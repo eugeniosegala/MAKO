@@ -48,7 +48,7 @@ export function PowerProfileControls({
     <>
       <PanelSectionRow>
         <ToggleField
-          label={t("POWER_SEPARATE", "Separate AC / battery settings")}
+          label={t("POWER_SEPARATE", "Separate power settings")}
           checked={enabled}
           disabled={busy || disabled}
           onChange={(value) => void changeEnabled(value)}
@@ -61,7 +61,7 @@ export function PowerProfileControls({
             selectedOption={powerMode}
             disabled={busy || disabled}
             rgOptions={[
-              { data: "shared", label: t("POWER_SHARED", "Shared / fallback") },
+              { data: "shared", label: t("POWER_SHARED", "Base settings") },
               {
                 data: "handheld",
                 label: t("POWER_HANDHELD", "Handheld (Battery)"),
@@ -83,11 +83,11 @@ export function PowerProfileControls({
                 ? t("POWER_CURRENT_BATTERY", "Current power: Battery")
                 : t(
                     "POWER_CURRENT_UNKNOWN",
-                    "Power source unavailable; Shared / fallback settings apply at startup.",
+                    "Power source unavailable; Base settings apply at startup.",
                   )}{" "}
             {t(
               "POWER_HELP",
-              "Frame Generation, Scaling and Renderer performance switch automatically, even with the panel closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+              "Switches automatically with the power source. Some changes require a game restart.",
             )}
           </div>
         </MakoInfo>

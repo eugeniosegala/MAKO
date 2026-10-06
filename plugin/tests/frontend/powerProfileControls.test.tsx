@@ -101,7 +101,7 @@ test("waits for edits before cloning and keeps another profile's editor intact",
       flushConfigChanges={flushConfigChanges}
     />,
   );
-  fireEvent.click(screen.getByText("Separate AC / battery settings"));
+  fireEvent.click(screen.getByText("Separate power settings"));
   expect(flushConfigChanges).toHaveBeenCalledOnce();
   expect(mocks.setProfilePowerModes).not.toHaveBeenCalled();
   rerender(
@@ -139,7 +139,7 @@ test("edits an explicit power set and reloads canonical settings after disabling
   });
   expect(loadProfileConfig).toHaveBeenCalledWith("game", "docked");
   loadProfileConfig.mockClear();
-  fireEvent.click(screen.getByText("Separate AC / battery settings"));
+  fireEvent.click(screen.getByText("Separate power settings"));
   expect(mocks.setProfilePowerModes).toHaveBeenCalledWith("game", false);
   await waitFor(() => expect(loadProfileConfig).toHaveBeenCalledWith("game"));
 });
@@ -159,7 +159,7 @@ test("reports toggle failures and blocks controls while another set loads", asyn
       loadProfileConfig={loadProfileConfig}
     />,
   );
-  fireEvent.click(screen.getByText("Separate AC / battery settings"));
+  fireEvent.click(screen.getByText("Separate power settings"));
   await waitFor(() =>
     expect(mocks.showErrorToast).toHaveBeenCalledWith(
       "Failed to update profile config",
@@ -182,7 +182,6 @@ test("reports toggle failures and blocks controls while another set loads", asyn
       .disabled,
   ).toBe(true);
   expect(
-    (screen.getByText("Separate AC / battery settings") as HTMLButtonElement)
-      .disabled,
+    (screen.getByText("Separate power settings") as HTMLButtonElement).disabled,
   ).toBe(true);
 });

@@ -24,13 +24,13 @@ The profile dropdown chooses which profile you are editing; it does not force th
 
 ### AC and battery settings
 
-Enable **Separate AC / battery settings** for the selected profile, then use **Editing settings for** to configure **Handheld (Battery)** and **Docked (AC Power)** independently. Both start as copies of the existing Renderer settings. **Shared / fallback** remains editable and is used when power detection is unavailable at startup; turning separate settings off restores that set.
+Enable **Separate power settings** for the selected profile, then use **Editing settings for** to configure **Handheld (Battery)** and **Docked (AC Power)** independently. Both start as copies of the existing Renderer settings. **Base settings** remain editable and are used when power detection is unavailable at startup; turning separate settings off restores that set.
 
 MAKO Renderer selects the set from Linux system power supplies at launch and checks for changes at most once every two seconds during presentation. AC power selects Docked, including a charger without a physical dock; battery operation selects Handheld. An external display alone does not select Docked. Switching works with the Decky panel and Qt window closed. A transient power-read failure retains the running Renderer's last confirmed source.
 
 Frame Generation, Scaling, GPU selection, and Renderer performance settings can differ. Process matching, DLL path, Allow FP16, Shaders, and launcher compatibility settings remain shared. Existing live, recreation, and restart rules still apply; plugging in cannot enable resources that were not provisioned at game startup. Check **Live Status** for pending changes. The panel follows the active power set when the source changes during a game; outside a game, select either set to prepare it in advance.
 
-Decky and the standalone Qt UI use the same optional tables in `conf.toml`; use current matching MAKO Renderer and MAKO Decky versions. Older editors do not understand the tables and may remove them when saving. A Flatpak sandbox that cannot read system power supplies uses Shared / fallback settings at startup. Shader configurations and launch options remain per profile.
+Decky and the standalone Qt UI use the same optional tables in `conf.toml`; use current matching MAKO Renderer and MAKO Decky versions. Older editors do not understand the tables and may remove them when saving. A Flatpak sandbox that cannot read system power supplies uses Base settings at startup. Shader configurations and launch options remain per profile.
 
 ## Frame Generation
 
@@ -40,7 +40,7 @@ Turn on **Enable Frame-gen (Restart)** before starting the game.
 
 - **Fixed** requests the selected 2x–5x total output ratio. Start with 2x. Select `0x` to pause generation without losing the saved multiplier.
 - **Adaptive** varies generation toward **Target FPS** without slowing a game already above the target. **Maximum Multiplier** is a ceiling, not a fixed ratio; MAKO may use less or miss a target the game and GPU cannot sustain.
-- **Match Display Refresh Rate** is off by default. When enabled, Adaptive follows the current Gamescope refresh during play, clamped to the Renderer’s 10–1000 FPS range, including changes between handheld, TV, and monitor displays. **Fallback Target FPS** preserves the manual target for unavailable refresh feedback and non-Gamescope sessions. Steady and Fractional caps follow the applied target; editor estimates use the fallback, and **Live Status** shows the actual target. The option can differ between AC/battery sets and is also available in Qt. It does not change display settings or Maximum Multiplier.
+- **Match Display Refresh Rate** sits directly below Target FPS and is off by default. When enabled, Adaptive follows Gamescope's current display refresh. The manual slider becomes a disabled **Fallback Target FPS**; turn matching off to edit it. Unavailable refresh feedback uses that saved value. Editor cap estimates use the fallback; **Live Status** shows the applied target. The same behavior applies in Qt.
 - **Steady Base Cap** starts by limiting real FPS to half the target, such as 60 real FPS for a 120 FPS target, to favour an even cadence. With Smooth Cadence, it can align a validated higher integer ratio. The cap may reduce responsiveness.
 - **Fractional Adaptive** allows a changing mix of real and generated frames. It can retain more real frames and feel more responsive than Steady Base Cap, but may feel less even, especially on some VRR setups.
 - **Real Frame Priority** sets a target-relative real-frame ceiling in Fractional mode. At a 120 FPS target, Low, Medium, High, and Very High correspond to 72, 80, 90, and 96 real FPS caps. Higher priority permits more real frames but does not make a game deliver them. Automatic keeps the normal Fractional policy.

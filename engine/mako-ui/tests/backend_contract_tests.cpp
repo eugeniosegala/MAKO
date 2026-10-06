@@ -447,6 +447,18 @@ void test_feature_group_order_and_ownership() {
                 "onToggled: backend.adaptive_target_refresh_rate = checked")) &&
             frame_generation_group.contains(QStringLiteral("? t.fallbackTargetFps : t.targetFps")),
         "Adaptive must expose refresh matching and its saved fallback");
+    const qsizetype target_entry = frame_generation_group.indexOf(
+        QStringLiteral("title: backend.adaptive_target_refresh_rate")
+    );
+    const qsizetype matching_entry = frame_generation_group.indexOf(
+        QStringLiteral("title: t.adaptiveTargetRefreshRate")
+    );
+    require(target_entry >= 0 && matching_entry > target_entry &&
+            frame_generation_group.mid(target_entry, matching_entry - target_entry)
+                .count(QStringLiteral("GroupEntry {")) == 1 &&
+            frame_generation_group.mid(target_entry, matching_entry - target_entry)
+                .contains(QStringLiteral("enabled: !backend.adaptive_target_refresh_rate")),
+        "Refresh matching must directly follow the target and lock manual editing while enabled");
     require(frame_generation_group.contains(QStringLiteral(
                 "checked: backend.frame_generation_provisioned")) &&
             frame_generation_group.contains(QStringLiteral(

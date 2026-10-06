@@ -82,6 +82,7 @@ vi.mock("@decky/ui", () => ({
     label,
     description,
     value,
+    disabled,
     min,
     max,
     step,
@@ -95,6 +96,7 @@ vi.mock("@decky/ui", () => ({
     label: React.ReactNode;
     description?: React.ReactNode;
     value: number;
+    disabled?: boolean;
     min?: number;
     max?: number;
     step?: number;
@@ -136,7 +138,8 @@ vi.mock("@decky/ui", () => ({
       <div
         ref={container}
         role="slider"
-        tabIndex={0}
+        tabIndex={disabled ? -1 : 0}
+        aria-disabled={disabled}
         className={className}
         data-slider-field="true"
         data-value={value}
@@ -152,15 +155,20 @@ vi.mock("@decky/ui", () => ({
       >
         {description}
         <span>{label}</span>
-        <button onClick={() => onChange?.(0)}>Set 0x</button>
+        <button disabled={disabled} onClick={() => onChange?.(0)}>
+          Set 0x
+        </button>
         <button
+          disabled={disabled}
           onClick={() => {
             if (!stalePausedInstance) onChange?.(value + 1);
           }}
         >
           D-pad right
         </button>
-        <button onClick={() => onChange?.(4)}>Set 5x</button>
+        <button disabled={disabled} onClick={() => onChange?.(4)}>
+          Set 5x
+        </button>
       </div>
     );
   },
@@ -192,7 +200,7 @@ afterEach(() => {
 });
 
 describe("Frame Generation controls", () => {
-  test("refresh matching defaults off and preserves an editable fallback", () => {
+  test("refresh matching follows the target and locks its saved fallback until matching is off", () => {
     window.SP_REACT = React;
     const config = { ...getDefaults(), adaptive: true };
     const onConfigChange = vi.fn(async () => undefined);
@@ -208,6 +216,16 @@ describe("Frame Generation controls", () => {
     expect(config.adaptive_target_refresh_rate).toBe(false);
     expect(toggle.getAttribute("data-checked")).toBe("false");
     expect(screen.getByText("Target FPS (90)")).toBeTruthy();
+    const manualTarget = screen
+      .getByText("Target FPS (90)")
+      .closest<HTMLElement>('[data-slider-field="true"]')!;
+    expect(
+      manualTarget.compareDocumentPosition(toggle) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      within(manualTarget).getByText("D-pad right").hasAttribute("disabled"),
+    ).toBe(false);
     fireEvent.click(toggle);
     expect(onConfigChange).toHaveBeenCalledExactlyOnceWith(
       "adaptive_target_refresh_rate",
@@ -227,15 +245,33 @@ describe("Frame Generation controls", () => {
       .closest<HTMLElement>('[data-slider-field="true"]')!;
     expect(fallback.getAttribute("data-value")).toBe("90");
     expect(
-      screen.getByText(/This editor estimates caps from the fallback/),
+      screen.getByText(
+        "Used if refresh detection fails. Turn matching off to edit.",
+      ),
     ).toBeTruthy();
+    expect(
+      within(fallback).getByText("D-pad right").hasAttribute("disabled"),
+    ).toBe(true);
     fireEvent.click(within(fallback).getByText("D-pad right"));
-    expect(onConfigChange).toHaveBeenLastCalledWith("target_fps", 91);
+    expect(onConfigChange).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByText("Match Display Refresh Rate"));
     expect(onConfigChange).toHaveBeenLastCalledWith(
       "adaptive_target_refresh_rate",
       false,
     );
+    rerender(
+      <FpsMultiplierControl
+        config={config}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+    const restoredTarget = screen
+      .getByText("Target FPS (90)")
+      .closest<HTMLElement>('[data-slider-field="true"]')!;
+    expect(restoredTarget.getAttribute("data-value")).toBe("90");
+    fireEvent.click(within(restoredTarget).getByText("D-pad right"));
+    expect(onConfigChange).toHaveBeenLastCalledWith("target_fps", 91);
     rerender(
       <FpsMultiplierControl
         config={{ ...config, adaptive: false }}

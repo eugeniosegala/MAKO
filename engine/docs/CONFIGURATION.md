@@ -44,7 +44,7 @@ scaling_sharpness = 0.8
 
 ### AC and battery settings
 
-In the Qt UI, enable **Separate AC / battery settings** under **Power Profiles**, then choose **Editing settings for** to edit Handheld, Docked, or Shared / fallback. Enabling it copies the existing Renderer settings into both power sets. Turning it off removes the two sets and restores Shared / fallback. Selecting a set in either editor changes which values you edit; the running Renderer continues to select settings from the detected power source.
+In the Qt UI, enable **Separate power settings** under **Power Profiles**, then choose **Editing settings for** to edit Handheld, Docked, or Base settings. Enabling it copies the existing Renderer settings into both power sets. Turning it off removes the two sets and restores Base settings. Selecting a set in either editor changes which values you edit; the running Renderer continues to select settings from the detected power source.
 
 The optional `handheld` and `docked` tables belong to the preceding `[[profile]]`. Both tables must exist when the feature is enabled. They inherit omitted Renderer settings from that profile and cannot override its name or process matches. For example:
 
@@ -103,7 +103,7 @@ MAKO Decky and `mako-ui` share this configuration. Edit a profile in one UI at a
 
 See [Adaptive validation](ADAPTIVE-VALIDATION.md) for detailed scheduling and cadence behavior.
 
-**Match Display Refresh Rate** is off by default in MAKO Decky and the standalone Qt UI. When enabled, handheld, TV, and monitor refresh changes update the running target without either editor open. Steady Base Cap, Fractional Real Frame Priority, and output pacing use that same applied target. The saved `target_fps` remains editable as **Fallback Target FPS** and is never overwritten by display feedback. Editor cap estimates use this fallback; Decky's Live Status reports the applied target. Outside Gamescope, or when confirmed refresh feedback is unavailable, MAKO retains the fallback. The option follows the refresh rate selected by Gamescope; it does not change display settings or the multiplier ceiling.
+**Match Display Refresh Rate** sits directly below Target FPS in both UIs and is off by default. When enabled, Adaptive follows Gamescope's current display refresh. The saved target is shown as a disabled **Fallback Target FPS**; turn matching off to edit it. Unavailable refresh feedback uses this saved fallback. Editor cap estimates use the fallback; Decky's Live Status shows the applied target. Matching does not change display settings or Maximum Multiplier.
 
 #### Choosing a mode in the Qt UI
 

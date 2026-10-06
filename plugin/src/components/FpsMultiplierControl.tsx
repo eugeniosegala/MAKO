@@ -272,22 +272,6 @@ export function FpsMultiplierControl({
             <>
               <PanelSectionRow>
                 <ToggleField
-                  label={t(
-                    "ADAPTIVE_TARGET_REFRESH_RATE",
-                    "Match Display Refresh Rate",
-                  )}
-                  description={t(
-                    "ADAPTIVE_TARGET_REFRESH_RATE_DESC",
-                    "Off by default. Follows the current Gamescope display refresh rate during play, within Renderer limits. Uses the saved Target FPS when refresh information is unavailable.",
-                  )}
-                  checked={config.adaptive_target_refresh_rate ?? false}
-                  onChange={(value) =>
-                    onConfigChange(ADAPTIVE_TARGET_REFRESH_RATE, value)
-                  }
-                />
-              </PanelSectionRow>
-              <PanelSectionRow>
-                <ToggleField
                   label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive")}
                   description={
                     <>
@@ -376,7 +360,7 @@ export function FpsMultiplierControl({
                     config.adaptive_target_refresh_rate
                       ? t(
                           "ADAPTIVE_FALLBACK_TARGET_FPS_DESC",
-                          "Used when display refresh is unavailable. This editor estimates caps from the fallback; the live target and caps follow display refresh.",
+                          "Used if refresh detection fails. Turn matching off to edit.",
                         )
                       : t(
                           "ADAPTIVE_TARGET_FPS_DESC",
@@ -384,10 +368,27 @@ export function FpsMultiplierControl({
                         )
                   }
                   value={targetFps}
+                  disabled={config.adaptive_target_refresh_rate ?? false}
                   min={TARGET_FPS_MIN}
                   max={TARGET_FPS_MAX}
                   step={1}
                   onChange={(value) => onConfigChange(TARGET_FPS, value)}
+                />
+              </PanelSectionRow>
+              <PanelSectionRow>
+                <ToggleField
+                  label={t(
+                    "ADAPTIVE_TARGET_REFRESH_RATE",
+                    "Match Display Refresh Rate",
+                  )}
+                  description={t(
+                    "ADAPTIVE_TARGET_REFRESH_RATE_DESC",
+                    "Uses the display refresh rate as Target FPS.",
+                  )}
+                  checked={config.adaptive_target_refresh_rate ?? false}
+                  onChange={(value) =>
+                    onConfigChange(ADAPTIVE_TARGET_REFRESH_RATE, value)
+                  }
                 />
               </PanelSectionRow>
               <PanelSectionRow>
