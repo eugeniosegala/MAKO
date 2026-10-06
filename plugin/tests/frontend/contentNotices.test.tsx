@@ -96,7 +96,7 @@ describe("content status notices", () => {
     );
     const warning = screen.getByRole("alert");
     expect(warning.textContent).toContain(
-      "LS1 is unavailable at the selected precision or model setting",
+      "LS1 is unavailable for the selected model setting",
     );
     expect(warning.textContent).toContain("Frame Generation is unavailable at the selected precision or model setting");
     expect(warning.compareDocumentPosition(screen.getByRole("note")) & 4).toBe(

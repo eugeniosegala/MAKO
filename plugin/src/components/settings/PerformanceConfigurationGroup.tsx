@@ -92,7 +92,7 @@ export function PerformanceConfigurationGroup({
           }
           description={t(
             "CONFIG_ALLOW_FP16_DESC",
-            "Global precision setting for all profiles: on requests FP16; off uses FP32. Applies to Frame Generation and MAKO Scaler. LS1 falls back to MAKO Scaler when FP16 is selected. Unsupported FP16 models show a warning. Restart the game after changing it.",
+            "Global precision setting for all profiles: on requests FP16; off uses FP32. Applies to Frame Generation and MAKO Scaler. LS1 always uses FP32. Unsupported FP16 models show a warning. Restart the game after changing it.",
           )}
           checked={config.allow_fp16}
           onChange={(value) => onConfigChange(ALLOW_FP16, value)}

@@ -284,7 +284,7 @@
   "FIXED_MULTIPLIER": "Multiplicador fixo",
   "FIXED_MULTIPLIER_DESC": "2x–5x define uma proporção de saída fixa; 5x custa mais e destina-se a ecrãs de alta taxa de atualização. 0x pausa a geração sem libertar recursos.",
   "CONFIG_ALLOW_FP16": "Permitir FP16 (Reiniciar)",
-  "CONFIG_ALLOW_FP16_DESC": "Precisão global para todos os perfis: ativado solicita FP16; desativado utiliza FP32. Aplica-se à geração de fotogramas e ao MAKO Scaler. O LS1 utiliza o MAKO Scaler como alternativa quando FP16 está selecionado. Os modelos FP16 sem suporte apresentam um aviso. Reinicie o jogo após alterar.",
+  "CONFIG_ALLOW_FP16_DESC": "Precisão global para todos os perfis: ativado solicita FP16; desativado utiliza FP32. Aplica-se à geração de fotogramas e ao MAKO Scaler. O LS1 utiliza sempre FP32. Os modelos FP16 sem suporte apresentam um aviso. Reinicie o jogo após alterar.",
   "CONFIG_GPU": "GPU (Reiniciar)",
   "CONFIG_GPU_DESC": "Nome opcional da GPU, ID fornecedor:dispositivo ou ID do barramento PCI. Reinicie o jogo após a alteração.",
   "CONFIG_ACTIVE_IN": "Processos correspondentes",
@@ -380,7 +380,7 @@
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Aviso sobre os modelos do Lossless Scaling",
   "MODEL_WARNING_DESCRIPTION": "Algumas funcionalidades do Lossless Scaling podem estar indisponíveis:",
-  "MODEL_WARNING_LS1": "O LS1 não está disponível com a precisão ou o modelo selecionado. O MAKO Scaler preserva a precisão selecionada. Desative FP16 para utilizar o caminho FP32 compatível do LS1.",
+  "MODEL_WARNING_LS1": "O LS1 não está disponível com o modelo selecionado. O MAKO Scaler preserva a precisão selecionada.",
   "MODEL_WARNING_LSFG": "A geração de fotogramas não está disponível com a precisão ou o modelo selecionado. Utilize um modelo público compatível do Lossless Scaling ou desative FP16 para um modelo que apenas suporta FP32.",
   "MODEL_WARNING_UPDATE": "Aplique as atualizações disponíveis do MAKO Decky e Renderer e reinicie. Se persistir, confirme os ficheiros do Lossless Scaling e recolha diagnósticos.",
   "MODEL_WARNING_CHECK_UPDATES": "Procurar atualizações do MAKO Decky"

@@ -54,7 +54,7 @@ int mako::cli::inspect_dll::run(const Options& options) {
         bool compatible = false;
         try {
             static_cast<void>(mako::backend::loadLs1ShaderSet(
-                options.dll, *options.ls1Mode, options.sharpness, options.allowFp16
+                options.dll, *options.ls1Mode, options.sharpness
             ));
             compatible = true;
         } catch (const std::exception& error) {

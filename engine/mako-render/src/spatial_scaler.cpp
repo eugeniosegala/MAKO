@@ -777,8 +777,7 @@ public:
         sourceSize(sourceExtent),
         presentationSize(presentationExtent),
         requested(requested),
-        active(requested),
-        fp16(fp16Requested) {
+        active(requested) {
         // The spatial role is constructed at the scaling-engine startup
         // boundary, while model selection remains live. Prime the immutable
         // DLL archive here so the first later LS1 selection does not place
@@ -799,16 +798,6 @@ public:
             );
             return;
         }
-        if (fp16Requested && !vk.supportsFP16()) {
-            this->active = ls::ScalingMethod::Native;
-            this->fallback = "scaling FP16 requested but shaderFloat16 is not enabled on the application device; Native Resolution blit is active; select FP32 for compute scaling";
-            // The lower swapchain may already have presentation-sized images.
-            // Preserve reconstruction of the source rectangle rather than
-            // exposing an incomplete real frame or substituting FP32 compute.
-            this->pipeline = std::make_unique<NativeResolutionPipeline>(
-                vk, sourceExtent, presentationExtent, workingFormat);
-            return;
-        }
         const bool ls1Requested =
             ls::licensedScalingModelRequested(requested);
         if (ls1Requested) {
@@ -819,7 +808,7 @@ public:
                     ? mako::backend::Ls1Mode::Performance
                     : mako::backend::Ls1Mode::Quality;
                 auto payloads = mako::backend::loadLs1ShaderSet(
-                    *shaderDllPath, mode, sharpness, fp16Requested
+                    *shaderDllPath, mode, sharpness
                 );
                 this->translatorPath = payloads.translator;
                 this->dllSha256 = payloads.dllSha256;
@@ -833,6 +822,19 @@ public:
                 this->active = ls::ScalingMethod::Mako;
             }
         }
+        // LS1 always uses FP32. The global precision choice applies only to
+        // MAKO Scaler, including fallback after an LS1 construction failure.
+        if (fp16Requested && !vk.supportsFP16()) {
+            this->active = ls::ScalingMethod::Native;
+            this->fallback = "scaling FP16 requested but shaderFloat16 is not enabled on the application device; Native Resolution blit is active; select FP32 for compute scaling";
+            // The lower swapchain may already have presentation-sized images.
+            // Preserve reconstruction of the source rectangle rather than
+            // exposing an incomplete real frame or substituting FP32 compute.
+            this->pipeline = std::make_unique<NativeResolutionPipeline>(
+                vk, sourceExtent, presentationExtent, workingFormat);
+            return;
+        }
+        this->fp16 = fp16Requested;
         this->pipeline = std::make_unique<MakoPipeline>(
             vk, sourceExtent, presentationExtent, workingFormat, sharpness, fp16Requested
         );

@@ -30,13 +30,13 @@ namespace mako::backend {
     };
 
     /// Extract one LS1 model from a user-supplied Lossless.dll and translate
-    /// its Direct3D 11 compute bytecode to Vulkan SPIR-V. No licensed payload
-    /// is persisted or packaged by MAKO.
+    /// its Direct3D 11 compute bytecode to FP32 Vulkan SPIR-V, independently
+    /// of the LSFG/MAKO Scaler precision setting. No licensed payload is
+    /// persisted or packaged by MAKO.
     [[nodiscard]] Ls1ShaderSet loadLs1ShaderSet(
         const std::filesystem::path& shaderDllPath,
         Ls1Mode mode,
-        float sharpness,
-        bool fp16Requested = false
+        float sharpness
     );
 
 }

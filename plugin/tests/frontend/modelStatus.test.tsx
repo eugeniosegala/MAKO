@@ -49,7 +49,7 @@ test("checks a saved LS1 selection without writing it and refreshes after DLL up
     saved.dll,
     "ls1",
     saved.scaling_sharpness,
-    saved.allow_fp16,
+    false,
   );
   checkScalingModel.mockResolvedValue({ compatible: true, reason: null });
   await act(() => vi.advanceTimersByTimeAsync(30000));
@@ -93,7 +93,7 @@ test("debounces sharpness changes and inspects Ultra Performance's effective mod
     config().dll,
     "ls1-performance",
     0.75,
-    config().allow_fp16,
+    false,
   );
 });
 
@@ -109,6 +109,25 @@ test("model-free choices and disabled scaling never start a probe", async () => 
   await settle();
   expect(result.current.ls1).toBeNull();
   expect(checkScalingModel).not.toHaveBeenCalled();
+});
+
+test("LS1 stays at FP32 when the global precision changes", async () => {
+  const { result, rerender } = renderHook(
+    (saved) => useModelStatus(saved, true),
+    { initialProps: { ...config(), allow_fp16: true } },
+  );
+  await settle();
+  expect(checkScalingModel).toHaveBeenCalledWith(
+    config().dll,
+    "ls1",
+    config().scaling_sharpness,
+    false,
+  );
+  rerender({ ...config(), allow_fp16: false });
+  expect(result.current.ls1?.compatible).toBe(true);
+  await settle();
+  expect(checkScalingModel).toHaveBeenCalledTimes(1);
+  expect(checkFrameGenerationModel).not.toHaveBeenCalled();
 });
 
 test("missing inspector RPC is unknown, and unmount stops subsequent polling", async () => {

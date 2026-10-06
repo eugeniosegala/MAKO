@@ -17,7 +17,7 @@ A setting belongs to the earliest boundary that can safely establish all state i
 | Compositor feedback | Confirmed refresh, explicit VRR/tearing state, and application HDR state | Background sample, independent of profile reload |
 | Dormant value | A setting for an inactive mode or unavailable private resource | Save now; apply when its owning mode or resource becomes active |
 
-The process-wide backend is created lazily when the first active swapchain needs it. FP16 is captured at process start even when the backend is still dormant, so scaling and a later FG backend cannot disagree after a config reload. Once built, pending DLL, GPU, and Ultra changes are compared with the actual construction baseline, not merely the previous file.
+The process-wide backend is created lazily when the first active swapchain needs it. FP16 is captured at process start even when the backend is still dormant, so MAKO Scaler and a later FG backend cannot disagree after a config reload. LS1 always uses FP32 independently of that baseline. Once built, pending DLL, GPU, and Ultra changes are compared with the actual construction baseline, not merely the previous file.
 
 ## Update flow
 

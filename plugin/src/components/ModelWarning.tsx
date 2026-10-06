@@ -54,7 +54,7 @@ export function ModelWarning({
                     )
                   : t(
                       "MODEL_WARNING_LS1",
-                      "LS1 is unavailable at the selected precision or model setting. MAKO Scaler preserves the selected precision. Turn FP16 off to use the supported FP32 LS1 path.",
+                      "LS1 is unavailable for the selected model setting. MAKO Scaler preserves the selected precision.",
                     )}
               </li>
             )}

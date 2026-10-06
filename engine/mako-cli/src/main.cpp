@@ -94,10 +94,10 @@ SUBCOMMAND OPTIONS:
 
     inspect-dll
         -d, --dll <PATH>                Path to Lossless.dll
-            --ls1 <METHOD>             Probe only ls1 or ls1-performance; emits JSON
+            --ls1 <METHOD>             Probe FP32 ls1 or ls1-performance; emits JSON
             --sharpness <FLOAT>        Selected LS1 sharpness from 0 to 1 (default 0.8)
             --lsfg                     Probe the selected LSFG FP16 model; emits JSON
-            --no-fp16                  With --lsfg/--ls1, select FP32
+            --no-fp16                  With --lsfg, select FP32; LS1 always uses FP32
 
     benchmark
         -t, --duration <SECONDS>        Benchmark duration in seconds
@@ -119,7 +119,7 @@ SUBCOMMAND OPTIONS:
         -p, --performance-mode          Use the lighter LSFG model
 
     spatial-quality-regression
-        -a, --allow-fp16                Request FP16 colour arithmetic
+        -a, --allow-fp16                Request MAKO Scaler FP16 colour arithmetic
             --no-fp16                  Use FP32 arithmetic (default)
         -d, --dll <PATH>                Path to Lossless.dll for LS1 methods
         -g, --gpu <STRING>              GPU to use
@@ -133,7 +133,7 @@ SUBCOMMAND OPTIONS:
         -h, --height <INT>              Exact presentation height
 
     spatial-profile
-        -a, --allow-fp16                Request FP16 colour arithmetic
+        -a, --allow-fp16                Request MAKO Scaler FP16 colour arithmetic
             --no-fp16                  Use FP32 arithmetic (default)
         -d, --dll <PATH>                Path to Lossless.dll for LS1 methods
         -g, --gpu <STRING>              GPU to use
@@ -151,7 +151,7 @@ SUBCOMMAND OPTIONS:
 
     combined-quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Request FP16 arithmetic (default)
+        -a, --allow-fp16                Request LSFG/MAKO Scaler FP16 (default)
             --no-fp16                  Use FP32 arithmetic
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts

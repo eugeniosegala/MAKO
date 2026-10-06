@@ -110,6 +110,7 @@ describe("Performance Settings", () => {
     const allowFp16 = screen.getByText("Allow FP16 (Restart)");
     expect((allowFp16 as HTMLButtonElement).disabled).toBe(false);
     expect(allowFp16.getAttribute("data-checked")).toBe("false");
+    expect(screen.getByText(/LS1 always uses FP32/)).toBeTruthy();
     fireEvent.click(allowFp16);
     expect(onConfigChange).toHaveBeenCalledWith("allow_fp16", true);
     expect(allowFp16.getAttribute("data-bottom-separator")).toBe("none");

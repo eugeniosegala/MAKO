@@ -592,7 +592,7 @@ test.each<{ name: string; status: ModelWarningProps; message: string }>([
   {
     name: "LS1",
     status: { ls1: { compatible: false, reason: "ls1-unavailable" } },
-    message: "LS1 is unavailable at the selected precision or model setting.",
+    message: "LS1 is unavailable for the selected model setting.",
   },
   {
     name: "runtime fallback",
@@ -642,7 +642,7 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
   expect(
     screen.getAllByRole("listitem").map((item) => item.textContent),
   ).toEqual([
-    "LS1 is unavailable at the selected precision or model setting. MAKO Scaler preserves the selected precision. Turn FP16 off to use the supported FP32 LS1 path.",
+    "LS1 is unavailable for the selected model setting. MAKO Scaler preserves the selected precision.",
     "Frame Generation is unavailable at the selected precision or model setting. Use a supported public Lossless Scaling model, or turn FP16 off for an FP32-only model.",
   ]);
   const update = screen.getByRole("button", {
@@ -666,7 +666,7 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
     "LS1 is unavailable for this game. MAKO Scaler is active.",
   );
   expect(warning.textContent).not.toContain(
-    "LS1 is unavailable at the selected precision or model setting.",
+    "LS1 is unavailable for the selected model setting.",
   );
   expect(
     screen.getByRole("button", { name: "Check for MAKO Decky updates" }),

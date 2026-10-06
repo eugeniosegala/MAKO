@@ -56,13 +56,13 @@ class ScalingModelStatusTests(unittest.TestCase):
         self.assertEqual(self.dll.read_bytes(), original)
         self.assertFalse((self.home / ".config").exists())
 
-    def test_scaling_precision_changes_invalidate_the_cached_selection(self):
+    def test_ls1_always_inspects_fp32_and_ignores_global_precision_changes(self):
         for precision in (False, True, False):
             self.assertTrue(self.service.check_scaling_model(
                 str(self.dll), "ls1", 0.8, precision)["compatible"])
             arguments = self.runner.call_args.args[0]
-            self.assertEqual("--no-fp16" in arguments, not precision)
-        self.assertEqual(self.runner.call_count, 3)
+            self.assertIn("--no-fp16", arguments)
+        self.assertEqual(self.runner.call_count, 1)
         self.assertEqual(self.service.check_scaling_model(
             str(self.dll), "ls1", 0.8, "true"),
             {"compatible": None, "reason": "invalid-selection"})

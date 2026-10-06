@@ -55,9 +55,7 @@ namespace {
 mako::backend::Ls1ShaderSet mako::backend::loadLs1ShaderSet(
         const std::filesystem::path& shaderDllPath,
         const Ls1Mode mode,
-        const float sharpness, const bool fp16Requested) {
-    if (fp16Requested)
-        throw ls::error("LS1 FP16 translation is not validated; MAKO Scaler preserves the requested FP16 precision");
+        const float sharpness) {
     if (!std::isfinite(sharpness) || sharpness < 0.0F || sharpness > 1.0F)
         throw ls::error("LS1 sharpness must be between zero and one");
 

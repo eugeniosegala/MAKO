@@ -40,7 +40,6 @@ export function useModelStatus(
   enabled: boolean,
 ): ModelStatuses {
   const method = effectiveScalingMethod(config);
-  const allowFp16 = config.allow_fp16;
   const ls1 =
     enabled &&
     !config.disable_mako &&
@@ -52,6 +51,7 @@ export function useModelStatus(
     !config.disable_mako &&
     config.frame_generation_provisioned &&
     config.frame_generation_enabled;
+  const allowFp16 = lsfg && config.allow_fp16;
   const key = JSON.stringify([
     config.dll,
     ls1,
@@ -80,7 +80,7 @@ export function useModelStatus(
               config.dll,
               method,
               config.scaling_sharpness,
-              allowFp16,
+              false,
             ),
           )
         : null;

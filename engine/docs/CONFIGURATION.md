@@ -47,7 +47,7 @@ MAKO keeps known launcher and web-helper processes inactive while allowing their
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `dll` | Automatic | Optional absolute path to `Lossless.dll`. LSFG and LS1 require it; MAKO Scaler and Native Resolution do not. |
-| `allow_fp16` | `true` | Selects FP16 LSFG and MAKO Scaler colour arithmetic; `false` selects FP32. Ordinary builds fail explicitly when native FP16 LSFG is unavailable; experimental builds may force conversion of a supported FP32 graph with unqualified image quality. LS1 uses MAKO Scaler at FP16 when no validated LS1 FP16 path exists. Coordinates and transport retain their required precision. Requires restart; Ultra Performance respects this choice. |
+| `allow_fp16` | `true` | Selects FP16 LSFG and MAKO Scaler colour arithmetic; `false` selects FP32. Ordinary builds fail explicitly when native FP16 LSFG is unavailable; experimental builds may force conversion of a supported FP32 graph with unqualified image quality. LS1 Quality and LS1 Performance always use FP32 independently of this setting. Coordinates and transport retain their required precision. Requires restart; Ultra Performance respects this choice. |
 
 MAKO Decky and `mako-ui` share this configuration. Edit a profile in one UI at a time.
 

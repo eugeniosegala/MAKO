@@ -43,16 +43,17 @@ class DllDetectionService(BaseService):
     def check_scaling_model(
         self, dll: str, method: str, sharpness: float, allow_fp16: bool = False,
     ) -> ModelStatusResponse:
-        """Inspect only the selected LS1 graph through the installed Renderer."""
+        """Inspect the selected LS1 graph at its fixed FP32 precision.
+
+        Keep allow_fp16 accepted for compatibility with older RPC consumers.
+        """
         if (type(allow_fp16) is not bool
                 or method not in ("ls1", "ls1-performance")
                 or isinstance(sharpness, bool)
                 or not isinstance(sharpness, (int, float))
                 or not math.isfinite(sharpness) or not 0 <= sharpness <= 1):
             return {"compatible": None, "reason": "invalid-selection"}
-        arguments = ("--ls1", method, "--sharpness", str(sharpness))
-        if not allow_fp16:
-            arguments += ("--no-fp16",)
+        arguments = ("--ls1", method, "--sharpness", str(sharpness), "--no-fp16")
         return self._check_model(dll, arguments, "ls1")
 
     def check_frame_generation_model(self, dll: str, allow_fp16: bool) -> ModelStatusResponse:

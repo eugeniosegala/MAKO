@@ -284,7 +284,7 @@
   "FIXED_MULTIPLIER": "固定倍率",
   "FIXED_MULTIPLIER_DESC": "2x～5x は固定の出力倍率です。高リフレッシュ画面向けの 5x は負荷が高くなります。0x はリソースを解放せずに生成を一時停止します。",
   "CONFIG_ALLOW_FP16": "FP16 を許可（再起動）",
-  "CONFIG_ALLOW_FP16_DESC": "すべてのプロファイルに適用される精度設定です。オンは FP16 を要求し、オフは FP32 を使用します。フレーム生成と MAKO Scaler に適用されます。FP16 を選択すると、LS1 は MAKO Scaler に切り替わります。非対応の FP16 モデルには警告が表示されます。変更後はゲームを再起動してください。",
+  "CONFIG_ALLOW_FP16_DESC": "すべてのプロファイルに適用される精度設定です。オンは FP16 を要求し、オフは FP32 を使用します。フレーム生成と MAKO Scaler に適用されます。LS1 は常に FP32 を使用します。非対応の FP16 モデルには警告が表示されます。変更後はゲームを再起動してください。",
   "CONFIG_GPU": "GPU（再起動）",
   "CONFIG_GPU_DESC": "任意の GPU 名、vendor:device ID、または PCI バス ID。変更後はゲームを再起動してください。",
   "CONFIG_ACTIVE_IN": "一致するプロセス",
@@ -380,7 +380,7 @@
   "LIVE_STATUS_SCALING_UNAVAILABLE": "この実行サーフェスでは利用できません。",
   "MODEL_WARNING_TITLE": "Lossless Scaling モデルの警告",
   "MODEL_WARNING_DESCRIPTION": "Lossless Scaling の一部の機能が利用できない可能性があります：",
-  "MODEL_WARNING_LS1": "選択した精度またはモデル設定では LS1 を利用できません。MAKO Scaler は選択した精度を維持します。対応する LS1 の FP32 処理を使うには、FP16 をオフにしてください。",
+  "MODEL_WARNING_LS1": "選択したモデル設定では LS1 を利用できません。MAKO Scaler は選択した精度を維持します。",
   "MODEL_WARNING_LSFG": "選択した精度またはモデル設定ではフレーム生成を利用できません。対応する Lossless Scaling の公開版モデルを使用するか、FP32 のみに対応するモデルでは FP16 をオフにしてください。",
   "MODEL_WARNING_UPDATE": "MAKO Decky と Renderer の更新があれば適用し、再起動してください。解決しなければ Lossless Scaling のファイルを確認し、診断情報を収集してください。",
   "MODEL_WARNING_CHECK_UPDATES": "MAKO Deckyの更新を確認"

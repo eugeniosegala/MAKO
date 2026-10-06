@@ -215,7 +215,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "allow_fp16": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
-        "description": "select FP16 for supported model arithmetic and scaling; false selects FP32",
+        "description": "select FP16 for supported LSFG model and MAKO Scaler arithmetic; false selects FP32; LS1 always uses FP32",
         "location": "global"
     },
 

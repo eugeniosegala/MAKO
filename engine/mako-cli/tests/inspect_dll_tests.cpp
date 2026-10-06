@@ -11,6 +11,9 @@ namespace {
     bool fp32Compatible = true;
     bool fp16Compatible = true;
     std::vector<bool> checkedPrecisions;
+    bool ls1Compatible = true;
+    std::vector<mako::backend::Ls1Mode> checkedLs1Modes;
+    std::vector<float> checkedSharpness;
 }
 
 // Exercise the actual CLI protocol and precision policy without licensed data
@@ -23,8 +26,12 @@ namespace mako::backend {
     LosslessDllInspection inspectLosslessDll(const std::filesystem::path&) {
         throw std::runtime_error("LSFG-only inspection must not inspect LS1");
     }
-    Ls1ShaderSet loadLs1ShaderSet(const std::filesystem::path&, Ls1Mode, float, bool) {
-        throw std::runtime_error("LSFG-only inspection must not translate LS1");
+    Ls1ShaderSet loadLs1ShaderSet(const std::filesystem::path&, Ls1Mode mode, float sharpness) {
+        checkedLs1Modes.push_back(mode);
+        checkedSharpness.push_back(sharpness);
+        if (!ls1Compatible)
+            throw std::runtime_error("synthetic LS1 failure");
+        return {};
     }
 }
 
@@ -46,8 +53,32 @@ int main() {
                     (compatible ? "true" : "false") + "}\n";
                 const std::vector<bool> expectedPrecisions = std::vector<bool>{allowFp16};
                 if (status != (compatible ? 0 : 1) || output.str() != expected ||
-                        checkedPrecisions != expectedPrecisions) {
+                        checkedPrecisions != expectedPrecisions || !checkedLs1Modes.empty()) {
                     std::cerr << "LSFG inspection protocol or precision policy mismatch\n";
+                    return 1;
+                }
+            }
+    for (const auto mode : {mako::backend::Ls1Mode::Quality, mako::backend::Ls1Mode::Performance})
+        for (const bool allowFp16 : {false, true})
+            for (const bool compatible : {false, true}) {
+                ls1Compatible = compatible;
+                checkedPrecisions.clear();
+                checkedLs1Modes.clear();
+                checkedSharpness.clear();
+                std::ostringstream output;
+                auto* previous = std::cout.rdbuf(output.rdbuf());
+                const int status = mako::cli::inspect_dll::run({
+                    .dll = "synthetic", .ls1Mode = mode, .sharpness = 0.75F,
+                    .allowFp16 = allowFp16,
+                });
+                std::cout.rdbuf(previous);
+                const std::string expected = std::string("{\"schema_version\":1,\"compatible\":") +
+                    (compatible ? "true" : "false") + "}\n";
+                if (status != (compatible ? 0 : 1) || output.str() != expected ||
+                        !checkedPrecisions.empty() ||
+                        checkedLs1Modes != std::vector<mako::backend::Ls1Mode>{mode} ||
+                        checkedSharpness != std::vector<float>{0.75F}) {
+                    std::cerr << "LS1 inspection must ignore global precision and retain the selected model\n";
                     return 1;
                 }
             }

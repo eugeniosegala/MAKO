@@ -205,7 +205,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "allow_fp16",
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
-    description: "select FP16 for supported model arithmetic and scaling; false selects FP32"
+    description: "select FP16 for supported LSFG model and MAKO Scaler arithmetic; false selects FP32; LS1 always uses FP32"
   },
   scaling_enabled: {
     name: "scaling_enabled",
