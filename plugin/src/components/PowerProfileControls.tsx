@@ -4,6 +4,7 @@ import { setProfilePowerModes } from "../api/makoApi";
 import { showErrorToast } from "../utils/toastUtils";
 import t from "../i18n/i18n";
 import { MakoInfo } from "./MakoInfo";
+import { MakoSectionTail } from "./MakoUi";
 
 interface Props {
   profileName: string;
@@ -76,20 +77,29 @@ export function PowerProfileControls({
       )}
       {enabled && (
         <MakoInfo as={PanelSectionRow}>
-          <div style={{ fontSize: "11px", color: "#b8c5d6" }}>
-            {powerSource === "docked"
-              ? t("POWER_CURRENT_AC", "Current power: AC")
-              : powerSource === "handheld"
-                ? t("POWER_CURRENT_BATTERY", "Current power: Battery")
-                : t(
-                    "POWER_CURRENT_UNKNOWN",
-                    "Power source unavailable; Base settings apply at startup.",
-                  )}{" "}
-            {t(
-              "POWER_HELP",
-              "Switches automatically with the power source. Some changes require a game restart.",
-            )}
-          </div>
+          <MakoSectionTail>
+            <div
+              style={{
+                paddingTop: "8px",
+                fontSize: "11px",
+                lineHeight: 1.35,
+                color: "#b8c5d6",
+              }}
+            >
+              {powerSource === "docked"
+                ? t("POWER_CURRENT_AC", "Current power: AC")
+                : powerSource === "handheld"
+                  ? t("POWER_CURRENT_BATTERY", "Current power: Battery")
+                  : t(
+                      "POWER_CURRENT_UNKNOWN",
+                      "Power source unavailable; Base settings apply at startup.",
+                    )}{" "}
+              {t(
+                "POWER_HELP",
+                "Switches automatically with the power source. Some changes require a game restart.",
+              )}
+            </div>
+          </MakoSectionTail>
         </MakoInfo>
       )}
     </>
