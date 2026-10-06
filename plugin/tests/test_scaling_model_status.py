@@ -51,10 +51,21 @@ class ScalingModelStatusTests(unittest.TestCase):
                 self.assertEqual(self.check(method, sharpness), {"compatible": True, "reason": None})
                 args, kwargs = self.runner.call_args
                 self.assertEqual(args[0], [str(self.cli), "inspect-dll", "--dll", str(self.dll),
-                                          "--ls1", method, "--sharpness", str(sharpness)])
+                                          "--ls1", method, "--sharpness", str(sharpness), "--no-fp16"])
                 self.assertEqual(kwargs["timeout"], 15)
         self.assertEqual(self.dll.read_bytes(), original)
         self.assertFalse((self.home / ".config").exists())
+
+    def test_scaling_precision_changes_invalidate_the_cached_selection(self):
+        for precision in (False, True, False):
+            self.assertTrue(self.service.check_scaling_model(
+                str(self.dll), "ls1", 0.8, precision)["compatible"])
+            arguments = self.runner.call_args.args[0]
+            self.assertEqual("--no-fp16" in arguments, not precision)
+        self.assertEqual(self.runner.call_count, 3)
+        self.assertEqual(self.service.check_scaling_model(
+            str(self.dll), "ls1", 0.8, "true"),
+            {"compatible": None, "reason": "invalid-selection"})
 
     def test_missing_explicit_dll_does_not_silently_inspect_a_different_installation(self):
         self.dll.unlink()

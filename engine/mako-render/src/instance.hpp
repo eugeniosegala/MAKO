@@ -102,6 +102,10 @@ namespace mako::layer {
                 !this->presentationEnvironment.gamescopeWsiDisabled;
         }
 
+        [[nodiscard]] bool fp16RequestedAtStartup() const {
+            return this->fp16AtStartup;
+        }
+
         /// ensure the layer is up-to-date
         /// @param forceConfigurationPoll bypass the present-path polling
         /// interval at an application-owned swapchain creation boundary
@@ -179,6 +183,7 @@ namespace mako::layer {
         ls::WatchedConfig config;
         std::optional<ls::GameConf> active_profile;
         bool frameGenerationInteropProvisionedAtStartup{false};
+        bool fp16AtStartup{true};
         bool scalingEngineConfiguredAtStartup{false};
         bool swapchainImageCountCompatibilityConfiguredAtStartup{false};
 

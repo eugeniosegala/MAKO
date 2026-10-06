@@ -105,7 +105,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "주사율 임계값",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "프레임 생성을 일시 중지할 최대 주사율을 선택합니다.",
   "CONFIG_ULTRA_PERFORMANCE": "울트라 성능 (재시작)",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "저전력 기기에서 MAKO의 GPU 부하를 줄입니다. 흐름 배율 70%, 경량 FG 모델, 지원되는 경우 FP16, 스케일링이 활성화되면 LS1 Performance를 사용합니다. 활성화된 MAKO 기능 전반에서 화질과 성능을 맞바꿉니다.",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "저전력 기기에서 MAKO의 GPU 부하를 줄입니다. 흐름 배율 70%, 경량 FG 모델, 스케일링이 활성화되면 LS1 Performance를 사용합니다. 활성화된 MAKO 기능 전반에서 화질과 성능을 맞바꿉니다. 전역 FP16 설정을 따릅니다.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Ultra Performance를 켜거나 끄려면 게임을 다시 시작해야 합니다. 그 밖의 호환되는 프로필 설정은 시작 후에도 사용할 수 있습니다.",
   "CONFIG_PERFORMANCE_MODE": "경량 FG 모델",
   "CONFIG_PERFORMANCE_MODE_DESC": "가벼운 FG 모델은 GPU 부담을 줄이지만 고스팅을 늘립니다. 울트라 성능은 이를 강제로 켭니다.",
@@ -284,7 +284,7 @@
   "FIXED_MULTIPLIER": "고정 배율",
   "FIXED_MULTIPLIER_DESC": "2x–5x는 고정 출력 배율입니다. 높은 주사율 화면용 5x는 비용이 큽니다. 0x는 리소스를 해제하지 않고 생성을 일시 중지합니다.",
   "CONFIG_ALLOW_FP16": "FP16 허용 (재시작)",
-  "CONFIG_ALLOW_FP16_DESC": "전역 렌더러 설정입니다. 모든 프로필에 적용되며 게임별로 변경할 수 없습니다. AMD에서 성능을 향상할 수 있습니다. 오래된 NVIDIA GPU에서는 비활성화하세요. 변경 후 게임을 다시 시작하세요.",
+  "CONFIG_ALLOW_FP16_DESC": "모든 프로필에 적용되는 전역 정밀도 설정입니다. 켜면 FP16을 요청하고 끄면 FP32를 사용합니다. 프레임 생성과 MAKO Scaler에 적용됩니다. FP16을 선택하면 LS1 대신 MAKO Scaler를 사용합니다. 지원되지 않는 FP16 모델에는 경고가 표시됩니다. 변경 후 게임을 다시 시작하세요.",
   "CONFIG_GPU": "GPU (재시작)",
   "CONFIG_GPU_DESC": "선택적 GPU 이름, vendor:device ID 또는 PCI 버스 ID입니다. 변경 후 게임을 다시 시작하세요.",
   "CONFIG_ACTIVE_IN": "일치하는 프로세스",
@@ -380,8 +380,8 @@
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Lossless Scaling 모델 경고",
   "MODEL_WARNING_DESCRIPTION": "Lossless Scaling의 일부 기능을 사용하지 못할 수 있습니다:",
-  "MODEL_WARNING_LS1": "LS1 사용 가능 여부 확인에 실패했습니다. LS1을 불러올 수 없으면 MAKO Scaler가 자동으로 사용됩니다.",
-  "MODEL_WARNING_LSFG": "LSFG 모델 확인에 실패했습니다. 선택한 정밀도 설정에서는 프레임 생성을 사용하지 못할 수 있습니다.",
+  "MODEL_WARNING_LS1": "선택한 정밀도 또는 모델 설정에서는 LS1을 사용할 수 없습니다. MAKO Scaler는 선택한 정밀도를 유지합니다. 지원되는 LS1 FP32 경로를 사용하려면 FP16을 끄세요.",
+  "MODEL_WARNING_LSFG": "선택한 정밀도 또는 모델 설정에서는 프레임 생성을 사용할 수 없습니다. 지원되는 Lossless Scaling 공개 버전 모델을 사용하거나 FP32만 지원하는 모델에서는 FP16을 끄세요.",
   "MODEL_WARNING_UPDATE": "MAKO Decky와 Renderer 업데이트가 있으면 적용하고 재시작하세요. 해결되지 않으면 Lossless Scaling 파일을 확인하고 진단 정보를 수집하세요.",
   "MODEL_WARNING_CHECK_UPDATES": "MAKO Decky 업데이트 확인"
 }

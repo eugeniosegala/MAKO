@@ -295,7 +295,7 @@ export const checkLosslessScalingDll = callable<[], DllDetectionResult>(
   "check_lossless_scaling_dll",
 );
 export const checkScalingModel = callable<
-  [string, string, number],
+  [string, string, number, boolean],
   ModelStatusResult
 >("check_scaling_model");
 export const checkFrameGenerationModel = callable<

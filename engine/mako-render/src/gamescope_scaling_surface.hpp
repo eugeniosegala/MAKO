@@ -109,12 +109,19 @@ namespace mako::layer {
         /// Mirror Gamescope WSI's per-Vulkan-swapchain protocol lifetime. The
         /// compositor needs the real image count before low-latency delivery,
         /// and a replacement must not inherit its predecessor's pacing state.
+        /// applicationExtent is the original game request, before expansion.
         [[nodiscard]] bool createSwapchain(VkSurfaceKHR surface,
             VkSwapchainKHR swapchain, const VkSwapchainCreateInfoKHR& info,
-            uint32_t imageCount, std::string_view engineName,
+            VkExtent2D applicationExtent, uint32_t imageCount, std::string_view engineName,
             std::optional<VkPresentModeKHR> compositorPresentMode,
             uint32_t refreshHz = 0);
         void destroySwapchain(VkSurfaceKHR surface, VkSwapchainKHR swapchain);
+
+        /// Return a cached X11 extent change before acquiring an application
+        /// image. No X11 query, image acquisition or semaphore signal occurs.
+        /// The private variable Wayland surface cannot report this mismatch.
+        [[nodiscard]] VkResult acquisitionResult(
+            VkSurfaceKHR surface, VkSwapchainKHR swapchain) const;
 
         /// Bind the matching protocol object before every lower presentation,
         /// including each generated output. Association recovers Xwayland and

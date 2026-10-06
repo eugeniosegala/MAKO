@@ -105,7 +105,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "Limite da taxa de atualização",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "Escolha a maior taxa de atualização em que a geração de quadros deve permanecer pausada.",
   "CONFIG_ULTRA_PERFORMANCE": "Desempenho ultra (Reiniciar)",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduz a carga da GPU do MAKO em dispositivos de baixo consumo. Usa escala de fluxo de 70%, o modelo de FG mais leve, FP16 quando houver suporte e LS1 Performance quando a escala estiver ativada. Troca qualidade de imagem por desempenho nos recursos ativos do MAKO.",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduz a carga da GPU do MAKO em dispositivos de baixo consumo. Usa escala de fluxo de 70%, o modelo de FG mais leve e LS1 Performance quando a escala estiver ativada. Troca qualidade de imagem por desempenho nos recursos ativos do MAKO. Respeita a configuração global de FP16.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Ativar ou desativar o Ultra Performance requer reiniciar o jogo. Outros controles de perfil compatíveis continuam disponíveis após a inicialização.",
   "CONFIG_PERFORMANCE_MODE": "Modelo de FG mais leve",
   "CONFIG_PERFORMANCE_MODE_DESC": "O modelo FG leve reduz o uso da GPU, mas aumenta fantasmas; Desempenho ultra força sua ativação.",
@@ -284,7 +284,7 @@
   "FIXED_MULTIPLIER": "Multiplicador fixo",
   "FIXED_MULTIPLIER_DESC": "2x–5x define uma proporção de saída fixa; 5x custa mais e serve para telas de alta taxa de atualização. 0x pausa a geração sem liberar recursos.",
   "CONFIG_ALLOW_FP16": "Permitir FP16 (Reiniciar)",
-  "CONFIG_ALLOW_FP16_DESC": "Configuração global do renderizador: aplica-se a todos os perfis e não pode ser alterada por jogo. Melhora o desempenho em AMD; desative para GPUs NVIDIA mais antigas. Reinicie o jogo após alterar.",
+  "CONFIG_ALLOW_FP16_DESC": "Precisão global para todos os perfis: ativado solicita FP16; desativado usa FP32. Aplica-se à geração de quadros e ao MAKO Scaler. O LS1 usa o MAKO Scaler como alternativa quando FP16 está selecionado. Modelos FP16 sem suporte exibem um aviso. Reinicie o jogo após alterar.",
   "CONFIG_GPU": "GPU (Reiniciar)",
   "CONFIG_GPU_DESC": "Nome opcional da GPU, ID fornecedor:dispositivo ou ID do barramento PCI. Reinicie o jogo após a alteração.",
   "CONFIG_ACTIVE_IN": "Processos correspondentes",
@@ -380,8 +380,8 @@
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Aviso sobre os modelos do Lossless Scaling",
   "MODEL_WARNING_DESCRIPTION": "Alguns recursos do Lossless Scaling podem estar indisponíveis:",
-  "MODEL_WARNING_LS1": "O LS1 falhou na verificação de disponibilidade. O MAKO Scaler é usado automaticamente se o LS1 não puder ser carregado.",
-  "MODEL_WARNING_LSFG": "Uma verificação de modelos LSFG falhou. A geração de quadros pode estar indisponível com a precisão selecionada.",
+  "MODEL_WARNING_LS1": "O LS1 não está disponível com a precisão ou o modelo selecionado. O MAKO Scaler preserva a precisão selecionada. Desative FP16 para usar o caminho FP32 compatível do LS1.",
+  "MODEL_WARNING_LSFG": "A geração de quadros não está disponível com a precisão ou o modelo selecionado. Use um modelo público compatível do Lossless Scaling ou desative FP16 para um modelo que só oferece FP32.",
   "MODEL_WARNING_UPDATE": "Aplique as atualizações disponíveis do MAKO Decky e Renderer e reinicie. Se persistir, confira os arquivos de Lossless Scaling e colete diagnósticos.",
   "MODEL_WARNING_CHECK_UPDATES": "Procurar atualizações do MAKO Decky"
 }

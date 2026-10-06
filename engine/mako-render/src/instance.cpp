@@ -424,6 +424,7 @@ Root::Root() :
     )),
     gamescopeEnvironmentDetected(gamescopeProcessEnvironmentHint()),
     hdrFeedbackReader(this->presentationEnvironment) {
+    this->fp16AtStartup = this->config.get().global().allow_fp16;
     std::cerr << makoBuildIdentity << '\n';
 
     std::cerr << "MAKO Renderer: presentation policy: gamescope_wsi="
@@ -685,7 +686,7 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
     const auto& currentGlobal = this->config.get().global();
     result.globalChangeDeferred = backendGlobalChangePending(
         this->backendGlobal, currentGlobal
-    );
+    ) || currentGlobal.allow_fp16 != this->fp16AtStartup;
 
     const auto previousProfileName = this->active_profile
         ? std::optional<std::string>{this->active_profile->name}
@@ -722,7 +723,8 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
         scalingEnginePending = projection.scalingEnginePending;
         swapchainImageCountCompatibilityPending =
             projection.swapchainImageCountCompatibilityPending;
-        profileProcessRestartRequired = projection.restartRequired();
+        profileProcessRestartRequired = projection.restartRequired() ||
+            currentGlobal.allow_fp16 != this->fp16AtStartup;
     } else if (runtimeProfile) {
         if (runtimeProfile->frame_generation_provisioned !=
                 this->frameGenerationInteropProvisionedAtStartup) {
@@ -755,7 +757,7 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
     if (ultraPerformancePending) {
         profileProcessRestartRequired = true;
         std::cerr << "MAKO Renderer: Ultra Performance toggle deferred; "
-                     "restart the game to apply its process-static FP16 and "
+                     "restart the game to apply its model and "
                      "resource policy; compatible profile changes remain live\n";
     }
     if (scalingEnginePending) {
@@ -875,19 +877,20 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
 
 void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
         const std::function<void(void)>& finish) const {
-    if (!this->frameGenerationInteropProvisioned()) {
+    if (!this->frameGenerationInteropProvisioned() && !this->scalingEngineProvisioned()) {
         finish();
         return;
     }
 
+    std::vector<const char*> requiredExtensions{"VK_KHR_get_physical_device_properties2"};
+    if (this->frameGenerationInteropProvisioned()) {
+        requiredExtensions.push_back("VK_KHR_external_memory_capabilities");
+        requiredExtensions.push_back("VK_KHR_external_semaphore_capabilities");
+    }
     auto extensions = add_extensions(
         createInfo.ppEnabledExtensionNames,
         createInfo.enabledExtensionCount,
-        {
-            "VK_KHR_get_physical_device_properties2",
-            "VK_KHR_external_memory_capabilities",
-            "VK_KHR_external_semaphore_capabilities"
-        }
+        requiredExtensions
     );
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
@@ -1615,9 +1618,10 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                         applicationDevice
                     );
                 },
-                dll, ls::effectiveAllowFp16(global, profile)
+                dll, this->fp16AtStartup
             );
             this->backendGlobal = global;
+            this->backendGlobal->allow_fp16 = this->fp16AtStartup;
             this->backendProfile = profile;
         } catch (const std::exception& e) {
             backendInitializationError = e.what();
@@ -1656,7 +1660,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     const auto memoryBefore = vk.deviceMemorySnapshot();
     const bool inserted = this->swapchains.emplace(swapchain,
         Swapchain(vk, frameGenerationBackend, std::move(contextProfile), info,
-            std::move(scalingShaderDll),
+            std::move(scalingShaderDll), this->fp16AtStartup,
             this->gamescopeHdrActive,
             this->gamescopeDetected,
             this->presentationEnvironment.hdrExposureDisabled,

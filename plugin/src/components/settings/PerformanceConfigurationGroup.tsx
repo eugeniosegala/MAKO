@@ -47,7 +47,7 @@ export function PerformanceConfigurationGroup({
               <div>
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "Reduces MAKO's GPU workload on low-power devices. Uses 70% Flow Scale, the Lighter FG Model, FP16 when supported, and LS1 Performance when Scaling is enabled. Trades image quality for performance across the active MAKO features.",
+                  "Reduces MAKO's GPU workload on low-power devices. Uses 70% Flow Scale, the Lighter FG Model, and LS1 Performance when Scaling is enabled. Respects the global FP16 setting. Trades image quality for performance across the active MAKO features.",
                 )}
               </div>
               <MakoInlineTip tone="info">
@@ -92,10 +92,9 @@ export function PerformanceConfigurationGroup({
           }
           description={t(
             "CONFIG_ALLOW_FP16_DESC",
-            "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs. Restart the game after changing it.",
+            "Global precision setting for all profiles: on requests FP16; off uses FP32. Applies to Frame Generation and MAKO Scaler. LS1 falls back to MAKO Scaler when FP16 is selected. Unsupported FP16 models show a warning. Restart the game after changing it.",
           )}
-          checked={config.ultra_performance || config.allow_fp16}
-          disabled={config.ultra_performance}
+          checked={config.allow_fp16}
           onChange={(value) => onConfigChange(ALLOW_FP16, value)}
           bottomSeparator="none"
         />

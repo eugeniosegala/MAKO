@@ -14,7 +14,7 @@ namespace mako::backend {
         std::string reason;
     };
 
-    /// Static, GPU-independent inspection of the model resources MAKO knows
+    /// GPU-independent inspection of the model resources MAKO knows
     /// how to consume. Fingerprints identify content but never decide support.
     struct LosslessDllInspection {
         std::string fileSha256;
@@ -33,8 +33,9 @@ namespace mako::backend {
         const std::filesystem::path& dll
     );
 
-    /// Inspect the complete runtime LSFG registry for one precision, without
-    /// constructing a Vulkan device or requiring any LS1 model/translator.
+    /// Inspect the complete runtime LSFG registry at the selected precision,
+    /// including DirectX translation only for FP32, without a Vulkan device
+    /// or any LS1 model. Native SPIR-V inspection needs no translator.
     [[nodiscard]] ModelCompatibility inspectLsfgRegistry(
         const std::filesystem::path& dll, bool fp16
     );

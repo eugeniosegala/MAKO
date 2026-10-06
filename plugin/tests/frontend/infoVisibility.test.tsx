@@ -175,9 +175,7 @@ test("R1 hides information without changing controls, repeats, or other buttons"
     screen.getByText("Helpful tip").closest(".Mako_OptionMessage"),
   ).toBeTruthy();
   expect(
-    screen
-      .getByText("Setting relationship")
-      .closest(".Mako_OptionMessage"),
+    screen.getByText("Setting relationship").closest(".Mako_OptionMessage"),
   ).toBeTruthy();
   expect(pressButton(input, 5).defaultPrevented).toBe(false);
   expect(pressButton(input).defaultPrevented).toBe(true);
@@ -230,8 +228,12 @@ test("renders option descriptions two pixels smaller in both Steam UI modes", ()
   expect(styles).toContain(
     ".DesktopUI .Mako_InfoVisibility .Steam_FieldDescription,\n        .DesktopUI .Mako_InfoVisibility .Mako_OptionDescription,\n        .DesktopUI .Mako_InfoVisibility .Mako_OptionMessage {\n          font-size: 11px !important;\n          line-height: 16px !important;",
   );
-  expect(screen.getByText("Option message").closest(".Mako_OptionMessage")).toBeTruthy();
-  expect(screen.getByText("Top warning").closest(".Mako_OptionMessage")).toBeNull();
+  expect(
+    screen.getByText("Option message").closest(".Mako_OptionMessage"),
+  ).toBeTruthy();
+  expect(
+    screen.getByText("Top warning").closest(".Mako_OptionMessage"),
+  ).toBeNull();
 });
 
 test("clicking the ribbon persists the choice across reopening without changing section preferences", () => {
@@ -255,9 +257,7 @@ test("clicking the ribbon persists the choice across reopening without changing 
   expect(isDisplayed(screen.getByText("v3.2.1"))).toBe(true);
   expect(isDisplayed(screen.getByText("the-captain"))).toBe(true);
   expect(isDisplayed(screen.getByText("Waiting for MAKO"))).toBe(true);
-  expect(isDisplayed(screen.getByText(/Live metrics unavailable/))).toBe(
-    true,
-  );
+  expect(isDisplayed(screen.getByText(/Live metrics unavailable/))).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Show info" }));
   expect(localStorage.getItem("mako-info-hidden")).toBe("false");
 });
@@ -586,12 +586,13 @@ test.each<{ name: string; status: ModelWarningProps; message: string }>([
   {
     name: "LSFG",
     status: { lsfg: { compatible: false, reason: "lsfg-unavailable" } },
-    message: "An LSFG model check failed.",
+    message:
+      "Frame Generation is unavailable at the selected precision or model setting.",
   },
   {
     name: "LS1",
     status: { ls1: { compatible: false, reason: "ls1-unavailable" } },
-    message: "LS1 failed its availability check.",
+    message: "LS1 is unavailable at the selected precision or model setting.",
   },
   {
     name: "runtime fallback",
@@ -641,8 +642,8 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
   expect(
     screen.getAllByRole("listitem").map((item) => item.textContent),
   ).toEqual([
-    "LS1 failed its availability check. MAKO Scaler is used automatically if LS1 cannot load.",
-    "An LSFG model check failed. Frame Generation may be unavailable with the selected precision setting.",
+    "LS1 is unavailable at the selected precision or model setting. MAKO Scaler preserves the selected precision. Turn FP16 off to use the supported FP32 LS1 path.",
+    "Frame Generation is unavailable at the selected precision or model setting. Use a supported public Lossless Scaling model, or turn FP16 off for an FP32-only model.",
   ]);
   const update = screen.getByRole("button", {
     name: "Check for MAKO Decky updates",
@@ -665,7 +666,7 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
     "LS1 is unavailable for this game. MAKO Scaler is active.",
   );
   expect(warning.textContent).not.toContain(
-    "LS1 failed its availability check.",
+    "LS1 is unavailable at the selected precision or model setting.",
   );
   expect(
     screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
@@ -673,7 +674,7 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
 
   rerender(panel({ ls1: { compatible: true, reason: null }, lsfg: failed }));
   expect(screen.getByRole("listitem").textContent).toContain(
-    "An LSFG model check failed.",
+    "Frame Generation is unavailable at the selected precision or model setting.",
   );
   rerender(
     panel({

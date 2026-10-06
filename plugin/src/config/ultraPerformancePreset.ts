@@ -1,5 +1,4 @@
 import {
-  ALLOW_FP16,
   FLOW_SCALE,
   PERFORMANCE_MODE,
   SCALING_METHOD_LS1_PERFORMANCE,
@@ -26,6 +25,5 @@ export function ultraPerformanceChanges(
       ? ULTRA_PERFORMANCE_FLOW_SCALE
       : DEFAULT_CONFIGURATION.flow_scale,
     [PERFORMANCE_MODE]: enabled,
-    [ALLOW_FP16]: DEFAULT_CONFIGURATION.allow_fp16,
   };
 }

@@ -83,8 +83,8 @@ SUBCOMMAND OPTIONS:
 
     benchmark & debug
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Allow FP16 when supported (default)
-            --no-fp16                  Use FP32 LSFG shaders
+        -a, --allow-fp16                Request FP16 arithmetic (default)
+            --no-fp16                  Use FP32 arithmetic
         -w, --width <INT>               Width of the input frames
         -h, --height <INT>              Height of the input frames
         -f, --flow <FLOAT>              Flow scale
@@ -96,8 +96,8 @@ SUBCOMMAND OPTIONS:
         -d, --dll <PATH>                Path to Lossless.dll
             --ls1 <METHOD>             Probe only ls1 or ls1-performance; emits JSON
             --sharpness <FLOAT>        Selected LS1 sharpness from 0 to 1 (default 0.8)
-            --lsfg                     Probe LSFG FP32 and FP16 registries; emits JSON
-            --no-fp16                  With --lsfg, inspect only the FP32 registry
+            --lsfg                     Probe the selected LSFG FP16 model; emits JSON
+            --no-fp16                  With --lsfg/--ls1, select FP32
 
     benchmark
         -t, --duration <SECONDS>        Benchmark duration in seconds
@@ -107,8 +107,8 @@ SUBCOMMAND OPTIONS:
 
     quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Allow FP16 when supported (default)
-            --no-fp16                  Use FP32 LSFG shaders
+        -a, --allow-fp16                Request FP16 arithmetic (default)
+            --no-fp16                  Use FP32 arithmetic
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -s, --scene <NAME>              Procedural scene name
@@ -119,6 +119,8 @@ SUBCOMMAND OPTIONS:
         -p, --performance-mode          Use the lighter LSFG model
 
     spatial-quality-regression
+        -a, --allow-fp16                Request FP16 colour arithmetic
+            --no-fp16                  Use FP32 arithmetic (default)
         -d, --dll <PATH>                Path to Lossless.dll for LS1 methods
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
@@ -131,6 +133,8 @@ SUBCOMMAND OPTIONS:
         -h, --height <INT>              Exact presentation height
 
     spatial-profile
+        -a, --allow-fp16                Request FP16 colour arithmetic
+            --no-fp16                  Use FP32 arithmetic (default)
         -d, --dll <PATH>                Path to Lossless.dll for LS1 methods
         -g, --gpu <STRING>              GPU to use
         -m, --method <NAME>             native, mako, ls1, or ls1-performance
@@ -147,8 +151,8 @@ SUBCOMMAND OPTIONS:
 
     combined-quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Allow FP16 when supported (default)
-            --no-fp16                  Use FP32 LSFG shaders
+        -a, --allow-fp16                Request FP16 arithmetic (default)
+            --no-fp16                  Use FP32 arithmetic
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -c, --scene <NAME>              Procedural scene name
@@ -238,7 +242,7 @@ SUBCOMMAND OPTIONS:
             }
         }
         if (optind < argc || opts.dll.empty() || (opts.lsfg && opts.ls1Mode) ||
-                (!opts.allowFp16 && !opts.lsfg) ||
+                (!opts.allowFp16 && !opts.lsfg && !opts.ls1Mode) ||
                 opts.sharpness < 0.0F || opts.sharpness > 1.0F) {
             usage(program);
             std::exit(EXIT_FAILURE);
@@ -461,7 +465,9 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_spatial_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::SpatialOptions opts{};
-        const std::array<option, 11> GETOPT {{
+        const std::array<option, 13> GETOPT {{
+            { "allow-fp16", no_argument, nullptr, 'a' },
+            { "no-fp16", no_argument, nullptr, 'A' },
             { "dll",        required_argument, nullptr, 'd' },
             { "gpu",        required_argument, nullptr, 'g' },
             { "output",     required_argument, nullptr, 'o' },
@@ -477,8 +483,10 @@ SUBCOMMAND OPTIONS:
 
         int c{0};
         while ((c = getopt_long(
-                argc, argv, "d:g:o:c:m:f:s:t:w:h:", GETOPT.data(), nullptr)) != -1) {
+                argc, argv, "ad:g:o:c:m:f:s:t:w:h:", GETOPT.data(), nullptr)) != -1) {
             switch (c) {
+                case 'a': opts.allow_fp16 = true; break;
+                case 'A': opts.allow_fp16 = false; break;
                 case 'd':
                     opts.dll.emplace(optarg);
                     break;
@@ -532,7 +540,9 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_spatial_profile(int argc, char** argv,
             const std::string& program) {
         quality::SpatialProfileOptions opts{};
-        const std::array<option, 11> GETOPT {{
+        const std::array<option, 13> GETOPT {{
+            { "allow-fp16", no_argument, nullptr, 'a' },
+            { "no-fp16", no_argument, nullptr, 'A' },
             { "dll",                      required_argument, nullptr, 'd' },
             { "gpu",                      required_argument, nullptr, 'g' },
             { "method",                   required_argument, nullptr, 'm' },
@@ -548,8 +558,10 @@ SUBCOMMAND OPTIONS:
 
         int c{0};
         while ((c = getopt_long(
-                argc, argv, "d:g:m:w:h:f:s:u:n:x", GETOPT.data(), nullptr)) != -1) {
+                argc, argv, "ad:g:m:w:h:f:s:u:n:x", GETOPT.data(), nullptr)) != -1) {
             switch (c) {
+                case 'a': opts.allow_fp16 = true; break;
+                case 'A': opts.allow_fp16 = false; break;
                 case 'd':
                     opts.dll.emplace(optarg);
                     break;

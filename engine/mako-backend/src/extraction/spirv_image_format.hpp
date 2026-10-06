@@ -7,7 +7,7 @@
 
 namespace mako::backend::detail {
 
-    void patchLs1StorageImageFormat(
+    void patchStorageImageFormat(
         std::vector<uint8_t>& data, uint32_t imageFormat
     );
 

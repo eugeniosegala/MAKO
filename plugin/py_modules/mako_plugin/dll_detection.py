@@ -41,18 +41,22 @@ class DllDetectionService(BaseService):
         self._model_cache: dict[str, _ModelInspectionCache] = {}
 
     def check_scaling_model(
-        self, dll: str, method: str, sharpness: float,
+        self, dll: str, method: str, sharpness: float, allow_fp16: bool = False,
     ) -> ModelStatusResponse:
         """Inspect only the selected LS1 graph through the installed Renderer."""
-        if (method not in ("ls1", "ls1-performance")
+        if (type(allow_fp16) is not bool
+                or method not in ("ls1", "ls1-performance")
                 or isinstance(sharpness, bool)
                 or not isinstance(sharpness, (int, float))
                 or not math.isfinite(sharpness) or not 0 <= sharpness <= 1):
             return {"compatible": None, "reason": "invalid-selection"}
-        return self._check_model(dll, ("--ls1", method, "--sharpness", str(sharpness)), "ls1")
+        arguments = ("--ls1", method, "--sharpness", str(sharpness))
+        if not allow_fp16:
+            arguments += ("--no-fp16",)
+        return self._check_model(dll, arguments, "ls1")
 
     def check_frame_generation_model(self, dll: str, allow_fp16: bool) -> ModelStatusResponse:
-        """Inspect LSFG registries allowed by the saved precision permission."""
+        """Inspect the LSFG registry at the selected arithmetic precision."""
         if type(allow_fp16) is not bool:
             return {"compatible": None, "reason": "invalid-selection"}
         arguments = ("--lsfg",) if allow_fp16 else ("--lsfg", "--no-fp16")

@@ -105,7 +105,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "刷新率阈值",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "选择帧生成应保持暂停的最高刷新率。",
   "CONFIG_ULTRA_PERFORMANCE": "极致性能（重启）",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "降低 MAKO 在低功耗设备上的 GPU 负载。它使用 70% 光流缩放、轻量帧生成模型、受支持时的 FP16，并在启用缩放时使用 LS1 Performance。以画质换取所有已启用 MAKO 功能的性能。",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "降低 MAKO 在低功耗设备上的 GPU 负载。它使用 70% 光流缩放、轻量帧生成模型，并在启用缩放时使用 LS1 Performance。以画质换取所有已启用 MAKO 功能的性能。遵循全局 FP16 设置。",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "开启或关闭 Ultra Performance 需要重启游戏。其他兼容的配置文件控件在启动后仍可使用。",
   "CONFIG_PERFORMANCE_MODE": "轻量帧生成模型",
   "CONFIG_PERFORMANCE_MODE_DESC": "轻量 FG 模型降低 GPU 开销，但增加重影；极致性能会强制开启。",
@@ -284,7 +284,7 @@
   "FIXED_MULTIPLIER": "固定倍率",
   "FIXED_MULTIPLIER_DESC": "2x–5x 是固定输出倍率；5x 开销较大，适合高刷新率屏幕。0x 可暂停帧生成而不卸载资源。",
   "CONFIG_ALLOW_FP16": "允许 FP16（重启）",
-  "CONFIG_ALLOW_FP16_DESC": "这是全局渲染器设置：适用于所有配置文件，不能按游戏更改。可提升 AMD GPU 的性能；较旧的 NVIDIA GPU 请禁用。更改后请重启游戏。",
+  "CONFIG_ALLOW_FP16_DESC": "适用于所有配置文件的全局精度设置：开启时请求 FP16，关闭时使用 FP32。适用于帧生成和 MAKO Scaler。选择 FP16 时，LS1 会回退到 MAKO Scaler。不支持的 FP16 模型会显示警告。更改后请重启游戏。",
   "CONFIG_GPU": "GPU（重启）",
   "CONFIG_GPU_DESC": "可选的 GPU 名称、厂商:设备 ID 或 PCI 总线 ID。更改后请重启游戏。",
   "CONFIG_ACTIVE_IN": "匹配的进程",
@@ -380,8 +380,8 @@
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Lossless Scaling 模型警告",
   "MODEL_WARNING_DESCRIPTION": "Lossless Scaling 的部分功能可能无法使用：",
-  "MODEL_WARNING_LS1": "LS1 可用性检查失败。如果无法加载 LS1，将自动使用 MAKO Scaler。",
-  "MODEL_WARNING_LSFG": "LSFG 模型检查失败。在所选精度设置下，帧生成可能不可用。",
+  "MODEL_WARNING_LS1": "LS1 在所选精度或模型设置下不可用。MAKO Scaler 会保持所选精度。关闭 FP16 可使用受支持的 LS1 FP32 路径。",
+  "MODEL_WARNING_LSFG": "帧生成在所选精度或模型设置下不可用。请使用受支持的 Lossless Scaling 公开版模型，或为仅支持 FP32 的模型关闭 FP16。",
   "MODEL_WARNING_UPDATE": "安装可用的 MAKO Decky 和 Renderer 更新并重启。若问题仍在，请验证 Lossless Scaling 文件并收集诊断信息。",
   "MODEL_WARNING_CHECK_UPDATES": "检查 MAKO Decky 更新"
 }

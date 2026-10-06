@@ -6,6 +6,7 @@
 
 #include <array>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 
 namespace mako::backend {
@@ -41,6 +42,6 @@ namespace mako::backend {
     /// @throws ls::error if shaders are missing
     /// @throws vk::vulkan_error on Vulkan errors
     ShaderRegistry buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
-        const DllResourceArchive& archive);
+        const DllResourceArchive& archive, const std::filesystem::path& dll);
 
 }

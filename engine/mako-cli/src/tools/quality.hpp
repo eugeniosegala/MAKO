@@ -30,6 +30,7 @@ namespace mako::cli::quality {
     /// Options for the real MAKO/LS1 spatial reconstruction regression.
     struct SpatialOptions {
         std::optional<std::string> dll;
+        bool allow_fp16{false};
         std::optional<std::string> gpu;
         std::optional<std::filesystem::path> output;
         std::string scene{"motion-boundary"};
@@ -47,6 +48,7 @@ namespace mako::cli::quality {
     /// Options for timestamp-query profiling of the production spatial graph.
     struct SpatialProfileOptions {
         std::optional<std::string> dll;
+        bool allow_fp16{false};
         std::optional<std::string> gpu;
         std::string method{"mako"};
         uint32_t width{1280};

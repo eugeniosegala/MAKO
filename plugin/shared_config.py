@@ -215,7 +215,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "allow_fp16": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
-        "description": "allow FP16 acceleration (disable on older NVIDIA GPUs)",
+        "description": "select FP16 for supported model arithmetic and scaling; false selects FP32",
         "location": "global"
     },
 
@@ -355,7 +355,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "ultra_performance": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 70% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain available after startup",
+        "description": "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 70% flow scale, the lighter FG model and active-policy resource allocation while respecting the global precision choice; compatible controls remain available after startup",
         "location": "toml"
     },
 

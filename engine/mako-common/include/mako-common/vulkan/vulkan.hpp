@@ -124,6 +124,7 @@ namespace vk {
         PFN_vkCreateSwapchainKHR CreateSwapchainKHR;
         PFN_vkGetSwapchainImagesKHR GetSwapchainImagesKHR;
         PFN_vkAcquireNextImageKHR AcquireNextImageKHR;
+        PFN_vkAcquireNextImage2KHR AcquireNextImage2KHR;
         PFN_vkQueuePresentKHR QueuePresentKHR;
         PFN_vkDestroySwapchainKHR DestroySwapchainKHR;
     };
@@ -191,7 +192,8 @@ namespace vk {
             bool frameGenerationInteropEnabled,
             bool isGraphical = true,
             std::optional<PFN_vkSetDeviceLoaderData> setLoaderData = std::nullopt,
-            const std::optional<std::filesystem::path>& cachefile = std::nullopt);
+            const std::optional<std::filesystem::path>& cachefile = std::nullopt,
+            bool shaderFloat16Enabled = false);
 
         /// find a memory type index
         /// @param validTypes bitset of valid memory types

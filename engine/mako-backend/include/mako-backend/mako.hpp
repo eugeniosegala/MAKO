@@ -73,7 +73,7 @@ namespace mako::backend {
         ///
         /// @param devicePicker Function that picks a physical device based on some identifiers.
         /// @param shaderDllPath Path to the Lossless.dll file to load shaders from.
-        /// @param allowLowPrecision Whether to load low-precision (FP16) shaders if supported.
+        /// @param allowLowPrecision Request supported FP16 model shaders; false requires FP32.
         ///
         /// @throws backend::error on failure
         ///

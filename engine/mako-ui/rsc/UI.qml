@@ -217,7 +217,6 @@ ApplicationWindow {
                         title: t.allowFp16
                         description: t.allowFp16Desc
                         compactRestartMarker: true
-                        enabled: !backend.ultra_performance
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight

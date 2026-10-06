@@ -105,7 +105,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "Refresh Rate Threshold",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "Choose the highest refresh rate where frame generation should remain paused.",
   "CONFIG_ULTRA_PERFORMANCE": "Ultra Performance (Restart)",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduces MAKO's GPU workload on low-power devices. Uses 70% Flow Scale, the Lighter FG Model, FP16 when supported, and LS1 Performance when Scaling is enabled. Trades image quality for performance across the active MAKO features.",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduces MAKO's GPU workload on low-power devices. Uses 70% Flow Scale, the Lighter FG Model, and LS1 Performance when Scaling is enabled. Respects the global FP16 setting. Trades image quality for performance across the active MAKO features.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
   "CONFIG_PERFORMANCE_MODE": "Lighter FG Model",
   "CONFIG_PERFORMANCE_MODE_DESC": "Lighter FG model lowers GPU cost but increases ghosting; Ultra Performance forces it on.",
@@ -284,7 +284,7 @@
   "FIXED_MULTIPLIER": "Fixed Multiplier",
   "FIXED_MULTIPLIER_DESC": "2x–5x sets a constant output ratio; 5x costs more and suits high-refresh displays. 0x pauses generation live without unloading resources.",
   "CONFIG_ALLOW_FP16": "Allow FP16 (Restart)",
-  "CONFIG_ALLOW_FP16_DESC": "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs. Restart the game after changing it.",
+  "CONFIG_ALLOW_FP16_DESC": "Global precision setting for all profiles: on requests FP16; off uses FP32. Applies to Frame Generation and MAKO Scaler. LS1 falls back to MAKO Scaler when FP16 is selected. Unsupported FP16 models show a warning. Restart the game after changing it.",
   "CONFIG_GPU": "GPU (Restart)",
   "CONFIG_GPU_DESC": "Optional GPU name, vendor:device ID, or PCI bus ID. Restart the game after changing it.",
   "CONFIG_ACTIVE_IN": "Matched Processes",
@@ -380,8 +380,8 @@
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Lossless Scaling model warning",
   "MODEL_WARNING_DESCRIPTION": "Some Lossless Scaling features may be unavailable:",
-  "MODEL_WARNING_LS1": "LS1 failed its availability check. MAKO Scaler is used automatically if LS1 cannot load.",
-  "MODEL_WARNING_LSFG": "An LSFG model check failed. Frame Generation may be unavailable with the selected precision setting.",
+  "MODEL_WARNING_LS1": "LS1 is unavailable at the selected precision or model setting. MAKO Scaler preserves the selected precision. Turn FP16 off to use the supported FP32 LS1 path.",
+  "MODEL_WARNING_LSFG": "Frame Generation is unavailable at the selected precision or model setting. Use a supported public Lossless Scaling model, or turn FP16 off for an FP32-only model.",
   "MODEL_WARNING_UPDATE": "Apply available MAKO Decky and Renderer updates, then restart. If unresolved, verify Lossless Scaling files and collect diagnostics.",
   "MODEL_WARNING_CHECK_UPDATES": "Check for MAKO Decky updates"
 }

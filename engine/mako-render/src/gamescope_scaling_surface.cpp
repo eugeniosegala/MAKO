@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "gamescope_scaling_surface.hpp"
+#include "spatial_scaling_policy.hpp"
 #include "presentation_policy.hpp"
 #include "present_diagnostics.hpp"
 
@@ -145,6 +146,8 @@ struct GamescopeScalingSurface::Impl {
         Impl* owner{};
         wl_proxy* proxy{};
         bool retired{};
+        std::optional<VkExtent2D> applicationExtent;
+        VkResult acquisitionResult{VK_SUCCESS};
         uint32_t refreshHz{};
         uint32_t presentId{};
         OrderedPresentTimeline presentTimeline;
@@ -166,6 +169,8 @@ struct GamescopeScalingSurface::Impl {
         uint32_t server{};
         uint32_t window{};
         bool formatPolicyLogged{};
+        std::optional<VkExtent2D> queriedExtent;
+        uint64_t extentQueryGeneration{};
         xcb_connection_t* connection{};
         std::unordered_map<VkSwapchainKHR, std::unique_ptr<Content>> contents;
         ~Surface() {
@@ -174,6 +179,39 @@ struct GamescopeScalingSurface::Impl {
         }
     };
     std::unordered_map<VkSurfaceKHR, std::unique_ptr<Surface>> surfaces;
+
+    std::optional<VkExtent2D> windowExtent(const Surface& state) const {
+        Reply<xcb_get_geometry_reply_t> geometry(geometryReply(state.connection,
+            getGeometry(state.connection, state.window), nullptr), &std::free);
+        if (!geometry)
+            return std::nullopt;
+        return VkExtent2D{geometry->width, geometry->height};
+    }
+
+    void observeWindowExtent(Surface& state, const VkSurfaceKHR surface,
+            const VkExtent2D extent, const char* boundary) {
+        for (auto& [swapchain, content] : state.contents) {
+            if (!content->applicationExtent || content->acquisitionResult != VK_SUCCESS ||
+                    sameExtent(*content->applicationExtent, extent))
+                continue;
+            // A private variable-extent Wayland swapchain never learns that
+            // its associated X11 window resized. Preserve the native WSI
+            // invalidation until the application replaces this swapchain.
+            content->acquisitionResult = VK_ERROR_OUT_OF_DATE_KHR;
+            if (present_diagnostics::enabled()) {
+                std::cerr << "MAKO Renderer: spatial scaling window extent: "
+                          << "operation=swapchain-out-of-date; pid=" << getpid()
+                          << "; surface=" << surface
+                          << "; swapchain=" << swapchain
+                          << "; window=" << state.window
+                          << "; application=" << content->applicationExtent->width
+                          << 'x' << content->applicationExtent->height
+                          << "; current=" << extent.width << 'x' << extent.height
+                          << "; boundary=" << boundary
+                          << "; action=requery-before-application-acquire\n";
+            }
+        }
+    }
 
     wl_proxy* marshal(wl_proxy* proxy, uint32_t opcode,
             const wl_interface* interface, uint32_t version,
@@ -527,7 +565,8 @@ bool GamescopeScalingSurface::owns(const VkSurfaceKHR surface) const {
 
 bool GamescopeScalingSurface::createSwapchain(
         const VkSurfaceKHR surface, const VkSwapchainKHR swapchain,
-        const VkSwapchainCreateInfoKHR& info, const uint32_t imageCount,
+        const VkSwapchainCreateInfoKHR& info, const VkExtent2D applicationExtent,
+        const uint32_t imageCount,
         const std::string_view engineName,
         const std::optional<VkPresentModeKHR> compositorPresentMode,
         const uint32_t refreshHz) {
@@ -539,8 +578,35 @@ bool GamescopeScalingSurface::createSwapchain(
     if (state.contents.contains(swapchain))
         return true;
 
+    // Gamescope can retain the X11 window size while an application explicitly
+    // chooses another rendering extent. Invalidate only a source that matched
+    // an observed window extent, rather than treating every override as stale.
+    const auto extent = impl->windowExtent(state);
+    if (!extent)
+        return false;
     auto content = std::make_unique<Impl::Content>();
     content->owner = impl.get();
+    // Explicit swapchain-maintenance scaling can legally use an image size
+    // different from the window. Leave that lower-WSI contract in charge.
+    bool exactWindowExtent = true;
+    for (auto* node = static_cast<const VkBaseInStructure*>(info.pNext);
+            node; node = node->pNext) {
+#if defined(VK_KHR_swapchain_maintenance1)
+        if (node->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR)
+            exactWindowExtent = reinterpret_cast<const VkSwapchainPresentScalingCreateInfoKHR*>(node)
+                ->scalingBehavior == 0;
+#elif defined(VK_EXT_swapchain_maintenance1)
+        if (node->sType == VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT)
+            exactWindowExtent = reinterpret_cast<const VkSwapchainPresentScalingCreateInfoEXT*>(node)
+                ->scalingBehavior == 0;
+#endif
+    }
+    const bool explicitPresentationScaling = !exactWindowExtent;
+    if (exactWindowExtent && !sameExtent(applicationExtent, *extent) &&
+            (!state.queriedExtent || !sameExtent(applicationExtent, *state.queriedExtent)))
+        exactWindowExtent = false;
+    if (exactWindowExtent)
+        content->applicationExtent = applicationExtent;
     content->compositorPresentMode = compositorPresentMode;
     content->refreshHz = refreshHz;
     if (present_diagnostics::enabled()) {
@@ -580,6 +646,25 @@ bool GamescopeScalingSurface::createSwapchain(
         state.contents.erase(inserted);
         return false;
     }
+    // Creation keeps its specified return codes; acquisition requests
+    // recreation before touching the application's semaphore or fence.
+    impl->observeWindowExtent(state, surface, *extent, "swapchain-create");
+    if (present_diagnostics::enabled()) {
+        std::cerr << "MAKO Renderer: spatial scaling window extent: "
+                  << "operation=swapchain-create; pid=" << getpid()
+                  << "; surface=" << surface
+                  << "; swapchain=" << swapchain
+                  << "; window=" << state.window
+                  << "; queried=" << state.queriedExtent.value_or(VkExtent2D{}).width
+                  << 'x' << state.queriedExtent.value_or(VkExtent2D{}).height
+                  << "; query_generation=" << state.extentQueryGeneration
+                  << "; application=" << applicationExtent.width << 'x' << applicationExtent.height
+                  << "; current=" << extent->width << 'x' << extent->height
+                  << "; presentation=" << info.imageExtent.width << 'x' << info.imageExtent.height
+                  << "; exact_window_extent=" << exactWindowExtent
+                  << "; extent_contract=" << (explicitPresentationScaling ? "presentation-scaling"
+                      : exactWindowExtent ? "window" : "application-override") << '\n';
+    }
     return true;
 }
 
@@ -597,30 +682,53 @@ void GamescopeScalingSurface::destroySwapchain(
     impl->displayFlush(impl->display);
 }
 
+VkResult GamescopeScalingSurface::acquisitionResult(
+        const VkSurfaceKHR surface, const VkSwapchainKHR swapchain) const {
+    const std::lock_guard lock(impl->mutex);
+    const auto found = impl->surfaces.find(surface);
+    if (found == impl->surfaces.end())
+        return VK_SUCCESS;
+    const auto content = found->second->contents.find(swapchain);
+    return content == found->second->contents.end()
+        ? VK_SUCCESS : content->second->acquisitionResult;
+}
+
 std::optional<VkResult> GamescopeScalingSurface::applicationCapabilities(
         const VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR& capabilities) const {
     const std::lock_guard lock(impl->mutex);
     const auto found = impl->surfaces.find(surface);
     if (found == impl->surfaces.end())
         return std::nullopt;
-    const auto& state = *found->second;
-    Reply<xcb_get_geometry_reply_t> geometry(impl->geometryReply(state.connection,
-        impl->getGeometry(state.connection, state.window), nullptr), &std::free);
-    if (!geometry)
+    auto& state = *found->second;
+    const auto extent = impl->windowExtent(state);
+    if (!extent)
         return VK_ERROR_SURFACE_LOST_KHR;
-    const VkExtent2D extent{geometry->width, geometry->height};
-    if (extent.width < capabilities.minImageExtent.width ||
-            extent.height < capabilities.minImageExtent.height ||
-            extent.width > capabilities.maxImageExtent.width ||
-            extent.height > capabilities.maxImageExtent.height)
+    if (extent->width < capabilities.minImageExtent.width ||
+            extent->height < capabilities.minImageExtent.height ||
+            extent->width > capabilities.maxImageExtent.width ||
+            extent->height > capabilities.maxImageExtent.height)
         return VK_ERROR_SURFACE_LOST_KHR;
+    ++state.extentQueryGeneration;
+    if (present_diagnostics::enabled() &&
+            (!state.queriedExtent || !sameExtent(*state.queriedExtent, *extent))) {
+        std::cerr << "MAKO Renderer: spatial scaling window extent: "
+                  << "operation=capability-query; pid=" << getpid()
+                  << "; surface=" << surface
+                  << "; window=" << state.window
+                  << "; previous=" << state.queriedExtent.value_or(VkExtent2D{}).width
+                  << 'x' << state.queriedExtent.value_or(VkExtent2D{}).height
+                  << "; current=" << extent->width << 'x' << extent->height
+                  << "; query_generation=" << state.extentQueryGeneration << '\n';
+    }
+    state.queriedExtent = *extent;
+    impl->observeWindowExtent(state, surface, *extent, "capability-query");
     // Both Xlib and XCB expose a concrete window extent. Leaking Wayland's
     // UINT32_MAX sentinel can break startup before an application has even
     // created a swapchain. Query the live geometry rather than the creation
     // size so recreation follows resizes, without doing X11 work at present.
-    capabilities.currentExtent = extent;
-    capabilities.minImageExtent = extent;
-    capabilities.maxImageExtent = extent;
+    capabilities.currentExtent = *extent;
+    capabilities.minImageExtent = *extent;
+    capabilities.maxImageExtent = *extent;
     return VK_SUCCESS;
 }
 

@@ -54,7 +54,7 @@ export function ModelWarning({
                     )
                   : t(
                       "MODEL_WARNING_LS1",
-                      "LS1 failed its availability check. MAKO Scaler is used automatically if LS1 cannot load.",
+                      "LS1 is unavailable at the selected precision or model setting. MAKO Scaler preserves the selected precision. Turn FP16 off to use the supported FP32 LS1 path.",
                     )}
               </li>
             )}
@@ -62,7 +62,7 @@ export function ModelWarning({
               <li>
                 {t(
                   "MODEL_WARNING_LSFG",
-                  "An LSFG model check failed. Frame Generation may be unavailable with the selected precision setting.",
+                  "Frame Generation is unavailable at the selected precision or model setting. Use a supported public Lossless Scaling model, or turn FP16 off for an FP32-only model.",
                 )}
               </li>
             )}

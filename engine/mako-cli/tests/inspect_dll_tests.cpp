@@ -23,7 +23,7 @@ namespace mako::backend {
     LosslessDllInspection inspectLosslessDll(const std::filesystem::path&) {
         throw std::runtime_error("LSFG-only inspection must not inspect LS1");
     }
-    Ls1ShaderSet loadLs1ShaderSet(const std::filesystem::path&, Ls1Mode, float) {
+    Ls1ShaderSet loadLs1ShaderSet(const std::filesystem::path&, Ls1Mode, float, bool) {
         throw std::runtime_error("LSFG-only inspection must not translate LS1");
     }
 }
@@ -41,11 +41,10 @@ int main() {
                     .dll = "synthetic", .lsfg = true, .allowFp16 = allowFp16,
                 });
                 std::cout.rdbuf(previous);
-                const bool compatible = fp32 && (!allowFp16 || fp16);
+                const bool compatible = allowFp16 ? fp16 : fp32;
                 const std::string expected = std::string("{\"schema_version\":1,\"compatible\":") +
                     (compatible ? "true" : "false") + "}\n";
-                const std::vector<bool> expectedPrecisions = allowFp16
-                    ? std::vector<bool>{false, true} : std::vector<bool>{false};
+                const std::vector<bool> expectedPrecisions = std::vector<bool>{allowFp16};
                 if (status != (compatible ? 0 : 1) || output.str() != expected ||
                         checkedPrecisions != expectedPrecisions) {
                     std::cerr << "LSFG inspection protocol or precision policy mismatch\n";

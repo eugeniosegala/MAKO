@@ -122,11 +122,11 @@ class Plugin:
         return self.dll_detection_service.check_lossless_scaling_dll()
 
     async def check_scaling_model(
-        self, dll: str, method: str, sharpness: float,
+        self, dll: str, method: str, sharpness: float, allow_fp16: bool = False,
     ) -> ModelStatusResponse:
         """Read-only selected-model preflight outside Decky's event loop."""
         return await asyncio.to_thread(
-            self.dll_detection_service.check_scaling_model, dll, method, sharpness,
+            self.dll_detection_service.check_scaling_model, dll, method, sharpness, allow_fp16,
         )
 
     async def check_frame_generation_model(

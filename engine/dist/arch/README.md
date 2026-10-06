@@ -43,7 +43,7 @@ Installing the package does not activate MAKO for every game. Open **MAKO Render
 mako-ui
 ```
 
-Create or select a game profile and configure Frame Generation, Scaling, and/or Shaders. Frame Generation and LS1 scaling require a lawful user-supplied `Lossless.dll`; the open MAKO Scaler and bundled shaders do not. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**:
+Create or select a game profile and configure Frame Generation, Scaling, and/or Shaders. Frame Generation and LS1 scaling require a lawful user-supplied `Lossless.dll`; the open MAKO Scaler and bundled shaders do not. LS1 and DirectX-only LSFG models additionally need the optional `vkd3d` dependency, plus `lib32-vkd3d` for 32-bit games. Native SPIR-V LSFG models do not need the translator. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**:
 
 ```text
 /usr/bin/mako-launch %command%

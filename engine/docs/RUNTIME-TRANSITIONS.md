@@ -8,8 +8,8 @@ A setting belongs to the earliest boundary that can safely establish all state i
 
 | Boundary | State | Completion |
 | --- | --- | --- |
-| Process start | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, layer membership and order, Gamescope WSI isolation, HDR exposure, Zink, and audio compatibility | Start a new game process |
-| Process-wide backend | DLL, FP16 permission, GPU, and Ultra Performance policy | Construct a new backend, normally by restarting the process |
+| Process start | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, layer membership and order, Gamescope WSI isolation, HDR exposure, Zink, audio compatibility, and the shared FP16 precision choice | Start a new game process |
+| Process-wide backend | DLL, GPU, and Ultra Performance policy | Construct a new backend, normally by restarting the process |
 | Game-owned swapchain | Spatial extents and pacing shape | Natural recreation, or one eligible maintenance1-backed extent request |
 | Private spatial context | Scaling method and sharpness | Prepare, drain MAKO-owned work, and atomically replace |
 | Private FG context | Flow Scale, lighter model, and generated-output capacity | Prepare, drain MAKO-owned work, and atomically replace |
@@ -17,7 +17,7 @@ A setting belongs to the earliest boundary that can safely establish all state i
 | Compositor feedback | Confirmed refresh, explicit VRR/tearing state, and application HDR state | Background sample, independent of profile reload |
 | Dormant value | A setting for an inactive mode or unavailable private resource | Save now; apply when its owning mode or resource becomes active |
 
-The process-wide backend is created lazily when the first active swapchain needs it. Once built, pending DLL, FP16, GPU, and Ultra changes are compared with the actual construction baseline, not merely the previous file.
+The process-wide backend is created lazily when the first active swapchain needs it. FP16 is captured at process start even when the backend is still dormant, so scaling and a later FG backend cannot disagree after a config reload. Once built, pending DLL, GPU, and Ultra changes are compared with the actual construction baseline, not merely the previous file.
 
 ## Update flow
 
@@ -123,7 +123,7 @@ Disabling Frame Generation provisioning before launch omits LSFG device interop 
 
 The `0x` execution state submits no LSFG model work, generated-image acquisition, or generated presents. The saved cap is dormant. When provisioning is on, the process retains interop, backend, private images, and synchronization so `0x` can return to an active factor live. Failed provisioning leaves real-frame or independent scaling active and reports restart pending.
 
-Ultra Performance remains a process-start policy: effective FP16, Flow Scale 0.7, lighter model, active-policy-sized capacity, and LS1 Performance when scaling is enabled. It never enables scaling. Compatible live controls still work, but changing Ultra itself waits for restart and cannot partially mutate the active backend.
+Ultra Performance remains a process-start policy: the global FP16 choice, Flow Scale 0.7, lighter model, active-policy-sized capacity, and LS1 Performance when scaling is enabled. It never enables scaling. Compatible live controls still work, but changing Ultra itself waits for restart and cannot partially mutate the active backend.
 
 ## Runtime status and diagnostics
 

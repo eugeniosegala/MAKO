@@ -134,6 +134,7 @@ namespace mako::layer {
         Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             ls::GameConf profile, SwapchainInfo info,
             std::optional<std::filesystem::path> scalingShaderDll,
+            bool fp16Requested,
             std::optional<bool> gamescopeHdrActive,
             bool gamescopeDetected, bool hdrExposureDisabled,
             std::optional<uint32_t> gamescopeRefreshHz,
@@ -468,6 +469,7 @@ namespace mako::layer {
 
         SwapchainColorPipeline colorPipeline;
         std::optional<std::filesystem::path> scalingShaderDll;
+        bool fp16Requested{true};
         ls::GameConf profile;
         SwapchainInfo info;
 

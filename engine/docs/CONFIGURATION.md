@@ -47,7 +47,7 @@ MAKO keeps known launcher and web-helper processes inactive while allowing their
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `dll` | Automatic | Optional absolute path to `Lossless.dll`. LSFG and LS1 require it; MAKO Scaler and Native Resolution do not. |
-| `allow_fp16` | `true` | Allows LSFG FP16 when supported by the selected GPU. Set `false` for FP32. Requires restart. |
+| `allow_fp16` | `true` | Selects FP16 LSFG and MAKO Scaler colour arithmetic; `false` selects FP32. Ordinary builds fail explicitly when native FP16 LSFG is unavailable; experimental builds may force conversion of a supported FP32 graph with unqualified image quality. LS1 uses MAKO Scaler at FP16 when no validated LS1 FP16 path exists. Coordinates and transport retain their required precision. Requires restart; Ultra Performance respects this choice. |
 
 MAKO Decky and `mako-ui` share this configuration. Edit a profile in one UI at a time.
 
@@ -107,7 +107,7 @@ Gamescope VRR feedback can affect an eligible pacing handoff, but it does not ch
 | --- | --- | --- |
 | `flow_scale` | `0.8` | LSFG motion-estimation resolution from 0.25–1.0. Lower values reduce GPU cost and may reduce quality. |
 | `performance_mode` | `false` | Uses the lighter LSFG model. |
-| `ultra_performance` | `false` | Restart-bound lighter preset using 70% Flow Scale, the lighter model, FP16 permission, and LS1 Performance when scaling is enabled. |
+| `ultra_performance` | `false` | Restart-bound lighter preset using 70% Flow Scale, the lighter model and LS1 Performance when scaling is enabled. Respects the global precision choice. |
 | `gpu` | Automatic | Optional GPU name, vendor/device ID, or PCI bus ID. Cross-GPU Frame Generation is unsupported. |
 | `pacing` | `none` | Compatibility field; `none` is the only supported value. |
 

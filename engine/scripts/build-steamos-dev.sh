@@ -13,6 +13,7 @@ compiler="${CXX:-clang++}"
 jobs="${MAKO_BUILD_JOBS:-}"
 build_64_bit=true
 build_32_bit=false
+experimental_lsfg_fp16=OFF
 
 usage() {
     cat <<'EOF'
@@ -32,6 +33,8 @@ Options:
   --build-dir PATH       64-bit persistent CMake build directory.
   --build-32-dir PATH    32-bit persistent CMake build directory.
   --jobs COUNT           Parallel compile jobs.
+  --experimental-lsfg-fp16  Build the unqualified FP32-to-FP16 LSFG fallback.
+                            Uses the existing FP16 setting; adds no user toggle.
 Environment:
   MAKO_BUILD_DIR     Persistent CMake build directory (default: build/steamos-dev)
   MAKO_BUILD_32_DIR  Persistent 32-bit build directory (default: build/steamos-dev-32)
@@ -71,6 +74,9 @@ while (($#)); do
             ;;
         --with-32-bit)
             build_32_bit=true
+            ;;
+        --experimental-lsfg-fp16)
+            experimental_lsfg_fp16=ON
             ;;
         --32-bit-only)
             build_64_bit=false
@@ -172,6 +178,15 @@ vulkan_headers_include_dir="$vulkan_headers_source/include"
 echo "Using shared Vulkan-Headers $vulkan_headers_revision ($resolved_vulkan_headers_commit)."
 
 compiler_launcher=""
+lsfg_fp16_tools_source=""
+if [[ "$experimental_lsfg_fp16" == ON ]]; then
+    lsfg_fp16_tools_source="$("$repo_root/scripts/prepare-lsfg-fp16-tools.sh")"
+    # Source archives lack .git; prevent the optimizer's version generator
+    # from reporting this enclosing MAKO repository's commit as its own.
+    read -r optimizer_project optimizer_commit < "$lsfg_fp16_tools_source/.mako-source-pin"
+    export FORCED_BUILD_VERSION_DESCRIPTION="$optimizer_commit"
+    echo "Experimental LSFG FP16 conversion enabled; image quality is unqualified."
+fi
 if command -v ccache >/dev/null 2>&1; then
     export CCACHE_DIR="${CCACHE_DIR:-$build_cache_root/ccache}"
     mkdir -p "$CCACHE_DIR"
@@ -209,10 +224,20 @@ build_layer() {
         -DMAKO_BUILD_VK_LAYER=ON \
         -DMAKO_BUILD_UI=OFF \
         -DMAKO_BUILD_CLI="$build_cli" \
+        -DMAKO_EXPERIMENTAL_LSFG_FP16="$experimental_lsfg_fp16" \
+        -DMAKO_LSFG_FP16_TOOLS_SOURCE="$lsfg_fp16_tools_source" \
         -DMAKO_INSTALL_XDG_FILES=OFF \
         -DMAKO_LAYER_LIBRARY_PATH="../$install_libdir/libmako-render.so" \
         -DMAKO_SCALING_LAYER_LIBRARY_PATH="../$install_libdir/libmako-render-scaling.so" \
         "$@"
+
+    if [[ "$experimental_lsfg_fp16" == ON ]]; then
+        # Refresh with the canonical upstream generator even when an existing
+        # Ninja cache retained a version generated before the pin was supplied.
+        python3 "$lsfg_fp16_tools_source/utils/update_build_version.py" \
+            "$lsfg_fp16_tools_source/CHANGES" \
+            "$target_build_dir/mako-backend/spirv-tools/build-version.inc"
+    fi
 
     cmake --build "$target_build_dir" --parallel "$jobs" --target "${build_targets[@]}"
 
@@ -236,6 +261,7 @@ fi
 if [[ "$build_32_bit" == true ]]; then
     build_layer "32-bit" "$build_32_dir" \
         -DCMAKE_CXX_FLAGS=-m32 \
+        -DCMAKE_C_FLAGS=-m32 \
         -DCMAKE_SHARED_LINKER_FLAGS=-m32 \
         -DCMAKE_INSTALL_LIBDIR=lib32 \
         -DMAKO_LAYER_MANIFEST_SUFFIX=.x86

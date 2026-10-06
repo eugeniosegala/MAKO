@@ -427,7 +427,7 @@ int main() {
             mako_test_surface_mode(mode);
             expect(!bridge.createSwapchain(surface,
                 reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(700 + mode)),
-                feedbackInfo, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR),
+                feedbackInfo, {1920, 1080}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR),
                 "protocol allocation failure");
             expect(mako_test_surface_objects() == surfaceObjects,
                 "failed swapchain protocol setup leaked objects");
@@ -437,12 +437,128 @@ int main() {
             static_cast<uintptr_t>(1001));
         const int feedbacks = mako_test_surface_feedbacks();
         expect(bridge.createSwapchain(surface, firstSwapchain,
-            feedbackInfo, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR),
+            feedbackInfo, {1920, 1080}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR),
             "create swapchain protocol object");
         expect(mako_test_surface_feedbacks() == feedbacks + 1 &&
             mako_test_surface_feedback_image_count() == 6 &&
             std::strcmp(mako_test_surface_feedback_engine(), "vkd3d") == 0,
             "swapchain feedback must carry the actual image count and engine");
+
+        // Startup can resize the X11 window between capability query and
+        // creation. The private Wayland swapchain accepts the old size, so
+        // the bridge must preserve native out-of-date acquisition behavior.
+        std::ostringstream extentLog;
+        auto* previousExtentLog = std::cerr.rdbuf(extentLog.rdbuf());
+        checkApplicationExtent(bridge, surface, {1920, 1080});
+        const auto stableQueryLog = extentLog.str();
+        checkApplicationExtent(bridge, surface, {1920, 1080});
+        expect(extentLog.str() == stableQueryLog,
+            "unchanged capability queries must not emit per-frame extent logs");
+        const auto overrideSwapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(3006));
+        expect(bridge.createSwapchain(surface, overrideSwapchain, feedbackInfo,
+            {2560, 1440}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR) &&
+            bridge.acquisitionResult(surface, overrideSwapchain) == VK_SUCCESS,
+            "an explicit render extent must remain valid when Gamescope retains the window size");
+        const auto staleSwapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(3001));
+        mako_test_surface_resize(2560, 1440);
+        const int createGeometryQueries = mako_test_surface_geometry_queries();
+        expect(bridge.createSwapchain(surface, staleSwapchain, feedbackInfo,
+            {1920, 1080}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR),
+            "a creation race must keep normal Vulkan creation semantics");
+        expect(mako_test_surface_geometry_queries() == createGeometryQueries + 1,
+            "creation must validate the live window with one query");
+        const int acquireGeometryQueries = mako_test_surface_geometry_queries();
+        for (int attempt = 0; attempt < 100; ++attempt)
+            expect(bridge.acquisitionResult(surface, staleSwapchain) == VK_ERROR_OUT_OF_DATE_KHR,
+                "stale startup dimensions must request recreation before acquisition");
+        expect(mako_test_surface_geometry_queries() == acquireGeometryQueries,
+            "cached acquisition checks must never query X11");
+        expect(bridge.acquisitionResult(VK_NULL_HANDLE, staleSwapchain) == VK_SUCCESS &&
+            bridge.acquisitionResult(surface, VK_NULL_HANDLE) == VK_SUCCESS,
+            "unowned surfaces and swapchains must preserve lower acquisition");
+        checkApplicationExtent(bridge, surface, {2560, 1440}, 1.5F);
+        expect(bridge.acquisitionResult(surface, overrideSwapchain) == VK_SUCCESS,
+            "window observations must not reinterpret an explicit render extent as stale");
+        bridge.destroySwapchain(surface, overrideSwapchain);
+        const auto freshSwapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(3002));
+        expect(bridge.createSwapchain(surface, freshSwapchain, feedbackInfo,
+            {2560, 1440}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR) &&
+            bridge.acquisitionResult(surface, freshSwapchain) == VK_SUCCESS &&
+            bridge.acquisitionResult(surface, staleSwapchain) == VK_ERROR_OUT_OF_DATE_KHR,
+            "replacement must use fresh geometry without resetting its predecessor");
+        // A genuine low-resolution game window remains valid; the display
+        // target is not authority to force the game's source resolution.
+        checkApplicationExtent(bridge, surface, {1152, 720});
+        expect(bridge.acquisitionResult(surface, freshSwapchain) == VK_ERROR_OUT_OF_DATE_KHR,
+            "a later capability query must invalidate the old source size");
+        const auto lowSwapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(3003));
+        auto lowInfo = feedbackInfo;
+        lowInfo.imageExtent = {2304, 1440};
+        expect(bridge.createSwapchain(surface, lowSwapchain, lowInfo,
+            {1152, 720}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR) &&
+            bridge.acquisitionResult(surface, lowSwapchain) == VK_SUCCESS,
+            "an intentional 720-high input must not be replaced with the display size");
+        checkApplicationExtent(bridge, surface, {2560, 1440}, 1.5F);
+        checkApplicationExtent(bridge, surface, {1152, 720});
+        expect(bridge.acquisitionResult(surface, lowSwapchain) == VK_ERROR_OUT_OF_DATE_KHR,
+            "returning to the old size must not revive an invalidated swapchain");
+        bridge.destroySwapchain(surface, staleSwapchain);
+        bridge.destroySwapchain(surface, freshSwapchain);
+        bridge.destroySwapchain(surface, lowSwapchain);
+        expect(bridge.acquisitionResult(surface, lowSwapchain) == VK_SUCCESS,
+            "destroyed protocol contents must not retain an extent override");
+
+#if defined(VK_KHR_swapchain_maintenance1)
+        VkSwapchainPresentScalingCreateInfoKHR explicitScaling{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR,
+            .scalingBehavior = VK_PRESENT_SCALING_STRETCH_BIT_KHR,
+        };
+#elif defined(VK_EXT_swapchain_maintenance1)
+        VkSwapchainPresentScalingCreateInfoEXT explicitScaling{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT,
+            .scalingBehavior = VK_PRESENT_SCALING_STRETCH_BIT_EXT,
+        };
+#endif
+#if defined(VK_KHR_swapchain_maintenance1) || defined(VK_EXT_swapchain_maintenance1)
+        const auto explicitSwapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(3004));
+        auto explicitInfo = feedbackInfo;
+        explicitInfo.pNext = &explicitScaling;
+        expect(bridge.createSwapchain(surface, explicitSwapchain, explicitInfo,
+            {1920, 1080}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR) &&
+            bridge.acquisitionResult(surface, explicitSwapchain) == VK_SUCCESS,
+            "negotiated presentation scaling may legally differ from the window");
+        checkApplicationExtent(bridge, surface, {2560, 1440}, 1.5F);
+        expect(bridge.acquisitionResult(surface, explicitSwapchain) == VK_SUCCESS,
+            "window observations must preserve negotiated presentation scaling");
+        bridge.destroySwapchain(surface, explicitSwapchain);
+        explicitScaling.scalingBehavior = 0;
+        mako_test_surface_resize(1920, 1080);
+        expect(bridge.createSwapchain(surface, explicitSwapchain, explicitInfo,
+            {2560, 1440}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR) &&
+            bridge.acquisitionResult(surface, explicitSwapchain) == VK_ERROR_OUT_OF_DATE_KHR,
+            "a zero scaling flag must retain the ordinary exact-window contract");
+        bridge.destroySwapchain(surface, explicitSwapchain);
+#endif
+        mako_test_surface_mode(4);
+        const auto lostSwapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(3005));
+        const int objectsBeforeLostWindow = mako_test_surface_objects();
+        expect(!bridge.createSwapchain(surface, lostSwapchain, feedbackInfo,
+            {1920, 1080}, 6, "vkd3d", VK_PRESENT_MODE_FIFO_KHR) &&
+            mako_test_surface_objects() == objectsBeforeLostWindow &&
+            bridge.acquisitionResult(surface, lostSwapchain) == VK_SUCCESS,
+            "failed window proof must release the new protocol content");
+        mako_test_surface_mode(0);
+        std::cerr.rdbuf(previousExtentLog);
+        if (present_diagnostics::enabled()) {
+            expect(extentLog.str().find("operation=capability-query") != std::string::npos &&
+                extentLog.str().find("queried=1920x1080") != std::string::npos &&
+                extentLog.str().find("application=1920x1080; current=2560x1440") != std::string::npos &&
+                extentLog.str().find("extent_contract=application-override") != std::string::npos &&
+                extentLog.str().find("action=requery-before-application-acquire") != std::string::npos,
+                "startup diagnostics must distinguish queried, requested and live window sizes");
+        } else {
+            expect(extentLog.str().empty(), "window extent diagnostics must be opt-in");
+        }
         checkApplicationExtent(bridge, surface, {640, 480});
         checkApplicationExtent(bridge, surface, {1920, 1080});
         checkApplicationExtent(bridge, surface, {1280, 720});
@@ -470,7 +586,7 @@ int main() {
         }
         checkApplicationExtent(bridge, surface, {1920, 1080});
         const auto timedSwapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(500));
-        expect(bridge.createSwapchain(surface, timedSwapchain, feedbackInfo, 5,
+        expect(bridge.createSwapchain(surface, timedSwapchain, feedbackInfo, {1920, 1080}, 5,
                 "MAKO Renderer", VK_PRESENT_MODE_FIFO_KHR, 120),
             "timed bridge creation");
         const int times = mako_test_surface_present_times();
@@ -505,7 +621,7 @@ int main() {
                 "protocol timing and refresh events must reach the matching accumulator");
         expect(mako_test_surface_reads() == timedReads, "timing diagnostics must not read the socket");
         bridge.destroySwapchain(surface, timedSwapchain);
-        expect(bridge.createSwapchain(surface, timedSwapchain, feedbackInfo, 5,
+        expect(bridge.createSwapchain(surface, timedSwapchain, feedbackInfo, {1920, 1080}, 5,
                 "MAKO Renderer", VK_PRESENT_MODE_FIFO_KHR, 120),
             "retained generation-off bridge creation");
         const auto nativeBefore = std::chrono::steady_clock::now();
@@ -540,7 +656,7 @@ int main() {
         const auto sameSurfaceReplacement = reinterpret_cast<VkSwapchainKHR>(
             static_cast<uintptr_t>(1002));
         expect(bridge.createSwapchain(surface, sameSurfaceReplacement,
-            feedbackInfo, 7, "vkd3d", VK_PRESENT_MODE_FIFO_KHR),
+            feedbackInfo, {1920, 1080}, 7, "vkd3d", VK_PRESENT_MODE_FIFO_KHR),
             "create replacement swapchain protocol object");
         expect(mako_test_surface_associations() == associations + 100,
             "creating a replacement must not steal the live image");
@@ -570,7 +686,7 @@ int main() {
             static_cast<uintptr_t>(2001));
         const auto replacementFeedback = swapchainInfo(replacement);
         expect(bridge.createSwapchain(replacement, replacementSwapchain,
-            replacementFeedback, 5, "vkd3d", std::nullopt),
+            replacementFeedback, {1920, 1080}, 5, "vkd3d", std::nullopt),
             "replacement surface swapchain protocol object");
         checkApplicationExtent(bridge, replacement, {640, 480});
         checkApplicationExtent(bridge, replacement, {1920, 1080});

@@ -89,6 +89,7 @@ describe("Performance Settings", () => {
           ...getDefaults(),
           ultra_performance: true,
           performance_mode: false,
+          allow_fp16: false,
         }}
         onConfigChange={onConfigChange}
         onConfigUpdate={onConfigUpdate}
@@ -107,8 +108,10 @@ describe("Performance Settings", () => {
       (screen.getByText("Flow Scale (70%)") as HTMLButtonElement).disabled,
     ).toBe(true);
     const allowFp16 = screen.getByText("Allow FP16 (Restart)");
-    expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
-    expect(allowFp16.getAttribute("data-checked")).toBe("true");
+    expect((allowFp16 as HTMLButtonElement).disabled).toBe(false);
+    expect(allowFp16.getAttribute("data-checked")).toBe("false");
+    fireEvent.click(allowFp16);
+    expect(onConfigChange).toHaveBeenCalledWith("allow_fp16", true);
     expect(allowFp16.getAttribute("data-bottom-separator")).toBe("none");
     expect(
       screen.queryByText(/private frame-generation context live/),
@@ -128,13 +131,13 @@ describe("Performance Settings", () => {
       "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
     );
 
+    onConfigChange.mockClear();
     fireEvent.click(screen.getByText("Ultra Performance (Restart)"));
     expect(onConfigChange).not.toHaveBeenCalled();
     expect(onConfigUpdate).toHaveBeenCalledWith({
       ultra_performance: false,
       flow_scale: 0.8,
       performance_mode: false,
-      allow_fp16: true,
     });
   });
 });

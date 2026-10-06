@@ -107,8 +107,8 @@ Use the absolute path: if you put ~/.local/bin ahead of /usr/bin in PATH, a
 user-local mako-launch would otherwise shadow the packaged one.
 
 Frame generation and LS1 spatial scaling need a user-owned Lossless.dll from
-Lossless Scaling; the open MAKO Scaler does not. LS1 additionally needs vkd3d
-(lib32-vkd3d for 32-bit games). Both are optional dependencies.
+Lossless Scaling; the open MAKO Scaler does not. LS1 and DirectX LSFG models
+additionally need vkd3d (lib32-vkd3d for 32-bit games). Both are optional dependencies.
 
 Do not run upstream's "Install MAKO Renderer": it targets ~/.local and would
 create a second, independently managed copy. This package deliberately does not

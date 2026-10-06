@@ -40,7 +40,7 @@ export function useModelStatus(
   enabled: boolean,
 ): ModelStatuses {
   const method = effectiveScalingMethod(config);
-  const allowFp16 = config.ultra_performance || config.allow_fp16;
+  const allowFp16 = config.allow_fp16;
   const ls1 =
     enabled &&
     !config.disable_mako &&
@@ -76,7 +76,12 @@ export function useModelStatus(
       if (!active) return;
       const scalingStatus = ls1
         ? await inspect(() =>
-            checkScalingModel(config.dll, method, config.scaling_sharpness),
+            checkScalingModel(
+              config.dll,
+              method,
+              config.scaling_sharpness,
+              allowFp16,
+            ),
           )
         : null;
       if (active) {

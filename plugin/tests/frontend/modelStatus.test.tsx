@@ -49,6 +49,7 @@ test("checks a saved LS1 selection without writing it and refreshes after DLL up
     saved.dll,
     "ls1",
     saved.scaling_sharpness,
+    saved.allow_fp16,
   );
   checkScalingModel.mockResolvedValue({ compatible: true, reason: null });
   await act(() => vi.advanceTimersByTimeAsync(30000));
@@ -92,6 +93,7 @@ test("debounces sharpness changes and inspects Ultra Performance's effective mod
     config().dll,
     "ls1-performance",
     0.75,
+    config().allow_fp16,
   );
 });
 
@@ -153,7 +155,7 @@ test("checks enabled families sequentially and keeps their failures independent"
   await settle();
   expect(checkFrameGenerationModel).toHaveBeenLastCalledWith(
     config().dll,
-    true,
+    false,
   );
   rerender({ ...config(), frame_generation_enabled: false });
   expect(result.current.lsfg).toBeNull();

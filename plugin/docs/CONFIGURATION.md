@@ -69,10 +69,10 @@ The note below the controls shows the active profile configuration file. Advance
 
 ## Performance settings
 
-- **Ultra Performance (Restart)** selects a lighter preset: 70% Flow Scale, the lighter FG model, FP16 where supported, and LS1 Performance when Scaling is enabled.
+- **Ultra Performance (Restart)** selects a lighter preset: 70% Flow Scale, the lighter FG model and LS1 Performance when Scaling is enabled. The global precision toggle remains authoritative.
 - **Flow Scale** trades motion-estimation quality for GPU cost.
 - **Lighter FG Model** reduces GPU work but may show more artifacts.
-- **Allow FP16 (Restart)** normally improves performance on AMD hardware. Some older NVIDIA GPUs may perform better with it disabled.
+- **Allow FP16 (Restart)** selects FP16 model and MAKO Scaler colour arithmetic when on and FP32 when off, across all profiles and presets. Ordinary Renderer builds warn when native FP16 LSFG is unavailable. The separately selected [experimental Renderer build](../../engine/docs/BUILDING-FROM-SOURCE.md#experimental-forced-lsfg-fp16) uses this same toggle to force conversion of a supported FP32-only LSFG model; its image quality is unqualified. Native FP16 takes priority, and turning this toggle off always selects FP32. LS1 currently uses MAKO Scaler at FP16 when this is on; turn it off for LS1 FP32. Restart the game after changing it.
 - **Lossless.dll Path (Restart)** is an optional override; leave it empty for automatic Steam-library detection.
 - **GPU (Restart)** selects a GPU on multi-GPU systems. Multi-GPU Frame Generation is unsupported.
 

@@ -8,7 +8,6 @@ describe("Ultra Performance preset", () => {
       ultra_performance: true,
       flow_scale: 0.7,
       performance_mode: true,
-      allow_fp16: true,
     });
   });
 
@@ -17,7 +16,6 @@ describe("Ultra Performance preset", () => {
       ultra_performance: false,
       flow_scale: 0.8,
       performance_mode: false,
-      allow_fp16: true,
     });
   });
 });

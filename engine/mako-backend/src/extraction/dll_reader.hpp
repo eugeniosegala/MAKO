@@ -12,6 +12,7 @@
 namespace mako::backend {
 
     struct ModelResolutionCache;
+    struct LsfgTranslationCache;
 
     /// Parsed, process-local view of one user-owned DLL. Fingerprints identify
     /// content for caching and diagnostics; they are never compatibility
@@ -24,6 +25,10 @@ namespace mako::backend {
         // Resolution metadata only, lazily populated by model_resources.cpp.
         // The archive is immutable once published; its cache retains no archive.
         mutable std::shared_ptr<ModelResolutionCache> modelResolutionCache;
+        // Successful DirectX translations and experimental FP16 conversions,
+        // also process-local. No archive back-reference: evicting the DLL
+        // archive releases its prepared shader data.
+        mutable std::shared_ptr<LsfgTranslationCache> lsfgTranslationCache;
     };
 
     /// Parse and fingerprint a DLL, reusing a process-local result only while

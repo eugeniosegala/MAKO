@@ -102,6 +102,7 @@ bool layer::context_ModifySwapchainCreateInfo(const ls::GameConf& profile,
 Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             ls::GameConf profile, SwapchainInfo info,
             const std::optional<std::filesystem::path> scalingShaderDll,
+            const bool fp16Requested,
             const std::optional<bool> gamescopeHdrActive,
             const bool gamescopeDetected,
             const bool hdrExposureDisabled,
@@ -120,6 +121,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             hdrExposureDisabled
         )),
         scalingShaderDll(scalingShaderDll),
+        fp16Requested(fp16Requested),
         profile(std::move(profile)), info(std::move(info)) {
     if (this->info.gamescopeDisplayTiming) {
         this->wsiPresentTimingQuery = reinterpret_cast<
@@ -184,7 +186,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             this->colorPipeline.exchangeFormat,
             ls::effectiveScalingMethod(this->profile),
             this->profile.scaling_sharpness,
-            scalingShaderDll
+            scalingShaderDll, this->fp16Requested
         );
         this->spatialScalingPasses.reserve(this->info.images.size());
         for (size_t i = 0; i < this->info.images.size(); ++i) {
@@ -196,6 +198,9 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             });
         }
         const auto activeScalingMethod = this->spatialScaler->activeMethod();
+        std::cerr << "MAKO Renderer: spatial arithmetic precision="
+                  << this->spatialScaler->precisionName() << " requested="
+                  << (this->fp16Requested ? "fp16" : "fp32") << '\n';
         const double effectiveScalingFactor = std::min(
             static_cast<double>(this->info.extent.width) /
                 static_cast<double>(this->info.applicationExtent.width),
@@ -244,8 +249,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                      )
                   << '\n';
         if (!this->spatialScaler->fallbackReason().empty()) {
-            std::cerr << "MAKO Renderer: LS1 scaling unavailable; using MAKO "
-                         "fallback: "
+            std::cerr << "MAKO Renderer: requested scaling model unavailable; using "
+                      << ls::scalingMethodName(activeScalingMethod) << " fallback: "
                       << this->spatialScaler->fallbackReason() << '\n';
         }
     }

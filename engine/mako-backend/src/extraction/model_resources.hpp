@@ -29,6 +29,12 @@ namespace mako::backend {
         const DllResourceArchive& archive, bool fp16,
         std::optional<bool> performance = std::nullopt);
 
+    /// DirectX fallback requires exact SM5.0 reflection even at canonical IDs.
+    /// Discovery preserves both modes as one table; there is no FP16 lane.
+    [[nodiscard]] ModelResourceSelection resolveLsfgDxbcModelResources(
+        const DllResourceArchive& archive,
+        std::optional<bool> performance = std::nullopt);
+
     /// A variant selects only that LS1 graph on the canonical path. With no
     /// variant, inspect all five graphs of the requested mode. Discovery needs
     /// the complete reflected LS1 table to identify stage and variant order.

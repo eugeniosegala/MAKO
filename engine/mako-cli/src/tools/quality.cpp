@@ -851,7 +851,7 @@ int quality::runSpatial(const SpatialOptions& opts) {
             VK_FORMAT_R8G8B8A8_UNORM,
             *method,
             opts.sharpness,
-            dll
+            dll, opts.allow_fp16
         };
         if (scaler.activeMethod() != *method) {
             throw ls::error(
@@ -905,6 +905,7 @@ int quality::runSpatial(const SpatialOptions& opts) {
             << "MAKO quality result: " << (passed ? "PASS" : "FAIL")
             << " kind=spatial-scaling scene=" << opts.scene << '\n'
             << "  method: " << ls::scalingMethodName(*method) << '\n'
+            << "  spatial precision: " << scaler.precisionName() << '\n'
             << "  factor: " << opts.scaling_factor << '\n'
             << "  sharpness: " << opts.sharpness << '\n'
             << "  scene time: " << opts.scene_time << '\n'
@@ -984,7 +985,7 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
             VK_FORMAT_R8G8B8A8_UNORM,
             *method,
             opts.sharpness,
-            dll
+            dll, opts.allow_fp16
         };
         if (scaler.activeMethod() != *method) {
             throw ls::error(
@@ -1067,6 +1068,7 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         std::cout << std::fixed << std::setprecision(3)
             << "MAKO spatial GPU profile: PASS schema=2\n"
             << "  method: " << ls::scalingMethodName(*method) << '\n'
+            << "  spatial precision: " << scaler.precisionName() << '\n'
             << "  factor: " << opts.scaling_factor << '\n'
             << "  sharpness: " << opts.sharpness << '\n'
             << "  frame-generation handoff: "
@@ -1204,7 +1206,7 @@ int quality::runCombined(const CombinedOptions& opts) {
             VK_FORMAT_R8G8B8A8_UNORM,
             *method,
             opts.sharpness,
-            dll
+            dll, opts.allow_fp16
         };
         if (scaler.activeMethod() != *method) {
             throw ls::error(
@@ -1319,6 +1321,7 @@ int quality::runCombined(const CombinedOptions& opts) {
             << (scaler.directFrameGenerationOutputCount() == 2
                     ? "direct-reconstruction" : "copy-private-output")
             << '\n'
+            << "  spatial precision: " << scaler.precisionName() << '\n'
             << "  factor: " << opts.scaling_factor << '\n'
             << "  sharpness: " << opts.sharpness << '\n'
             << "  interpolation: " << opts.interpolation << '\n'

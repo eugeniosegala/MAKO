@@ -18,7 +18,7 @@ namespace ls {
     struct GlobalConf {
         /// optional dll override
         std::optional<std::string> dll;
-        /// allow FP16 shaders when supported by the selected device
+        /// request supported FP16 model/scaling arithmetic; false selects FP32
         bool allow_fp16{true};
     };
 
@@ -329,10 +329,11 @@ namespace ls {
         return profile.ultra_performance || profile.performance_mode;
     }
 
-    /// FP16 permission selected for a process after applying its profile preset.
+    /// The global precision choice takes precedence over every profile preset.
     [[nodiscard]] constexpr bool effectiveAllowFp16(
             const GlobalConf& global, const GameConf& profile) noexcept {
-        return profile.ultra_performance || global.allow_fp16;
+        static_cast<void>(profile);
+        return global.allow_fp16;
     }
 
     /// Scheduler duration represented by the public fractional-seconds value.

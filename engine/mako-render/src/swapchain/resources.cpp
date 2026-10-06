@@ -569,7 +569,7 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
             this->preparedSpatialScaler.emplace(
                 vk, this->info.applicationExtent, this->info.extent,
                 this->colorPipeline.exchangeFormat, requested.method,
-                requested.sharpness, this->scalingShaderDll
+                requested.sharpness, this->scalingShaderDll, this->fp16Requested
             );
             this->configureDirectSpatialFrameGenerationOutputs(
                 vk, *this->preparedSpatialScaler, this->sourceImages,
@@ -663,8 +663,8 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
                   << "; sharpness=" << requested.sharpness
                   << "; transition=private-scaler\n";
         if (!this->spatialScaler->fallbackReason().empty()) {
-            std::cerr << "MAKO Renderer: LS1 scaling unavailable; using MAKO "
-                         "fallback: "
+            std::cerr << "MAKO Renderer: requested scaling model unavailable; using "
+                      << ls::scalingMethodName(activeMethod) << " fallback: "
                       << this->spatialScaler->fallbackReason() << '\n';
         }
         if (present_diagnostics::enabled()) {

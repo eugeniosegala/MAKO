@@ -46,8 +46,13 @@ class DevRendererDeploymentTests(unittest.TestCase):
         self.write(self.installed_plugin / "plugin.json", (PLUGIN_ROOT / "plugin.json").read_text())
         self.write(self.installed_plugin / "dist/index.js", "old frontend")
         self.write(self.root / "bin/node", "#!/bin/sh\nexit 0\n", executable=True)
-        self.write(self.engine / "scripts/build-steamos-dev.sh", "#!/bin/sh\nexit 0\n", executable=True)
+        self.write(self.engine / "scripts/build-steamos-dev.sh", """#!/bin/sh
+printf '%s\\n' "$@" > "$(dirname "$0")/build-args.txt"
+""", executable=True)
         self.write(self.engine / "scripts/mako-vrr-lease", "#!/bin/sh\nexit 0\n", executable=True)
+        self.built_cli = self.engine / "build/steamos-dev/mako-cli" / paths.CLI_FILENAME
+        self.installed_cli = self.home / paths.CLI_DIR / paths.CLI_FILENAME
+        self.write(self.built_cli, "#!/bin/sh\n# new model inspector\nexit 0\n", executable=True)
         self.write(self.engine / "scripts/manage-vkbasalt-release.py", """
 import pathlib, shutil, sys
 source = pathlib.Path(__file__).parents[1] / 'vkbasalt-fixture'
@@ -91,6 +96,7 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
         return self.home / ".local" / ("lib" if bits == 64 else "lib32")
 
     def prepare(self, owner):
+        self.write(self.installed_cli, "#!/bin/sh\n# old model inspector\nexit 1\n", executable=True)
         for bits in (64, 32):
             for installed_owner in ("decky", "standalone"):
                 libdir = self.library_dir(installed_owner, bits)
@@ -106,10 +112,10 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
         self.write(self.home / paths.MAKO_ROOT / paths.ACTIVE_RENDERER_STATE_FILENAME,
                    json.dumps({"schema_version": 1, "owner": owner, "version": "4.0.0"}))
 
-    def deploy(self, bits):
+    def deploy(self, bits, *extra):
         return subprocess.run(
             ["bash", str(self.plugin / "scripts/deploy-dev.sh"),
-             "--engine" if bits == 64 else "--engine-32"],
+             "--engine" if bits == 64 else "--engine-32", *extra],
             env=self.env, text=True, capture_output=True, timeout=30)
 
     def test_deploy_updates_selected_owner_and_only_requested_architecture(self):
@@ -119,12 +125,21 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                     self.prepare(owner)
                     state = self.home / paths.MAKO_ROOT / paths.ACTIVE_RENDERER_STATE_FILENAME
                     original_state = state.read_bytes()
+                    original_cli = self.installed_cli.read_bytes()
                     original_manifest = (self.build_dir(bits) / "private-scaling-manifest" /
                         (paths.SPATIAL_SCALING_JSON_FILENAME if bits == 64 else paths.SPATIAL_SCALING_JSON32_FILENAME))
                     original_build_manifest = original_manifest.read_bytes()
                     result = self.deploy(bits)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertIn(f"verified active {bits}-bit {owner}", result.stdout)
+                    self.assertNotIn("--experimental-lsfg-fp16",
+                                     (self.engine / "scripts/build-args.txt").read_text())
+                    if bits == 64:
+                        self.assertEqual(self.installed_cli.read_bytes(), self.built_cli.read_bytes())
+                        self.assertTrue(os.access(self.installed_cli, os.X_OK))
+                        self.assertIn("verified installed 64-bit CLI", result.stdout)
+                    else:
+                        self.assertEqual(self.installed_cli.read_bytes(), original_cli)
                     _, libraries = selection.selected_libraries(self.home, bits)
                     for library, content in zip(libraries, (f"new FG {bits}", f"new spatial {bits}", f"new vkBasalt {bits}")):
                         self.assertEqual(library.read_text(), content)
@@ -135,6 +150,44 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                     self.assertEqual(state.read_bytes(), original_state)
                     self.assertEqual(original_manifest.read_bytes(), original_build_manifest)
                     self.assertEqual((self.home / ".config/mako-render/conf.toml").read_text(), "keep profiles")
+
+    def test_experimental_precision_is_forwarded_only_when_requested(self):
+        for bits in (64, 32):
+            with self.subTest(bits=bits):
+                self.prepare("standalone")
+                result = self.deploy(bits, "--experimental-lsfg-fp16")
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                args = (self.engine / "scripts/build-args.txt").read_text().splitlines()
+                self.assertIn("--experimental-lsfg-fp16", args)
+                self.assertEqual("--32-bit-only" in args, bits == 32)
+                self.assertNotIn("--with-32-bit", args)
+
+    def test_experimental_precision_rejects_missing_native_or_flatpak_scope(self):
+        for scope in ("--frontend", "--flatpaks", "--e2e"):
+            with self.subTest(scope=scope):
+                self.prepare("standalone")
+                result = subprocess.run(
+                    ["bash", str(self.plugin / "scripts/deploy-dev.sh"), scope,
+                     "--experimental-lsfg-fp16"], env=self.env, text=True,
+                    capture_output=True, timeout=30)
+                self.assertEqual(result.returncode, 2, result.stdout + result.stderr)
+                self.assertFalse((self.engine / "scripts/build-args.txt").exists())
+                self.assertEqual((self.installed_plugin / "dist/index.js").read_text(), "old frontend")
+
+    def test_missing_or_non_executable_cli_fails_before_deploy(self):
+        for executable in (None, False):
+            with self.subTest(executable=executable):
+                self.prepare("standalone")
+                original_cli = self.installed_cli.read_bytes()
+                if executable is None:
+                    self.built_cli.unlink()
+                else:
+                    self.write(self.built_cli, "not executable")
+                result = self.deploy(64)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertEqual(self.installed_cli.read_bytes(), original_cli)
+                self.assertEqual((self.installed_plugin / "dist/index.js").read_text(), "old frontend")
+                self.assertEqual((self.library_dir("standalone", 64) / paths.LIB_FILENAME).read_text(), "old standalone 64")
 
     def test_ambiguous_or_missing_selection_fails_before_deploy(self):
         private = self.home / paths.VULKAN_LAYER_DIR / paths.JSON_FILENAME

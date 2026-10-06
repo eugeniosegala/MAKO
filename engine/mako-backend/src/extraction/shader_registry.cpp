@@ -3,7 +3,7 @@
 #include "shader_registry.hpp"
 #include "../shaders/color_conversion_spirv.hpp"
 #include "model_resource_validation.hpp"
-#include "model_resources.hpp"
+#include "lsfg_shader_set.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/vulkan/shader.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <iostream>
 #include <span>
 #include <string>
 #include <vector>
@@ -20,11 +21,10 @@ using namespace mako::backend;
 
 namespace {
     /// get the source code for a shader
-    const std::vector<uint8_t>& getShaderSource(uint32_t id, bool fp16, bool perf,
+    const std::vector<uint8_t>& getShaderSource(uint32_t id, bool perf,
             const DllResourceArchive& archive,
-            const ModelResourceSelection selection) {
-        return selection.resource(
-            archive, detail::lsfgResourceId(id, fp16, perf));
+            const LsfgShaderSet& selection) {
+        return selection.resource(archive, id, perf);
     }
 
     [[nodiscard]] const mako::backend::detail::LsfgShaderSpec& shaderSpec(
@@ -39,13 +39,12 @@ namespace {
     }
 
     [[nodiscard]] vk::Shader makeShader(
-            const vk::Vulkan& vk, const uint32_t id,
-            const bool fp16, const bool perf,
+            const vk::Vulkan& vk, const uint32_t id, const bool perf,
             const DllResourceArchive& archive,
-            const ModelResourceSelection selection) {
+            const LsfgShaderSet& selection) {
         const auto& contract = shaderSpec(id, perf).contract;
         return vk::Shader(
-            vk, getShaderSource(id, fp16, perf, archive, selection),
+            vk, getShaderSource(id, perf, archive, selection),
             contract.sampledImages, contract.storageImages,
             contract.uniformBuffers, contract.samplers
         );
@@ -95,16 +94,19 @@ namespace {
 }
 
 ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
-        const DllResourceArchive& archive) {
-    const auto selection = resolveLsfgModelResources(archive, fp16);
+        const DllResourceArchive& archive, const std::filesystem::path& dll) {
+    const auto selection = loadLsfgShaderSet(archive, dll, fp16);
+    if (selection.convertedFp16Stages)
+        std::clog << "MAKO Renderer: LSFG experimental_fp16=forced; quality=unqualified; "
+            << "converted_stages=" << selection.convertedFp16Stages << '\n';
     // patch the generate shader
-    std::vector<uint8_t> generate_data = getShaderSource(256, fp16, false, archive, selection);
+    std::vector<uint8_t> generate_data = getShaderSource(256, false, archive, selection);
     std::vector<uint8_t> generate_data_hdr = generate_data;
     patchGenerateShader(generate_data, false);
     patchGenerateShader(generate_data_hdr, true);
 
     // load all other shaders
-#define SHADER(id) makeShader(vk, id, fp16, PERF, archive, selection)
+#define SHADER(id) makeShader(vk, id, PERF, archive, selection)
 
     return {
 #define PERF false
@@ -169,7 +171,7 @@ ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
             }
         },
 #undef PERF
-        .is_fp16 = fp16
+        .is_fp16 = selection.fp16
     };
 
 #undef SHADER

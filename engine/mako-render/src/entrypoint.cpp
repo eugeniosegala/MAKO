@@ -7,6 +7,7 @@
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
+#include "mako-common/vulkan/device_features.hpp"
 #include "present_diagnostics.hpp"
 #include "swapchain/swapchain.hpp"
 #include "swapchain/create_policy.hpp"
@@ -724,6 +725,7 @@ namespace {
         const bool gamescopeDisplayTiming = presentationDevice &&
             supportedGamescopeDisplayTiming(physdev, *info);
         bool presentRetirementEnabled = false;
+        bool shaderFloat16Enabled = false;
         bool lowerDeviceCreated = false;
         const auto rollbackCreatedDevice = [&]() noexcept {
             if (!lowerDeviceCreated || !device || *device == VK_NULL_HANDLE)
@@ -747,6 +749,46 @@ namespace {
         // create device
         try {
             VkDeviceCreateInfo newInfo = *info;
+            std::vector<const char*> precisionExtensions;
+            bool enableScalingFp16 = false;
+            if (scalingEngineProvisioned && layer_info->root.fp16RequestedAtStartup() &&
+                    instance_info->funcs.GetPhysicalDeviceFeatures2) {
+                uint32_t count{};
+                auto result = instance_info->funcs.EnumerateDeviceExtensionProperties(
+                    physdev, nullptr, &count, nullptr);
+                std::vector<VkExtensionProperties> supported(count);
+                if (result == VK_SUCCESS)
+                    result = instance_info->funcs.EnumerateDeviceExtensionProperties(
+                        physdev, nullptr, &count, supported.data());
+                const bool extensionSupported = result == VK_SUCCESS &&
+                    std::ranges::any_of(supported, [](const auto& extension) {
+                        return std::strcmp(extension.extensionName,
+                            VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME) == 0;
+                    });
+                if (extensionSupported) {
+                    VkPhysicalDeviceShaderFloat16Int8Features half{
+                        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES,
+                    };
+                    VkPhysicalDeviceFeatures2 features{
+                        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+                        .pNext = &half,
+                    };
+                    instance_info->funcs.GetPhysicalDeviceFeatures2(physdev, &features);
+                    enableScalingFp16 = half.shaderFloat16 == VK_TRUE;
+                    if (enableScalingFp16) {
+                        if (info->enabledExtensionCount)
+                            precisionExtensions.assign(info->ppEnabledExtensionNames,
+                                info->ppEnabledExtensionNames + info->enabledExtensionCount);
+                        if (!std::ranges::any_of(precisionExtensions, [](const char* name) {
+                                return std::strcmp(name, VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME) == 0;
+                            }))
+                            precisionExtensions.push_back(VK_KHR_SHADER_FLOAT16_INT8_EXTENSION_NAME);
+                        newInfo.ppEnabledExtensionNames = precisionExtensions.data();
+                        newInfo.enabledExtensionCount = static_cast<uint32_t>(precisionExtensions.size());
+                    }
+                }
+            }
+            const vk::ShaderFloat16FeatureRequest precisionFeatures(newInfo, enableScalingFp16);
             layer_info->root.modifyDeviceCreateInfo(
                 newInfo,
                 swapchainMaintenance1Extension.value_or(nullptr),
@@ -754,6 +796,7 @@ namespace {
                 [&, newInfo = &newInfo]() {
                     presentRetirementEnabled =
                         swapchainMaintenance1Enabled(*newInfo);
+                    shaderFloat16Enabled = vk::shaderFloat16Enabled(newInfo->pNext);
                     auto res = instance_info->funcs.CreateDevice(physdev, newInfo, alloc, device);
                     if (res != VK_SUCCESS)
                         throw ls::vulkan_error(res, "vkCreateDevice() failed");
@@ -818,7 +861,7 @@ namespace {
                         true, frameGenerationInteropEnabled),
                     *layerQueueFamily,
                     frameGenerationInteropEnabled,
-                    true, setLoaderData
+                    true, setLoaderData, std::nullopt, shaderFloat16Enabled
                 )
             );
             if (!inserted)
@@ -977,6 +1020,10 @@ namespace {
             ;
     }
 
+    bool isOptionalPresentationCommand(const std::string_view name) {
+        return name == "vkAcquireNextImage2KHR" || isPresentWaitCommand(name);
+    }
+
     // Instrument only an application-invoked wait. Do not invent completion,
     // shorten timeouts, reinterpret present IDs, or take a swapchain-owner lock
     // across the driver's blocking call. GPA gates retain optional support.
@@ -1038,7 +1085,7 @@ namespace {
                 "vkGetPhysicalDeviceSurfaceFormats2KHR" ||
                 std::string_view(name) == "vkGetPhysicalDeviceFeatures2" ||
                 std::string_view(name) == "vkGetPhysicalDeviceFeatures2KHR" ||
-                isPresentWaitCommand(name)) {
+                isOptionalPresentationCommand(name)) {
             if (!instance || !layer_info->GetInstanceProcAddr ||
                     !layer_info->GetInstanceProcAddr(instance, name)) {
                 return nullptr;
@@ -1059,7 +1106,7 @@ namespace {
 
         if (!instance_info->funcs.GetDeviceProcAddr) return nullptr;
 
-        if (isPresentWaitCommand(name) &&
+        if (isOptionalPresentationCommand(name) &&
                 !instance_info->funcs.GetDeviceProcAddr(device, name))
             return nullptr;
 
@@ -2441,7 +2488,7 @@ namespace {
 
             if (instance_info->scalingSurfaces &&
                     !instance_info->scalingSurfaces->createSwapchain(
-                        info->surface, *swapchain, newInfo, imageCount,
+                        info->surface, *swapchain, newInfo, info->imageExtent, imageCount,
                         instance_info->engineName,
                         modification.gamescopeProtocolPresentMode,
                         modification.gamescopePresentRefreshHz)) {
@@ -2883,6 +2930,15 @@ namespace {
 #pragma clang diagnostic pop
     }
 
+    VkResult bridgeAcquisitionResult(const VkSwapchainKHR swapchain) {
+        if (!instance_info->scalingSurfaces)
+            return VK_SUCCESS;
+        const auto info = instance_info->swapchainInfos.find(swapchain);
+        return info == instance_info->swapchainInfos.end() ? VK_SUCCESS
+            : instance_info->scalingSurfaces->acquisitionResult(
+                info->second.surface, swapchain);
+    }
+
     VkResult myvkAcquireNextImageKHR(
             VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout,
             VkSemaphore semaphore, VkFence fence, uint32_t* imageIndex) {
@@ -2890,9 +2946,28 @@ namespace {
         if (mapping == instance_info->swapchains.end())
             return VK_ERROR_INITIALIZATION_FAILED;
 
+        const auto extentResult = bridgeAcquisitionResult(swapchain);
+        if (extentResult != VK_SUCCESS)
+            return extentResult;
         return mapping->second.get().df().AcquireNextImageKHR(
             device, swapchain, timeout, semaphore, fence, imageIndex
         );
+    }
+
+    VkResult myvkAcquireNextImage2KHR(VkDevice device,
+            const VkAcquireNextImageInfoKHR* info, uint32_t* imageIndex) {
+        if (!instance_info || !info)
+            return VK_ERROR_INITIALIZATION_FAILED;
+        const auto mapping = instance_info->swapchains.find(info->swapchain);
+        if (mapping == instance_info->swapchains.end())
+            return VK_ERROR_INITIALIZATION_FAILED;
+        const auto lower = mapping->second.get().df().AcquireNextImage2KHR;
+        if (!lower)
+            return VK_ERROR_EXTENSION_NOT_PRESENT;
+        const auto extentResult = bridgeAcquisitionResult(info->swapchain);
+        if (extentResult != VK_SUCCESS)
+            return extentResult;
+        return lower(device, info, imageIndex);
     }
 
     void myvkDestroySwapchainKHR(
@@ -3034,6 +3109,7 @@ namespace {
                         VKPTR(myvkGetPhysicalDeviceSurfaceFormats2KHR) },
                     { "vkCreateSwapchainKHR", VKPTR(myvkCreateSwapchainKHR) },
                     { "vkAcquireNextImageKHR", VKPTR(myvkAcquireNextImageKHR) },
+                    { "vkAcquireNextImage2KHR", VKPTR(myvkAcquireNextImage2KHR) },
                     { "vkQueuePresentKHR", VKPTR(myvkQueuePresentKHR) },
                     { "vkWaitForPresentKHR", VKPTR(myvkWaitForPresentKHR) },
 #if defined(VK_KHR_present_wait2)

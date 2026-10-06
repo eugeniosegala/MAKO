@@ -105,6 +105,22 @@ It builds both 64-bit Renderer roles and the CLI, retaining `build/steamos-dev` 
 
 The 32-bit tree defaults to `build/steamos-dev-32`. This development path skips the UI, Flatpak extensions, tests, archives, Decky ZIP, and hardware QA. It uses `ccache` under `build/cache/ccache` when available.
 
+### Experimental forced LSFG FP16
+
+For visual testing of an FP32-only LSFG model, build a separate native candidate with the existing FP16 setting controlling conversion:
+
+```bash
+./scripts/build-steamos-dev.sh --experimental-lsfg-fp16 --with-32-bit \
+    --build-dir build/lsfg-fp16-experimental \
+    --build-32-dir build/lsfg-fp16-experimental-32 --jobs 4
+```
+
+This build requires CMake 3.22.1 or newer. `scripts/prepare-lsfg-fp16-tools.sh` downloads checksum-pinned official SPIRV-Tools `33e02568181e3312f49a3cf33df470bf96ef293a` and its matching SPIRV-Headers `2a611a970fdbc41ac2e3e328802aed9985352dca` into `build/cache/lsfg-fp16-tools/`. The optimizer is linked statically for each architecture, with no additional runtime library or executable requirement. Direct CMake builds can use `-DMAKO_EXPERIMENTAL_LSFG_FP16=ON -DMAKO_LSFG_FP16_TOOLS_SOURCE=PATH` with the prepared source directory. Ordinary development and release builds leave conversion disabled by default; the build fingerprint identifies experimental binaries explicitly.
+
+There is no additional UI or runtime toggle. With FP16 on, native FP16 takes priority; otherwise a supported native FP32 or translated DirectX graph is converted once and cached in memory. With FP16 off, the ordinary FP32 path remains selected. Conversion requires valid SPIR-V, preserved descriptor contracts, and actual half arithmetic. It cannot manufacture support for an unknown model layout or an unsupported GPU. Shader inputs, converted modules, and model resources never leave process memory.
+
+Forced conversion is unqualified for image quality: the preliminary moving-edge check failed its existing quality threshold. The runtime reports `experimental_fp16=forced; quality=unqualified` when this path is selected. Check moving edges, ghosting, flicker, and fine detail in actual games; passing compilation or Vulkan validation does not qualify image quality. These native builds do not update an installed Renderer, Decky plugin, or Flatpak extension. Follow the existing deployment workflow only when installation is requested.
+
 ## SteamOS Flatpak development cache
 
 Reusable package data lives under `build/cache`; disposable staging lives under `build/work`. Inspect both without deleting anything:

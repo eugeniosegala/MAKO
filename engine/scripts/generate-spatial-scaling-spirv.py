@@ -19,6 +19,8 @@ HASH_MANIFEST = ROOT / "mako-render/src/shaders/spatial_scaling_spirv.hashes"
 VARIANTS = (
     ("spatialScalingRgba8Spirv", ()),
     ("spatialScalingRgba16fSpirv", ("-DMAKO_SCALING_RGBA16F=1",)),
+    ("spatialScalingRgba8Fp16Spirv", ("-DMAKO_SCALING_FP16=1",)),
+    ("spatialScalingRgba16fFp16Spirv", ("-DMAKO_SCALING_RGBA16F=1", "-DMAKO_SCALING_FP16=1")),
 )
 
 

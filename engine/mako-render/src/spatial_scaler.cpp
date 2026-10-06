@@ -32,11 +32,15 @@
 using namespace mako::layer;
 
 namespace {
-    std::span<const uint32_t> scalingShader(const VkFormat format) {
+    std::span<const uint32_t> scalingShader(const VkFormat format, const bool fp16) {
         switch (format) {
             case VK_FORMAT_R8G8B8A8_UNORM:
+                if (fp16)
+                    return mako::layer::embedded::spatialScalingRgba8Fp16Spirv;
                 return mako::layer::embedded::spatialScalingRgba8Spirv;
             case VK_FORMAT_R16G16B16A16_SFLOAT:
+                if (fp16)
+                    return mako::layer::embedded::spatialScalingRgba16fFp16Spirv;
                 return mako::layer::embedded::spatialScalingRgba16fSpirv;
             default:
                 throw ls::vulkan_error(
@@ -271,14 +275,14 @@ namespace {
                 const VkExtent2D sourceExtent,
                 const VkExtent2D presentationExtent,
                 const VkFormat workingFormat,
-                const float sharpness) :
+                const float sharpness, const bool fp16) :
             sourceSize(sourceExtent),
             presentationSize(presentationExtent),
             sourceImage(vk, sourceExtent, workingFormat,
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
             reconstructedImage(vk, presentationExtent, workingFormat,
                 VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT),
-            shader(vk, scalingShader(workingFormat), 1, 1, 1, 1),
+            shader(vk, scalingShader(workingFormat, fp16), 1, 1, 1, 1),
             descriptorPool(vk, {
                 .sets = 1,
                 .uniform_buffers = 1,
@@ -768,11 +772,13 @@ public:
             const VkFormat workingFormat,
             const ls::ScalingMethod requested,
             const float sharpness,
-            const std::optional<std::filesystem::path>& shaderDllPath) :
+            const std::optional<std::filesystem::path>& shaderDllPath,
+            const bool fp16Requested) :
         sourceSize(sourceExtent),
         presentationSize(presentationExtent),
         requested(requested),
-        active(requested) {
+        active(requested),
+        fp16(fp16Requested) {
         // The spatial role is constructed at the scaling-engine startup
         // boundary, while model selection remains live. Prime the immutable
         // DLL archive here so the first later LS1 selection does not place
@@ -793,6 +799,16 @@ public:
             );
             return;
         }
+        if (fp16Requested && !vk.supportsFP16()) {
+            this->active = ls::ScalingMethod::Native;
+            this->fallback = "scaling FP16 requested but shaderFloat16 is not enabled on the application device; Native Resolution blit is active; select FP32 for compute scaling";
+            // The lower swapchain may already have presentation-sized images.
+            // Preserve reconstruction of the source rectangle rather than
+            // exposing an incomplete real frame or substituting FP32 compute.
+            this->pipeline = std::make_unique<NativeResolutionPipeline>(
+                vk, sourceExtent, presentationExtent, workingFormat);
+            return;
+        }
         const bool ls1Requested =
             ls::licensedScalingModelRequested(requested);
         if (ls1Requested) {
@@ -803,7 +819,7 @@ public:
                     ? mako::backend::Ls1Mode::Performance
                     : mako::backend::Ls1Mode::Quality;
                 auto payloads = mako::backend::loadLs1ShaderSet(
-                    *shaderDllPath, mode, sharpness
+                    *shaderDllPath, mode, sharpness, fp16Requested
                 );
                 this->translatorPath = payloads.translator;
                 this->dllSha256 = payloads.dllSha256;
@@ -818,7 +834,7 @@ public:
             }
         }
         this->pipeline = std::make_unique<MakoPipeline>(
-            vk, sourceExtent, presentationExtent, workingFormat, sharpness
+            vk, sourceExtent, presentationExtent, workingFormat, sharpness, fp16Requested
         );
     }
 
@@ -826,6 +842,7 @@ public:
     VkExtent2D presentationSize{};
     ls::ScalingMethod requested{ls::ScalingMethod::Mako};
     ls::ScalingMethod active{ls::ScalingMethod::Mako};
+    bool fp16{false};
     std::string fallback;
     std::string translatorPath;
     std::string dllSha256;
@@ -839,10 +856,11 @@ SpatialScaler::SpatialScaler(const vk::Vulkan& vk,
         const VkFormat workingFormat,
         const ls::ScalingMethod requestedMethod,
         const float sharpness,
-        const std::optional<std::filesystem::path>& shaderDllPath) :
+        const std::optional<std::filesystem::path>& shaderDllPath,
+        const bool fp16Requested) :
     implementation(std::make_unique<Implementation>(
         vk, sourceExtent, presentationExtent, workingFormat,
-        requestedMethod, sharpness, shaderDllPath
+        requestedMethod, sharpness, shaderDllPath, fp16Requested
     )) {}
 
 SpatialScaler::~SpatialScaler() = default;
@@ -893,6 +911,12 @@ ls::ScalingMethod SpatialScaler::activeMethod() const {
 
 std::string_view SpatialScaler::fallbackReason() const {
     return this->implementation->fallback;
+}
+
+std::string_view SpatialScaler::precisionName() const {
+    if (this->implementation->active == ls::ScalingMethod::Native)
+        return "blit";
+    return this->implementation->fp16 ? "fp16" : "fp32";
 }
 
 uint32_t SpatialScaler::ls1ModelVariant() const {

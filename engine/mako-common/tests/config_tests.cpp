@@ -188,6 +188,10 @@ int main() {
             ls::ScalingMethod::Mako,
         "An ordinary scaling profile must retain its selected method");
     nativeEngine.ultra_performance = true;
+    expect(!ls::effectiveAllowFp16({.allow_fp16 = false}, nativeEngine),
+        "Ultra Performance must respect an explicit FP32 choice");
+    expect(ls::effectiveAllowFp16({.allow_fp16 = true}, nativeEngine),
+        "Ultra Performance must retain an explicit FP16 choice");
     expect(ls::effectiveScalingMethod(nativeEngine) ==
             ls::ScalingMethod::Ls1Performance,
         "Ultra Performance must select LS1 Performance for an enabled engine");

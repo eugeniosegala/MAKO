@@ -75,6 +75,9 @@ namespace mako::backend::detail {
         uint32_t logicalId, bool fp16, bool performance
     );
 
+    [[nodiscard]] uint32_t lsfgDxbcResourceId(uint32_t logicalId, bool performance);
+    [[nodiscard]] uint32_t lsfgStorageImageFormat(uint32_t logicalId);
+
     [[nodiscard]] std::span<const LsfgShaderSpec> lsfgShaderSpecs(
         bool performance
     );

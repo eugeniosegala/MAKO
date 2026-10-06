@@ -34,6 +34,10 @@ The above copyright notice and this permission notice (including the next paragr
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+## Experimental LSFG FP16 optimizer
+
+The optional native FP16 experiment statically links official [SPIRV-Tools at commit `33e02568181e3312f49a3cf33df470bf96ef293a`](https://github.com/KhronosGroup/SPIRV-Tools/tree/33e02568181e3312f49a3cf33df470bf96ef293a), copyright © 2015–2025 The Khronos Group Inc. and its contributors, under the Apache License 2.0. Its generated tables use [SPIRV-Headers at commit `2a611a970fdbc41ac2e3e328802aed9985352dca`](https://github.com/KhronosGroup/SPIRV-Headers/tree/2a611a970fdbc41ac2e3e328802aed9985352dca), under the Khronos permissive terms recorded in that repository. The experimental CMake install includes their complete license files under `share/doc/mako-render/spirv-tools/` and `share/doc/mako-render/spirv-headers/`. The checksum-pinned source preparation is owned by `engine/scripts/prepare-lsfg-fp16-tools.sh`; ordinary builds do not include this optimizer. Neither this dependency nor conversion redistributes Lossless Scaling resources.
+
 ## Bundled vkBasalt Vulkan layer
 
 MAKO Renderer native archives and Flatpak extensions include 64-bit and 32-bit vkBasalt libraries from [MAKO's maintained fork](https://github.com/eugeniosegala/vkBasalt), based on [upstream vkBasalt](https://github.com/DadSchoorse/vkBasalt). [`engine/vkbasalt-release.json`](engine/vkbasalt-release.json) records the current release tag, source and upstream commits, immutable asset URL, and checksum used by packaging.

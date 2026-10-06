@@ -29,7 +29,8 @@ namespace mako::layer {
             VkExtent2D sourceExtent, VkExtent2D presentationExtent,
             VkFormat workingFormat, ls::ScalingMethod requestedMethod,
             float sharpness,
-            const std::optional<std::filesystem::path>& shaderDllPath);
+            const std::optional<std::filesystem::path>& shaderDllPath,
+            bool fp16Requested);
         ~SpatialScaler();
 
         SpatialScaler(const SpatialScaler&) = delete;
@@ -77,6 +78,7 @@ namespace mako::layer {
         [[nodiscard]] ls::ScalingMethod requestedMethod() const;
         [[nodiscard]] ls::ScalingMethod activeMethod() const;
         [[nodiscard]] std::string_view fallbackReason() const;
+        [[nodiscard]] std::string_view precisionName() const;
         [[nodiscard]] uint32_t ls1ModelVariant() const;
         [[nodiscard]] std::string_view ls1Translator() const;
         [[nodiscard]] std::string_view ls1DllSha256() const;

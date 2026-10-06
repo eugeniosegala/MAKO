@@ -2,6 +2,17 @@
 
 #version 450
 
+#ifdef MAKO_SCALING_FP16
+#extension GL_EXT_shader_explicit_arithmetic_types_float16 : require
+#define Color float16_t
+#define Color3 f16vec3
+#define Color4 f16vec4
+#else
+#define Color float
+#define Color3 vec3
+#define Color4 vec4
+#endif
+
 // MAKO's spatial reconstruction pass is deliberately independent from the
 // proprietary LS1 resources. It combines a clamped sharpened-cubic reconstruction
 // with contrast-aware anti-ringing and a bounded local sharpening term at a
@@ -23,20 +34,20 @@ layout(set = 0, binding = 48, rgba16f) uniform writeonly image2D outputImage;
 layout(set = 0, binding = 48, rgba8) uniform writeonly image2D outputImage;
 #endif
 
-float luma(vec3 color) {
-    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+Color luma(Color3 color) {
+    return dot(color, Color3(0.2126, 0.7152, 0.0722));
 }
 
-vec4 sourceTexel(ivec2 coordinate) {
-    return texelFetch(
+Color4 sourceTexel(ivec2 coordinate) {
+    return Color4(texelFetch(
         sampler2D(sourceTexture, sourceSampler), coordinate, 0
-    );
+    ));
 }
 
-vec4 filteredSource(vec2 coordinate) {
-    return textureLod(
+Color4 filteredSource(vec2 coordinate) {
+    return Color4(textureLod(
         sampler2D(sourceTexture, sourceSampler), coordinate, 0.0
-    );
+    ));
 }
 
 vec4 sharpenedCubicWeights(float fraction) {
@@ -100,92 +111,95 @@ void main() {
         ) + vec3(0.5)
     ) * inverseSourceSize.y;
 
-    vec4 reconstructed = filteredSource(vec2(
+    // Pixel coordinates and cubic sample locations retain FP32 precision.
+    // The selected arithmetic precision applies to colour reconstruction,
+    // anti-ringing, and sharpening; image storage keeps its existing format.
+    Color4 reconstructed = filteredSource(vec2(
         horizontalSampleCoordinates.x, verticalSampleCoordinates.x
-    )) * (horizontalSampleWeights.x * verticalSampleWeights.x);
+    )) * Color(horizontalSampleWeights.x * verticalSampleWeights.x);
     reconstructed += filteredSource(vec2(
         horizontalSampleCoordinates.y, verticalSampleCoordinates.x
-    )) * (horizontalSampleWeights.y * verticalSampleWeights.x);
+    )) * Color(horizontalSampleWeights.y * verticalSampleWeights.x);
     reconstructed += filteredSource(vec2(
         horizontalSampleCoordinates.z, verticalSampleCoordinates.x
-    )) * (horizontalSampleWeights.z * verticalSampleWeights.x);
+    )) * Color(horizontalSampleWeights.z * verticalSampleWeights.x);
     reconstructed += filteredSource(vec2(
         horizontalSampleCoordinates.x, verticalSampleCoordinates.y
-    )) * (horizontalSampleWeights.x * verticalSampleWeights.y);
+    )) * Color(horizontalSampleWeights.x * verticalSampleWeights.y);
     reconstructed += filteredSource(vec2(
         horizontalSampleCoordinates.y, verticalSampleCoordinates.y
-    )) * (horizontalSampleWeights.y * verticalSampleWeights.y);
+    )) * Color(horizontalSampleWeights.y * verticalSampleWeights.y);
     reconstructed += filteredSource(vec2(
         horizontalSampleCoordinates.z, verticalSampleCoordinates.y
-    )) * (horizontalSampleWeights.z * verticalSampleWeights.y);
+    )) * Color(horizontalSampleWeights.z * verticalSampleWeights.y);
     reconstructed += filteredSource(vec2(
         horizontalSampleCoordinates.x, verticalSampleCoordinates.z
-    )) * (horizontalSampleWeights.x * verticalSampleWeights.z);
+    )) * Color(horizontalSampleWeights.x * verticalSampleWeights.z);
     reconstructed += filteredSource(vec2(
         horizontalSampleCoordinates.y, verticalSampleCoordinates.z
-    )) * (horizontalSampleWeights.y * verticalSampleWeights.z);
+    )) * Color(horizontalSampleWeights.y * verticalSampleWeights.z);
     reconstructed += filteredSource(vec2(
         horizontalSampleCoordinates.z, verticalSampleCoordinates.z
-    )) * (horizontalSampleWeights.z * verticalSampleWeights.z);
+    )) * Color(horizontalSampleWeights.z * verticalSampleWeights.z);
 
     ivec2 maximumSourceCoordinate = ivec2(parameters.sizes.xy) - ivec2(1);
     int centerX0 = clamp(sourceBase.x, 0, maximumSourceCoordinate.x);
     int centerX1 = clamp(sourceBase.x + 1, 0, maximumSourceCoordinate.x);
     int centerY0 = clamp(sourceBase.y, 0, maximumSourceCoordinate.y);
     int centerY1 = clamp(sourceBase.y + 1, 0, maximumSourceCoordinate.y);
-    vec4 center00 = sourceTexel(ivec2(centerX0, centerY0));
-    vec4 center10 = sourceTexel(ivec2(centerX1, centerY0));
-    vec4 center01 = sourceTexel(ivec2(centerX0, centerY1));
-    vec4 center11 = sourceTexel(ivec2(centerX1, centerY1));
-    vec4 bilinear = mix(
-        mix(center00, center10, fraction.x),
-        mix(center01, center11, fraction.x),
-        fraction.y
+    Color4 center00 = sourceTexel(ivec2(centerX0, centerY0));
+    Color4 center10 = sourceTexel(ivec2(centerX1, centerY0));
+    Color4 center01 = sourceTexel(ivec2(centerX0, centerY1));
+    Color4 center11 = sourceTexel(ivec2(centerX1, centerY1));
+    Color4 bilinear = mix(
+        mix(center00, center10, Color(fraction.x)),
+        mix(center01, center11, Color(fraction.x)),
+        Color(fraction.y)
     );
-    vec4 localMinimum = min(min(center00, center10), min(center01, center11));
-    vec4 localMaximum = max(max(center00, center10), max(center01, center11));
+    Color4 localMinimum = min(min(center00, center10), min(center01, center11));
+    Color4 localMaximum = max(max(center00, center10), max(center01, center11));
     reconstructed = clamp(reconstructed, localMinimum, localMaximum);
 
-    float minimumLuma = min(
+    Color minimumLuma = min(
         min(luma(center00.rgb), luma(center10.rgb)),
         min(luma(center01.rgb), luma(center11.rgb))
     );
-    float maximumLuma = max(
+    Color maximumLuma = max(
         max(luma(center00.rgb), luma(center10.rgb)),
         max(luma(center01.rgb), luma(center11.rgb))
     );
-    float contrast = maximumLuma - minimumLuma;
-    float ringingRisk = smoothstep(0.06, 0.30, contrast);
-    vec3 baseColor = mix(
-        reconstructed.rgb, bilinear.rgb, ringingRisk * 0.22
+    Color contrast = maximumLuma - minimumLuma;
+    Color ringingRisk = smoothstep(Color(0.06), Color(0.30), contrast);
+    Color3 baseColor = mix(
+        reconstructed.rgb, bilinear.rgb, ringingRisk * Color(0.22)
     );
 
-    vec3 localAverage = 0.25 * (
+    Color3 localAverage = Color(0.25) * (
         center00.rgb + center10.rgb + center01.rgb + center11.rgb
     );
-    float horizontalEdge =
+    Color horizontalEdge =
         abs(luma(center10.rgb) - luma(center00.rgb)) +
         abs(luma(center11.rgb) - luma(center01.rgb));
-    float verticalEdge =
+    Color verticalEdge =
         abs(luma(center01.rgb) - luma(center00.rgb)) +
         abs(luma(center11.rgb) - luma(center10.rgb));
-    float edgeDirectionConfidence = abs(horizontalEdge - verticalEdge) /
-        (horizontalEdge + verticalEdge + 0.0001);
-    const float sharpeningBaseline = 3.0;
-    float sharpeningGain = sharpeningBaseline * parameters.tuning.x *
-        mix(0.18, 0.32, edgeDirectionConfidence) *
-        mix(1.0, 0.55, ringingRisk);
-    vec3 sharpened = baseColor + (baseColor - localAverage) * sharpeningGain;
+    Color edgeDirectionConfidence = abs(horizontalEdge - verticalEdge) /
+        (horizontalEdge + verticalEdge + Color(0.0001));
+    const Color sharpeningBaseline = Color(3.0);
+    Color sharpeningGain = sharpeningBaseline * Color(parameters.tuning.x) *
+        mix(Color(0.18), Color(0.32), edgeDirectionConfidence) *
+        mix(Color(1.0), Color(0.55), ringingRisk);
+    Color3 sharpened = baseColor + (baseColor - localAverage) * sharpeningGain;
 
     // Scale the contrast-relative sharpening envelope with the threefold
     // baseline, but never permit the unbounded overshoot that produces bright
     // halos around UI and text.
-    vec3 envelope = vec3(sharpeningBaseline * (0.02 + contrast * 0.08));
+    Color3 envelope = Color3(sharpeningBaseline * (Color(0.02) + contrast * Color(0.08)));
     sharpened = clamp(
         sharpened, localMinimum.rgb - envelope, localMaximum.rgb + envelope
     );
     imageStore(
         outputImage, outputCoordinate,
-        vec4(sharpened, clamp(reconstructed.a, 0.0, 1.0))
+        vec4(Color4(sharpened, clamp(reconstructed.a, Color(0.0), Color(1.0))))
     );
 }

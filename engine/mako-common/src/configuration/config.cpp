@@ -27,7 +27,7 @@ void ConfigFile::createDefaultConfigFile(const std::filesystem::path& path) {
 
 [global]
 # dll = '/media/games/Lossless Scaling/Lossless.dll' # if you don't have LS in the default location
-allow_fp16 = true # use FP16 when supported; set false to select FP32
+allow_fp16 = true # request FP16 model/scaling arithmetic; false selects FP32
 
 [[profile]]
 name = "4x FG / 85% [Performance]"

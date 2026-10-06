@@ -62,6 +62,10 @@ MAKO Renderer: present diagnostics: operation=application-present-mode context=2
 MAKO Renderer: present diagnostics: operation=application-present-wait waiter=19 pid=4242 device=55 swapchain=1234 api=KHR2 calls=60 successful=59 timeouts=1 errors=0 polls=1 first_present_id=20 last_present_id=79 duration_mean_ms=8.2 duration_max_ms=21.5
 MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
 MAKO Renderer: spatial scaling surface bridge: surface=1234; xwayland_server=0; window=5678; transport=wayland; gamescope_wsi=isolated; application_surface=x11; extent_contract=window
+MAKO Renderer: spatial scaling window extent: operation=capability-query; surface=1234; window=5678; previous=1152x720; current=2560x1440; query_generation=3
+MAKO Renderer: spatial scaling window extent: operation=swapchain-create; surface=1234; swapchain=9999; window=5678; queried=1152x720; query_generation=2; application=1152x720; current=2560x1440; presentation=2304x1440; exact_window_extent=1; extent_contract=window
+MAKO Renderer: spatial scaling window extent: operation=swapchain-create; surface=1234; swapchain=10000; window=5678; queried=1920x1080; query_generation=4; application=2560x1440; current=1920x1080; presentation=3840x2160; exact_window_extent=0; extent_contract=application-override
+MAKO Renderer: spatial scaling window extent: operation=swapchain-out-of-date; surface=1234; swapchain=9999; window=5678; application=1152x720; current=2560x1440; boundary=swapchain-create; action=requery-before-application-acquire
 MAKO Renderer: spatial scaling swapchain policy: requested=854x532; surface_current=1280x800; surface_extent_mode=fixed; advertised_source=854x532; advertised_presentation=1280x800; actual_source=854x532; actual_presentation=1280x800; policy_revision=4; contract_policy_revision=4; query_generation=9; selected_source=854x532; selected_presentation=1280x800; format=44; format_supported=1; shape_supported=1; queue_presentation_support=supported; queue_commands_supported=1; variable_feedback_suppressed=0; inactive_reason=none; source_presentation_split=1; active=1
 MAKO Renderer: spatial scaling swapchain policy: requested=1280x800; surface_current=1280x800; surface_extent_mode=fixed; advertised_source=854x532; advertised_presentation=1280x800; actual_source=1280x800; actual_presentation=1280x800; policy_revision=4; contract_policy_revision=4; query_generation=9; selected_source=0x0; selected_presentation=0x0; format=44; format_supported=1; shape_supported=1; queue_presentation_support=not-checked; queue_commands_supported=1; variable_feedback_suppressed=0; inactive_reason=application-extent-override-no-source-presentation-split; source_presentation_split=0; active=0
 MAKO Renderer: spatial scaling active: source=854x532; presentation=1280x800; factor=1.5; requested_method=ls1; active_method=ls1; sharpness=0.5; ls1_model_variant=2; ls1_translator=/runtime/libvkd3d-shader.so.1; working_format=37; pipeline=pre-frame-generation; placement_reason=presentation-within-low-resolution-budget
@@ -350,6 +354,12 @@ class DiagnosticsHelperTests(unittest.TestCase):
                         result.stdout,
                     )
                     self.assertIn("action=native-feedback-guard", result.stdout)
+                    self.assertIn("spatial scaling window extent", result.stdout)
+                    self.assertIn("queried=1152x720", result.stdout)
+                    self.assertIn("current=2560x1440", result.stdout)
+                    self.assertIn("boundary=swapchain-create", result.stdout)
+                    self.assertIn("action=requery-before-application-acquire", result.stdout)
+                    self.assertIn("extent_contract=application-override", result.stdout)
 
     def test_config_preset_correlates_requested_and_applied_state(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

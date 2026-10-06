@@ -527,7 +527,6 @@ namespace mako::ui {
             MARK_DIRTY()
         }
         void allowFP16Updated(bool allow_fp16) {
-            if (getUltraPerformance()) return;
             auto& conf = this->m_global;
             conf.allow_fp16 = allow_fp16;
             MARK_DIRTY()
@@ -783,7 +782,6 @@ namespace mako::ui {
                 ? ls::GameConfDefaults::ultraPerformanceFlowScale
                 : ls::GameConfDefaults::flowScale;
             conf.performance_mode = ultra_performance;
-            this->m_global.allow_fp16 = true;
             MARK_DIRTY()
         }
         void flowScaleUpdated(float flow_scale) {

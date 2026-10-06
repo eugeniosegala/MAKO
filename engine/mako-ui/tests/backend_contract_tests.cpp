@@ -462,6 +462,20 @@ void test_save_lifetime() {
         QByteArray(MAKO_UI_VKBASALT_SHADER_SOURCE_DIR));
     {
         mako::ui::Backend backend;
+        backend.allowFP16Updated(false);
+        for (const bool enabled : {true, false}) {
+            backend.ultraPerformanceUpdated(enabled);
+            require(!backend.getAllowFP16(),
+                "Ultra Performance overwrote an explicit global FP32 choice");
+        }
+        backend.ultraPerformanceUpdated(true);
+        backend.allowFP16Updated(true);
+        require(backend.getAllowFP16(),
+            "FP16 precision must remain editable under Ultra Performance");
+        backend.allowFP16Updated(false);
+        require(!backend.getAllowFP16(),
+            "FP32 precision must remain editable under Ultra Performance");
+        backend.ultraPerformanceUpdated(false);
         backend.targetFPSUpdated(90);
         require(backend.fractionalRealFramePriorityCapFor(QStringLiteral("low")) == 54.0,
             "Priority preview did not follow the initial Target FPS");

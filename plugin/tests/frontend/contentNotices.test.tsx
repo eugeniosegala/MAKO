@@ -95,8 +95,10 @@ describe("content status notices", () => {
       />,
     );
     const warning = screen.getByRole("alert");
-    expect(warning.textContent).toContain("LS1 failed its availability check");
-    expect(warning.textContent).toContain("An LSFG model check failed");
+    expect(warning.textContent).toContain(
+      "LS1 is unavailable at the selected precision or model setting",
+    );
+    expect(warning.textContent).toContain("Frame Generation is unavailable at the selected precision or model setting");
     expect(warning.compareDocumentPosition(screen.getByRole("note")) & 4).toBe(
       4,
     );
@@ -223,7 +225,9 @@ describe("content status notices", () => {
     expect(welcome.textContent).toContain(
       "If anything looks or feels wrong after several changes, restart the game for a clean new session.",
     );
-    const finalTip = screen.getByText(/check the release page for MAKO updates\.$/);
+    const finalTip = screen.getByText(
+      /check the release page for MAKO updates\.$/,
+    );
     const underlinedPhrases = Array.from(welcome.querySelectorAll("span"))
       .filter((element) => element.style.textDecorationLine === "underline")
       .map((element) => element.textContent);

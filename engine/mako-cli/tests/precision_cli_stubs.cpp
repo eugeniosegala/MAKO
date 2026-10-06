@@ -31,12 +31,11 @@ namespace mako::cli {
         return reportPrecision(opts.allow_fp16);
     }
 
-    // Commands without LSFG precision controls must never reach these probes.
-    int quality::runSpatial(const SpatialOptions&) { return 2; }
-    int quality::runSpatialProfile(const SpatialProfileOptions&) { return 2; }
+    int quality::runSpatial(const SpatialOptions& opts) { return reportPrecision(opts.allow_fp16); }
+    int quality::runSpatialProfile(const SpatialProfileOptions& opts) { return reportPrecision(opts.allow_fp16); }
     int quality::runSynchronizationCanary(const SynchronizationCanaryOptions&) { return 2; }
     int inspect_dll::run(const Options& opts) {
-        return opts.lsfg ? reportPrecision(opts.allowFp16) : 2;
+        return (opts.lsfg || opts.ls1Mode) ? reportPrecision(opts.allowFp16) : 2;
     }
     int validate::run(const Options&, i18n::Language) { return 2; }
 }

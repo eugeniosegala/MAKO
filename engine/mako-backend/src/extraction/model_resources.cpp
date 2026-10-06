@@ -23,9 +23,11 @@ namespace {
 }
 
 struct mako::backend::ModelResolutionCache {
-    // First key: LSFG FP32/FP16 or LS1 Q/P. Second: mode/variant or all.
+    // First key: native LSFG FP32/FP16, DirectX LSFG, or LS1 Q/P.
+    // Second: mode/variant or all.
     std::map<std::pair<uint32_t, uint32_t>, ResolutionOutcome> selections;
     std::optional<ResolutionOutcome> relocatedLsfg;
+    std::optional<ResolutionOutcome> relocatedLsfgDxbc;
     std::optional<ResolutionOutcome> relocatedLs1;
 };
 
@@ -85,6 +87,16 @@ namespace {
             declaresFloat16 = declaresFloat16 || info.declaresFloat16;
         }
         return declaresFloat16;
+    }
+
+    void validateLsfgDxbc(const DllResourceArchive& archive,
+            const ModelResourceSelection selection, const bool performance) {
+        for (const auto& spec : detail::lsfgShaderSpecs(performance)) {
+            const auto id = detail::lsfgDxbcResourceId(spec.logicalId, performance);
+            detail::validateDxbcResourceBindings(selection.resource(archive, id),
+                spec.contract, "LSFG DirectX resource " +
+                    std::to_string(selection.resourceId(id)));
+        }
     }
 
     void validateLs1(const DllResourceArchive& archive,
@@ -195,6 +207,26 @@ mako::backend::ModelResourceSelection mako::backend::resolveLsfgModelResources(
         } catch (const ls::error& error) {
             return relocatedAfterFailure(error, cache.relocatedLsfg,
                 [&] { return discoverLsfg(archive); });
+        }
+    });
+}
+
+mako::backend::ModelResourceSelection mako::backend::resolveLsfgDxbcModelResources(
+        const DllResourceArchive& archive, const std::optional<bool> performance) {
+    return cachedResolution(archive, {6U,
+            performance ? (*performance ? 1U : 0U) : 2U}, [&](ModelResolutionCache& cache) {
+        try {
+            for (const bool mode : {false, true})
+                if (!performance || *performance == mode)
+                    validateLsfgDxbc(archive, {}, mode);
+            return int64_t{0};
+        } catch (const ls::error& error) {
+            return relocatedAfterFailure(error, cache.relocatedLsfgDxbc, [&] {
+                return discoverTable(archive, 255U, "LSFG DirectX", [&](const auto selection) {
+                    for (const bool mode : {false, true})
+                        validateLsfgDxbc(archive, selection, mode);
+                });
+            });
         }
     });
 }

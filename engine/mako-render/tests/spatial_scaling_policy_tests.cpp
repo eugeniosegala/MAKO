@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "spatial_scaling_policy.hpp"
+#include "shaders/spatial_scaling_spirv.hpp"
+#include <span>
 #include "swapchain/create_policy.hpp"
 
 #include <bit>
@@ -225,6 +227,23 @@ namespace {
 }
 
 int main() {
+    const auto declaresHalf = [](const std::span<const uint32_t> words) {
+        for (size_t i = 5; i < words.size();) {
+            const auto count = words[i] >> 16;
+            expect(count && i + count <= words.size(), "embedded scaling SPIR-V must be well formed");
+            if ((words[i] & 0xffffU) == 22U && count == 3U && words[i + 2] == 16U)
+                return true;
+            i += count;
+        }
+        return false;
+    };
+    expect(!declaresHalf(embedded::spatialScalingRgba8Spirv) &&
+            !declaresHalf(embedded::spatialScalingRgba16fSpirv),
+        "FP32 scaling variants must not require FP16 arithmetic");
+    expect(declaresHalf(embedded::spatialScalingRgba8Fp16Spirv) &&
+            declaresHalf(embedded::spatialScalingRgba16fFp16Spirv),
+        "both FP16 scaling storage variants must contain real half arithmetic");
+
     testVariableMemoryGraphAdmission();
     expect(spatialScalingProcessSupported(false, false, false),
         "An ordinary desktop process must permit spatial scaling");

@@ -13,6 +13,9 @@ flatpak_runtime_bundle_output="$(
 renderer_path_output="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" renderer-paths
 )"
+cli_relative_path="$(
+  python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" cli-path
+)"
 vkbasalt_path_output="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" vkbasalt-paths
 )"
@@ -69,6 +72,7 @@ deploy_engine=false
 deploy_engine_32=false
 deploy_flatpaks=false
 reload_plugin=false
+experimental_lsfg_fp16=false
 action_selected=false
 
 usage() {
@@ -84,12 +88,13 @@ Flatpak options build local development extensions.
 Options:
   --frontend              Rebuild and deploy dist/ with fresh dev-build metadata.
   --backend               Regenerate and deploy Python backend plus refreshed dev UI.
-  --engine                Incrementally build/deploy the 64-bit host layer plus refreshed dev UI.
+  --engine                Incrementally build/deploy the 64-bit host layers and CLI plus refreshed dev UI.
   --engine-32             Incrementally build/deploy the 32-bit host layer plus refreshed dev UI.
   --host                  Deploy Decky plus both 64-bit and 32-bit host layers.
   --flatpaks              Deploy Decky plus Flatpak runtimes $flatpak_runtime_summary.
   --e2e                   Deploy Decky, both host layers, and all Flatpak runtime bundles.
   --all                   Deploy frontend, backend, and engine.
+  --experimental-lsfg-fp16 Build the native forced-FP16 experiment; uses the existing FP16 toggle.
   --reload                Reload only this plugin through Decky after deployment.
   --plugin-dir PATH       Installed Decky plugin directory.
   --engine-repo PATH      MAKO Renderer source directory for --engine.
@@ -150,6 +155,9 @@ while (($#)); do
       reload_plugin=true
       action_selected=true
       ;;
+    --experimental-lsfg-fp16)
+      experimental_lsfg_fp16=true
+      ;;
     --plugin-dir)
       if (($# < 2)); then
         echo "--plugin-dir requires a path" >&2
@@ -178,6 +186,13 @@ while (($#)); do
   esac
   shift
 done
+
+if [[ "$experimental_lsfg_fp16" == true ]] &&
+    { [[ "$deploy_engine" == false && "$deploy_engine_32" == false ]] ||
+      [[ "$deploy_flatpaks" == true ]]; }; then
+  echo "Experimental LSFG FP16 deployment requires a native Renderer scope without Flatpak builds." >&2
+  exit 2
+fi
 
 if [[ "$action_selected" == false ]]; then
   deploy_frontend=true
@@ -316,6 +331,8 @@ PY
 }
 
 built_layer_64=""
+built_cli=""
+installed_cli=""
 built_layer_32=""
 built_spatial_layer_64=""
 built_spatial_layer_32=""
@@ -384,6 +401,9 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   fi
 
   engine_build_args=()
+  if [[ "$experimental_lsfg_fp16" == true ]]; then
+    engine_build_args+=(--experimental-lsfg-fp16)
+  fi
   if [[ "$deploy_engine" == true && "$deploy_engine_32" == true ]]; then
     engine_build_args+=(--with-32-bit)
   elif [[ "$deploy_engine_32" == true ]]; then
@@ -413,6 +433,8 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   fi
   if [[ "$deploy_engine" == true ]]; then
     built_layer_64="$engine_build_dir/mako-render/$renderer_library_filename"
+    built_cli="$engine_build_dir/mako-cli/${cli_relative_path##*/}"
+    installed_cli="$HOME/$cli_relative_path"
     built_spatial_layer_64="$engine_build_dir/mako-render/$spatial_library_filename"
     built_spatial_manifest_64="$engine_build_dir/mako-render/private-scaling-manifest/${spatial_manifest_relative_path##*/}"
     installed_spatial_manifest_64="$HOME/$spatial_manifest_relative_path"
@@ -434,6 +456,7 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     installed_vkbasalt_manifest_32="$HOME/$vkbasalt_manifest32_relative_path"
   fi
   for layer_path in \
+      "$built_cli" \
       "$built_layer_64" "$built_layer_32" \
       "$built_spatial_layer_64" "$built_spatial_layer_32" \
       "$built_spatial_manifest_64" "$built_spatial_manifest_32" \
@@ -444,6 +467,10 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
       exit 1
     fi
   done
+  if [[ -n "$built_cli" && ! -x "$built_cli" ]]; then
+    echo "Incremental engine build produced a non-executable CLI: $built_cli" >&2
+    exit 1
+  fi
   for installed_path in "$installed_layer_64" "$installed_layer_32"; do
     if [[ -n "$installed_path" && ! -f "$installed_path" ]]; then
       echo "MAKO Renderer is not installed yet: $installed_path" >&2
@@ -609,9 +636,16 @@ if [[ -n "$built_layer_64" ]]; then
   copy_file "$built_spatial_manifest_64" "$installed_spatial_manifest_64"
   copy_file "$built_vkbasalt_library_64" "$installed_vkbasalt_library_64"
   copy_file "$built_vkbasalt_manifest_64" "$installed_vkbasalt_manifest_64"
+  copy_file "$built_cli" "$installed_cli"
+  if [[ ! -x "$installed_cli" ]] || ! cmp -s "$built_cli" "$installed_cli"; then
+    echo "Installed Renderer CLI differs from the development build: $installed_cli" >&2
+    exit 1
+  fi
+  cli_checksum="$(sha256sum "$installed_cli")"
+  echo "MAKO Renderer: verified installed 64-bit CLI $installed_cli; sha256=${cli_checksum%% *}"
   python3 "$project_dir/scripts/dev-renderer-selection.py" --bits 64 \
     --verify "$built_layer_64" "$built_spatial_layer_64" "$built_vkbasalt_library_64"
-  echo "Deployed incremental 64-bit Renderer and private vkBasalt layers."
+  echo "Deployed incremental 64-bit Renderer layers, CLI, and private vkBasalt layers."
 fi
 if [[ -n "$built_layer_32" ]]; then
   copy_file "$built_layer_32" "$installed_layer_32"

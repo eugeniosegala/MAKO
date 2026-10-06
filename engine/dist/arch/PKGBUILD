@@ -54,8 +54,8 @@ depends=(
 
 optdepends=(
     'qt6-wayland: native configuration UI under Wayland sessions'
-    'vkd3d: LS1 spatial scaling needs libvkd3d-shader.so.1 (64-bit)'
-    'lib32-vkd3d: LS1 spatial scaling needs libvkd3d-shader.so.1 (32-bit)'
+    'vkd3d: LS1 scaling and DirectX LSFG models need libvkd3d-shader.so.1 (64-bit)'
+    'lib32-vkd3d: LS1 scaling and DirectX LSFG models need libvkd3d-shader.so.1 (32-bit)'
     'lib32-mesa: Zink support for 32-bit OpenGL games'
 )
 

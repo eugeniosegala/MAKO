@@ -541,6 +541,9 @@ VulkanDeviceFuncs vk::initVulkanDeviceFuncs(const VulkanInstanceFuncs& f, VkDevi
             dpa<PFN_vkGetSwapchainImagesKHR>(f, d, "vkGetSwapchainImagesKHR") : nullptr,
         .AcquireNextImageKHR = graphical ?
             dpa<PFN_vkAcquireNextImageKHR>(f, d, "vkAcquireNextImageKHR") : nullptr,
+        .AcquireNextImage2KHR = graphical ?
+            reinterpret_cast<PFN_vkAcquireNextImage2KHR>(
+                optionalDeviceProc("vkAcquireNextImage2KHR")) : nullptr,
         .QueuePresentKHR = graphical ?
             dpa<PFN_vkQueuePresentKHR>(f, d, "vkQueuePresentKHR") : nullptr,
         .DestroySwapchainKHR = graphical ?
@@ -606,7 +609,8 @@ Vulkan::Vulkan(VkInstance instance, VkDevice device,
         const bool frameGenerationInteropEnabled,
         bool isGraphical,
         std::optional<PFN_vkSetDeviceLoaderData> setLoaderData,
-        const std::optional<std::filesystem::path>& cachefile) :
+        const std::optional<std::filesystem::path>& cachefile,
+        const bool shaderFloat16Enabled) :
     instance(new VkInstance(instance)),
     instance_funcs(instanceFuncs),
     phys_dev(physdev),
@@ -615,7 +619,7 @@ Vulkan::Vulkan(VkInstance instance, VkDevice device,
         this->instance_funcs, this->phys_dev, this->queueFamilyIdx
     )),
     frameGenerationInterop(frameGenerationInteropEnabled),
-    fp16(false),
+    fp16(shaderFloat16Enabled),
     robustImageAccess2(false),
     device(new VkDevice(device)),
     setLoaderData(setLoaderData),

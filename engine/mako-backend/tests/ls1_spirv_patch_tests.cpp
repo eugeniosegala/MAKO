@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-#include "extraction/ls1_spirv_patch.hpp"
+#include "extraction/spirv_image_format.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <cstdint>
@@ -61,7 +61,7 @@ namespace {
 
     void testRgba8Patch() {
         auto shader = shaderWords();
-        mako::backend::detail::patchLs1StorageImageFormat(
+        mako::backend::detail::patchStorageImageFormat(
             shader, imageFormatRgba8
         );
         require(readWord(shader, 8) == capabilityShader,
@@ -72,7 +72,7 @@ namespace {
 
     void testExtendedFormatPatch() {
         auto shader = shaderWords();
-        mako::backend::detail::patchLs1StorageImageFormat(
+        mako::backend::detail::patchStorageImageFormat(
             shader, imageFormatR8Snorm
         );
         require(readWord(shader, 8) == capabilityStorageImageExtendedFormats,
@@ -81,10 +81,21 @@ namespace {
             "R8Snorm did not patch the storage image format");
     }
 
+    void testLsfgFormats() {
+        for (const uint32_t format : {2U, 4U, 15U}) {
+            auto shader = shaderWords();
+            mako::backend::detail::patchStorageImageFormat(shader, format);
+            require(readWord(shader, 17) == format,
+                "LSFG storage image format did not match its image owner");
+            require(readWord(shader, 8) == (format == 15U ? 49U : 1U),
+                "LSFG scalar image capability was incorrect");
+        }
+    }
+
     void testMissingExtendedFormatCapabilityFailsClosed() {
         auto shader = shaderWithoutPatchableCapability();
         try {
-            mako::backend::detail::patchLs1StorageImageFormat(
+            mako::backend::detail::patchStorageImageFormat(
                 shader, imageFormatR8Snorm
             );
             throw std::runtime_error(
@@ -99,6 +110,7 @@ int main() {
     try {
         testRgba8Patch();
         testExtendedFormatPatch();
+        testLsfgFormats();
         testMissingExtendedFormatCapabilityFailsClosed();
     } catch (const std::exception& error) {
         std::cerr << "LS1 SPIR-V patch test failed: " << error.what() << '\n';

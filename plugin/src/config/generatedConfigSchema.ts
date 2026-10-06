@@ -205,7 +205,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "allow_fp16",
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
-    description: "allow FP16 acceleration (disable on older NVIDIA GPUs)"
+    description: "select FP16 for supported model arithmetic and scaling; false selects FP32"
   },
   scaling_enabled: {
     name: "scaling_enabled",
@@ -325,7 +325,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "ultra_performance",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 70% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain available after startup"
+    description: "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 70% flow scale, the lighter FG model and active-policy resource allocation while respecting the global precision choice; compatible controls remain available after startup"
   },
   flow_scale: {
     name: "flow_scale",

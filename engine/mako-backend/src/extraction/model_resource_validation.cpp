@@ -430,11 +430,24 @@ uint32_t mako::backend::detail::lsfgResourceId(
         const uint32_t logicalId, const bool fp16,
         const bool performance) {
     constexpr uint32_t baseOffset = 49U;
-    constexpr uint32_t performanceOffset = 23U;
     constexpr uint32_t fp32Offset = 49U;
-    return baseOffset + logicalId +
-        (performance ? performanceOffset : 0U) +
+    return baseOffset + lsfgDxbcResourceId(logicalId, performance) +
         (fp16 ? 0U : fp32Offset);
+}
+
+uint32_t mako::backend::detail::lsfgDxbcResourceId(
+        const uint32_t logicalId, const bool performance) {
+    return logicalId + (performance ? 23U : 0U);
+}
+
+uint32_t mako::backend::detail::lsfgStorageImageFormat(const uint32_t logicalId) {
+    // Match the existing shader-chain image owners: scalar mipmaps/masks,
+    // floating-point flow outputs, and quantized RGBA intermediates/output.
+    if (logicalId == 255U || logicalId == 279U)
+        return 15U; // SPIR-V R8
+    if (logicalId == 262U || logicalId == 266U || logicalId == 274U)
+        return 2U; // SPIR-V Rgba16f
+    return 4U; // SPIR-V Rgba8 (generation's HDR copy is patched by the registry)
 }
 
 std::span<const mako::backend::detail::LsfgShaderSpec>

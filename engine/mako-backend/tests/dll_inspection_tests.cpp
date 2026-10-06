@@ -4,6 +4,8 @@
 #include "extraction/dll_reader.hpp"
 #include "extraction/model_resource_validation.hpp"
 #include "extraction/model_resources.hpp"
+#include "extraction/lsfg_shader_set.hpp"
+#include "extraction/spirv_fp16.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <algorithm>
@@ -11,6 +13,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <cstdlib>
+#include <dlfcn.h>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -275,6 +279,111 @@ namespace {
                     resources.emplace(mako::backend::ModelResourceSelection{offset}.resourceId(canonical),
                         syntheticSpirv(spec.contract, false, fp16));
                 }
+    }
+
+    void addLsfgDxbcTable(Resources& resources, const int64_t offset) {
+        for (const bool performance : {false, true})
+            for (const auto& spec : mako::backend::detail::lsfgShaderSpecs(performance)) {
+                const auto id = spec.logicalId + (performance ? 23U : 0U);
+                resources.emplace(mako::backend::ModelResourceSelection{offset}.resourceId(id),
+                    reflectedDxbc(spec.contract));
+            }
+    }
+
+    void testLsfgDxbcResolutionAndTranslation() {
+        using namespace mako::backend;
+        Resources resources;
+        addLsfgDxbcTable(resources, 0);
+        require(resources.size() == 48, "DirectX table must have 48 distinct stages");
+        for (const int64_t offset : {-200, 0, 1000}) {
+            Resources relocated;
+            addLsfgDxbcTable(relocated, offset);
+            require(resolveLsfgDxbcModelResources({.resources = relocated}).idOffset == offset,
+                "coherent reflected DirectX table was not resolved");
+        }
+        auto ambiguous = Resources{};
+        addLsfgDxbcTable(ambiguous, 1000);
+        addLsfgDxbcTable(ambiguous, 2000);
+        requireFailure([&] { static_cast<void>(resolveLsfgDxbcModelResources(
+            {.resources = ambiguous})); }, "ambiguous DirectX tables accepted");
+        for (const uint32_t id : {255U, 267U, 279U, 280U, 302U}) {
+            auto partial = resources;
+            partial.erase(id);
+            requireFailure([&] { static_cast<void>(resolveLsfgDxbcModelResources(
+                {.resources = partial})); }, "partial DirectX runtime table accepted");
+        }
+        auto wrong = resources;
+        wrong.at(267) = reflectedDxbc({1, 1, 0, 1});
+        requireFailure([&] { static_cast<void>(resolveLsfgDxbcModelResources(
+            {.resources = wrong})); }, "wrong mode/stage reflection accepted");
+        wrong.at(267) = syntheticDxbc();
+        requireFailure([&] { static_cast<void>(resolveLsfgDxbcModelResources(
+            {.resources = wrong})); }, "DirectX stage without reflection accepted");
+
+        const char* previous = std::getenv("MAKO_VKD3D_SHADER_PATH");
+        const std::string previousPath = previous ? previous : "";
+        struct RestoreEnvironment {
+            std::string path;
+            bool present;
+            ~RestoreEnvironment() {
+                if (present) ::setenv("MAKO_VKD3D_SHADER_PATH", path.c_str(), 1);
+                else ::unsetenv("MAKO_VKD3D_SHADER_PATH");
+                ::unsetenv("MAKO_TEST_TRANSLATION_FAILURE");
+            }
+        } restore{previousPath, previous != nullptr};
+        ::setenv("MAKO_VKD3D_SHADER_PATH", MAKO_TEST_TRANSLATOR_PATH, 1);
+        void* library = ::dlopen(MAKO_TEST_TRANSLATOR_PATH, RTLD_NOW | RTLD_LOCAL);
+        require(library != nullptr, "synthetic translator failed to load");
+        struct CloseLibrary { void* value; ~CloseLibrary() { ::dlclose(value); } } close{library};
+        const auto calls = reinterpret_cast<size_t (*)()>(
+            ::dlsym(library, "mako_test_translation_calls"));
+        require(calls != nullptr, "synthetic translator counter unavailable");
+        const auto beforeFp16 = calls();
+        const DllResourceArchive archive{.resources = resources};
+        requireFailure([&] { static_cast<void>(loadLsfgShaderSet(archive, "synthetic.dll", true)); },
+            "an FP16 request silently selected a DirectX FP32 fallback");
+        require(calls() == beforeFp16 + (detail::experimentalLsfgFp16Available() ? 48U : 0U),
+            "FP16 failure did not follow the configured conversion policy");
+        // The fixture emits structurally reflected, semantically invalid
+        // SPIR-V. Experimental conversion must reject it, without caching a
+        // purported FP16 success. Its validated FP32 translation remains cached.
+        const DllResourceArchive fp32Archive{.resources = resources};
+        const auto begin = calls();
+        const auto shaders = loadLsfgShaderSet(fp32Archive, "synthetic.dll", false);
+        require(!shaders.fp16 && shaders.translated && shaders.translated->size() == 48,
+            "DirectX fallback misreported precision or lost stages");
+        require(calls() == begin + 48, "not every DirectX stage was translated once");
+        const auto cached = loadLsfgShaderSet(fp32Archive, "synthetic.dll", false);
+        require(cached.translated == shaders.translated && calls() == begin + 48,
+            "repeated FP32 selection bypassed the process-local translation cache");
+        for (const bool mode : {false, true})
+            for (const auto& spec : detail::lsfgShaderSpecs(mode)) {
+                const auto& bytes = shaders.resource(archive, spec.logicalId, mode);
+                const auto info = detail::validateSpirvComputeShader(bytes, spec.contract,
+                    "translated synthetic shader");
+                require(info.exactBindings && !info.declaresFloat16,
+                    "translated stage had wrong bindings or precision");
+            }
+        // Success belongs to one immutable archive; replaced DLLs must translate.
+        const DllResourceArchive replacement{.resources = resources};
+        static_cast<void>(loadLsfgShaderSet(replacement, "synthetic.dll", false));
+        require(calls() == begin + 96, "replacement archive reused stale translation");
+
+        for (const char* failure : {"compile", "malformed", "binding", "precision"}) {
+            ::setenv("MAKO_TEST_TRANSLATION_FAILURE", failure, 1);
+            const DllResourceArchive retry{.resources = resources};
+            requireFailure([&] { static_cast<void>(loadLsfgShaderSet(
+                retry, "synthetic.dll", false)); }, "failed translator output accepted");
+            ::unsetenv("MAKO_TEST_TRANSLATION_FAILURE");
+            require(loadLsfgShaderSet(retry, "synthetic.dll", false).translated != nullptr,
+                "failed translation was permanently cached");
+        }
+        ::setenv("MAKO_TEST_TRANSLATION_FAILURE", "compile", 1);
+        Resources nativeResources = resources;
+        addLsfgTable(nativeResources, 0);
+        const auto native = loadLsfgShaderSet({.resources = nativeResources}, "synthetic.dll", true);
+        require(native.fp16 && !native.translated,
+            "native Vulkan model did not take precedence over DirectX translation");
     }
 
     void addLs1Table(Resources& resources, const int64_t offset) {
@@ -675,6 +784,7 @@ int main() {
     try {
         const TemporaryDirectory temporary;
         testSha256();
+        testLsfgDxbcResolutionAndTranslation();
         testPeExtractionAndIdentity(temporary);
         testShaderContainersAndRequiredBindings();
         testCapabilityIsolationAndHarmlessAdditions();

@@ -299,16 +299,18 @@ namespace {
         }
 
         try {
-            const bool fp16 = allowLowPrecision && vk.supportsFP16();
+            if (allowLowPrecision && !vk.supportsFP16())
+                throw ls::error("LSFG FP16 requested but shaderFloat16 is unavailable on the selected GPU; select FP32");
+            const bool fp16 = allowLowPrecision;
             auto registry = backend::buildShaderRegistry(
-                vk, fp16, *archive
+                vk, fp16, *archive, shaderDllPath
             );
             std::clog << "MAKO Renderer: model DLL inspected: component=lsfg"
                       << "; dll_sha256=" << archive->fileSha256
                       << "; resource_layout_sha256="
                       << archive->resourceLayoutSha256
                       << "; resource_count=" << archive->resources.size()
-                      << "; precision=" << (fp16 ? "fp16" : "fp32")
+                      << "; precision=" << (registry.is_fp16 ? "fp16" : "fp32")
                       << "; compatibility=structural-and-vulkan" << '\n';
             return registry;
         } catch (const std::exception& e) {
