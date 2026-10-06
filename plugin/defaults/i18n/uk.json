@@ -402,7 +402,7 @@
   "POWER_LOADING": "Loading profile settings...",
   "CONFIG_VKBASALT_CUSTOM_LABEL": "Custom: {name}",
   "CONFIG_VKBASALT_CUSTOM_MISSING": "Custom: {name} (definition missing)",
-  "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader…",
-  "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh Custom Shaders",
+  "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
+  "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
   "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
 }

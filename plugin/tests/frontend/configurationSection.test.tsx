@@ -144,9 +144,19 @@ vi.mock("@decky/ui", () => ({
       {children}
     </button>
   ),
+  DialogButton: ({
+    children,
+    onClick,
+    disabled,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  ),
   showModal: vi.fn(),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
+  makoDialogButtonStyle: () => ({}),
   MakoExperimentalSettingLabel: ({
     label,
     badgeLabel,
@@ -442,7 +452,7 @@ describe("Configuration controls", () => {
         onRefreshShaders={onRefreshShaders}
       />,
     );
-    fireEvent.click(screen.getByText("Add Custom Shader…"));
+    fireEvent.click(screen.getByText("Add Custom Shader"));
     await waitFor(() =>
       expect(onAddShader).toHaveBeenCalledWith("/tmp/tone.fx"),
     );
@@ -457,15 +467,15 @@ describe("Configuration controls", () => {
       false,
     );
     shaderPicker.mockRejectedValueOnce("User Canceled");
-    fireEvent.click(screen.getByText("Add Custom Shader…"));
+    fireEvent.click(screen.getByText("Add Custom Shader"));
     await waitFor(() =>
       expect(
-        screen.getByText("Add Custom Shader…").closest("button")?.disabled,
+        screen.getByText("Add Custom Shader").closest("button")?.disabled,
       ).toBe(false),
     );
     expect(screen.queryByText(/User Canceled/)).toBeNull();
     expect(onAddShader).toHaveBeenCalledOnce();
-    fireEvent.click(screen.getByText("Refresh Custom Shaders"));
+    fireEvent.click(screen.getByText("Refresh"));
     await waitFor(() => expect(onRefreshShaders).toHaveBeenCalledOnce());
     fireEvent.click(screen.getByText("Choose effects (2 selected)"));
     for (let page = 0; page < 4; page++)
