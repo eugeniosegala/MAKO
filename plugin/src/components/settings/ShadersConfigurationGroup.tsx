@@ -321,14 +321,6 @@ export function ShadersConfigurationGroup({
                 disabled={busy}
                 onChange={(value) => onConfigChange(VKBASALT_SHADER, value)}
               />
-            </SteamEffectsField>
-          </PanelSectionRow>
-          <PanelSectionRow>
-            <MakoFocusable
-              flow-children="column"
-              noFocusRing
-              style={{ width: "100%", minWidth: 0, paddingBottom: "6px" }}
-            >
               <MakoInfo
                 className="Mako_OptionDescription"
                 data-mako-info="true"
@@ -344,7 +336,14 @@ export function ShadersConfigurationGroup({
                   "Effects run in selection order; uncheck and recheck to move one last. Stacking increases GPU load, especially with heavier effects such as HDR Look. Test per game and monitor GPU usage.",
                 )}
               </MakoInfo>
-
+            </SteamEffectsField>
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <MakoFocusable
+              flow-children="column"
+              noFocusRing
+              style={{ width: "100%", minWidth: 0, paddingBottom: "6px" }}
+            >
               {(onAddShader || onRefreshShaders) && (
                 <MakoFocusable
                   flow-children="row"
@@ -356,7 +355,7 @@ export function ShadersConfigurationGroup({
                     width: "100%",
                     minWidth: 0,
                     boxSizing: "border-box",
-                    padding: "18px 4px 8px",
+                    padding: "12px 4px 8px",
                   }}
                 >
                   {onAddShader && (
