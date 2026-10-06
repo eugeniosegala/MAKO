@@ -29,6 +29,19 @@ namespace mako::backend {
 
     using Context = ContextImpl;
 
+    /// Diagnostic timings for the most recent completed generated-frame batch.
+    /// GPU spans include commands/barriers; CPU submit times can overlap GPU work.
+    struct FrameProfile {
+        double cpuPreviousWaitUs{};
+        double cpuPrepassSubmitUs{};
+        double cpuGenerationSubmitUs{};
+        double gpuPrepassUs{};
+        std::vector<double> gpuGeneratedUs;
+        double gpuSpanUs{};
+        uint32_t timestampValidBits{};
+        float timestampPeriodNs{};
+    };
+
     ///
     /// Primitive exception class that deliveres a detailed error message
     ///
@@ -133,6 +146,15 @@ namespace mako::backend {
         /// @throws backend::error on failure
         ///
         void scheduleFrames(Context& context);
+
+        /// Enable diagnostic CPU clocks and GPU timestamps on a fresh context.
+        /// Must precede its first schedule; ordinary contexts allocate no queries.
+        void enableFrameProfiling(Context& context);
+
+        /// Read the latest batch after the caller establishes GPU completion with
+        /// its normal output wait. No extra fence wait or blocking query-result
+        /// flag is added; unavailable queries fail. Readback is measurement overhead.
+        [[nodiscard]] FrameProfile readFrameProfile(const Context& context) const;
 
         ///
         /// Schedule generated frames at explicit interpolation timestamps.

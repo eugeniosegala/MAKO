@@ -26,6 +26,10 @@ target_compile_options(mako-cli PRIVATE
     -Wno-unsafe-buffer-usage) # CLI parsing
 
 if(BUILD_TESTING)
+    add_executable(mako-profile-statistics-tests "tests/profile_statistics_tests.cpp")
+    target_include_directories(mako-profile-statistics-tests PRIVATE src)
+    target_link_libraries(mako-profile-statistics-tests PRIVATE mako-common)
+    add_test(NAME cli-profile-timing-contract COMMAND mako-profile-statistics-tests)
     add_executable(mako-temporal-sequence-tests "tests/temporal_sequence_tests.cpp")
     target_include_directories(mako-temporal-sequence-tests PRIVATE src)
     add_test(NAME temporal-sequence-contract COMMAND mako-temporal-sequence-tests)

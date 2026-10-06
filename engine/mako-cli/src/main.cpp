@@ -101,6 +101,9 @@ SUBCOMMAND OPTIONS:
 
     benchmark
         -t, --duration <SECONDS>        Benchmark duration in seconds
+            --profile                  Separate CPU/GPU diagnostic mode; ignores duration
+            --profile-samples <INT>     Measured iterations, 1-10000 (default 200)
+            --profile-warmup <INT>      Warm-up iterations, 6-10000 (default 200)
 
     debug
         <folder>                        Path to the debug frames
@@ -254,8 +257,9 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_benchmark(int argc, char** argv,
             const i18n::Language language, const std::string& program) {
         benchmark::Options opts{};
+        bool profileControlsExplicit{false};
 
-        const std::array<option, 11> GETOPT {{
+        const std::array<option, 14> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
             { "no-fp16",          no_argument,       nullptr, 'A' },
@@ -266,6 +270,9 @@ SUBCOMMAND OPTIONS:
             { "performance-mode",       no_argument, nullptr, 'p' },
             { "gpu",              required_argument, nullptr, 'g' },
             { "duration",         required_argument, nullptr, 't' },
+            { "profile",          no_argument,       nullptr, 1000 },
+            { "profile-samples",  required_argument, nullptr, 1001 },
+            { "profile-warmup",   required_argument, nullptr, 1002 },
             { nullptr,                  no_argument, nullptr,  0  }
         }};
 
@@ -304,6 +311,17 @@ SUBCOMMAND OPTIONS:
                 case 't':
                     opts.duration = numericArgument<int>(optarg, "--duration");
                     break;
+                case 1000:
+                    opts.profile = true;
+                    break;
+                case 1001:
+                    opts.profile_samples = numericArgument<int>(optarg, "--profile-samples");
+                    profileControlsExplicit = true;
+                    break;
+                case 1002:
+                    opts.profile_warmup = numericArgument<int>(optarg, "--profile-warmup");
+                    profileControlsExplicit = true;
+                    break;
                 case '?':
                 default:
                     usage(program);
@@ -316,6 +334,11 @@ SUBCOMMAND OPTIONS:
             std::exit(EXIT_FAILURE);
         }
 
+        if ((profileControlsExplicit && !opts.profile) || opts.profile_samples < 1 ||
+                opts.profile_samples > 10000 || opts.profile_warmup < 6 || opts.profile_warmup > 10000) {
+            std::cerr << "Frame profiling requires --profile, 1-10000 samples and 6-10000 warm-up iterations\n";
+            std::exit(EXIT_FAILURE);
+        }
         std::exit(benchmark::run(opts, language));
     }
 

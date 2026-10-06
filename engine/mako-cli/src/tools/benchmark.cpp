@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "benchmark.hpp"
+#include "profile_statistics.hpp"
 #include "image_transfer.hpp"
 #include "mako-common/quality/image_quality.hpp"
 #include "i18n.hpp"
@@ -15,12 +16,15 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <chrono>
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <iomanip>
 #include <iostream>
 #include <optional>
+#include <map>
+#include <numeric>
 #include <string>
 #include <utility>
 #include <vector>
@@ -32,6 +36,78 @@ using namespace mako::cli;
 using namespace mako::cli::benchmark;
 
 namespace {
+    using ProfileClock = std::chrono::steady_clock;
+    double elapsedUs(const ProfileClock::time_point start) {
+        return std::chrono::duration<double, std::micro>(ProfileClock::now() - start).count();
+    }
+
+    void profile(const Options& opts, const vk::Vulkan& vk,
+            const vk::TimelineSemaphore& sync, mako::backend::Instance& backend,
+            mako::backend::Context& context, const size_t outputs) {
+        backend.enableFrameProfiling(context);
+        std::map<std::string, std::vector<double>> samples;
+        for (const auto* name : {"cpu_signal", "cpu_schedule", "cpu_previous_wait",
+                "cpu_prepass_submit", "cpu_generation_submit", "cpu_output_wait",
+                "cpu_iteration", "cpu_profile_read", "gpu_prepass", "gpu_generation", "gpu_span"})
+            samples[name].reserve(static_cast<size_t>(opts.profile_samples));
+        for (size_t i = 0; i < outputs; ++i)
+            samples["gpu_output_" + std::to_string(i)].reserve(static_cast<size_t>(opts.profile_samples));
+        uint64_t timeline{1};
+        mako::backend::FrameProfile result;
+        for (int iteration = 0; iteration < opts.profile_warmup + opts.profile_samples; ++iteration) {
+            const auto batchStart = ProfileClock::now();
+            auto start = batchStart;
+            sync.signal(vk, timeline++);
+            const double signalUs = elapsedUs(start);
+            start = ProfileClock::now();
+            backend.scheduleFrames(context);
+            const double scheduleUs = elapsedUs(start);
+            start = ProfileClock::now();
+            for (size_t i = 0; i < outputs; ++i)
+                if (!sync.wait(vk, timeline++))
+                    throw ls::error("Frame-profile output wait failed");
+            const double waitUs = elapsedUs(start);
+            const double iterationUs = elapsedUs(batchStart);
+            start = ProfileClock::now();
+            result = backend.readFrameProfile(context);
+            const double readUs = elapsedUs(start);
+            if (iteration < opts.profile_warmup) continue;
+            samples.at("cpu_signal").push_back(signalUs);
+            samples.at("cpu_schedule").push_back(scheduleUs);
+            samples.at("cpu_previous_wait").push_back(result.cpuPreviousWaitUs);
+            samples.at("cpu_prepass_submit").push_back(result.cpuPrepassSubmitUs);
+            samples.at("cpu_generation_submit").push_back(result.cpuGenerationSubmitUs);
+            samples.at("cpu_output_wait").push_back(waitUs);
+            samples.at("cpu_iteration").push_back(iterationUs);
+            samples.at("cpu_profile_read").push_back(readUs);
+            samples.at("gpu_prepass").push_back(result.gpuPrepassUs);
+            samples.at("gpu_generation").push_back(std::accumulate(result.gpuGeneratedUs.begin(), result.gpuGeneratedUs.end(), 0.0));
+            samples.at("gpu_span").push_back(result.gpuSpanUs);
+            for (size_t i = 0; i < outputs; ++i)
+                samples.at("gpu_output_" + std::to_string(i)).push_back(result.gpuGeneratedUs.at(i));
+        }
+        std::cerr << std::fixed << std::setprecision(9)
+            << "MAKO Renderer: benchmark-profile operation=summary schema=1 samples=" << opts.profile_samples
+            << " warmup=" << opts.profile_warmup << " outputs=" << outputs
+            << " timestamp_bits=" << result.timestampValidBits
+            << " timestamp_period_ns=" << result.timestampPeriodNs << '\n';
+        for (int i = 0; i < opts.profile_samples; ++i) {
+            std::cerr << "MAKO Renderer: benchmark-profile operation=sample index=" << i;
+            for (const auto& [name, values] : samples)
+                std::cerr << ' ' << name << '=' << values.at(static_cast<size_t>(i));
+            std::cerr << '\n';
+        }
+        for (const auto& [name, values] : samples) {
+            const auto stats = mako::cli::profileStatistics(values);
+            std::cerr << "MAKO Renderer: benchmark-profile operation=metric name=" << name
+                << " unit=us samples=" << values.size()
+                << " min=" << stats.minimum << " median=" << stats.median
+                << " p95=" << stats.percentile95 << " max=" << stats.maximum
+                << " cv_percent=" << stats.coefficientOfVariationPercent << '\n';
+        }
+        std::cerr << "MAKO Renderer: frame profile is diagnostic; query reads perturb iteration spacing; "
+                     "CPU waits overlap GPU work; timings are not additive or comparable capacity FPS\n";
+    }
     // get current time in milliseconds
     uint64_t ms() {
         struct timespec ts{};
@@ -54,6 +130,9 @@ int benchmark::run(const Options& opts, const i18n::Language language) {
             throw ls::error(std::string{text.dimensions_positive});
         if (opts.duration <= 0)
             throw ls::error(std::string{text.duration_positive});
+        if (opts.profile_samples < 1 || opts.profile_samples > 10000 ||
+                opts.profile_warmup < 6 || opts.profile_warmup > 10000)
+            throw ls::error("Invalid frame-profile sample or warm-up count");
         const VkExtent2D extent{
             static_cast<uint32_t>(opts.width),
             static_cast<uint32_t>(opts.height)
@@ -151,6 +230,12 @@ int benchmark::run(const Options& opts, const i18n::Language language) {
         std::cerr << "MAKO_BENCHMARK recipe=2 content=traffic-pair-v1 "
                      "source_times=0,1 upload=outside-timer precision="
                   << (opts.allow_fp16 ? "fp16-allowed" : "fp32") << '\n';
+
+        if (opts.profile) {
+            profile(opts, vk, sync, mako, mako_ctx, destimgs.size());
+            mako.closeContext(mako_ctx);
+            return EXIT_SUCCESS;
+        }
 
         // run the benchmark
         size_t iterations{0};

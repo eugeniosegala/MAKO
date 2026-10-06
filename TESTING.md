@@ -77,6 +77,8 @@ Custom shader UI coverage includes native FX discovery and registration in `stan
 
 Optional Lossless Scaling coverage includes file and environment profile parsing in `watched-configuration`, Qt missing-path detection and model-free setting persistence in `ui-backend-contract`, and Decky discovery, RPC, panel access, warning visibility, and availability-refresh tests. Synthetic files cover removal, configured-path precedence, directories, stale replies, and unknown discovery failures without loading licensed models. These tests do not prove actual MAKO Scaler or shader rendering, Gamescope, or Flatpak launches without Lossless Scaling; qualify those separately on hardware.
 
+Frame Generation diagnostic profiling adds `cli-profile-timing-contract` coverage for queue timestamp rollover, unsupported timestamp properties and summary statistics, plus CLI parsing/default/range checks in `cli-precision-contract`. The shared query owner remains used by the spatial profiler. MAKO Gym's opt-in `scripts/renderer_profile.py` validates effective model/precision, every raw sample, containment of CPU boundaries, GPU span consistency and recomputed summaries. Run a filtered hardware profile before collecting canonical FG configurations; retain ordinary capacity evidence separately because query readback changes iteration spacing. These checks do not qualify generated-frame display pacing or game image quality.
+
 ## Selecting MAKO Gym coverage
 
 MAKO Gym is an optional sibling checkout for targeted hardware work. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.

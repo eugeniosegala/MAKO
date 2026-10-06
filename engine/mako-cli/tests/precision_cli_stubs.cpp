@@ -19,6 +19,10 @@ namespace {
 
 namespace mako::cli {
     int benchmark::run(const Options& opts, i18n::Language) {
+        if (opts.profile) {
+            std::cout << "profile samples=" << opts.profile_samples << " warmup=" << opts.profile_warmup << '\n';
+            return 0;
+        }
         return reportPrecision(opts.allow_fp16);
     }
     int debug::run(const Options& opts, i18n::Language) {

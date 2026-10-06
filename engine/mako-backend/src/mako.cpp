@@ -15,6 +15,7 @@
 #include "mako-common/vulkan/fence.hpp"
 #include "mako-common/vulkan/image.hpp"
 #include "mako-common/vulkan/timeline_semaphore.hpp"
+#include "mako-common/vulkan/timestamp_query_pool.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 #include "shaderchains/alpha0.hpp"
 #include "shaderchains/alpha1.hpp"
@@ -58,6 +59,18 @@ using namespace mako;
 using namespace mako::backend;
 
 namespace mako::backend {
+    struct FrameProfilingState {
+        FrameProfilingState(const vk::Vulkan& vk, const size_t outputs) :
+            queries(vk, static_cast<uint32_t>(2 + outputs * 2)) {}
+        vk::TimestampQueryPool queries;
+        FrameProfile timings;
+        size_t generatedCount{};
+    };
+
+    using ProfileClock = std::chrono::steady_clock;
+    double profileMicroseconds(const ProfileClock::time_point start) {
+        return std::chrono::duration<double, std::micro>(ProfileClock::now() - start).count();
+    }
     error::error(const std::string& msg, const std::exception& inner)
         : std::runtime_error(msg + "\n- " + inner.what()) {}
     error::error(const std::string& msg)
@@ -118,6 +131,9 @@ namespace mako::backend {
         /// (see mako documentation)
         void scheduleFrames();
 
+        void enableFrameProfiling();
+        [[nodiscard]] FrameProfile readFrameProfile() const;
+
         /// schedule a variable number of frames at explicit timestamps
         void scheduleFrames(std::span<const float> timestamps);
 
@@ -142,6 +158,8 @@ namespace mako::backend {
 
         // Descriptor bindings repeat every lcm(2 source slots, 3 history slots).
         // Record lazily, once per phase and output; prepareWork serializes reuse.
+        // Declared before recordings so query pools outlive referring commands.
+        std::unique_ptr<FrameProfilingState> profiling;
         using RecordedCommands = std::array<std::optional<vk::CommandBuffer>, commandPhaseCount>;
         std::vector<RecordedCommands> cmdbufs;
         vk::Fence cmdbufFence;
@@ -824,6 +842,36 @@ void Instance::scheduleFrames(Context& context) { // NOLINT (static)
 #endif
 }
 
+void Instance::enableFrameProfiling(Context& context) { // NOLINT (static)
+    context.enableFrameProfiling();
+}
+
+FrameProfile Instance::readFrameProfile(const Context& context) const { // NOLINT (static)
+    return context.readFrameProfile();
+}
+
+void Context::enableFrameProfiling() {
+    if (this->fidx != 0 || this->workScheduled || this->profiling)
+        throw backend::error("Frame profiling requires a fresh unscheduled context");
+    this->profiling = std::make_unique<FrameProfilingState>(this->ctx.vk, this->destImages.size());
+}
+
+FrameProfile Context::readFrameProfile() const {
+    if (!this->profiling || !this->workScheduled || this->profiling->generatedCount == 0)
+        throw backend::error("No generated batch is available for frame profiling");
+    const auto& state = *this->profiling;
+    const auto ticks = state.queries.timestamps(static_cast<uint32_t>(2 + state.generatedCount * 2));
+    auto result = state.timings;
+    result.gpuPrepassUs = state.queries.elapsedMicroseconds(ticks.at(0), ticks.at(1));
+    result.gpuGeneratedUs.reserve(state.generatedCount);
+    for (size_t i = 0; i < state.generatedCount; ++i)
+        result.gpuGeneratedUs.push_back(state.queries.elapsedMicroseconds(ticks.at(2 + i * 2), ticks.at(3 + i * 2)));
+    result.gpuSpanUs = state.queries.elapsedMicroseconds(ticks.front(), ticks.back());
+    result.timestampValidBits = state.queries.timestampValidBits();
+    result.timestampPeriodNs = state.queries.timestampPeriodNanoseconds();
+    return result;
+}
+
 void Instance::scheduleFrames(Context& context, std::span<const float> timestamps) { // NOLINT (static)
     if (timestamps.empty())
         throw backend::error("At least one interpolation timestamp is required");
@@ -859,12 +907,17 @@ bool Instance::contextReady(const Context& context) const {
 }
 
 void Context::prepareWork() {
+    const auto start = this->profiling ? ProfileClock::now() : ProfileClock::time_point{};
     if (this->workScheduled && !this->cmdbufFence.wait(
             this->ctx.vk, previousWorkFenceTimeoutNs)) {
         std::cerr << "MAKO Renderer: backend work fence timed out after "
                   << previousWorkFenceTimeout.count() << " ms; "
                      "aborting frame scheduling\n";
         throw backend::error("Timeout waiting for previous frame to complete");
+    }
+    if (this->profiling) {
+        this->profiling->timings.cpuPreviousWaitUs = profileMicroseconds(start);
+        this->profiling->timings.cpuGenerationSubmitUs = 0.0;
     }
 }
 
@@ -873,6 +926,11 @@ void Context::schedulePrepass(const VkFence completionFence) {
     if (!recorded) {
         vk::CommandBuffer cmdbuf(ctx.vk);
         cmdbuf.begin(ctx.vk, 0);
+
+        if (this->profiling) {
+            this->profiling->queries.reset(cmdbuf.handle());
+            this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0);
+        }
 
         if (this->sourceColorConversion)
             this->sourceColorConversion->render(ctx.vk, cmdbuf, this->fidx);
@@ -884,6 +942,9 @@ void Context::schedulePrepass(const VkFence completionFence) {
         this->beta0.render(ctx.vk, cmdbuf, this->fidx);
         this->beta1.render(ctx.vk, cmdbuf);
 
+        if (this->profiling)
+            this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+
         cmdbuf.end(ctx.vk);
         recorded.emplace(std::move(cmdbuf));
     }
@@ -893,11 +954,14 @@ void Context::schedulePrepass(const VkFence completionFence) {
     // fails before the final fence can be signalled.
     this->cmdbufFence.reset(this->ctx.vk);
     this->workScheduled = true;
+    const auto start = this->profiling ? ProfileClock::now() : ProfileClock::time_point{};
     cmdbuf.submit(this->ctx.vk,
         {}, this->syncSemaphore.handle(), this->idx,
         {}, this->prepassSemaphore.handle(), this->idx,
         completionFence
     );
+    if (this->profiling)
+        this->profiling->timings.cpuPrepassSubmitUs = profileMicroseconds(start);
 
     this->idx++;
 }
@@ -926,6 +990,8 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
     }
 
     this->prepareWork();
+    if (this->profiling)
+        this->profiling->generatedCount = generatedFrameCount;
 
     // Every generated pass has its own uniform buffer and descriptor sets.
     // Previous GPU work is complete at this point, so a changed timestamp can
@@ -955,6 +1021,9 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
             vk::CommandBuffer cmdbuf(ctx.vk);
             cmdbuf.begin(ctx.vk, 0);
 
+            if (this->profiling)
+                this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, static_cast<uint32_t>(2 + i * 2));
+
             const auto& pass = this->passes.at(i);
             for (size_t j = 0; j < 7; j++) {
                 pass.gamma0.at(j).render(ctx.vk, cmdbuf, this->fidx);
@@ -968,6 +1037,9 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
             if (this->destColorConversion)
                 this->destColorConversion->render(ctx.vk, cmdbuf, i);
 
+            if (this->profiling)
+                this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, static_cast<uint32_t>(3 + i * 2));
+
             cmdbuf.end(ctx.vk);
             recorded.emplace(std::move(cmdbuf));
         }
@@ -976,6 +1048,7 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
     this->schedulePrepass(VK_NULL_HANDLE);
 
     // schedule main passes
+    const auto start = this->profiling ? ProfileClock::now() : ProfileClock::time_point{};
     for (size_t i = 0; i < generatedFrameCount; i++) {
         const auto& cmdbuf = *this->cmdbufs.at(i + 1).at(this->fidx % commandPhaseCount);
         cmdbuf.submit(this->ctx.vk,
@@ -984,6 +1057,8 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
             i == generatedFrameCount - 1 ? this->cmdbufFence.handle() : VK_NULL_HANDLE
         );
     }
+    if (this->profiling)
+        this->profiling->timings.cpuGenerationSubmitUs = profileMicroseconds(start);
 
     this->idx += generatedFrameCount;
     this->fidx++;
@@ -991,6 +1066,8 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
 
 void Context::scheduleFrameHistory() {
     this->prepareWork();
+    if (this->profiling)
+        this->profiling->generatedCount = 0;
     this->schedulePrepass(this->cmdbufFence.handle());
     this->fidx++;
 }

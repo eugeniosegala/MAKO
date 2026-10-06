@@ -24,6 +24,11 @@ namespace mako::cli::benchmark {
         std::optional<std::string> gpu;
 
         int duration{10};
+
+        // Separate diagnostic recipe; never used by ordinary capacity runs.
+        bool profile{false};
+        int profile_samples{200};
+        int profile_warmup{200};
     };
 
     /// run the "benchmark" command

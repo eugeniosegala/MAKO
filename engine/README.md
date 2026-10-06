@@ -102,6 +102,10 @@ For manual profile editing and the full setting reference, see [Configuration](d
 
 See [Scaling](docs/SCALING.md) for resolution and presentation details, or [Troubleshooting](docs/TROUBLESHOOTING.md) when MAKO does not activate or present correctly.
 
+## Frame Generation profiling
+
+Use `mako-cli benchmark --profile` for opt-in CPU submission/wait timings and GPU preprocessing/output timestamp spans. See [Frame Generation profiling](docs/FRAME-PROFILING.md) for arguments, warm-up guidance, output records and measurement limits.
+
 ## Build from source
 
 Build a standard development configuration with CMake and Vulkan development headers:
