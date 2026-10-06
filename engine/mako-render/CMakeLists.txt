@@ -203,6 +203,14 @@ if(BUILD_TESTING)
     mako_register_portable_policy_test(
         mako-profile-update-tests profile-update)
 
+    add_executable(mako-power-profile-update-tests
+        "tests/power_profile_update_tests.cpp")
+    target_link_libraries(mako-power-profile-update-tests PRIVATE mako-common)
+    target_include_directories(mako-power-profile-update-tests PRIVATE "src")
+    add_test(NAME power-profile-update COMMAND mako-power-profile-update-tests)
+    mako_register_portable_policy_test(
+        mako-power-profile-update-tests power-profile-update)
+
     add_executable(mako-spatial-scaling-policy-tests
         "tests/spatial_scaling_policy_tests.cpp")
     target_include_directories(mako-spatial-scaling-policy-tests

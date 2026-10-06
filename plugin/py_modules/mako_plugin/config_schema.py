@@ -363,44 +363,21 @@ class ConfigurationManager:
 
     @staticmethod
     def _renderer_profile_lines(config: ConfigurationData) -> list[str]:
-        """Serialize native settings once for base and power-specific tables."""
+        """Use the schema's native fields for both base and power tables."""
         lines: list[str] = []
-        if config["gpu"]:
-            lines.append(f"gpu = {_toml_string(config['gpu'])}")
-        lines.extend([
-            f"scaling_enabled = {str(config['scaling_enabled']).lower()}",
-            f"scaling_method = {_toml_string(config['scaling_method'])}",
-            f"scaling_factor = {config['scaling_factor']}",
-            "scaling_supersampling = "
-            f"{str(config['scaling_supersampling']).lower()}",
-            f"scaling_sharpness = {config['scaling_sharpness']}",
-            "swapchain_image_count_compatibility = "
-            f"{str(config['swapchain_image_count_compatibility']).lower()}",
-            "frame_generation_provisioned = "
-            f"{str(config['frame_generation_provisioned']).lower()}",
-            f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
-            "frame_generation_refresh_threshold = "
-            f"{config['frame_generation_refresh_threshold']}",
-            f"base_fps_cap = {config['base_fps_cap']}",
-            f"multiplier = {config['multiplier']}",
-            f"adaptive = {str(config['adaptive']).lower()}",
-            f"adaptive_auto_base_fps_cap = {str(config['adaptive_auto_base_fps_cap']).lower()}",
-            "adaptive_fractional_real_frame_priority = "
-            f"{_toml_string(config['adaptive_fractional_real_frame_priority'])}",
-            f"target_fps = {config['target_fps']}",
-            "adaptive_target_refresh_rate = "
-            f"{str(config['adaptive_target_refresh_rate']).lower()}",
-            f"adaptive_max_multiplier = {config['adaptive_max_multiplier']}",
-            f"adaptive_stable_cadence = {str(config['adaptive_stable_cadence']).lower()}",
-            f"gamescope_vrr_mode = {_toml_string(config['gamescope_vrr_mode'])}",
-            f"dynamic_cadence_recovery = {str(config['dynamic_cadence_recovery']).lower()}",
-            "dynamic_cadence_probe_interval_seconds = "
-            f"{config['dynamic_cadence_probe_interval_seconds']}",
-            f"ultra_performance = {str(config['ultra_performance']).lower()}",
-            f"flow_scale = {config['flow_scale']}",
-            f"performance_mode = {str(config['performance_mode']).lower()}",
-            "pacing = 'none'",
-        ])
+        for field in CONFIG_SCHEMA_DEF:
+            if field not in POWER_PROFILE_FIELDS:
+                continue
+            value = config[field]
+            if field == "gpu" and not value:
+                continue
+            if isinstance(value, bool):
+                literal = str(value).lower()
+            elif isinstance(value, str):
+                literal = _toml_string(value)
+            else:
+                literal = str(value)
+            lines.append(f"{field} = {literal}")
         return lines
 
     @staticmethod

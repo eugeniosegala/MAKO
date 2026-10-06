@@ -18,6 +18,8 @@ MAKO Decky's Python backend translates UI requests into canonical profile data, 
 
 `shared_config.py` owns the cross-language configuration schema. Generate its Python and TypeScript bindings through the owning script; never edit generated bindings directly. A profile write must keep Renderer TOML, Decky sidecars, the selected shader configuration, and the generated wrapper coherent. `InstallationService._renderer_file_inventory()` owns archive destinations and the file set used for native rollback and cleanup; the standalone installer's independent cleanup list must match it through the cross-component test. Installation and Flatpak preparation are separate transactions with the limits recorded in [native installation transactions](../../INSTALLATION-TRANSACTIONS.md).
 
+Native base and power-table serialization derives its field set from that schema's `toml`/`profile` locations, excluding the shared process match. Adding a native setting does not require another Decky writer or power-mode mapping. The power-profile contract checks every schema-owned native key in both tables; shader and launcher sidecars remain shared across power modes.
+
 Keep orchestration in `ConfigurationService` and `InstallationService` when an operation must coordinate several files. A shorter file is not a reason to create a second state owner or to move only half of a transaction. Follow [testing](../../TESTING.md) and the focused backend contract tests whenever an RPC, profile, wrapper, installation, or Flatpak boundary changes.
 
 ## Flatpak VRR discovery lifecycle

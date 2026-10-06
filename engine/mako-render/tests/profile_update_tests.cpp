@@ -103,6 +103,54 @@ int main() {
                 .appliedProfile.target_fps == 120,
         "Fixed mode must ignore the dormant Adaptive refresh choice");
 
+    auto fixedBeforeGrowth = automaticTarget;
+    auto adaptiveAfterGrowth = fixedBeforeGrowth;
+    adaptiveAfterGrowth.adaptive = true;
+    adaptiveAfterGrowth.adaptive_max_multiplier = 5;
+    const auto pendingGrowth = planProfileUpdate(
+        fixedBeforeGrowth, adaptiveAfterGrowth, 2, true, false,
+        true, true, false, false, 60
+    );
+    expect(pendingGrowth.decision.frameGenerationPrivateRebuild &&
+            !pendingGrowth.appliedProfile.adaptive &&
+            pendingGrowth.appliedProfile.target_fps == 120,
+        "Private growth must retain Fixed policy until resources commit");
+    for (const auto refresh : {std::optional<uint32_t>{60},
+            std::optional<uint32_t>{144}, std::optional<uint32_t>{0},
+            std::optional<uint32_t>{}}) {
+        auto committed = pendingGrowth.appliedProfile;
+        applyFrameGenerationResourceProfile(
+            committed, adaptiveAfterGrowth, adaptiveAfterGrowth, refresh
+        );
+        const auto target = refresh && *refresh ? *refresh : 120U;
+        expect(committed.adaptive && committed.target_fps == target &&
+                generationSchedulerPolicy(committed, refresh)->targetFps == target,
+            "Private commit must resolve the new Adaptive policy from current refresh");
+        committed.adaptive_auto_base_fps_cap = true;
+        expect(effectiveBaseFpsCap(committed) == target / 2.0,
+            "Private commit must align Steady caps with the resolved target");
+    }
+    auto latestTarget = adaptiveAfterGrowth;
+    latestTarget.target_fps = 165;
+    latestTarget.adaptive_target_refresh_rate = false;
+    auto liveWhilePreparing = pendingGrowth.appliedProfile;
+    liveWhilePreparing.adaptive_target_refresh_rate = false;
+    liveWhilePreparing.base_fps_cap = 40;
+    applyFrameGenerationResourceProfile(
+        liveWhilePreparing, adaptiveAfterGrowth, latestTarget, 60
+    );
+    expect(liveWhilePreparing.target_fps == 165 &&
+            !liveWhilePreparing.adaptive_target_refresh_rate &&
+            liveWhilePreparing.base_fps_cap == 40,
+        "Resource commit must preserve newer live edits and use the latest fallback");
+    latestTarget.adaptive_target_refresh_rate = true;
+    liveWhilePreparing.adaptive_target_refresh_rate = true;
+    applyFrameGenerationResourceProfile(
+        liveWhilePreparing, fixedBeforeGrowth, latestTarget, 60
+    );
+    expect(!liveWhilePreparing.adaptive && liveWhilePreparing.target_fps == 165,
+        "A private commit back to Fixed must restore the latest saved fallback");
+
     auto fractionalPacing = adaptiveProfile();
     fractionalPacing.frame_generation_provisioned = true;
     for (const bool smooth : {false, true}) {

@@ -688,6 +688,22 @@ namespace mako::layer {
             ls::GameConfLimits::maximumTargetFps);
     }
 
+    /// Apply only the policy established by a committed private FG resource set.
+    /// Live target edits and compositor feedback may have changed during preparation.
+    inline void applyFrameGenerationResourceProfile(ls::GameConf& applied,
+            const ls::GameConf& resources, const ls::GameConf& requested,
+            const std::optional<uint32_t> displayRefreshHz) {
+        applied.flow_scale = resources.flow_scale;
+        applied.performance_mode = resources.performance_mode;
+        applied.adaptive = resources.adaptive;
+        applied.multiplier = resources.multiplier;
+        applied.adaptive_max_multiplier = resources.adaptive_max_multiplier;
+        applied.target_fps = adaptiveTargetFpsForDisplay(
+            requested.target_fps, applied.adaptive,
+            applied.adaptive_target_refresh_rate, displayRefreshHz
+        );
+    }
+
     /// Adaptive owns the resolved applied output target. Fixed + Dynamic Cadence
     /// Recovery instead follows a confirmed Gamescope refresh rate and treats
     /// the selected Fixed multiplier as a ceiling. Without that external

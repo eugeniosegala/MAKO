@@ -258,6 +258,39 @@ describe("MAKO configuration persistence", () => {
     );
   });
 
+  test("locks before draining saves and skips superseded loads waiting on the queue", async () => {
+    const { result } = renderHook(() => useMakoConfig());
+    await waitFor(() => expect(result.current.isConfigLoading).toBe(false));
+    let finishFlush!: () => void;
+    const flushing = new Promise<void>((resolve) => {
+      finishFlush = resolve;
+    });
+    const beforeLoad = vi.fn(() => flushing);
+    mocks.getProfileConfig.mockResolvedValue({
+      success: true,
+      config: { ...getDefaults(), vkbasalt_sharpness: 0.73 },
+      power_mode: "docked",
+    });
+    let oldLoad!: Promise<void>;
+    let newLoad!: Promise<void>;
+    act(() => {
+      oldLoad = result.current.loadMakoConfig("game", "handheld", beforeLoad);
+      newLoad = result.current.loadMakoConfig("game", "docked", beforeLoad);
+    });
+    expect(result.current.canEditConfig()).toBe(false);
+    expect(mocks.getProfileConfig).not.toHaveBeenCalled();
+    await act(async () => {
+      finishFlush();
+      await Promise.all([oldLoad, newLoad]);
+    });
+    expect(mocks.getProfileConfig).toHaveBeenCalledExactlyOnceWith(
+      "game",
+      "docked",
+    );
+    expect(result.current.config.vkbasalt_sharpness).toBe(0.73);
+    expect(result.current.canEditConfig()).toBe(true);
+  });
+
   test("fills missing defaults before writing and commits state only after success", async () => {
     mocks.updateMakoConfigFromObject.mockResolvedValue({ success: true });
     const { result } = renderHook(() => useMakoConfig());

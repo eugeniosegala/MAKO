@@ -4,6 +4,7 @@ import {
   PanelSectionRow,
   showModal,
 } from "@decky/ui";
+import { useCallback, useRef } from "react";
 import {
   useInstallationStatus,
   useDllDetection,
@@ -63,6 +64,19 @@ export function Content() {
     loadMakoConfig,
   } = useMakoConfig();
 
+  // Session selection and the writer depend on each other. Keep only the
+  // current queue drain here; useMakoConfig owns load locking and stale replies.
+  const flushConfigChangesRef = useRef<(() => Promise<void>) | undefined>();
+  const loadEditorConfig = useCallback(
+    (profileName?: string, mode?: string) =>
+      loadMakoConfig(
+        profileName,
+        mode,
+        () => flushConfigChangesRef.current?.() ?? Promise.resolve(),
+      ),
+    [loadMakoConfig],
+  );
+
   const { dllDetected, dllMissing, dllDetectionStatus } = useDllDetection(
     config.dll,
   );
@@ -86,7 +100,7 @@ export function Content() {
     getEditingProfile,
   } = useProfileSession({
     isInstalled,
-    loadProfileConfig: loadMakoConfig,
+    loadProfileConfig: loadEditorConfig,
     syncCurrentProfile,
   });
   const scalingRuntimeState = useRuntimeScalingStatus(
@@ -109,12 +123,13 @@ export function Content() {
     applyConfigPatch,
     replaceConfig,
   });
+  flushConfigChangesRef.current = flushConfigChanges;
 
   const refreshShaders = async () => {
     const profile = editingProfile;
     await flushConfigChanges();
     if (getEditingProfile() === profile) {
-      await loadMakoConfig(profile, getEditingPowerMode());
+      await loadEditorConfig(profile, getEditingPowerMode());
     }
   };
 
@@ -125,7 +140,7 @@ export function Content() {
     if (!result.success)
       throw new Error(result.error || "Unable to add shader");
     if (getEditingProfile() === profile) {
-      await loadMakoConfig(profile, getEditingPowerMode());
+      await loadEditorConfig(profile, getEditingPowerMode());
     }
   };
 
@@ -133,7 +148,7 @@ export function Content() {
     await handleInstall(
       setIsInstalled,
       setInstallationStatus,
-      loadMakoConfig,
+      loadEditorConfig,
       engineUpdateRequired ? "update" : "install",
     );
     await checkInstallation();
@@ -226,7 +241,7 @@ export function Content() {
             topMargin="18px"
             onProfileChange={async (profileName) => {
               selectEditingProfile(profileName);
-              await loadMakoConfig(profileName);
+              await loadEditorConfig(profileName);
             }}
           />
         )}
@@ -243,7 +258,7 @@ export function Content() {
               powerSource={currentPowerSource ?? powerSource}
               disabled={isConfigLoading}
               flushConfigChanges={flushConfigChanges}
-              loadProfileConfig={loadMakoConfig}
+              loadProfileConfig={loadEditorConfig}
             />
             {isConfigLoading && (
               <PanelSectionRow>

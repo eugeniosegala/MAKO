@@ -1,6 +1,7 @@
 """AC/battery persistence and independent Renderer/Decky contracts."""
 
 import tempfile
+import tomllib
 from pathlib import Path
 from unittest.mock import patch
 import unittest
@@ -138,6 +139,35 @@ target_fps = 90
             self.assertIn('"' + field + '"', native)
         for shared in ("active_in", "dll", "allow_fp16", "enable_zink", "external_vulkan_layer"):
             self.assertNotIn(shared, POWER_PROFILE_FIELDS)
+
+    def test_every_native_setting_is_saved_in_each_power_table(self):
+        self.service.set_profile_power_modes("game", True)
+        self.service.update_profile_config_fields("game", {"gpu": 'GPU "A"'}, "shared")
+        data = self.service._get_profile_data()
+        tables = tomllib.loads(ConfigurationManager.generate_toml_content_multi_profile(data))
+        profile = next(item for item in tables["profile"] if item["name"] == "game")
+        self.assertEqual(POWER_PROFILE_FIELDS, set(profile) - {"name", "active_in", "handheld", "docked"})
+        for mode in ("handheld", "docked"):
+            with self.subTest(mode=mode):
+                self.assertEqual(POWER_PROFILE_FIELDS, set(profile[mode]))
+                self.assertEqual(data["power_profiles"]["game"][mode], profile[mode])
+        self.assertEqual(data, ConfigurationManager.parse_toml_content_multi_profile(
+            ConfigurationManager.generate_toml_content_multi_profile(data)
+        ))
+
+    def test_shared_live_shader_edits_preserve_both_power_sets(self):
+        self.service.set_profile_power_modes("game", True)
+        self.service.update_profile_config_fields("game", {"target_fps": 60}, "handheld")
+        self.service.update_profile_config_fields("game", {"target_fps": 144}, "docked")
+        original = self.service._get_profile_data()["power_profiles"]
+        for mode, strength in (("handheld", 0.8), ("docked", 0.3)):
+            result = self.service.update_profile_config_fields("game", {
+                "external_vulkan_layer": "vkbasalt", "vkbasalt_sharpness": strength,
+            }, mode)
+            self.assertTrue(result["success"], result)
+            self.assertEqual(original, self.service._get_profile_data()["power_profiles"])
+            for selected in ("shared", "handheld", "docked"):
+                self.assertEqual(strength, self.service.get_profile_config("game", selected)["config"]["vkbasalt_sharpness"])
 
 
 class PowerSupplyTests(unittest.TestCase):

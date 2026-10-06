@@ -32,6 +32,8 @@ The process-wide backend is created lazily when the first active swapchain needs
 
 Every application-owned swapchain creation forces one configuration freshness check so a replacement cannot combine new upper-layer policy with a stale lower-layer snapshot.
 
+AC/battery selection resolves the complete `GameConf` before this update flow; it does not maintain a separate list of live settings or apply a second transition policy. New Renderer fields use the normal parser, writer, editor, and lifetime owner and travel with their selected power set. `power-profile-update` exercises matching, saved inactive-mode edits, same-name power changes, mixed live/private/restart requests, pending extents, reversion, and missing startup provisioning through these production owners. Shared shader edits continue through their existing vkBasalt owner rather than becoming power-specific Renderer fields.
+
 ## Requested, applied, and pending state
 
 The transition engine keeps three facts distinct:
@@ -44,7 +46,7 @@ The transition engine keeps three facts distinct:
 
 `ProfileUpdatePlan::appliedProfile` is a merge. It starts from the requested profile, restores values that cannot cross the current boundary, then classifies the remaining effective differences. A pending restart or recreation must not block an independent live update.
 
-With `adaptive_target_refresh_rate` enabled, the applied Adaptive target is projected from confirmed Gamescope refresh at swapchain creation, profile application, and refresh transitions. The requested `target_fps` retains the saved fallback; missing or zero feedback restores it. Scheduler policy, caps, bridge output, and pacing consume the applied target together. A changed effective target resets scheduling even when Smooth Cadence is off, without allocating resources or writing configuration. Refresh changes during confirmed Steam UI suspension use the existing policy-reset gate and coalesce until gameplay returns. Fixed mode leaves the option dormant.
+With `adaptive_target_refresh_rate` enabled, the applied Adaptive target is projected from confirmed Gamescope refresh at swapchain creation, profile application, refresh transitions, and private FG resource commit. The commit uses the current matching choice, latest requested fallback, and current display feedback, so resource preparation cannot leave a newly activated Adaptive scheduler using a stale Fixed target. The requested `target_fps` retains the saved fallback; missing or zero feedback restores it. Scheduler policy, caps, bridge output, and pacing consume the applied target together. A changed effective target resets scheduling even when Smooth Cadence is off, without allocating resources or writing configuration. Refresh changes during confirmed Steam UI suspension use the existing policy-reset gate and coalesce until gameplay returns. Fixed mode leaves the option dormant.
 
 For example, a write that changes Base FPS Cap and Flow Scale applies the cap while preparing a private FG replacement. The old Flow Scale remains applied until handoff. Selecting `0x` later still applies immediately, and reverting Flow Scale before handoff cancels the replacement.
 

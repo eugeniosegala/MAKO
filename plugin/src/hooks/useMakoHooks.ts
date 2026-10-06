@@ -207,7 +207,11 @@ export function useMakoConfig() {
   const getEditingPowerMode = useCallback(() => powerModeRef.current, []);
 
   const loadMakoConfig = useCallback(
-    async (profileName?: string, mode?: string) => {
+    async (
+      profileName?: string,
+      mode?: string,
+      beforeLoad?: () => Promise<void>,
+    ) => {
       const requestId = ++loadRequestId.current;
       configLoadingRef.current = true;
       setIsConfigLoading(true);
@@ -223,6 +227,10 @@ export function useMakoConfig() {
         setCustomShaderEffects([]);
       };
       try {
+        // Lock editing before draining writes, then read their canonical result.
+        // Error reconciliation can reload directly without awaiting its own write.
+        if (beforeLoad) await beforeLoad();
+        if (requestId !== loadRequestId.current) return;
         const result = profileName
           ? await (mode
               ? getProfileConfig(profileName, mode)

@@ -229,12 +229,10 @@ void Swapchain::commitFrameGenerationResources(
     this->syncSemaphore = std::move(resources.syncSemaphore);
     this->ctx = std::move(resources.context);
 
-    this->profile.flow_scale = resourceProfile.flow_scale;
-    this->profile.performance_mode = resourceProfile.performance_mode;
-    this->profile.adaptive = resourceProfile.adaptive;
-    this->profile.multiplier = resourceProfile.multiplier;
-    this->profile.adaptive_max_multiplier =
-        resourceProfile.adaptive_max_multiplier;
+    applyFrameGenerationResourceProfile(
+        this->profile, resourceProfile,
+        this->runtimeStatusState.requestedProfile, this->gamescopeRefreshHz
+    );
 
     this->frameState.backendTimelineIndex = 1;
     this->frameState.backendFrameIndex = 0;

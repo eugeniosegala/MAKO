@@ -1,17 +1,28 @@
 import { defineConfig } from "vitest/config";
 
+const buildInfoFixtures = new Map([
+  [
+    "\0virtual:mako-release-info",
+    'export const currentRelease = { version: "test", codename: "test" };',
+  ],
+  [
+    "\0mako-dev-build-info-test-fixture",
+    "export const localDevelopmentBuildInfo = null;",
+  ],
+]);
+
 export default defineConfig({
   plugins: [
     {
-      name: "mako-release-info-test-fixture",
-      resolveId: (id) =>
-        id === "virtual:mako-release-info"
-          ? "\0virtual:mako-release-info"
-          : null,
-      load: (id) =>
-        id === "\0virtual:mako-release-info"
-          ? 'export const currentRelease = { version: "test", codename: "test" };'
-          : null,
+      name: "mako-build-info-test-fixtures",
+      resolveId: (id) => {
+        if (id === "virtual:mako-release-info")
+          return "\0virtual:mako-release-info";
+        if (/\/devBuildInfo\.generated(?:\.ts)?$/.test(id))
+          return "\0mako-dev-build-info-test-fixture";
+        return null;
+      },
+      load: (id) => buildInfoFixtures.get(id) ?? null,
     },
   ],
   test: {

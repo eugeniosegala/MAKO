@@ -219,11 +219,25 @@ void test_power_profile_editor() {
         backend.adaptiveTargetRefreshRateUpdated(true);
         require(backend.getTargetFPS() == 90, "Handheld did not clone shared settings");
         backend.targetFPSUpdated(60);
+        backend.baseFPSCapUpdated(30);
+        backend.scalingEnabledUpdated(true);
+        backend.scalingMethodUpdated(QStringLiteral("mako"));
+        backend.scalingSharpnessUpdated(0.2F);
+        backend.flowScaleUpdated(0.75F);
         backend.powerModeSelected(2);
         require(!backend.getAdaptiveTargetRefreshRate(),
             "Handheld refresh targeting changed Docked settings");
         require(backend.getTargetFPS() == 90, "Handheld edits changed Docked settings");
+        require(backend.getBaseFPSCap() == ls::GameConfDefaults::baseFpsCap &&
+                !backend.getScalingEnabled() &&
+                backend.getFlowScale() == ls::GameConfDefaults::flowScale,
+            "Handheld live tuning leaked into Docked settings");
         backend.targetFPSUpdated(144);
+        backend.baseFPSCapUpdated(90);
+        backend.scalingEnabledUpdated(true);
+        backend.scalingMethodUpdated(QStringLiteral("ls1"));
+        backend.scalingSharpnessUpdated(0.7F);
+        backend.flowScaleUpdated(0.8F);
         backend.addActiveIn(QStringLiteral("New.exe"));
         backend.renameProfile(QStringLiteral("renamed"));
         backend.powerModeSelected(0);
@@ -237,7 +251,17 @@ void test_power_profile_editor() {
             base.power_profiles[0].adaptive_target_refresh_rate &&
             !base.power_profiles[1].adaptive_target_refresh_rate &&
             !base.adaptive_target_refresh_rate &&
-            base.power_profiles[1].target_fps == 144,
+            base.power_profiles[1].target_fps == 144 &&
+            base.power_profiles[0].base_fps_cap == 30 &&
+            base.power_profiles[1].base_fps_cap == 90 &&
+            base.power_profiles[0].scaling_method == ls::ScalingMethod::Mako &&
+            base.power_profiles[1].scaling_method == ls::ScalingMethod::Ls1 &&
+            base.power_profiles[0].scaling_sharpness == 0.2F &&
+            base.power_profiles[1].scaling_sharpness == 0.7F &&
+            base.power_profiles[0].flow_scale == 0.75F &&
+            base.power_profiles[1].flow_scale == 0.8F &&
+            base.base_fps_cap == ls::GameConfDefaults::baseFpsCap &&
+            base.flow_scale == ls::GameConfDefaults::flowScale,
         "Qt did not save separate native settings with shared identity");
     {
         mako::ui::Backend backend;
