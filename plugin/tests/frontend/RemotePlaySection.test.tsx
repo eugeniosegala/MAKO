@@ -177,3 +177,62 @@ test("failed pending save prevents override mutation", async () => {
   await screen.findByText("Error: save failed");
   expect(installRemotePlayOverride).not.toHaveBeenCalled();
 });
+
+test("loading status does not report the override as disabled before the first response", async () => {
+  vi.mocked(getRemotePlayStatus).mockReturnValue(new Promise(() => {}));
+  render(<RemotePlaySection />);
+  expect(screen.getByRole("status").textContent).toContain(
+    "Checking Remote Play…",
+  );
+  expect(screen.queryByText("Remote Play override not installed")).toBeNull();
+});
+
+test.each([
+  [{ ...idle }, "Remote Play override not installed"],
+  [
+    { ...idle, managed: true, installed: true },
+    "Override installed — waiting for a stream",
+  ],
+  [
+    { ...idle, managed: true, installed: true, running: true },
+    "Remote Play running — frame generation inactive",
+  ],
+])(
+  "override state remains in the status panel when info is hidden: %s",
+  async (result, label) => {
+    vi.mocked(getRemotePlayStatus).mockResolvedValue(result);
+    render(
+      <InfoHiddenContext.Provider value={true}>
+        <RemotePlaySection />
+      </InfoHiddenContext.Provider>,
+    );
+    await waitFor(() =>
+      expect(screen.getByRole("status").textContent).toContain(label),
+    );
+    expect(screen.queryByText(/Uses the Remote Play profile/)).toBeNull();
+  },
+);
+
+test("a conflicting runtime cannot show a healthy active status and keeps its recovery message visible", async () => {
+  vi.mocked(getRemotePlayStatus).mockResolvedValue({
+    ...idle,
+    installed: true,
+    managed: true,
+    running: true,
+    frame_generation_active: true,
+    conflict: true,
+    message: "Remote Play uses another configuration. Edit it in Qt.",
+  });
+  render(
+    <InfoHiddenContext.Provider value={true}>
+      <RemotePlaySection />
+    </InfoHiddenContext.Provider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByRole("status").textContent).toContain("Needs attention"),
+  );
+  expect(
+    screen.queryByText("Remote Play — frame generation active"),
+  ).toBeNull();
+  expect(screen.getByRole("alert").textContent).toContain("Edit it in Qt.");
+});

@@ -415,5 +415,8 @@
   "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
   "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
   "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-  "REMOTE_PLAY_OFF": "Remote Play override not installed"
+  "REMOTE_PLAY_OFF": "Remote Play override not installed",
+  "REMOTE_PLAY_STATUS": "Status",
+  "REMOTE_PLAY_ATTENTION": "Needs attention",
+  "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
 }

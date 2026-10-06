@@ -1062,18 +1062,14 @@ ApplicationWindow {
 
                 Group {
                     name: t.remotePlay
-
-                    Label {
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        text: t.remotePlayDesc
-                        color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
-                    }
+                    objectName: "remotePlayGroup"
                     RowLayout {
                         Layout.fillWidth: true
+                        spacing: 8
                         ShaderActionButton {
                             Layout.preferredWidth: 1
                             text: backend.remote_play_managed ? t.restoreSteamClient : t.overrideRemotePlay
+                            Layout.fillHeight: true
                             enabled: !backend.remote_play_busy && !backend.remote_play_running &&
                                      (backend.remote_play_managed || backend.remote_play_available)
                             onClicked: backend.setRemotePlayOverride(!backend.remote_play_managed)
@@ -1081,12 +1077,14 @@ ApplicationWindow {
                         ShaderActionButton {
                             Layout.preferredWidth: 1
                             text: t.editRemotePlayProfile
+                            Layout.fillHeight: true
                             enabled: !backend.remote_play_busy
                             onClicked: backend.editRemotePlayProfile()
                         }
                         ShaderActionButton {
                             Layout.preferredWidth: 1
                             text: t.refreshRemotePlay
+                            Layout.fillHeight: true
                             enabled: !backend.remote_play_busy
                             onClicked: backend.refreshRemotePlay()
                         }
@@ -1094,9 +1092,73 @@ ApplicationWindow {
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
-                        text: backend.remote_play_message || (backend.remote_play_busy ? t.remotePlayWorking :
-                              backend.remote_play_running ? t.remotePlayRunning :
-                              backend.remote_play_installed ? t.remotePlayEnabled : t.remotePlayDisabled)
+                        text: t.remotePlayDesc
+                        font.pixelSize: 12
+                        color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                    }
+                    Rectangle {
+                        id: remoteStatus
+                        objectName: "remotePlayStatus"
+                        property bool attention: !backend.remote_play_busy && backend.remote_play_message.length > 0
+                        property string stateText: backend.remote_play_busy ? t.remotePlayWorking :
+                            attention ? t.remotePlayAttention :
+                            backend.remote_play_running ? t.remotePlayRunning :
+                            backend.remote_play_installed ? t.remotePlayEnabled :
+                            !backend.remote_play_available ? t.remotePlayUnavailable : t.remotePlayDisabled
+                        property color indicatorColor: attention || (!backend.remote_play_busy && !backend.remote_play_available) ? "#f4a259" :
+                            backend.remote_play_busy || backend.remote_play_running || backend.remote_play_installed ? "#83bff0" : "#738891"
+                        Layout.fillWidth: true
+                        implicitHeight: remoteStatusContent.implicitHeight + 20
+                        color: palette.base
+                        border.color: palette.mid
+                        radius: 4
+
+                        ColumnLayout {
+                            id: remoteStatusContent
+                            anchors.fill: parent
+                            anchors.margins: 10
+                            spacing: 8
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 8
+                                Rectangle {
+                                    width: 7
+                                    height: 7
+                                    radius: 3.5
+                                    color: remoteStatus.indicatorColor
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 3
+                                    Label {
+                                        text: t.remotePlayStatus
+                                        font.pixelSize: 11
+                                        color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.6)
+                                    }
+                                    Label {
+                                        Layout.fillWidth: true
+                                        text: remoteStatus.stateText
+                                        font.pixelSize: 12
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                implicitHeight: 1
+                                color: palette.mid
+                                visible: remoteStatus.attention
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: backend.remote_play_message
+                                textFormat: Text.PlainText
+                                font.pixelSize: 12
+                                wrapMode: Text.Wrap
+                                color: "#f4a259"
+                                visible: remoteStatus.attention
+                            }
+                        }
                     }
                 }
 

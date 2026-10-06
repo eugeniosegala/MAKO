@@ -416,7 +416,10 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   },
   "es": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -835,7 +838,10 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   },
   "ja": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "高度なオプションは {path} で編集できます。MAKO は上記のコントロールのみを統合し、その他の設定はすべて保持します。手動による高度な変更は次回の起動時に適用されます。デフォルトプロファイルはこのグローバルファイルを使用します。",
@@ -1254,7 +1260,10 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   },
   "ko": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -1673,7 +1682,10 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   },
   "language_metadata": {
     "en": {
@@ -2121,7 +2133,10 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   },
   "pt-PT": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -2540,7 +2555,10 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   },
   "steam_language_map": {
     "english": "en",
@@ -2973,7 +2991,10 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   },
   "uk": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -3392,7 +3413,10 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   },
   "zh": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -3811,6 +3835,9 @@
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
     "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
-    "REMOTE_PLAY_OFF": "Remote Play override not installed"
+    "REMOTE_PLAY_OFF": "Remote Play override not installed",
+    "REMOTE_PLAY_STATUS": "Status",
+    "REMOTE_PLAY_ATTENTION": "Needs attention",
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
   }
 }

@@ -210,7 +210,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     },
     "pt-BR": {
       "activeIn": "Processos correspondentes",
@@ -384,7 +387,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     },
     "pt-PT": {
       "activeIn": "Processos correspondentes",
@@ -558,7 +564,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     },
     "es": {
       "activeIn": "Procesos coincidentes",
@@ -732,7 +741,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     },
     "ko": {
       "activeIn": "일치하는 프로세스",
@@ -906,7 +918,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     },
     "ja": {
       "activeIn": "一致するプロセス",
@@ -1080,7 +1095,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     },
     "uk": {
       "activeIn": "Відповідні процеси",
@@ -1254,7 +1272,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     },
     "zh": {
       "activeIn": "匹配进程",
@@ -1428,7 +1449,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     },
     "de": {
       "activeIn": "Zugeordnete Prozesse",
@@ -1602,7 +1626,10 @@
       "remotePlayWorking": "Updating Remote Play…",
       "remotePlayRunning": "Remote Play is running.",
       "remotePlayEnabled": "Remote Play override enabled.",
-      "remotePlayDisabled": "Remote Play override off."
+      "remotePlayDisabled": "Remote Play override off.",
+      "remotePlayStatus": "Status",
+      "remotePlayAttention": "Needs attention",
+      "remotePlayUnavailable": "Native Steam streaming client unavailable."
     }
   }
 }
