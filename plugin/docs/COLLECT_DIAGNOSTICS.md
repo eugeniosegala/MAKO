@@ -1,137 +1,54 @@
 # Collect MAKO Decky Diagnostics
 
-Use this guide when **MAKO Decky** opens in Decky Loader and games launch through `mako-run`. Standalone `mako-launch` installations use the [MAKO Renderer guide](../../engine/docs/COLLECT_DIAGNOSTICS.md).
+Use this guide when MAKO Decky opens and games use `mako-run`. For `mako-launch`, use the [standalone guide](../../engine/docs/COLLECT_DIAGNOSTICS.md).
 
-This guide walks you through temporarily enabling diagnostics, reproducing the problem, creating a Desktop report, restoring your launch settings, and submitting the report. MAKO keeps the latest five diagnostics-enabled game sessions.
+## 1. Enable logs
 
-MAKO Decky's **Live Status** data is separate from these diagnostic logs and is managed automatically. You do not need to delete or change it.
+Confirm **MAKO Renderer is installed** in MAKO Decky. Fully close the game and save its current launch settings so you can restore them afterward.
 
-Before submitting `MAKO-diagnostics.txt`, review it for usernames, game names, application IDs, ROM names, and paths, and remove anything you do not want to share. Never post it in a public issue or include passwords, credentials, serial numbers, licence keys, or `Lossless.dll`. The process does not copy `Lossless.dll`, install system packages, reset the device, or change SteamOS system files. Google sign-in is required to upload the report through the form.
-
-These commands use the standard SteamOS home directory, `/home/deck`. If MAKO Decky shows a different **Wrapper path for this device**, use that home directory in the wrapper, diagnostics-helper, and Desktop paths below.
-
-## 1. Prepare the game
-
-Open MAKO Decky and confirm that **MAKO Renderer is installed**. Fully close the game before changing its launch settings, then follow exactly one setup below.
-
-### Native Steam or Proton game
-
-Temporarily replace the game's normal **Steam Properties > Launch Options** with:
+**Steam or Proton:** temporarily use these Launch Options:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 /home/deck/.local/bin/mako-run %command%
 ```
 
-### Heroic or Lutris game
-
-Keep the normal per-game wrapper from the [launcher setup guide](LAUNCHERS.md). Add these two environment variables in Heroic's game settings or Lutris's **Configure > System options > Environment variables**:
+**Heroic or Lutris:** keep the working Wrapper or Command prefix and add these per-game environment variables:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1
 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25
 ```
 
-Keep Heroic's **Wrapper** and **Arguments**, or Lutris's **Command prefix**, unchanged. Do not add `%command%` in either launcher.
-
-### EmuDeck Flatpak shortcut
-
-An EmuDeck Flatpak shortcut keeps its emulator ID, ROM path, and emulator flags in **Launch Options**. Save the current **Target** and **Launch Options** somewhere safe before editing them.
-
-Temporarily configure the shortcut as follows:
-
-| Field | Temporary diagnostic value |
-| --- | --- |
-| **Target** | `/usr/bin/env` |
-| **Start In** | Keep `/usr/bin` |
-| **Launch Options** | Add the prefix below before every existing EmuDeck argument |
-
-Add this at the beginning of the existing **Launch Options**:
+**EmuDeck Flatpak shortcut:** save the original **Target** and **Launch Options**. Set Target to `/usr/bin/env`, keep Start In as `/usr/bin`, and prepend this to the original Launch Options, followed by a space:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 /home/deck/.local/bin/mako-run
 ```
 
-Leave a space after `mako-run`, then keep the complete original EmuDeck launch options after it. Do not add `%command%`, remove the emulator ID, alter the ROM path, or change any existing flags.
+Keep all original emulator arguments and the ROM path. Do not add `%command%` here. Native emulators and AppImages use the Steam method above.
 
-If the emulator is a native application or AppImage instead of a Flatpak, use the **Native Steam or Proton game** method above.
+If MAKO Decky's **Wrapper path for this device** uses another home directory, replace `/home/deck` in these commands with that directory.
 
 ## 2. Reproduce the problem
 
-1. Start the affected game using the same Steam, Heroic, or Lutris entry that normally shows the problem.
-2. Reproduce the problem. Note what you did and, if possible, the approximate time it happened.
-3. Fully exit the game. Do not merely suspend it.
-4. Wait a few seconds for the game and emulator processes to close.
+Start the game, reproduce the issue once and note what happened. Fully exit the game and wait a few seconds.
 
-Each diagnostics-enabled launch starts a fresh private session log. MAKO keeps the current session and four earlier sessions, replacing the oldest when a sixth starts. Fully exit one game before starting another so each log represents one run.
+## 3. Save the report
 
-Rotation checks every history slot first and skips private capture when it encounters a symlink, directory, pipe, or file owned by another user. Rotation or file-creation failures leave the game using its original stderr destination. Retention limits the number of sessions, not their byte size: keep diagnostics enabled only while reproducing the problem. After closing the game, you can delete these five named log files without removing profiles or `runtime-state/`; ordinary Renderer uninstall preserves them. Decky Loader owns the plugin service log, and Steam owns its shared console logs; MAKO does not rotate or delete those logs.
-
-## 3. Create the Desktop report
-
-1. Switch the Steam Deck or Steam Machine to **Desktop Mode**.
-2. Open **Konsole**.
-3. Paste this complete command and press Enter:
-
-    ```bash
-    /home/deck/.local/bin/mako-diagnostics --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics.txt 2>&1
-    ```
-
-    Konsole normally shows no report text because the command sends all output to the Desktop file.
-
-4. Open the **Desktop** folder in Dolphin. The new report is:
-
-    ```text
-    MAKO-diagnostics.txt
-    ```
-
-The `all` preset is the best first report when the cause is unknown. It does not copy the entire Steam log: it filters for relevant MAKO, Vulkan-loader, and Gamescope lines. `--lines 2000` keeps the most recent 2,000 matching lines, which normally provides enough startup and failure context without creating an unnecessarily large attachment.
-
-The standard command reports the latest session. If the maintainer asks for an earlier run, replace `SESSION` and the output filename in this command:
+Switch to **Desktop Mode**, open **Konsole**, paste this command and press Enter:
 
 ```bash
-/home/deck/.local/bin/mako-diagnostics --session SESSION --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-SESSION.txt 2>&1
+/home/deck/.local/bin/mako-diagnostics --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics.txt 2>&1
 ```
 
-Use `previous` for the immediately previous run, `previous-two` for the two previous runs, or `all` for every available run in chronological order. Use `oldest` only when all five slots have been recorded. In `--session all ... all`, the first `all` selects sessions and the final `all` selects the diagnostic preset; `--lines 2000` applies separately to each session.
+Open your **Desktop** folder to find `MAKO-diagnostics.txt`. Konsole normally prints nothing.
 
-Use `all` for the first report. Focused presets such as `startup`, `errors`, `scaling`, `adaptive`, `recovery`, `performance`, `layers`, and `hdr` are intended for requested follow-ups. Every preset retains the initial Gamescope VRR/Allow Tearing snapshot and live pacing-owner changes. The `recovery` and `performance` presets also include Gamescope focus changes for menu-related reports and retain recovery records from older builds. Run `/home/deck/.local/bin/mako-diagnostics --list` to see the complete preset list.
+If the command is missing, select **Install MAKO Renderer** in Decky and retry. If no log is found, check the temporary launch settings and repeat the test.
 
-The optional Gamescope VRR override runs in a separate systemd user service. Its transition-only decision and restoration records are in the user journal rather than this game log; after a Game Mode test, they can be reviewed from Desktop Mode with `journalctl --user -o short-iso | grep -F 'MAKO Renderer: Gamescope VRR lease'`.
+## 4. Restore your settings
 
-With Gamescope WSI disabled, a `spatial scaling surface bridge` record only shows that MAKO associated the game with Gamescope. To confirm that scaling actually ran, check that the same session reports different active source and presentation resolutions.
+Restore the saved Launch Options and any changed Target, or remove the two diagnostics environment variables from Heroic/Lutris.
 
-With diagnostics enabled, `spatial scaling window extent` records distinguish the X11 size reported by a capability query from the game's original swapchain request, the live window at creation, and the enlarged presentation size. `operation=capability-query` logs the first valid size and subsequent changes, while `operation=swapchain-create` joins `queried`, `application`, `current`, and `presentation` by surface, window, and swapchain. `query_generation=0` means no valid capability query has been observed. Creation identifies `extent_contract=window` when the source matched an observed window size, `application-override` when the application deliberately requested another size, and `presentation-scaling` for explicit swapchain-maintenance scaling. `operation=swapchain-out-of-date` records a stale window contract observed at creation or a later capability query; the next application image acquisition requests recreation before acquiring or signalling. The records do not force the game to choose a higher resolution, and the creation record alone does not prove that any images were presented. Every report preset retains these records.
+## 5. Send the report
 
-With presentation diagnostics enabled, the isolated scaling bridge emits `operation=gamescope-bridge-timing` at most once per second per timed swapchain. It summarizes requested and compositor-reported intervals, CPU submission lateness, and reported lateness relative to each requested timestamp. `feedbacks`, `outstanding`, `unmatched`, `overwritten`, and `discontinuities` describe incomplete or rejected feedback; interval sample counts cover only consecutive IDs. Zero feedback means unavailable evidence, not perfect pacing. Gamescope may report its predicted target vblank, so these records do not establish physical scanout or input latency. Collection adds no socket read, roundtrip, or pacing change and retains at most 128 pending requests per diagnostic swapchain. The `scaling` and `performance` report presets retain these records.
-
-The bridge timing record also separates `nonconsecutive_ids`, `repeated_timestamps`, and `backwards_timestamps`. Causes can overlap; `discontinuities` still counts each unusable interval once. Repeated predicted timestamps are not a frame-drop count. `operation=application-present-mode` records the original application mode before MAKO filters dynamic overrides, initially and when it changes; an ambiguous multi-swapchain override is reported as `-1`. `operation=application-present-wait` summarizes application calls to `vkWaitForPresentKHR` and, with supported build headers, `vkWaitForPresent2KHR`: call/result/poll counts, present-ID bounds and mean/maximum blocking duration. It emits at most one window per second per calling thread for a stable device/swapchain/API stream. Switching streams drops an incomplete window; the final partial window is not flushed. No record means unobserved or shorter-than-window activity, not proof of no wait. Wait records join by PID and swapchain, independently of the presentation thread. Optional command availability, caller arguments, timeouts, IDs and driver results are preserved. Diagnostics disabled bypasses these wait wrappers entirely. The `scaling` and `performance` presets retain all three operations.
-
-## 4. Restore normal launch settings
-
-After creating the report:
-
-- **Native Steam or Proton:** restore the normal launch option:
-
-    ```text
-    /home/deck/.local/bin/mako-run %command%
-    ```
-
-- **Heroic or Lutris:** remove `MAKO_PRESENT_DIAGNOSTICS` and `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS` from the game's environment. Keep the normal per-game Wrapper or Command prefix.
-- **EmuDeck Flatpak:** restore the exact original **Target** and **Launch Options** saved before testing.
-
-All builds keep diagnostics off after these temporary settings are removed. Local development ZIPs and direct `dev:*` deployments also require explicit opt-in so synchronous log traffic cannot distort performance testing.
-
-## 5. Submit the report
-
-Open the [MAKO diagnostic report form][diagnostic-form], choose **MAKO Decky (Decky Loader plugin)**, answer the remaining short questions, and attach `/home/deck/Desktop/MAKO-diagnostics.txt`. It is fine to select or write **Unknown** when you do not know an answer. Submit the form once; the maintainer can request a more specific follow-up if one is needed.
-
-Keep screenshots, videos, and discussion in the original GitHub issue, but use the form for the diagnostic text file so it is not posted publicly.
-
-## If the report command fails
-
-- **`mako-diagnostics: No such file or directory`:** open MAKO Decky and select **Install MAKO Renderer**, then try again.
-- **`Diagnostics log not found`:** diagnostics did not reach the tested game, or the requested earlier session has already rotated out. Recheck the setup for its launch type and the requested `--session`, reproduce the issue again if necessary, and fully quit the game before rerunning the report command.
-- **The report contains no `render layer active` line:** send the report anyway. That absence is useful evidence that the Vulkan layer did not load.
-- **An EmuDeck shortcut no longer starts:** restore its saved Target and Launch Options, confirm it starts normally, then repeat the temporary diagnostic setup without removing or reordering any original EmuDeck arguments.
-
-[diagnostic-form]: https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform
+Review `MAKO-diagnostics.txt` and remove personal information. Upload it through the [diagnostic form](https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform), choosing **MAKO Decky (Decky Loader plugin)**. Answer **Unknown** when unsure. Do not post the log publicly or attach `Lossless.dll`.

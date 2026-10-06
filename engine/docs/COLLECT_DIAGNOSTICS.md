@@ -1,119 +1,55 @@
-# Collect standalone MAKO Renderer diagnostics
+# Collect MAKO Renderer Diagnostics
 
-Use this guide for MAKO Renderer installed directly from an archive or source. If you normally launch with MAKO Decky's `/home/deck/.local/bin/mako-run`, use the [MAKO Decky diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md).
+For standalone installations using `mako-launch`. If you use `mako-run`, follow the [MAKO Decky guide](../../plugin/docs/COLLECT_DIAGNOSTICS.md).
 
-The workflow is: validate configuration, enable diagnostics for one affected game, reproduce once, create `MAKO-diagnostics.txt`, restore the launch settings, and submit the report through the [MAKO diagnostic form][diagnostic-form].
+## 1. Enable logs
 
-Review the report before sharing it. It can contain usernames, game names, application IDs, ROM filenames, and paths. Remove personal path components and never include passwords, credentials, device serial numbers, licence keys, or `Lossless.dll`. Do not paste the report into a public GitHub issue.
+Fully close the game and save its current launch settings so you can restore them afterward.
 
-## 1. Validate and prepare
-
-Validate the active configuration:
-
-```bash
-mako-cli validate
-```
-
-Use `$HOME/.local/bin/mako-cli` if the command is not on `PATH`. Fully close the game, then choose its normal launch method.
-
-### Native Steam or Proton
-
-Temporarily replace the game's Steam launch options with:
+**Steam or Proton:** temporarily use these Launch Options:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 ~/.local/bin/mako-launch %command%
 ```
 
-### Direct terminal command
+For a system installation, use your normal `mako-launch` path.
 
-Capture the complete terminal session:
-
-```bash
-MAKO_PRESENT_DIAGNOSTICS=1 \
-MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 \
-~/.local/bin/mako-launch your-game-command \
-2>&1 | tee "$HOME/Desktop/MAKO-renderer-session.log"
-```
-
-### Existing Heroic or Flatpak setup
-
-Keep the existing launch method and Flatpak overrides. Add these variables only to the affected game:
+**Heroic, Lutris or Flatpak:** keep your working setup and add these per-game environment variables:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1
 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25
 ```
 
-Do not add the Decky `mako-run` wrapper to a standalone installation.
-
-## 2. Reproduce once
-
-1. Start the game through the same route that normally shows the problem.
-2. Reproduce the issue and note the action and approximate time.
-3. Fully exit the game rather than suspending it.
-4. Wait for Wine, Proton, or emulator child processes to close.
-
-Create the report before another diagnostics-enabled standalone run. Steam console logs are shared and are not rotated into MAKO Decky's private five-session history.
-
-## 3. Create the report
-
-For a user-local archive installation:
+**Terminal launch:** capture the game output:
 
 ```bash
-"$HOME/.local/bin/mako-diagnostics" --lines 2000 all > "$HOME/Desktop/MAKO-diagnostics.txt" 2>&1
+MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 \
+    mako-launch your-game-command 2>&1 | tee "$HOME/Desktop/MAKO-renderer-session.log"
 ```
 
-For a system or source installation:
+Replace `your-game-command` with your normal game command.
+
+## 2. Reproduce the problem
+
+Start the game, reproduce the issue once, note what happened and fully exit. Collect the report before another test run.
+
+## 3. Save the report
+
+In Desktop Mode, open Konsole and run:
 
 ```bash
 mako-diagnostics --lines 2000 all > "$HOME/Desktop/MAKO-diagnostics.txt" 2>&1
 ```
 
-For the direct terminal capture:
+If the command is not found, try `~/.local/bin/mako-diagnostics` instead. For the terminal capture above, add `--log "$HOME/Desktop/MAKO-renderer-session.log"` before `--lines`.
 
-```bash
-mako-diagnostics --log "$HOME/Desktop/MAKO-renderer-session.log" --lines 2000 all > "$HOME/Desktop/MAKO-diagnostics.txt" 2>&1
-```
+The file appears on your Desktop; Konsole normally prints nothing. If no log is found, check the temporary launch settings and repeat the test.
 
-The helper prefers MAKO Decky's private log when present; otherwise it selects the newest native or Flatpak Steam console log. If that is not the reproduction you want, pass its log path explicitly with `--log`. `all` keeps the last 2,000 matching MAKO, loader, and Gamescope lines rather than copying the complete log.
+## 4. Restore your settings
 
-Run `mako-diagnostics --list` to see focused presets. `startup`, `layers`, `config`, `scaling`, `adaptive`, `recovery`, `performance`, `lifecycle`, `hdr`, and `errors` may be combined. Every preset retains the initial Gamescope VRR/Allow Tearing snapshot and live pacing-owner changes. The `recovery` and `performance` presets also include Gamescope focus changes for menu-related reports and retain recovery records from older builds. These records describe Renderer state and queueing, not reconstructed image quality or compositor scanout.
+Restore the original launch settings and remove the two temporary diagnostics variables.
 
-The optional Gamescope VRR override writes transition-only decision and restoration records to its separate systemd user-service journal, not this game log. After a Game Mode test, inspect them from Desktop Mode with `journalctl --user -o short-iso | grep -F 'MAKO Renderer: Gamescope VRR lease'`.
+## 5. Send the report
 
-With Gamescope WSI disabled, a `spatial scaling surface bridge` record only shows that MAKO associated the game with Gamescope. To confirm that scaling actually ran, check that the same session reports different active source and presentation resolutions.
-
-With diagnostics enabled, `spatial scaling window extent` records distinguish the X11 size reported by a capability query from the game's original swapchain request, the live window at creation, and the enlarged presentation size. `operation=capability-query` logs the first valid size and subsequent changes, while `operation=swapchain-create` joins `queried`, `application`, `current`, and `presentation` by surface, window, and swapchain. `query_generation=0` means no valid capability query has been observed. Creation identifies `extent_contract=window` when the source matched an observed window size, `application-override` when the application deliberately requested another size, and `presentation-scaling` for explicit swapchain-maintenance scaling. `operation=swapchain-out-of-date` records a stale window contract observed at creation or a later capability query; the next application image acquisition requests recreation before acquiring or signalling. The records do not force the game to choose a higher resolution, and the creation record alone does not prove that any images were presented. Every report preset retains these records.
-
-With presentation diagnostics enabled, the isolated scaling bridge emits `operation=gamescope-bridge-timing` at most once per second per timed swapchain. It summarizes requested and compositor-reported intervals, CPU submission lateness, and reported lateness relative to each requested timestamp. `feedbacks`, `outstanding`, `unmatched`, `overwritten`, and `discontinuities` describe incomplete or rejected feedback; interval sample counts cover only consecutive IDs. Zero feedback means unavailable evidence, not perfect pacing. Gamescope may report its predicted target vblank, so these records do not establish physical scanout or input latency. Collection adds no socket read, roundtrip, or pacing change and retains at most 128 pending requests per diagnostic swapchain. The `scaling` and `performance` report presets retain these records.
-
-The bridge timing record also separates `nonconsecutive_ids`, `repeated_timestamps`, and `backwards_timestamps`. Causes can overlap; `discontinuities` still counts each unusable interval once. Repeated predicted timestamps are not a frame-drop count. `operation=application-present-mode` records the original application mode before MAKO filters dynamic overrides, initially and when it changes; an ambiguous multi-swapchain override is reported as `-1`. `operation=application-present-wait` summarizes application calls to `vkWaitForPresentKHR` and, with supported build headers, `vkWaitForPresent2KHR`: call/result/poll counts, present-ID bounds and mean/maximum blocking duration. It emits at most one window per second per calling thread for a stable device/swapchain/API stream. Switching streams drops an incomplete window; the final partial window is not flushed. No record means unobserved or shorter-than-window activity, not proof of no wait. Wait records join by PID and swapchain, independently of the presentation thread. Optional command availability, caller arguments, timeouts, IDs and driver results are preserved. Diagnostics disabled bypasses these wait wrappers entirely. The `scaling` and `performance` presets retain all three operations.
-
-`--session previous`, `oldest`, `previous-two`, or `all` applies only when the selected base log has MAKO Decky's rotated session files. A standalone Steam console log has no such history.
-
-## 4. Restore normal settings
-
-- Native Steam or Proton: restore `~/.local/bin/mako-launch %command%`.
-- Direct command: close the terminal and use the normal command next time.
-- Heroic or Flatpak: remove the two diagnostics variables while keeping the normal activation and overrides.
-
-Published builds keep presentation diagnostics off when `MAKO_PRESENT_DIAGNOSTICS` is absent.
-
-## 5. Submit
-
-Open the [MAKO diagnostic form][diagnostic-form], choose **MAKO Renderer (standalone/direct installation)**, and attach `MAKO-diagnostics.txt`. Answer **Unknown** instead of guessing. Keep screenshots, videos, and public discussion in the original issue, but send the diagnostic text through the form.
-
-## Retention and cleanup
-
-Standalone Renderer does not create or rotate a private diagnostics log. Steam owns its console logs; a `tee` capture remains until you remove it.
-
-Small `runtime-state/` files are status records, not logs. Normal context teardown removes its own record and lock. Before the next process publishes its first primary context, one bounded non-recursive pass removes only unlocked stale MAKO runtime files from that exact configuration directory. Unrelated files, symlinks, held locks, uncertain ownership, and cleanup failures are preserved and never block game startup.
-
-## If collection fails
-
-- `mako-diagnostics: command not found`: reinstall the current archive into the same prefix and confirm `~/.local/bin/mako-diagnostics` exists. Profiles under `~/.config/mako-render/` are preserved.
-- `Diagnostics log not found`: verify that the diagnostics variables reached the game, reproduce again, fully quit, and immediately rerun the report command.
-- No `render layer active` line: submit the report; absence is useful loader evidence.
-- The game no longer starts: remove the two temporary diagnostics variables and test the original standalone launch command.
-
-[diagnostic-form]: https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform
+Review `MAKO-diagnostics.txt` and remove personal information. Upload it through the [diagnostic form](https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform), choosing **MAKO Renderer (standalone/direct installation)**. Answer **Unknown** when unsure. Do not post the log publicly or attach `Lossless.dll`.
