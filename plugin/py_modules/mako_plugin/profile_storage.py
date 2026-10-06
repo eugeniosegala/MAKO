@@ -57,7 +57,7 @@ from .config_schema_generated import (
     DISABLE_HDR_EXPOSURE,
     WrapperSettingsData,
 )
-from .types import ProfileDetails
+from .types import CustomShaderEffect, ProfileDetails
 
 
 class ProfileMetadataEntry(TypedDict):
@@ -207,7 +207,7 @@ def vkbasalt_config_path(
 
 
 _VKBASALT_ASSIGNMENT = re.compile(
-    r"^(?P<prefix>\s*(?P<key>[A-Za-z][A-Za-z0-9]*)\s*=\s*)(?P<rest>.*)$"
+    r"^(?P<prefix>\s*(?P<key>[A-Za-z][A-Za-z0-9_]*)\s*=\s*)(?P<rest>.*)$"
 )
 _VKBASALT_SHADER_EFFECTS = {
     VKBASALT_SHADER_VIBRANCE: "makoVibrance",
@@ -253,7 +253,10 @@ def _selected_vkbasalt_effects(settings: WrapperSettingsData) -> list[str]:
     if antialiasing != VKBASALT_ANTIALIASING_NONE:
         effects.append(antialiasing)
     for shader in settings["vkbasalt_shader"].split(":"):
-        if shader != VKBASALT_SHADER_NONE:
+        if shader.startswith("custom/"):
+            if settings["vkbasalt_manage_custom_shaders"]:
+                effects.append(shader[7:])
+        elif shader != VKBASALT_SHADER_NONE:
             effects.append(_VKBASALT_SHADER_EFFECTS[shader])
     if sharpening != VKBASALT_SHARPENING_NONE:
         effects.append(sharpening)
@@ -263,6 +266,7 @@ def _selected_vkbasalt_effects(settings: WrapperSettingsData) -> list[str]:
 def _merge_vkbasalt_effects(
         existing_value: str,
         selected_effects: list[str],
+        controlled_custom: set[str],
 ) -> str:
     """Replace only UI-owned effects while retaining the advanced chain."""
     merged: list[str] = []
@@ -270,7 +274,7 @@ def _merge_vkbasalt_effects(
     for effect in (
             item.strip() for item in existing_value.split(":") if item.strip()
     ):
-        if effect.casefold() in _VKBASALT_CONTROLLED_EFFECTS:
+        if effect.casefold() in _VKBASALT_CONTROLLED_EFFECTS or effect in controlled_custom:
             if not inserted:
                 merged.extend(selected_effects)
                 inserted = True
@@ -286,9 +290,18 @@ def _assignment_parts(line: str) -> tuple[str, str, str, str] | None:
     if not match:
         return None
     rest = match.group("rest")
-    comment_match = re.search(r"\s+#.*$", rest)
-    if comment_match:
-        value = rest[:comment_match.start()].rstrip()
+    quoted = False
+    escaped = False
+    comment_start = None
+    for index, char in enumerate(rest):
+        if char == '"' and not escaped:
+            quoted = not quoted
+        if char == '#' and not quoted and index > 0 and rest[index - 1].isspace():
+            comment_start = index
+            break
+        escaped = char == '\\' and not escaped
+    if comment_start is not None:
+        value = rest[:comment_start].rstrip()
         suffix = rest[len(value):]
     else:
         value = rest.rstrip()
@@ -296,13 +309,91 @@ def _assignment_parts(line: str) -> tuple[str, str, str, str] | None:
     return match.group("prefix"), match.group("key"), value, suffix
 
 
+def _vkbasalt_value(value: str) -> str:
+    value = value.strip()
+    if value.startswith('"') and value.endswith('"'):
+        return re.sub(r'\\([\\"])', r'\1', value[1:-1])
+    return value
+
+
+def custom_shader_effects(content: str) -> list[CustomShaderEffect]:
+    """Discover FX definitions without treating bundled aliases as custom."""
+    entries: dict[str, CustomShaderEffect] = {}
+    for line in content.splitlines():
+        assignment = _assignment_parts(line)
+        if assignment is None:
+            continue
+        _, name, value, _ = assignment
+        entries.pop(name, None)
+        value = _vkbasalt_value(value)
+        if (name.casefold() not in _VKBASALT_CONTROLLED_EFFECTS
+                and name.casefold() not in {"none", "effects", "reshadeincludepath", "reshadetexturepath", "enableonlaunch", "togglekey", "cassharpness", "dlssharpness", "dlsdenoise"}
+                and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,127}", name)
+                and value.lower().endswith(".fx")):
+            entries[name] = {"id": "custom/" + name, "name": name, "path": value}
+    return [entries[key] for key in sorted(entries)]
+
+
+def vkbasalt_shader_selection(content: str, settings: WrapperSettingsData) -> str:
+    """Expose legacy custom activation until an explicit effect edit adopts it."""
+    if settings["vkbasalt_manage_custom_shaders"]:
+        return settings["vkbasalt_shader"]
+    custom = {effect["name"]: effect["id"] for effect in custom_shader_effects(content)}
+    reverse = {value.casefold(): key for key, value in _VKBASALT_SHADER_EFFECTS.items()}
+    chain = ""
+    for line in content.splitlines():
+        assignment = _assignment_parts(line)
+        if assignment and assignment[1] == "effects":
+            chain = _vkbasalt_value(assignment[2])
+    selected: list[str] = []
+    has_custom = False
+    for effect in (item.strip() for item in chain.split(":")):
+        if effect in custom:
+            selected.append(custom[effect])
+            has_custom = True
+        elif effect.casefold() in reverse:
+            selected.append(reverse[effect.casefold()])
+    return ":".join(dict.fromkeys(selected)) if has_custom else settings["vkbasalt_shader"]
+
+
+def add_custom_shader_content(content: str, path: Path) -> str:
+    """Reference a local file in place so its adjacent includes remain usable."""
+    path = path.expanduser().absolute()
+    if not path.is_file() or path.suffix.lower() != ".fx" or any(ord(c) < 32 or ord(c) == 127 or c == '"' for c in str(path)):
+        raise ValueError("Choose a readable local .fx shader file")
+    with path.open("rb") as shader:
+        shader.read(1)
+    for effect in custom_shader_effects(content):
+        if effect["path"] == str(path):
+            return content
+    stem = re.sub(r"[^A-Za-z0-9]", "", path.stem)
+    if not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,127}", stem):
+        stem = "CustomShader"
+    stem = "Custom" + stem[:100]
+    names = {
+        assignment[1].casefold() for line in content.splitlines()
+        if (assignment := _assignment_parts(line)) is not None
+    }
+    name = stem
+    suffix = 2
+    while name.casefold() in names:
+        name = stem + str(suffix)
+        suffix += 1
+    return content + ("\n" if content and not content.endswith("\n") else "") + name + " = " + json.dumps(str(path), ensure_ascii=False) + "\n"
+
+
 def merge_vkbasalt_config_content(
         existing_content: str,
         settings: WrapperSettingsData,
         shader_directory: Path,
+        previous_selection: str = "none",
 ) -> str:
     """Merge Decky's compact controls without replacing advanced settings."""
     selected_effects = _selected_vkbasalt_effects(settings)
+    controlled_custom = set()
+    if settings["vkbasalt_manage_custom_shaders"]:
+        controlled_custom.update(effect["name"] for effect in custom_shader_effects(existing_content))
+        controlled_custom.update(effect[7:] for effect in (previous_selection + ":" + settings["vkbasalt_shader"]).split(":") if effect.startswith("custom/"))
     sharpening = settings["vkbasalt_sharpening"]
     desired_values: dict[str, str] = {
         "makoVibrance": f'"{shader_directory / "Vibrance.fx"}"',
@@ -353,8 +444,9 @@ def merge_vkbasalt_config_content(
         if key == "effects":
             merged_lines.append(
                 prefix + _merge_vkbasalt_effects(
-                    value,
+                    _vkbasalt_value(value),
                     selected_effects,
+                    controlled_custom,
                 ) + suffix
             )
             seen.add(key)

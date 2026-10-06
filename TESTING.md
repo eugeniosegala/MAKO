@@ -73,6 +73,8 @@ AC/battery profile coverage includes native parsing/serialization, system-supply
 
 Adaptive display-refresh matching is covered by `profile-update`, native configuration round trips, Qt backend persistence, Decky power-profile and runtime-status contracts, and frontend controls. Portable tests cover disabled defaults, display-rate changes, the Renderer’s 10–1000 FPS bounds, fallback restoration, Fixed isolation, target-dependent caps, and older runtime records. Real handheld/TV/monitor hotplug and Steam refresh changes still require game evidence under Gamescope; non-Gamescope sessions intentionally retain the saved fallback.
 
+Custom shader UI coverage includes native FX discovery and registration in `standalone-launch-configuration`, Qt file-URL import and persistence in `ui-backend-contract`, and Decky game-profile, schema/RPC, catalog loading, and effect-selector tests. Fixtures cover quoted paths, comments, duplicate assignments, alias collisions, case-sensitive IDs, legacy chain preservation, mixed ordering, clearing without removing definitions, profile copies, and invalid imports. These use synthetic local files and do not prove shader compilation, pixel output, Flatpak filesystem access, or real game compatibility.
+
 ## Selecting MAKO Gym coverage
 
 MAKO Gym is an optional sibling checkout for targeted hardware work. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.

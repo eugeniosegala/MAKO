@@ -101,6 +101,15 @@ class ConfigurationPathFields(TypedDict, total=False):
     separate_power_modes: bool
     power_mode: str
     power_source: str
+    custom_shader_effects: List["CustomShaderEffect"]
+
+
+class CustomShaderEffect(TypedDict):
+    """A custom FX assignment in the selected profile's vkBasalt file."""
+
+    id: str
+    name: str
+    path: str
 
 
 class ConfigurationResponse(ServiceResponse, ConfigurationPathFields):

@@ -72,11 +72,26 @@ Turn on **Enable Shaders (Restart)** to use MAKO's private bundled vkBasalt buil
 
 - **Effects** is a multi-selection list. Effects run in the displayed order; unchecking and rechecking an effect moves it to the end. **Clear all** removes the chain.
 - **Sharpening** offers CAS or DLS; **Sharpness** adjusts its strength, and **DLS Denoise** appears only with DLS. **Anti-aliasing** offers lighter, softer FXAA or more selective SMAA.
-- Sharpening, sharpness, DLS denoise, anti-aliasing, and the selected effects apply live after Shaders was enabled at startup. Rebuilding an effect chain may cause a brief hitch.
+- Sharpening, sharpness, DLS denoise, anti-aliasing, and bundled effects apply live after Shaders was enabled at startup. Rebuilding an effect chain may cause a brief hitch. Custom shader changes require a game restart.
 - Combining several effects increases GPU cost.
 - **HDR Look (SDR)** adjusts contrast and colour but remains SDR; it does not enable HDR output or increase display luminance.
 
 The note below the controls shows the active profile configuration file. Advanced users can edit that file in Desktop Mode or over SSH. MAKO updates only the settings represented in its UI and preserves other options, comments, and lines. Avoid editing the same profile in MAKO Decky and the Qt configuration window simultaneously.
+
+### Custom shaders
+
+Select **Add Custom Shader…** to choose a local vkBasalt-compatible ReShade `.fx` file, then enable its **Custom:** entry in **Effects**. Adding a file only registers it for the selected profile; it does not enable it. Custom and bundled effects share the same ordered list. Unchecking a custom effect or using **Clear all** retains its definition and options so it can be selected again.
+
+MAKO references the original file instead of copying it. Keep its include files and textures available, and configure `reshadeIncludePath`, `reshadeTexturePath`, and shader-specific options in the displayed profile file when required. A shader designed for another ReShade runtime may use unsupported features. Flatpak games must be able to read the shader folder and its dependencies inside their sandbox.
+
+Existing `.fx` assignments in the profile file appear automatically when the profile loads. Before the first Effects edit, the file’s `effects` chain also supplies their initial selection. After that, choose activation and order in the UI. Use **Refresh Custom Shaders** after editing the file externally. For example:
+
+```ini
+effects = MyTone:makoVibrance
+MyTone = "/home/deck/shaders/MyTone.fx"
+```
+
+Use aliases beginning with an ASCII letter and containing letters, digits, or underscores, up to 128 characters; aliases are case-sensitive. Bundled aliases such as `makoVibrance`, `cas`, and `fxaa` remain reserved. MAKO preserves existing advanced custom chains until the first explicit **Effects** edit, then manages the discovered custom selections together with bundled effects. Other advanced settings remain intact. A selected shader whose definition was removed is shown as missing and can be unchecked. Restart the game after adding, selecting, removing, or changing a custom shader.
 
 ## Performance settings
 

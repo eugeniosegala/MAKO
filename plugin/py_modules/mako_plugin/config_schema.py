@@ -312,10 +312,16 @@ class ConfigurationManager:
                 "vkbasalt_antialiasing must be 'none', 'fxaa', or 'smaa'"
             )
         validated["vkbasalt_antialiasing"] = vkbasalt_antialiasing
-        vkbasalt_shader = validated["vkbasalt_shader"].strip().lower()
+        vkbasalt_shader = validated["vkbasalt_shader"].strip()
+        # Custom aliases are case-sensitive vkBasalt assignment keys.
+        vkbasalt_shader = ":".join(
+            item if "/" in item else item.lower()
+            for item in vkbasalt_shader.split(":")
+        )
         shader_effects = vkbasalt_shader.split(":")
         if not shader_effects or any(
-                effect not in VKBASALT_SHADER_VALUES or
+                (effect not in VKBASALT_SHADER_VALUES and
+                 re.fullmatch(r"custom/[A-Za-z][A-Za-z0-9_]{0,127}", effect) is None) or
                 (effect == "none" and len(shader_effects) != 1)
                 for effect in shader_effects
         ) or len(set(shader_effects)) != len(shader_effects):

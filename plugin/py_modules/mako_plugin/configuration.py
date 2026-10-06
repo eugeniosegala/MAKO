@@ -170,6 +170,7 @@ class ConfigurationService(BaseService):
     ) -> set[str]:
         """Merge enabled configs while retaining files for existing profiles."""
         resolved_metadata = metadata or {}
+        previous_settings = self._read_wrapper_profile_settings()
         if any(profile_storage.uses_vkbasalt(value) for value in profile_settings.values()):
             self._write_vkbasalt_shader_assets()
         expected_names = {
@@ -188,7 +189,9 @@ class ConfigurationService(BaseService):
                 resolved_metadata,
                 profile_name,
             )
-            if not profile_storage.uses_vkbasalt(settings):
+            if not profile_storage.uses_vkbasalt(settings) and not (
+                    settings["vkbasalt_manage_custom_shaders"] and
+                    profile_storage.vkbasalt_config_path(profile_name, self.vkbasalt_global_config_path, self.vkbasalt_profile_config_dir, steam_app_id).is_file()):
                 self._migrate_vkbasalt_profile_config(
                     profile_name,
                     steam_app_id,
@@ -232,6 +235,7 @@ class ConfigurationService(BaseService):
                     existing_content,
                     settings,
                     self.vkbasalt_shader_dir,
+                    self._wrapper_settings_for_profile(profile_name, previous_settings)["vkbasalt_shader"],
                 ),
                 0o644,
                 self.log,
@@ -515,10 +519,15 @@ class ConfigurationService(BaseService):
             config = self._config_for_profile(
                 profile_data, profile_name
             )
+            content = self._profile_shader_content(profile_name, metadata)
+            config["vkbasalt_shader"] = profile_storage.vkbasalt_shader_selection(
+                content, self._normalize_wrapper_settings(config)
+            )
 
             return self._success_response(
                 ConfigurationResponse,
                 config=config,
+                custom_shader_effects=profile_storage.custom_shader_effects(content),
                 vkbasalt_config_path=str(
                     self._vkbasalt_config_path(profile_name, metadata)
                 ),
@@ -558,10 +567,15 @@ class ConfigurationService(BaseService):
             config = self._config_for_profile(profile_data, profile_name)
             if variants and mode in POWER_MODES:
                 config = ConfigurationManager.validate_config({**config, **variants[mode]})
+            content = self._profile_shader_content(profile_name, metadata)
+            config["vkbasalt_shader"] = profile_storage.vkbasalt_shader_selection(
+                content, self._normalize_wrapper_settings(config)
+            )
             return self._success_response(
                 ConfigurationResponse,
                 f"Profile '{profile_name}' retrieved successfully",
                 config=config,
+                custom_shader_effects=profile_storage.custom_shader_effects(content),
                 separate_power_modes=bool(variants),
                 power_mode=mode if variants and mode in POWER_MODES else "shared",
                 power_source=source,
@@ -576,6 +590,26 @@ class ConfigurationService(BaseService):
                 str(error),
                 config=None,
             )
+
+    def _profile_shader_content(self, profile_name: str, metadata: profile_storage.ProfileMetadata | None = None) -> str:
+        path = self._vkbasalt_config_path(profile_name, metadata)
+        return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+    def add_profile_shader(self, profile_name: str, shader_path: str) -> ConfigurationResponse:
+        """Register one FX file without enabling it or changing its source files."""
+        with self._configuration_write_lock:
+            try:
+                data = self._get_profile_data()
+                if profile_name not in data["profiles"]:
+                    raise ValueError("Profile does not exist")
+                metadata = self._read_profile_metadata(data)
+                path = self._vkbasalt_config_path(profile_name, metadata)
+                content = self._profile_shader_content(profile_name, metadata)
+                updated = profile_storage.add_custom_shader_content(content, Path(shader_path))
+                write_managed_text_atomically(path, updated, 0o644, self.log)
+                return self.get_profile_config(profile_name)
+            except (OSError, ValueError, TypeError) as error:
+                return self._error_response(ConfigurationResponse, str(error), config=None)
 
     def update_config_from_dict(self, config: ConfigurationData) -> ConfigurationResponse:
         """Update TOML configuration from configuration dictionary (eliminates parameter duplication)
@@ -938,6 +972,9 @@ class ConfigurationService(BaseService):
             metadata[normalized_name] = profile_storage.profile_metadata_entry(
                 profile_name.strip(), PROFILE_KIND_PROCESS
             )
+            shader_content = self._profile_shader_content(source_profile, metadata)
+            if shader_content:
+                write_managed_text_atomically(self._vkbasalt_config_path(normalized_name, metadata), shader_content, 0o644, self.log)
             self._save_profile_data(new_profile_data)
             self._write_wrapper_profile_settings(profile_settings, metadata)
             self._write_profile_metadata(metadata)
@@ -1125,6 +1162,7 @@ class ConfigurationService(BaseService):
                     if source_profile in profile_data["profiles"]
                     else profile_data["current_profile"]
                 )
+                cloned_shader_content = self._profile_shader_content(source, metadata)
                 base_name = ConfigurationManager.normalize_profile_name(friendly_name)
                 if not ConfigurationManager.validate_profile_name(base_name):
                     base_name = f"game-{normalized_app_id}"
@@ -1184,6 +1222,8 @@ class ConfigurationService(BaseService):
                 processes,
             )
 
+            if created and cloned_shader_content:
+                write_managed_text_atomically(self._vkbasalt_config_path(target_profile, metadata), cloned_shader_content, 0o644, self.log)
             self._save_profile_data(profile_data)
             self._write_wrapper_profile_settings(profile_settings, metadata)
             self._write_profile_metadata(metadata)
@@ -1394,9 +1434,16 @@ class ConfigurationService(BaseService):
             field_values = ", ".join(f"{k}={repr(v)}" for k, v in config.items())
             self.log.info(f"Updated profile '{profile_name}' configuration: {field_values}")
 
+            content = self._profile_shader_content(profile_name, metadata)
+            display_config = cast(ConfigurationData, dict(config))
+            display_config["vkbasalt_shader"] = profile_storage.vkbasalt_shader_selection(
+                content, self._normalize_wrapper_settings(display_config)
+            )
             return self._success_response(ConfigurationResponse,
                                         f"Profile '{profile_name}' configuration updated successfully",
-                                        config=config)
+                                        config=display_config,
+                                        custom_shader_effects=profile_storage.custom_shader_effects(content),
+                                        vkbasalt_config_path=str(self._vkbasalt_config_path(profile_name, metadata)))
 
         except Exception as e:
             error_msg = f"Error updating profile configuration: {str(e)}"
@@ -1452,6 +1499,8 @@ class ConfigurationService(BaseService):
     ) -> ConfigurationResponse:
         """Execute one profile patch while holding the write lock."""
         try:
+            if "vkbasalt_shader" in changes:
+                changes = {**changes, "vkbasalt_manage_custom_shaders": True}
             profile_data = self._get_profile_data()
             if profile_name not in profile_data["profiles"]:
                 return self._error_response(
@@ -1477,6 +1526,10 @@ class ConfigurationService(BaseService):
             if power_mode in POWER_MODES and not variants:
                 raise ValueError("separate power settings are no longer enabled")
             current_config = self._config_for_profile(profile_data, profile_name)
+            current_config["vkbasalt_shader"] = profile_storage.vkbasalt_shader_selection(
+                self._profile_shader_content(profile_name, self._read_profile_metadata(profile_data)),
+                self._normalize_wrapper_settings(current_config),
+            )
             if variants and mode in POWER_MODES:
                 current_config.update(variants[mode])
             merged_config = ConfigurationManager.validate_config({
@@ -1488,6 +1541,7 @@ class ConfigurationService(BaseService):
                     key: merged_config[key] for key in POWER_PROFILE_FIELDS
                 })
                 shared = self._config_for_profile(profile_data, profile_name)
+                shared["vkbasalt_shader"] = current_config["vkbasalt_shader"]
                 shared.update({
                     key: value for key, value in changes.items()
                     if key not in POWER_PROFILE_FIELDS
@@ -1496,6 +1550,8 @@ class ConfigurationService(BaseService):
                 result = self._persist_profile_config(
                     profile_name, ConfigurationManager.validate_config(shared), profile_data
                 )
+                if result["success"] and result["config"] is not None:
+                    merged_config["vkbasalt_shader"] = result["config"]["vkbasalt_shader"]
                 result["config"] = merged_config if result["success"] else None
                 return result
             return self._persist_profile_config(profile_name, merged_config)

@@ -1,3 +1,4 @@
+import type { CustomShaderEffect } from "../api/makoApi";
 import { PanelSectionRow } from "@decky/ui";
 import { useState } from "react";
 import type { ConfigurationEditorProps } from "./settings/types";
@@ -18,6 +19,9 @@ interface FeatureSettingsProps extends ConfigurationEditorProps {
   scalingModelCompatible?: boolean | null;
   profileName: string;
   vkBasaltConfigPath: string;
+  customShaderEffects?: CustomShaderEffect[];
+  onAddShader?: (path: string) => Promise<void>;
+  onRefreshShaders?: () => Promise<void>;
 }
 
 export function FeatureSettings({
@@ -27,6 +31,9 @@ export function FeatureSettings({
   scalingModelCompatible = null,
   profileName,
   vkBasaltConfigPath,
+  customShaderEffects,
+  onAddShader,
+  onRefreshShaders,
   onConfigChange,
   onConfigUpdate,
 }: FeatureSettingsProps) {
@@ -101,10 +108,14 @@ export function FeatureSettings({
 
         {activeModality === "shaders" && (
           <ShadersConfigurationGroup
+            key={profileName}
             config={config}
             isDefaultProfile={profileName === DEFAULT_PROFILE_NAME}
             profileName={profileName}
             vkBasaltConfigPath={vkBasaltConfigPath}
+            customShaderEffects={customShaderEffects}
+            onAddShader={onAddShader}
+            onRefreshShaders={onRefreshShaders}
             onConfigChange={onConfigChange}
           />
         )}

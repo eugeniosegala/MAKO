@@ -33,6 +33,7 @@ import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
 import { currentRelease } from "virtual:mako-release-info";
 import { MakoButtonTheme, MakoReleaseIdentity } from "./MakoUi";
 import t from "../i18n/i18n";
+import { addProfileShader } from "../api/makoApi";
 
 export function Content() {
   const {
@@ -52,6 +53,7 @@ export function Content() {
   const {
     config,
     vkBasaltConfigPath,
+    customShaderEffects,
     powerMode,
     separatePowerModes,
     powerSource,
@@ -105,6 +107,25 @@ export function Content() {
     applyConfigPatch,
     replaceConfig,
   });
+
+  const refreshShaders = async () => {
+    const profile = editingProfile;
+    await flushConfigChanges();
+    if (getEditingProfile() === profile) {
+      await loadMakoConfig(profile, getEditingPowerMode());
+    }
+  };
+
+  const addShader = async (path: string) => {
+    const profile = editingProfile;
+    await flushConfigChanges();
+    const result = await addProfileShader(profile, path);
+    if (!result.success)
+      throw new Error(result.error || "Unable to add shader");
+    if (getEditingProfile() === profile) {
+      await loadMakoConfig(profile, getEditingPowerMode());
+    }
+  };
 
   const onInstall = async () => {
     await handleInstall(
@@ -234,6 +255,9 @@ export function Content() {
                 scalingModelCompatible={modelStatus.ls1?.compatible ?? null}
                 profileName={editingProfile}
                 vkBasaltConfigPath={vkBasaltConfigPath}
+                customShaderEffects={customShaderEffects}
+                onAddShader={addShader}
+                onRefreshShaders={refreshShaders}
                 onConfigChange={handleConfigChange}
                 onConfigUpdate={handleConfigChanges}
               />

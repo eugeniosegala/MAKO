@@ -7,6 +7,7 @@ import {
   getRuntimeStatus,
   updateMakoConfigFromObject,
   type ConfigUpdateResult,
+  type CustomShaderEffect,
   configFailureResult,
 } from "../api/makoApi";
 import {
@@ -171,6 +172,9 @@ export function useRuntimeScalingStatus(profileName: string, enabled: boolean) {
 export function useMakoConfig() {
   const [config, setConfig] = useState<ConfigurationData>(() => getDefaults());
   const [vkBasaltConfigPath, setVkBasaltConfigPath] = useState("");
+  const [customShaderEffects, setCustomShaderEffects] = useState<
+    CustomShaderEffect[]
+  >([]);
   const loadRequestId = useRef(0);
   const [isConfigLoading, setIsConfigLoading] = useState(false);
   const configLoadingRef = useRef(false);
@@ -187,6 +191,7 @@ export function useMakoConfig() {
       configLoadingRef.current = true;
       setIsConfigLoading(true);
       setVkBasaltConfigPath("");
+      setCustomShaderEffects([]);
       const resetConfig = () => {
         powerModeRef.current = "shared";
         setPowerMode("shared");
@@ -194,6 +199,7 @@ export function useMakoConfig() {
         setPowerSource("");
         setConfig(getDefaults());
         setVkBasaltConfigPath("");
+        setCustomShaderEffects([]);
       };
       try {
         const result = profileName
@@ -213,6 +219,7 @@ export function useMakoConfig() {
           setPowerSource(result.power_source || "");
           setConfig({ ...getDefaults(), ...result.config });
           setVkBasaltConfigPath(result.vkbasalt_config_path || "");
+          setCustomShaderEffects(result.custom_shader_effects || []);
         } else {
           console.log(
             "MAKO Renderer config not available, using defaults:",
@@ -288,6 +295,7 @@ export function useMakoConfig() {
     isConfigLoading,
     canEditConfig,
     vkBasaltConfigPath,
+    customShaderEffects,
     setConfig,
     applyConfigPatch,
     replaceConfig,

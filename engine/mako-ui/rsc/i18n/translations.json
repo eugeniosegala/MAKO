@@ -190,7 +190,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "pt-BR": {
       "activeIn": "Processos correspondentes",
@@ -344,7 +349,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "pt-PT": {
       "activeIn": "Processos correspondentes",
@@ -498,7 +508,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "es": {
       "activeIn": "Procesos coincidentes",
@@ -652,7 +667,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "ko": {
       "activeIn": "일치하는 프로세스",
@@ -806,7 +826,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "ja": {
       "activeIn": "一致するプロセス",
@@ -960,7 +985,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "uk": {
       "activeIn": "Відповідні процеси",
@@ -1114,7 +1144,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "zh": {
       "activeIn": "匹配进程",
@@ -1268,7 +1303,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "de": {
       "activeIn": "Zugeordnete Prozesse",
@@ -1422,7 +1462,12 @@
       "editPowerMode": "Editing settings for",
       "powerShared": "Shared / fallback",
       "powerHandheld": "Handheld (Battery)",
-      "powerDocked": "Docked (AC Power)"
+      "powerDocked": "Docked (AC Power)",
+      "customShader": "Custom Shader",
+      "shaderDefinitionMissing": "definition missing",
+      "addCustomShader": "Add Custom Shader…",
+      "refreshCustomShaders": "Refresh Custom Shaders",
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     }
   }
 }

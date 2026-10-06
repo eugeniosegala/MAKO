@@ -470,7 +470,14 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "vkbasalt_shader": {
         "fieldType": ConfigFieldType.STRING,
         "default": VKBASALT_SHADER_NONE,
-        "description": "Ordered colon-separated MAKO-managed vkBasalt effects from the bundled catalog, or none",
+        "description": "Ordered colon-separated bundled effects or custom/<profile effect name>, or none",
+        "location": "script"
+    },
+
+    "vkbasalt_manage_custom_shaders": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "Use the UI effect selection for custom shaders after the first explicit effect edit; false preserves legacy advanced chains",
         "location": "script"
     },
 

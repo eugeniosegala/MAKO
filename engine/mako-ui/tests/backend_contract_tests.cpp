@@ -475,6 +475,11 @@ void test_shader_controls() {
     require_property("vkbasalt_antialiasing", "QString", true, false);
     require_property("vkbasalt_shader", "QString", true, false);
     require_property("vkbasalt_config_path", "QString", false, false);
+    require_property("custom_shader_effects", "QVariantList", false, false);
+    require_property("shader_load_error", "QString", false, false);
+    require(mako::ui::Backend::staticMetaObject.indexOfMethod("addCustomShader(QString)") >= 0 &&
+            mako::ui::Backend::staticMetaObject.indexOfMethod("refreshCustomShaders()") >= 0,
+        "Qt custom shader controls are not exposed");
     require(mako::ui::Backend::staticMetaObject.indexOfMethod(
                 "openVkBasaltConfig()") >= 0,
         "Qt backend does not expose the advanced shader configuration opener");
@@ -624,6 +629,48 @@ void test_save_lifetime() {
                     .toString() ==
                     QStringLiteral("hdr_look:clarity:vibrance:levels_plus"),
             "UI did not save the ordered effects in Decky's profile sidecar");
+        const auto shaderPath = directory.filePath("custom # tone.fx");
+        QFile localShader(shaderPath);
+        require(localShader.open(QIODevice::WriteOnly), "unable to create custom shader fixture");
+        localShader.write("// synthetic shader fixture\n");
+        localShader.close();
+        const auto priorSelection = backend.getVkBasaltShader();
+        require(backend.addCustomShader(QUrl::fromLocalFile(shaderPath).toString()),
+            "Qt file URL import failed for a path with spaces and a hash");
+        require(backend.getVkBasaltShader() == priorSelection && backend.getCustomShaderEffects().size() == 1,
+            "adding a shader must register it without enabling it");
+        const auto customId = backend.getCustomShaderEffects().at(0).toMap().value(QStringLiteral("id")).toString();
+        require(backend.addCustomShader(shaderPath) && backend.getCustomShaderEffects().size() == 1,
+            "Qt custom shader registration must be idempotent");
+        backend.vkBasaltShaderUpdated(customId + QStringLiteral(":vibrance"));
+        backend.refreshCustomShaders();
+        require(backend.getVkBasaltShader() == customId + QStringLiteral(":vibrance"),
+            "refresh discarded a pending custom effect selection");
+        backend.vkBasaltShaderUpdated(QStringLiteral("none"));
+        backend.refreshCustomShaders();
+        require(backend.getCustomShaderEffects().size() == 1 && backend.getVkBasaltShader() == QStringLiteral("none"),
+            "clearing a custom shader must retain its selectable definition");
+        require(!backend.addCustomShader(shaderPath + QStringLiteral(".missing")) && !backend.getShaderLoadError().isEmpty(),
+            "Qt must surface an invalid shader import");
+        backend.vkBasaltShaderUpdated(customId);
+        backend.refreshCustomShaders();
+        QFile removedDefinition(backend.getVkBasaltConfigPath());
+        require(removedDefinition.open(QIODevice::ReadOnly), "custom config cannot be read");
+        auto withoutDefinition = removedDefinition.readAll();
+        removedDefinition.close();
+        withoutDefinition.replace((customId.mid(7) + QStringLiteral(" = \"") + shaderPath + QStringLiteral("\"\n")).toUtf8(), QByteArray{});
+        require(removedDefinition.open(QIODevice::WriteOnly | QIODevice::Truncate), "custom config cannot be edited");
+        removedDefinition.write(withoutDefinition);
+        removedDefinition.close();
+        backend.vkBasaltShaderUpdated(QStringLiteral("none"));
+        backend.refreshCustomShaders();
+        require(removedDefinition.open(QIODevice::ReadOnly) &&
+                !removedDefinition.readAll().contains(customId.mid(7).toUtf8()),
+            "unchecking a shader with a deleted definition left its alias active");
+        removedDefinition.close();
+        require(backend.addCustomShader(shaderPath), "custom shader could not be registered again");
+        backend.vkBasaltShaderUpdated(customId + QStringLiteral(":vibrance"));
+        backend.refreshCustomShaders();
         const auto timestamp = std::filesystem::last_write_time(configPath);
         QTimer::singleShot(700, &events, &QEventLoop::quit);
         events.exec();
@@ -632,6 +679,12 @@ void test_save_lifetime() {
         backend.targetFPSUpdated(165);
         backend.forceAlsaAudioUpdated(true);
         // No event loop: closing before the debounce must still save both files.
+    }
+    {
+        mako::ui::Backend reopened;
+        require(reopened.getVkBasaltShader() == QStringLiteral("custom/Customcustomtone:vibrance") &&
+                reopened.getCustomShaderEffects().size() == 1,
+            "Qt custom selection and catalog did not survive reopening");
     }
     require(ls::ConfigFile(configPath).profiles().front().target_fps == 165,
         "Closing the UI lost the pending profile edit");

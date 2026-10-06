@@ -63,10 +63,17 @@ export interface DllStatsResult {
 // Use centralized configuration data type
 export type MakoConfig = ConfigurationData;
 
+export interface CustomShaderEffect {
+  id: string;
+  name: string;
+  path: string;
+}
+
 export interface ConfigResult {
   success: boolean;
   config: Nullable<MakoConfig>;
   vkbasalt_config_path?: string;
+  custom_shader_effects?: CustomShaderEffect[];
   separate_power_modes?: boolean;
   power_mode?: string;
   power_source?: string;
@@ -311,6 +318,10 @@ export const getDllStats = callable<[], DllStatsResult>("get_dll_stats");
 export const getMakoConfig = callable<[], ConfigResult>("get_mako_config");
 export const getProfileConfig = callable<[string, string?], ConfigResult>(
   "get_profile_config",
+);
+
+export const addProfileShader = callable<[string, string], ConfigResult>(
+  "add_profile_shader",
 );
 export const getRuntimeStatus = callable<[string?], RuntimeStatusResult>(
   "get_runtime_status",

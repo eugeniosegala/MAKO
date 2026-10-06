@@ -70,6 +70,78 @@ class GameProfileTests(unittest.TestCase):
         )
         self.service._save_profile_data(self.profile_data)
 
+    def test_custom_shaders_are_discovered_managed_and_copied_per_profile(self):
+        content = ('# preserve\neffects = "Tone_A:makoVibrance:ToneB:cas" # selected\n'
+                   'Tone_A = "/tmp/a # colour.fx" # source\nToneB = /tmp/b.FX\n'
+                   'makoVibrance = /tmp/bundled.fx\nignored = /tmp/not.fx\n'
+                   'reshadeIncludePath = /tmp/includes.fx\nreshadeTexturePath = /tmp/textures.fx\n'
+                   'ignored = disabled\n# disabled = /tmp/disabled.fx\ncustomOption = keep\n')
+        self.assertEqual(configuration_module.profile_storage.custom_shader_effects('Backslash = "/tmp/a\\n.fx"\n')[0]["path"], '/tmp/a\\n.fx')
+        path = self.service._vkbasalt_config_path("mako")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+        self.assertEqual(self.service.get_profile_config("mako")["config"]["vkbasalt_shader"], "custom/Tone_A:vibrance:custom/ToneB")
+        self.assertTrue(self.service.update_profile_config_fields("mako", {
+            "external_vulkan_layer": "vkbasalt", "vkbasalt_sharpness": 0.6,
+        })["success"])
+        read = self.service.get_profile_config("mako")
+        self.assertEqual(read["config"]["vkbasalt_shader"], "custom/Tone_A:vibrance:custom/ToneB")
+        self.assertFalse(read["config"]["vkbasalt_manage_custom_shaders"])
+        unrelated = self.service.update_profile_config_fields("mako", {"vkbasalt_sharpness": 0.7})
+        self.assertEqual(unrelated["config"]["vkbasalt_shader"], read["config"]["vkbasalt_shader"])
+        self.assertEqual(unrelated["custom_shader_effects"], read["custom_shader_effects"])
+        self.assertEqual(read["custom_shader_effects"], [
+            {"id": "custom/ToneB", "name": "ToneB", "path": "/tmp/b.FX"},
+            {"id": "custom/Tone_A", "name": "Tone_A", "path": "/tmp/a # colour.fx"},
+        ])
+        self.assertTrue(self.service.set_profile_power_modes("mako", True)["success"])
+        mode_result = self.service.update_profile_config_fields("mako", {"target_fps": 60}, "handheld")
+        self.assertEqual(mode_result["config"]["vkbasalt_shader"], read["config"]["vkbasalt_shader"])
+        self.assertEqual(mode_result["config"]["target_fps"], 60)
+        result = self.service.update_profile_config_fields("mako", {
+            "vkbasalt_shader": "custom/ToneB:vibrance:custom/Tone_A",
+        })
+        self.assertTrue(result["success"], result)
+        self.assertTrue(result["config"]["vkbasalt_manage_custom_shaders"])
+        self.assertIn("effects = ToneB:makoVibrance:Tone_A:cas # selected", path.read_text())
+        clone = self.service.create_profile("Shader Copy", "mako")
+        self.assertTrue(clone["success"], clone)
+        copied = self.service.get_profile_config(clone["profile_name"])
+        self.assertEqual(copied["custom_shader_effects"], read["custom_shader_effects"])
+        self.assertEqual(copied["config"]["vkbasalt_shader"], "custom/ToneB:vibrance:custom/Tone_A")
+        path.write_text(path.read_text().replace("ToneB = /tmp/b.FX\n", ""), encoding="utf-8")
+        self.assertTrue(self.service.update_profile_config_fields("mako", {"vkbasalt_shader": "none"})["success"])
+        self.assertIn("effects = cas # selected", path.read_text())
+        self.assertIn('Tone_A = "/tmp/a # colour.fx" # source', path.read_text())
+        self.assertIn("customOption = keep", path.read_text())
+        self.assertEqual(self.service.get_profile_config(clone["profile_name"])["config"]["vkbasalt_shader"], copied["config"]["vkbasalt_shader"])
+        with patch.object(configuration_module, "detect_processes_for_steam_app", return_value=["ShaderGame.exe"]):
+            captured = self.service.capture_game_profile("12345", "Shader Game", clone["profile_name"])
+        self.assertTrue(captured["success"], captured)
+        captured_read = self.service.get_profile_config(captured["profile_name"])
+        self.assertEqual(captured_read["custom_shader_effects"], copied["custom_shader_effects"])
+        self.assertEqual(captured_read["config"]["vkbasalt_shader"], copied["config"]["vkbasalt_shader"])
+
+
+    def test_add_custom_shader_references_file_without_enabling_it(self):
+        shader = Path(self.temp_dir.name) / "Tone # local.fx"
+        shader.write_text("// synthetic shader fixture\n", encoding="utf-8")
+        path = self.service._vkbasalt_config_path("mako")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("CustomTonelocal = reserved\n# retain\n", encoding="utf-8")
+        result = self.service.add_profile_shader("mako", str(shader))
+        self.assertTrue(result["success"], result)
+        self.assertEqual(result["custom_shader_effects"], [{
+            "id": "custom/CustomTonelocal2", "name": "CustomTonelocal2", "path": str(shader),
+        }])
+        self.assertEqual(result["config"]["vkbasalt_shader"], "none")
+        original = path.read_text()
+        self.assertTrue(self.service.add_profile_shader("mako", str(shader))["success"])
+        self.assertEqual(path.read_text(), original)
+        for profile, file in (("missing", str(shader)), ("mako", str(shader) + ".missing"), ("mako", str(path))):
+            self.assertFalse(self.service.add_profile_shader(profile, file)["success"])
+        self.assertEqual(path.read_text(), original)
+
     def test_vkbasalt_effect_stack_validation(self):
         defaults = ConfigurationManager.get_defaults()
         valid = ConfigurationManager.validate_config({
@@ -80,7 +152,8 @@ class GameProfileTests(unittest.TestCase):
             valid["vkbasalt_shader"],
             "hdr_look:clarity:vibrance:levels_plus",
         )
-        for value in ("hdr_look:hdr_look", "none:vibrance", "clarity:", "unknown"):
+        self.assertEqual(ConfigurationManager.validate_config({**defaults, "vkbasalt_shader": "VIBRANCE:custom/Tone_A"})["vkbasalt_shader"], "vibrance:custom/Tone_A")
+        for value in ("custom/Tone_A:custom/Tone_A", "custom/../unsafe", "hdr_look:hdr_look", "none:vibrance", "clarity:", "unknown"):
             with self.subTest(value=value), self.assertRaises(ValueError):
                 ConfigurationManager.validate_config({
                     **defaults,

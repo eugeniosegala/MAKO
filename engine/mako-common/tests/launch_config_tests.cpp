@@ -119,6 +119,66 @@ int main() {
             !ls::isVkBasaltShader("none:vibrance"),
         "ordered shader selection validation is inconsistent");
 
+    const std::string customContent =
+        "# preserve\neffects = \"Tone_A:makoVibrance:ToneB:cas\" # selected\n"
+        "Tone_A = \"/tmp/a # colour.fx\" # source\n"
+        "ToneB = /tmp/b.FX\n"
+        "makoVibrance = /tmp/bundled.fx\n"
+        "reshadeIncludePath = /tmp/includes.fx\n"
+        "reshadeTexturePath = /tmp/textures.fx\n"
+        "ignored = /tmp/not.fx\nignored = disabled\n"
+        "# disabled = /tmp/disabled.fx\n"
+        "customOption = keep\n";
+    expect(ls::customVkBasaltShaders("Backslash = \"/tmp/a\\n.fx\"\n").at(0).path == "/tmp/a\\n.fx",
+        "custom quoted paths must retain literal unknown backslash escapes");
+    const auto custom = ls::customVkBasaltShaders(customContent);
+    expect(custom.size() == 2 && custom.at(0).name == "ToneB" &&
+            custom.at(1).name == "Tone_A" && custom.at(1).path == "/tmp/a # colour.fx",
+        "custom catalog must honor quotes, comments, duplicate assignments and reserved aliases");
+    ls::VkBasaltConf customSettings;
+    customSettings.shader = "vibrance";
+    expect(ls::vkBasaltShaderSelection(customContent, customSettings) ==
+            "custom/Tone_A:vibrance:custom/ToneB",
+        "legacy activation and mixed effect order must be visible before adoption");
+    expect(ls::mergeVkBasaltConfiguration(customContent, customSettings, shaderDirectory)
+            .find("effects = Tone_A:makoVibrance:cas:ToneB") != std::string::npos,
+        "unrelated writes must preserve legacy custom effects");
+    customSettings.manage_custom_shaders = true;
+    customSettings.shader = "custom/ToneB:vibrance:custom/Tone_A";
+    const auto managedCustom = ls::mergeVkBasaltConfiguration(customContent, customSettings, shaderDirectory);
+    expect(managedCustom.find("effects = ToneB:makoVibrance:Tone_A:cas # selected") != std::string::npos,
+        "custom effects must participate in ordered selection");
+    customSettings.shader = "none";
+    const auto clearedCustom = ls::mergeVkBasaltConfiguration(managedCustom, customSettings, shaderDirectory);
+    expect(clearedCustom.find("effects = cas # selected") != std::string::npos &&
+            clearedCustom.find("Tone_A = \"/tmp/a # colour.fx\" # source") != std::string::npos &&
+            clearedCustom.find("customOption = keep") != std::string::npos,
+        "clearing effects must retain custom definitions and advanced options");
+    expect(ls::mergeVkBasaltConfiguration("effects = Removed:opaque\n", customSettings,
+                shaderDirectory, "custom/Removed").find("effects = cas:opaque\n") != std::string::npos,
+        "clearing a missing custom definition must remove its formerly selected alias");
+    expect(ls::isVkBasaltShader("vibrance:custom/Tone_A") &&
+            !ls::isVkBasaltShader("custom/Tone_A:custom/Tone_A") &&
+            !ls::isVkBasaltShader("custom/../unsafe"),
+        "custom selection validation must preserve safe case-sensitive identities");
+    const auto localShader = directory / "Tone # local.fx";
+    writeText(localShader, "// synthetic shader fixture\n");
+    const auto customPath = directory / "custom.conf";
+    writeText(customPath, "CustomTonelocal = reserved\n# retain\n");
+    const auto added = ls::addVkBasaltCustomShader(customPath, localShader);
+    expect(added.name == "CustomTonelocal2" && added.path == localShader.string(),
+        "adding a shader must avoid collisions and reference its original file");
+    const auto registered = readText(customPath);
+    static_cast<void>(ls::addVkBasaltCustomShader(customPath, localShader));
+    expect(readText(customPath) == registered &&
+            ls::customVkBasaltShaders(registered).at(0).path == localShader.string(),
+        "shader registration must be idempotent and round-trip quoted paths");
+    bool rejectedShader = false;
+    try { static_cast<void>(ls::addVkBasaltCustomShader(customPath, directory / "missing.fx")); }
+    catch (const std::exception&) { rejectedShader = true; }
+    expect(rejectedShader && readText(customPath) == registered,
+        "invalid shader imports must leave the profile file untouched");
+
     setenv("MAKO_LAUNCH_CONFIG", canonicalPath.c_str(), 1);
     expect(ls::findLaunchConfigurationFile() == canonicalPath,
         "MAKO_LAUNCH_CONFIG must override launcher configuration discovery");

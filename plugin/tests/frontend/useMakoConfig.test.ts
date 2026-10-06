@@ -90,6 +90,27 @@ describe("MAKO configuration persistence", () => {
   });
   afterEach(cleanup);
 
+  test("loads custom catalogs per profile and clears them for older backends", async () => {
+    const { result } = renderHook(() => useMakoConfig());
+    await waitFor(() => expect(result.current.isConfigLoading).toBe(false));
+    const catalog = [
+      { id: "custom/Tone_A", name: "Tone_A", path: "/tmp/tone.fx" },
+    ];
+    mocks.getProfileConfig.mockResolvedValueOnce({
+      success: true,
+      config: getDefaults(),
+      custom_shader_effects: catalog,
+    });
+    await act(() => result.current.loadMakoConfig("game"));
+    expect(result.current.customShaderEffects).toEqual(catalog);
+    mocks.getProfileConfig.mockResolvedValueOnce({
+      success: true,
+      config: getDefaults(),
+    });
+    await act(() => result.current.loadMakoConfig("other"));
+    expect(result.current.customShaderEffects).toEqual([]);
+  });
+
   test("locks editing during power-mode loads and clears metadata on failure", async () => {
     const { result } = renderHook(() => useMakoConfig());
     await waitFor(() => expect(result.current.isConfigLoading).toBe(false));
@@ -134,6 +155,7 @@ describe("MAKO configuration persistence", () => {
     let finishInitialLoad!: (value: {
       success: boolean;
       config: ConfigurationData;
+      custom_shader_effects?: { id: string; name: string; path: string }[];
     }) => void;
     mocks.getMakoConfig.mockReturnValue(
       new Promise((resolve) => {
@@ -144,6 +166,9 @@ describe("MAKO configuration persistence", () => {
       success: true,
       config: { ...getDefaults(), multiplier: 4, target_fps: 120 },
       vkbasalt_config_path: "/home/deck/.config/mako-render/vkbasalt/abc.conf",
+      custom_shader_effects: [
+        { id: "custom/Game", name: "Game", path: "/tmp/game.fx" },
+      ],
     });
     const { result } = renderHook(() => useMakoConfig());
 
@@ -157,12 +182,18 @@ describe("MAKO configuration persistence", () => {
       finishInitialLoad({
         success: true,
         config: { ...getDefaults(), multiplier: 2, target_fps: 60 },
+        custom_shader_effects: [
+          { id: "custom/Stale", name: "Stale", path: "/tmp/stale.fx" },
+        ],
       });
       await Promise.resolve();
     });
 
     expect(result.current.config.multiplier).toBe(4);
     expect(result.current.config.target_fps).toBe(120);
+    expect(
+      result.current.customShaderEffects.map((effect) => effect.id),
+    ).toEqual(["custom/Game"]);
     expect(result.current.vkBasaltConfigPath).toBe(
       "/home/deck/.config/mako-render/vkbasalt/abc.conf",
     );

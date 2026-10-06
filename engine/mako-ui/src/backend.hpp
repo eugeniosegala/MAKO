@@ -54,6 +54,8 @@ namespace mako::ui {
         Q_PROPERTY(QString vkbasalt_antialiasing READ getVkBasaltAntialiasing WRITE vkBasaltAntialiasingUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString vkbasalt_shader READ getVkBasaltShader WRITE vkBasaltShaderUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString vkbasalt_config_path READ getVkBasaltConfigPath NOTIFY refreshUI)
+        Q_PROPERTY(QVariantList custom_shader_effects READ getCustomShaderEffects NOTIFY refreshUI)
+        Q_PROPERTY(QString shader_load_error READ getShaderLoadError NOTIFY refreshUI)
         Q_PROPERTY(QString launch_option READ getLaunchOption NOTIFY refreshUI)
 
         Q_PROPERTY(bool available READ isValidProfileIndex NOTIFY refreshUI)
@@ -122,6 +124,8 @@ namespace mako::ui {
         Q_INVOKABLE void refreshRunningGames(bool includeAllApplications = false);
         Q_INVOKABLE bool captureRunningGame(int index, bool createProfile);
         Q_INVOKABLE bool openVkBasaltConfig();
+        Q_INVOKABLE bool addCustomShader(const QString& path);
+        Q_INVOKABLE void refreshCustomShaders();
 
         [[nodiscard]] static bool isFractionalAdaptivePresetEnabled(
                 const ls::GameConf& conf) noexcept {
@@ -253,6 +257,8 @@ namespace mako::ui {
                 static_cast<size_t>(this->m_profile_index)
             ).string());
         }
+        [[nodiscard]] QVariantList getCustomShaderEffects() const;
+        [[nodiscard]] QString getShaderLoadError() const { return this->m_shader_load_error; }
         [[nodiscard]] QString getLaunchOption() const;
 
 #define VALIDATE_AND_GET_PROFILE(default) \
@@ -517,6 +523,7 @@ namespace mako::ui {
     setters:
         void profileSelected(int idx) {
             this->m_profile_index = idx;
+            this->m_shader_load_error.clear();
             this->m_power_mode = 0;
             emit refreshUI();
         }
@@ -618,6 +625,9 @@ namespace mako::ui {
             this->m_vkbasalt_profiles.at(
                 static_cast<size_t>(this->m_profile_index)
             ).shader = value;
+            this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).manage_custom_shaders = true;
             MARK_SHADER_DIRTY()
         }
 
@@ -980,11 +990,12 @@ namespace mako::ui {
         bool m_config_dirty{false};
         bool m_launch_dirty{false};
         bool m_vkbasalt_dirty{false};
+        QString m_shader_load_error;
         bool m_profile_metadata_dirty{false};
 
         void loadVkBasaltProfiles();
         void writeVkBasaltShaderAssets() const;
-        void writeVkBasaltProfiles() const;
+        void writeVkBasaltProfiles();
         void writeProfileMetadata() const;
         void renameVkBasaltProfile(
             const std::string& oldName,

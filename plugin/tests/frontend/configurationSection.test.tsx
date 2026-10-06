@@ -8,6 +8,12 @@ import {
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
+const shaderPicker = vi.hoisted(() => vi.fn());
+vi.mock("@decky/api", () => ({
+  openFilePicker: shaderPicker,
+  FileSelectionType: { FILE: 0 },
+}));
+
 vi.mock("@decky/ui", () => ({
   GamepadButton: {
     DIR_LEFT: 11,
@@ -408,6 +414,84 @@ describe("Configuration controls", () => {
         "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. This file belongs to the selected profile and is removed when that profile is deleted.",
       ),
     ).toBeTruthy();
+  });
+
+  test("shows custom definitions, retains missing selections, and uses the file picker", async () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const onAddShader = vi.fn(async () => undefined);
+    const onRefreshShaders = vi.fn(async () => undefined);
+    shaderPicker.mockResolvedValue({
+      path: "/tmp/tone.fx",
+      realpath: "/tmp/tone.fx",
+    });
+    render(
+      <ShadersConfigurationGroup
+        config={{
+          ...getDefaults(),
+          external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+          vkbasalt_shader: "custom/Tone_A:custom/Missing",
+        }}
+        isDefaultProfile={false}
+        profileName="game"
+        vkBasaltConfigPath="/tmp/game.conf"
+        customShaderEffects={[
+          { id: "custom/Tone_A", name: "Tone_A", path: "/tmp/a.fx" },
+        ]}
+        onConfigChange={onConfigChange}
+        onAddShader={onAddShader}
+        onRefreshShaders={onRefreshShaders}
+      />,
+    );
+    fireEvent.click(screen.getByText("Add Custom Shader…"));
+    await waitFor(() =>
+      expect(onAddShader).toHaveBeenCalledWith("/tmp/tone.fx"),
+    );
+    expect(shaderPicker).toHaveBeenCalledWith(
+      0,
+      "/home",
+      true,
+      true,
+      undefined,
+      ["fx"],
+      false,
+      false,
+    );
+    shaderPicker.mockRejectedValueOnce("User Canceled");
+    fireEvent.click(screen.getByText("Add Custom Shader…"));
+    await waitFor(() =>
+      expect(
+        screen.getByText("Add Custom Shader…").closest("button")?.disabled,
+      ).toBe(false),
+    );
+    expect(screen.queryByText(/User Canceled/)).toBeNull();
+    expect(onAddShader).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByText("Refresh Custom Shaders"));
+    await waitFor(() => expect(onRefreshShaders).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByText("Choose effects (2 selected)"));
+    for (let page = 0; page < 4; page++)
+      fireEvent.click(screen.getByTestId("mako-effects-next-page"));
+    expect(
+      screen
+        .getByRole("checkbox", {
+          name: "2. Custom: Missing (definition missing)",
+        })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    fireEvent.click(
+      screen.getByRole("checkbox", {
+        name: "2. Custom: Missing (definition missing)",
+      }),
+    );
+    await waitFor(() =>
+      expect(onConfigChange).toHaveBeenCalledWith(
+        "vkbasalt_shader",
+        "custom/Tone_A",
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    await waitFor(() =>
+      expect(onConfigChange).toHaveBeenCalledWith("vkbasalt_shader", "none"),
+    );
   });
 
   test("adds and removes effects in a per-profile ordered stack", async () => {
@@ -994,8 +1078,7 @@ describe("Configuration controls", () => {
     ]);
     expect(dropdown.textContent).toBe("2s");
     expect(
-      screen.getByText(/Recovery check interval/).style
-        .paddingBottom,
+      screen.getByText(/Recovery check interval/).style.paddingBottom,
     ).toBe("6px");
     fireEvent.click(dropdown);
     expect(onConfigChange).toHaveBeenCalledWith(

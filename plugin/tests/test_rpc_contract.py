@@ -23,6 +23,7 @@ from py_modules.mako_plugin.flatpak_service import (  # noqa: E402
 )
 from py_modules.mako_plugin.types import (  # noqa: E402
     ConfigSchemaResponse,
+    CustomShaderEffect,
     ConfigurationResponse,
     DllDetectionResponse,
     DllStatsResponse,
@@ -118,6 +119,7 @@ class RpcContractTests(unittest.TestCase):
             ModelStatusResponse: "ModelStatusResult",
             DllStatsResponse: "DllStatsResult",
             ConfigurationResponse: "ConfigResult",
+            CustomShaderEffect: "CustomShaderEffect",
             ConfigSchemaResponse: "ConfigSchemaResult",
             LaunchOptionResponse: "LaunchOptionResult",
             FileContentResponse: "FileContentResult",

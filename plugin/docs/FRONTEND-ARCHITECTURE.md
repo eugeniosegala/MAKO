@@ -11,7 +11,7 @@ MAKO Decky's panel composes independently owned state and view modules. Keep pro
 | Debounced configuration writes | `src/hooks/useProfileConfigWriter.ts` | Serializes and applies editor changes; controls should not create a second save queue. |
 | Main feature grouping | `src/components/FeatureSettings.tsx` and `src/components/ModalityTabs.tsx` | Selects Frame Generation, Scaling, or Shaders while retaining shared controls. |
 | Feature controls | `src/components/FpsMultiplierControl.tsx`, `ScalingControl.tsx`, and `src/components/settings/` | Sends typed configuration changes through the editor callbacks. |
-| Shader effect selection | `src/components/settings/shaders/EffectsChecklist.tsx` | Owns effect order, paging, Steam focus, and serialized live saves; `ShadersConfigurationGroup.tsx` owns the surrounding settings and profile-keyed reset. |
+| Shader effect selection | `src/components/settings/shaders/EffectsChecklist.tsx` | Owns effect order, paging, Steam focus, and serialized live saves; `ShadersConfigurationGroup.tsx` owns the surrounding settings, custom file picker, catalog labels, and profile-keyed reset. `useMakoConfig()` reads the catalog with the profile; `Content.tsx` drains the existing save queue before add/refresh and guards against late profile reloads. |
 | Flatpak setup | `src/components/FlatpaksModal.tsx` | Owns extension and application operations and their status display. |
 | Shared presentation | `src/components/MakoUi.tsx`, `ContentNotices.tsx`, and `RuntimeStatusCard.tsx` | Renders controls, notices, and status without persisting profile state. |
 

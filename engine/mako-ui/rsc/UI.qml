@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
+import QtQuick.Dialogs
 import "dialogs"
 import "panes"
 import "widgets"
@@ -639,6 +640,38 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
+                        title: t.customShader
+                        description: t.customShaderHelp
+                        visible: backend.enable_vkbasalt
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            RowLayout {
+                                Button {
+                                    text: t.addCustomShader
+                                    onClicked: customShaderPicker.open()
+                                }
+                                Button {
+                                    text: t.refreshCustomShaders
+                                    onClicked: backend.refreshCustomShaders()
+                                }
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                visible: backend.shader_load_error.length > 0
+                                text: backend.shader_load_error
+                                wrapMode: Text.WordWrap
+                            }
+                            FileDialog {
+                                id: customShaderPicker
+                                title: t.addCustomShader
+                                nameFilters: ["ReShade (*.fx)"]
+                                onAccepted: backend.addCustomShader(selectedFile.toString())
+                            }
+                        }
+                    }
+
+                    GroupEntry {
                         title: t.shaderEffects
                         description: t.shaderEffectsDesc
                         visible: backend.enable_vkbasalt
@@ -646,8 +679,15 @@ ApplicationWindow {
                         ColumnLayout {
                             id: effectStack
                             Layout.fillWidth: true
-                            property var effectIds: ["none", "hdr_look", "clarity", "levels_plus", "vibrance", "colourfulness", "curves", "deband", "technicolor2", "dpx", "bleach_bypass", "noir", "technicolor", "monochrome", "sepia", "film_grain", "vignette", "cartoon", "nostalgia", "chromatic_aberration"]
-                            property var effectLabels: [t.off, "HDR Look (SDR)", "Clarity", "Levels Plus", "Vibrance", "Colourfulness", "Curves", "Deband", "Technicolor 2", "DPX / Cineon", "Bleach Bypass", "Noir", "Technicolor", "Monochrome", "Sepia", "Film Grain", "Vignette", "Cartoon", "Nostalgia", "Chromatic Aberration"]
+                            property var bundledEffectIds: ["none", "hdr_look", "clarity", "levels_plus", "vibrance", "colourfulness", "curves", "deband", "technicolor2", "dpx", "bleach_bypass", "noir", "technicolor", "monochrome", "sepia", "film_grain", "vignette", "cartoon", "nostalgia", "chromatic_aberration"]
+                            property var bundledEffectLabels: [t.off, "HDR Look (SDR)", "Clarity", "Levels Plus", "Vibrance", "Colourfulness", "Curves", "Deband", "Technicolor 2", "DPX / Cineon", "Bleach Bypass", "Noir", "Technicolor", "Monochrome", "Sepia", "Film Grain", "Vignette", "Cartoon", "Nostalgia", "Chromatic Aberration"]
+
+                            property var customEffects: backend.custom_shader_effects
+                            property var missingIds: backend.vkbasalt_shader.split(":").filter(function(id) {
+                                return id.indexOf("custom/") === 0 && !customEffects.some(function(effect) { return effect.id === id; });
+                            })
+                            property var effectIds: bundledEffectIds.concat(customEffects.map(function(effect) { return effect.id; }), missingIds)
+                            property var effectLabels: bundledEffectLabels.concat(customEffects.map(function(effect) { return t.customShader + ": " + effect.name; }), missingIds.map(function(id) { return t.customShader + ": " + id.slice(7) + " (" + t.shaderDefinitionMissing + ")"; }))
 
                             Button {
                                 Layout.fillWidth: true

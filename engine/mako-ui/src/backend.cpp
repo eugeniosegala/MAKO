@@ -219,6 +219,8 @@ void Backend::loadVkBasaltProfiles() {
         ls::VkBasaltConf settings;
         const auto stored = storedProfiles
             .value(QString::fromStdString(profile.name)).toObject();
+        settings.manage_custom_shaders = stored.value(
+            QStringLiteral("vkbasalt_manage_custom_shaders")).toBool(false);
         settings.enabled = stored.value(QStringLiteral("external_vulkan_layer"))
             .toString() == QStringLiteral("vkbasalt");
         const auto sharpening = stored.value(
@@ -253,6 +255,12 @@ void Backend::loadVkBasaltProfiles() {
                 ls::vkBasaltStrengthMaximum
             );
         }
+        try {
+            settings.shader = ls::vkBasaltShaderSelection(
+                ls::readVkBasaltConfiguration(vkBasaltConfigPathForName(profile.name)), settings);
+        } catch (const std::exception& error) {
+            std::cerr << "MAKO Renderer: unable to read custom shader selection: " << error.what() << '\n';
+        }
         this->m_vkbasalt_profiles.push_back(std::move(settings));
     }
 }
@@ -271,7 +279,7 @@ void Backend::writeProfileMetadata() const {
         throw std::runtime_error("unable to replace Decky profile metadata");
 }
 
-void Backend::writeVkBasaltProfiles() const {
+void Backend::writeVkBasaltProfiles() {
     QJsonObject root = this->m_wrapper_settings_root;
     QJsonObject profiles = root.value(QStringLiteral("profiles")).toObject();
     for (size_t index = 0; index < this->m_profiles.size(); ++index) {
@@ -297,6 +305,7 @@ void Backend::writeVkBasaltProfiles() const {
             QString::fromStdString(settings.antialiasing));
         stored.insert(QStringLiteral("vkbasalt_shader"),
             QString::fromStdString(settings.shader));
+        stored.insert(QStringLiteral("vkbasalt_manage_custom_shaders"), settings.manage_custom_shaders);
         if (!stored.contains(QStringLiteral("disable_hdr_exposure")))
             stored.insert(QStringLiteral("disable_hdr_exposure"), true);
         for (const auto& field : {
@@ -320,6 +329,7 @@ void Backend::writeVkBasaltProfiles() const {
     const auto content = QJsonDocument(root).toJson(QJsonDocument::Indented);
     if (output.write(content) != content.size() || !output.commit())
         throw std::runtime_error("unable to replace Decky profile wrapper settings");
+    this->m_wrapper_settings_root = root;
 }
 
 std::filesystem::path Backend::vkBasaltConfigPathForName(
@@ -365,6 +375,57 @@ QString Backend::getLaunchOption() const {
     ));
     environment.append(launcher + QStringLiteral(" %command%"));
     return environment.join(' ');
+}
+
+QVariantList Backend::getCustomShaderEffects() const {
+    QVariantList result;
+    if (!isValidProfileIndex()) return result;
+    try {
+        const auto content = ls::readVkBasaltConfiguration(vkBasaltConfigPath(
+            static_cast<size_t>(this->m_profile_index)));
+        for (const auto& shader : ls::customVkBasaltShaders(content)) {
+            result.append(QVariantMap{
+                {QStringLiteral("id"), QString::fromStdString("custom/" + shader.name)},
+                {QStringLiteral("name"), QString::fromStdString(shader.name)},
+                {QStringLiteral("path"), QString::fromStdString(shader.path)},
+            });
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "MAKO Renderer: unable to read custom shader catalog: " << error.what() << '\n';
+    }
+    return result;
+}
+
+bool Backend::addCustomShader(const QString& value) {
+    if (!isValidProfileIndex()) return false;
+    try {
+        this->savePendingChanges();
+        const QUrl url(value);
+        const auto path = url.isLocalFile() ? url.toLocalFile() : value;
+        static_cast<void>(ls::addVkBasaltCustomShader(vkBasaltConfigPath(
+            static_cast<size_t>(this->m_profile_index)), path.toStdString()));
+        this->m_shader_load_error.clear();
+        emit this->refreshUI();
+        return true;
+    } catch (const std::exception& error) {
+        this->m_shader_load_error = QString::fromUtf8(error.what());
+        emit this->refreshUI();
+        return false;
+    }
+}
+
+void Backend::refreshCustomShaders() {
+    if (!isValidProfileIndex()) return;
+    this->savePendingChanges();
+    try {
+        auto& settings = this->m_vkbasalt_profiles.at(static_cast<size_t>(this->m_profile_index));
+        settings.shader = ls::vkBasaltShaderSelection(ls::readVkBasaltConfiguration(
+            vkBasaltConfigPath(static_cast<size_t>(this->m_profile_index))), settings);
+        this->m_shader_load_error.clear();
+    } catch (const std::exception& error) {
+        this->m_shader_load_error = QString::fromUtf8(error.what());
+    }
+    emit this->refreshUI();
 }
 
 bool Backend::openVkBasaltConfig() {
@@ -600,12 +661,18 @@ void Backend::savePendingChanges() {
         try {
             this->writeVkBasaltShaderAssets();
             for (size_t index = 0; index < this->m_profiles.size(); ++index) {
-                if (!this->m_vkbasalt_profiles.at(index).enabled)
+                const auto& settings = this->m_vkbasalt_profiles.at(index);
+                if (!settings.enabled && !(settings.manage_custom_shaders &&
+                        std::filesystem::is_regular_file(this->vkBasaltConfigPath(index))))
                     continue;
+                const auto previous = this->m_wrapper_settings_root.value(QStringLiteral("profiles")).toObject()
+                    .value(QString::fromStdString(this->m_profiles.at(index).name)).toObject()
+                    .value(QStringLiteral("vkbasalt_shader")).toString(QStringLiteral("none")).toStdString();
                 ls::writeVkBasaltConfiguration(
                     this->vkBasaltConfigPath(index),
                     this->m_vkbasalt_profiles.at(index),
-                    this->m_vkbasalt_shader_directory
+                    this->m_vkbasalt_shader_directory,
+                    previous
                 );
             }
             this->writeVkBasaltProfiles();

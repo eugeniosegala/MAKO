@@ -82,7 +82,7 @@ class ShaderAssetTests(unittest.TestCase):
             REPOSITORY_ROOT / "engine/mako-ui/rsc/UI.qml"
         ).read_text(encoding="utf-8")
         effect_ids = re.search(
-            r"property var effectIds: \[(.*?)\]", qml
+            r"property var bundledEffectIds: \[(.*?)\]", qml
         )
         self.assertIsNotNone(effect_ids)
         self.assertEqual(
@@ -93,12 +93,15 @@ class ShaderAssetTests(unittest.TestCase):
             'backend.vkbasalt_shader = next.length ? next.join(":") : "none"',
             qml,
         )
+        self.assertIn("backend.custom_shader_effects", qml)
+        self.assertIn("bundledEffectIds.concat", qml)
         for field in (
             'std::string sharpening{"cas"}',
             'float sharpness{0.5F}',
             'float dls_denoise{0.2F}',
             'std::string antialiasing{"none"}',
             'std::string shader{"none"}',
+            'bool manage_custom_shaders{false}',
             "vkBasaltStrengthMinimum = 0.0F",
             "vkBasaltStrengthMaximum = 1.0F",
         ):

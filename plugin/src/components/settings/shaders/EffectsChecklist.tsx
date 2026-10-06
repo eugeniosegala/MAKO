@@ -52,6 +52,10 @@ export function EffectsChecklist({
   const pageCount = Math.max(1, Math.ceil(effects.length / EFFECTS_PER_PAGE));
 
   useEffect(() => {
+    setPage((current) => Math.min(current, pageCount - 1));
+  }, [pageCount]);
+
+  useEffect(() => {
     setSelected(initialSelection);
   }, [selectionValue]);
 

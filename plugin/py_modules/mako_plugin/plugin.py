@@ -215,6 +215,9 @@ class Plugin:
         """Return validated requested-versus-applied Renderer state."""
         return self.runtime_state_service.get_status(profile_name)
 
+    async def add_profile_shader(self, profile_name: str, shader_path: str) -> ConfigurationResponse:
+        return self.configuration_service.add_profile_shader(profile_name, shader_path)
+
     async def get_config_schema(self) -> ConfigSchemaResponse:
         """Get configuration schema information for frontend
 

@@ -1,4 +1,8 @@
+import { useState } from "react";
+import { FileSelectionType, openFilePicker } from "@decky/api";
+import type { CustomShaderEffect } from "../../api/makoApi";
 import {
+  ButtonItem,
   Dropdown,
   Field,
   PanelSectionRow,
@@ -52,6 +56,9 @@ interface ShadersConfigurationGroupProps extends ConfigurationControlProps {
   isDefaultProfile: boolean;
   profileName: string;
   vkBasaltConfigPath: string;
+  customShaderEffects?: CustomShaderEffect[];
+  onAddShader?: (path: string) => Promise<void>;
+  onRefreshShaders?: () => Promise<void>;
 }
 
 export function ShadersConfigurationGroup({
@@ -59,8 +66,24 @@ export function ShadersConfigurationGroup({
   isDefaultProfile,
   profileName,
   vkBasaltConfigPath,
+  customShaderEffects = [],
+  onAddShader,
+  onRefreshShaders,
   onConfigChange,
 }: ShadersConfigurationGroupProps) {
+  const [busy, setBusy] = useState(false);
+  const [shaderError, setShaderError] = useState("");
+  const runShaderAction = async (action: () => Promise<void>) => {
+    setBusy(true);
+    setShaderError("");
+    try {
+      await action();
+    } catch (error) {
+      setShaderError(String(error));
+    } finally {
+      setBusy(false);
+    }
+  };
   const vkBasaltEnabled =
     config.external_vulkan_layer === EXTERNAL_VULKAN_LAYER_VKBASALT;
   const sharpeningEnabled =
@@ -102,7 +125,7 @@ export function ShadersConfigurationGroup({
       label: t("CONFIG_VKBASALT_ANTIALIASING_SMAA", "SMAA"),
     },
   ];
-  const shaderOptions = [
+  const shaderOptions: { data: string; label: string }[] = [
     {
       data: VKBASALT_SHADER_NONE,
       label: t("CONFIG_VKBASALT_EFFECT_NONE", "Off"),
@@ -188,6 +211,28 @@ export function ShadersConfigurationGroup({
     },
   ];
 
+  const customIds = new Set(customShaderEffects.map((effect) => effect.id));
+  shaderOptions.push(
+    ...customShaderEffects.map((effect) => ({
+      data: effect.id,
+      label: t("CONFIG_VKBASALT_CUSTOM_LABEL", "Custom: {name}", {
+        name: effect.name,
+      }),
+    })),
+  );
+  shaderOptions.push(
+    ...selectedEffects
+      .filter((id) => id.startsWith("custom/") && !customIds.has(id))
+      .map((id) => ({
+        data: id,
+        label: t(
+          "CONFIG_VKBASALT_CUSTOM_MISSING",
+          "Custom: {name} (definition missing)",
+          { name: id.slice(7) },
+        ),
+      })),
+  );
+
   return (
     <>
       <PanelSectionRow>
@@ -235,6 +280,55 @@ export function ShadersConfigurationGroup({
               />
             </Field>
           </PanelSectionRow>
+
+          {onAddShader && (
+            <PanelSectionRow>
+              <ButtonItem
+                disabled={busy}
+                onClick={() =>
+                  runShaderAction(async () => {
+                    const file = await openFilePicker(
+                      FileSelectionType.FILE,
+                      "/home",
+                      true,
+                      true,
+                      undefined,
+                      ["fx"],
+                      false,
+                      false,
+                    ).catch(() => null);
+                    if (file?.realpath || file?.path)
+                      await onAddShader(file.realpath || file.path);
+                  })
+                }
+              >
+                {t("CONFIG_VKBASALT_CUSTOM_ADD", "Add Custom Shader…")}
+              </ButtonItem>
+            </PanelSectionRow>
+          )}
+          {onRefreshShaders && (
+            <PanelSectionRow>
+              <ButtonItem
+                disabled={busy}
+                onClick={() => runShaderAction(onRefreshShaders)}
+              >
+                {t("CONFIG_VKBASALT_CUSTOM_REFRESH", "Refresh Custom Shaders")}
+              </ButtonItem>
+            </PanelSectionRow>
+          )}
+          <PanelSectionRow>
+            <MakoInlineTip tone="info">
+              {t(
+                "CONFIG_VKBASALT_CUSTOM_HELP",
+                "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+              )}
+            </MakoInlineTip>
+          </PanelSectionRow>
+          {shaderError && (
+            <PanelSectionRow>
+              <MakoInlineTip tone="warning">{shaderError}</MakoInlineTip>
+            </PanelSectionRow>
+          )}
 
           <PanelSectionRow>
             <Field

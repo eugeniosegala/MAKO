@@ -182,6 +182,7 @@ export const VKBASALT_SHARPNESS = "vkbasalt_sharpness" as const;
 export const VKBASALT_DLS_DENOISE = "vkbasalt_dls_denoise" as const;
 export const VKBASALT_ANTIALIASING = "vkbasalt_antialiasing" as const;
 export const VKBASALT_SHADER = "vkbasalt_shader" as const;
+export const VKBASALT_MANAGE_CUSTOM_SHADERS = "vkbasalt_manage_custom_shaders" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
 export const FORCE_ALSA_AUDIO = "force_alsa_audio" as const;
@@ -422,7 +423,13 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "vkbasalt_shader",
     fieldType: ConfigFieldType.STRING,
     default: "none",
-    description: "Ordered colon-separated MAKO-managed vkBasalt effects from the bundled catalog, or none"
+    description: "Ordered colon-separated bundled effects or custom/<profile effect name>, or none"
+  },
+  vkbasalt_manage_custom_shaders: {
+    name: "vkbasalt_manage_custom_shaders",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "Use the UI effect selection for custom shaders after the first explicit effect edit; false preserves legacy advanced chains"
   },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",
@@ -484,6 +491,7 @@ export interface ConfigurationData {
   vkbasalt_dls_denoise: number;
   vkbasalt_antialiasing: string;
   vkbasalt_shader: string;
+  vkbasalt_manage_custom_shaders: boolean;
   disable_steamdeck_mode: boolean;
   enable_zink: boolean;
   force_alsa_audio: boolean;
@@ -537,6 +545,7 @@ export function getDefaults(): ConfigurationData {
     vkbasalt_dls_denoise: 0.2,
     vkbasalt_antialiasing: "none",
     vkbasalt_shader: "none",
+    vkbasalt_manage_custom_shaders: false,
     disable_steamdeck_mode: false,
     enable_zink: false,
     force_alsa_audio: false,
@@ -583,6 +592,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     vkbasalt_dls_denoise: ConfigFieldType.FLOAT,
     vkbasalt_antialiasing: ConfigFieldType.STRING,
     vkbasalt_shader: ConfigFieldType.STRING,
+    vkbasalt_manage_custom_shaders: ConfigFieldType.BOOLEAN,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,
     force_alsa_audio: ConfigFieldType.BOOLEAN,

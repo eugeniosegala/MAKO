@@ -338,9 +338,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             "cool-game"
         ]
         self.assertNotIn("retired_option", stored_wrapper_settings)
+        self.assertFalse(stored_wrapper_settings["vkbasalt_manage_custom_shaders"])
         self.assertEqual(
             _sha256(wrapper_content),
-            "084fcde148a7a5f7cf6851063b2e17c26e0fd640500a1a1ee404507b71147c7a",
+            "2c4703a7b0e23f7ecee01164893185da234654dac78b5089f373dbac8339bf52",
         )
         self.assertEqual(
             _sha256(metadata_content),
