@@ -92,3 +92,35 @@ def detect_host_environment(
         native_architecture=native_architecture,
         armada=False,
     )
+
+
+def detect_power_source(root: Path = Path("/sys/class/power_supply")) -> str:
+    """Match the independently deployed Renderer's system-supply policy."""
+    def read(path: Path) -> str:
+        try:
+            return path.read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
+
+    try:
+        entries = list(root.iterdir())
+    except OSError:
+        return ""
+    if len(entries) > 64:
+        return ""
+    battery = supply = incomplete = False
+    for path in entries:
+        if read(path / "scope") == "Device":
+            continue
+        kind = read(path / "type")
+        if kind == "Battery":
+            battery |= read(path / "present") != "0"
+        elif kind in {"Mains", "USB", "USB_C", "USB_PD", "USB_DCP", "USB_CDP", "USB_ACA", "Wireless"}:
+            supply = True
+            online = read(path / "online")
+            if online == "1":
+                return "docked"
+            incomplete |= online != "0"
+        elif not kind:
+            incomplete = True
+    return "handheld" if battery and supply and not incomplete else ""

@@ -18,6 +18,16 @@ The **Default** profile applies when no saved game or process profile matches. S
 
 The profile dropdown chooses which profile you are editing; it does not force that profile onto the running game. Use **Matched Processes** only when a launcher, emulator, or unusual game executable needs an additional match.
 
+### AC and battery settings
+
+Enable **Separate AC / battery settings** for the selected profile, then use **Editing settings for** to configure **Handheld (Battery)** and **Docked (AC Power)** independently. Both start as copies of the existing Renderer settings. **Shared / fallback** remains editable and is used when power detection is unavailable at startup; turning separate settings off restores that set.
+
+MAKO Renderer selects the set from Linux system power supplies at launch and checks for changes at most once every two seconds during presentation. AC power selects Docked, including a charger without a physical dock; battery operation selects Handheld. An external display alone does not select Docked. Switching works with the Decky panel and Qt window closed. A transient power-read failure retains the running Renderer's last confirmed source.
+
+Frame Generation, Scaling, GPU selection, and Renderer performance settings can differ. Process matching, DLL path, Allow FP16, Shaders, and launcher compatibility settings remain shared. Existing live, recreation, and restart rules still apply; plugging in cannot enable resources that were not provisioned at game startup. Check **Live Status** for pending changes. The panel follows the active power set when the source changes during a game; outside a game, select either set to prepare it in advance.
+
+Decky and the standalone Qt UI use the same optional tables in `conf.toml`; use current matching MAKO Renderer and MAKO Decky versions. Older editors do not understand the tables and may remove them when saving. A Flatpak sandbox that cannot read system power supplies uses Shared / fallback settings at startup. Shader configurations and launch options remain per profile.
+
 ## Frame Generation
 
 Turn on **Enable Frame-gen (Restart)** before starting the game.

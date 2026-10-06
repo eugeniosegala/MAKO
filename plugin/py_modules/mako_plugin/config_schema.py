@@ -1,12 +1,13 @@
 """MAKO Renderer configuration and Decky profile management."""
 
 import json
+from copy import deepcopy
 import logging
 import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, TypedDict, Union, cast
+from typing import Any, Dict, TypedDict, Union, NotRequired, cast
 
 from shared_config import (
     ADAPTIVE_MAX_MULTIPLIER_MAX,
@@ -47,7 +48,7 @@ from shared_config import (
     ConfigFieldType,
     get_defaults,
 )
-from .config_schema_generated import ConfigurationData, get_script_generation_logic
+from .config_schema_generated import ConfigurationData, ConfigurationPatch, get_script_generation_logic
 
 
 @dataclass
@@ -87,10 +88,20 @@ CURRENT_PROFILE_COMMENT = re.compile(
 )
 
 
+POWER_PROFILE_FIELDS = PROFILE_TOML_FIELDS - {"active_in"}
+POWER_MODES = ("handheld", "docked")
+
+
+class PowerProfileSettings(TypedDict):
+    handheld: ConfigurationPatch
+    docked: ConfigurationPatch
+
+
 class ProfileData(TypedDict):
     current_profile: str
     profiles: Dict[str, ConfigurationData]
     global_config: Dict[str, Any]
+    power_profiles: NotRequired[Dict[str, PowerProfileSettings]]
 
 
 def _toml_string(value: str) -> str:
@@ -125,6 +136,18 @@ class ConfigurationManager:
             name: cast(ConfigurationData, dict(config))
             for name, config in profiles.items()
         }
+
+    @staticmethod
+    def _with_power_profiles(source: ProfileData, result: ProfileData) -> ProfileData:
+        """Preserve surviving power sets without mutable aliases to the source."""
+        variants = {
+            name: deepcopy(settings)
+            for name, settings in source.get("power_profiles", {}).items()
+            if name in result["profiles"]
+        }
+        if variants:
+            result["power_profiles"] = variants
+        return result
 
     @staticmethod
     def get_field_names() -> list[str]:
@@ -333,6 +356,46 @@ class ConfigurationManager:
         return ConfigurationManager.generate_toml_content_multi_profile(data)
 
     @staticmethod
+    def _renderer_profile_lines(config: ConfigurationData) -> list[str]:
+        """Serialize native settings once for base and power-specific tables."""
+        lines: list[str] = []
+        if config["gpu"]:
+            lines.append(f"gpu = {_toml_string(config['gpu'])}")
+        lines.extend([
+            f"scaling_enabled = {str(config['scaling_enabled']).lower()}",
+            f"scaling_method = {_toml_string(config['scaling_method'])}",
+            f"scaling_factor = {config['scaling_factor']}",
+            "scaling_supersampling = "
+            f"{str(config['scaling_supersampling']).lower()}",
+            f"scaling_sharpness = {config['scaling_sharpness']}",
+            "swapchain_image_count_compatibility = "
+            f"{str(config['swapchain_image_count_compatibility']).lower()}",
+            "frame_generation_provisioned = "
+            f"{str(config['frame_generation_provisioned']).lower()}",
+            f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
+            "frame_generation_refresh_threshold = "
+            f"{config['frame_generation_refresh_threshold']}",
+            f"base_fps_cap = {config['base_fps_cap']}",
+            f"multiplier = {config['multiplier']}",
+            f"adaptive = {str(config['adaptive']).lower()}",
+            f"adaptive_auto_base_fps_cap = {str(config['adaptive_auto_base_fps_cap']).lower()}",
+            "adaptive_fractional_real_frame_priority = "
+            f"{_toml_string(config['adaptive_fractional_real_frame_priority'])}",
+            f"target_fps = {config['target_fps']}",
+            f"adaptive_max_multiplier = {config['adaptive_max_multiplier']}",
+            f"adaptive_stable_cadence = {str(config['adaptive_stable_cadence']).lower()}",
+            f"gamescope_vrr_mode = {_toml_string(config['gamescope_vrr_mode'])}",
+            f"dynamic_cadence_recovery = {str(config['dynamic_cadence_recovery']).lower()}",
+            "dynamic_cadence_probe_interval_seconds = "
+            f"{config['dynamic_cadence_probe_interval_seconds']}",
+            f"ultra_performance = {str(config['ultra_performance']).lower()}",
+            f"flow_scale = {config['flow_scale']}",
+            f"performance_mode = {str(config['performance_mode']).lower()}",
+            "pacing = 'none'",
+        ])
+        return lines
+
+    @staticmethod
     def generate_toml_content_multi_profile(profile_data: ProfileData) -> str:
         global_config = profile_data["global_config"]
         lines = [
@@ -354,40 +417,15 @@ class ConfigurationManager:
                 lines.append(f"active_in = {_toml_string(active_in[0])}")
             elif active_in:
                 lines.append("active_in = [" + ", ".join(_toml_string(entry) for entry in active_in) + "]")
-            if config["gpu"]:
-                lines.append(f"gpu = {_toml_string(config['gpu'])}")
-            lines.extend([
-                f"scaling_enabled = {str(config['scaling_enabled']).lower()}",
-                f"scaling_method = {_toml_string(config['scaling_method'])}",
-                f"scaling_factor = {config['scaling_factor']}",
-                "scaling_supersampling = "
-                f"{str(config['scaling_supersampling']).lower()}",
-                f"scaling_sharpness = {config['scaling_sharpness']}",
-                "swapchain_image_count_compatibility = "
-                f"{str(config['swapchain_image_count_compatibility']).lower()}",
-                "frame_generation_provisioned = "
-                f"{str(config['frame_generation_provisioned']).lower()}",
-                f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
-                "frame_generation_refresh_threshold = "
-                f"{config['frame_generation_refresh_threshold']}",
-                f"base_fps_cap = {config['base_fps_cap']}",
-                f"multiplier = {config['multiplier']}",
-                f"adaptive = {str(config['adaptive']).lower()}",
-                f"adaptive_auto_base_fps_cap = {str(config['adaptive_auto_base_fps_cap']).lower()}",
-                "adaptive_fractional_real_frame_priority = "
-                f"{_toml_string(config['adaptive_fractional_real_frame_priority'])}",
-                f"target_fps = {config['target_fps']}",
-                f"adaptive_max_multiplier = {config['adaptive_max_multiplier']}",
-                f"adaptive_stable_cadence = {str(config['adaptive_stable_cadence']).lower()}",
-                f"gamescope_vrr_mode = {_toml_string(config['gamescope_vrr_mode'])}",
-                f"dynamic_cadence_recovery = {str(config['dynamic_cadence_recovery']).lower()}",
-                "dynamic_cadence_probe_interval_seconds = "
-                f"{config['dynamic_cadence_probe_interval_seconds']}",
-                f"ultra_performance = {str(config['ultra_performance']).lower()}",
-                f"flow_scale = {config['flow_scale']}",
-                f"performance_mode = {str(config['performance_mode']).lower()}",
-                "pacing = 'none'",
-            ])
+            lines.extend(ConfigurationManager._renderer_profile_lines(config))
+            for mode, overrides in profile_data.get("power_profiles", {}).get(profile_name, {}).items():
+                if mode not in POWER_MODES:
+                    raise ValueError("unsupported power profile mode")
+                variant = ConfigurationManager.validate_config({**config, **overrides})
+                lines.extend(["", f"[profile.{mode}]"])
+                if not variant["gpu"]:
+                    lines.append('gpu = ""')
+                lines.extend(ConfigurationManager._renderer_profile_lines(variant))
         return "\n".join(lines) + "\n"
 
     @staticmethod
@@ -433,9 +471,21 @@ class ConfigurationManager:
             "allow_fp16": bool(global_config.get("allow_fp16", True)),
         }
         profiles: Dict[str, ConfigurationData] = {}
+        power_profiles: Dict[str, PowerProfileSettings] = {}
         for profile in data.get("profile", []):
             name = str(profile.get("name", DEFAULT_PROFILE_NAME))
             profiles[name] = ConfigurationManager._config_from_profile(profile, global_config)
+            if any(mode in profile for mode in POWER_MODES):
+                variants = {}
+                for mode in POWER_MODES:
+                    raw = profile.get(mode)
+                    if not isinstance(raw, dict):
+                        raise ValueError("power profiles require handheld and docked tables")
+                    if set(raw) & {"name", "active_in", "handheld", "docked"}:
+                        raise ValueError("power profile identity must remain shared")
+                    merged = ConfigurationManager._config_from_profile({**profile, **raw}, global_config)
+                    variants[mode] = {key: merged[key] for key in POWER_PROFILE_FIELDS}
+                power_profiles[name] = cast(PowerProfileSettings, variants)
         if not profiles:
             profiles[DEFAULT_PROFILE_NAME] = ConfigurationManager.get_defaults()
         current = DEFAULT_PROFILE_NAME if DEFAULT_PROFILE_NAME in profiles else next(iter(profiles))
@@ -444,7 +494,10 @@ class ConfigurationManager:
             if match and match.group(1) in profiles:
                 current = match.group(1)
                 break
-        return ProfileData(current_profile=current, profiles=profiles, global_config=global_config)
+        result = ProfileData(current_profile=current, profiles=profiles, global_config=global_config)
+        if power_profiles:
+            result["power_profiles"] = power_profiles
+        return result
 
     @staticmethod
     def parse_toml_content(content: str) -> ConfigurationData:
@@ -470,7 +523,10 @@ class ConfigurationManager:
         source = source_profile if source_profile in profile_data["profiles"] else profile_data["current_profile"]
         profiles = ConfigurationManager._copy_profiles(profile_data["profiles"])
         profiles[name] = cast(ConfigurationData, dict(profiles[source]))
-        return ProfileData(current_profile=profile_data["current_profile"], profiles=profiles, global_config=dict(profile_data["global_config"]))
+        result = ConfigurationManager._with_power_profiles(profile_data, ProfileData(current_profile=profile_data["current_profile"], profiles=profiles, global_config=dict(profile_data["global_config"])))
+        if source in profile_data.get("power_profiles", {}):
+            result.setdefault("power_profiles", {})[name] = deepcopy(profile_data["power_profiles"][source])
+        return result
 
     @staticmethod
     def delete_profile(profile_data: ProfileData, profile_name: str) -> ProfileData:
@@ -483,7 +539,8 @@ class ConfigurationManager:
         current = profile_data["current_profile"]
         if current == profile_name:
             current = DEFAULT_PROFILE_NAME if DEFAULT_PROFILE_NAME in profiles else next(iter(profiles))
-        return ProfileData(current_profile=current, profiles=profiles, global_config=dict(profile_data["global_config"]))
+        result = ConfigurationManager._with_power_profiles(profile_data, ProfileData(current_profile=current, profiles=profiles, global_config=dict(profile_data["global_config"])))
+        return result
 
     @staticmethod
     def rename_profile(profile_data: ProfileData, old_name: str, new_name: str) -> ProfileData:
@@ -501,16 +558,19 @@ class ConfigurationManager:
             ).items()
         }
         current = normalized if profile_data["current_profile"] == old_name else profile_data["current_profile"]
-        return ProfileData(current_profile=current, profiles=profiles, global_config=dict(profile_data["global_config"]))
+        result = ConfigurationManager._with_power_profiles(profile_data, ProfileData(current_profile=current, profiles=profiles, global_config=dict(profile_data["global_config"])))
+        if old_name in profile_data.get("power_profiles", {}):
+            result.setdefault("power_profiles", {})[normalized] = deepcopy(profile_data["power_profiles"][old_name])
+        return result
 
     @staticmethod
     def set_current_profile(profile_data: ProfileData, profile_name: str) -> ProfileData:
         if profile_name not in profile_data["profiles"]:
             raise ValueError(f"Profile '{profile_name}' does not exist")
-        return ProfileData(
+        return ConfigurationManager._with_power_profiles(profile_data, ProfileData(
             current_profile=profile_name,
             profiles=ConfigurationManager._copy_profiles(
                 profile_data["profiles"]
             ),
             global_config=dict(profile_data["global_config"]),
-        )
+        ))

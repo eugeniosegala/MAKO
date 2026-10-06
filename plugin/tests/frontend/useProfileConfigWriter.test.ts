@@ -17,6 +17,75 @@ describe("profile configuration writer", () => {
     vi.useRealTimers();
   });
 
+  test("flush waits for pending persistence before power profiles can be cloned", async () => {
+    let finishWrite!: (value: { success: boolean }) => void;
+    const updateProfileConfigFields = vi.fn().mockReturnValue(
+      new Promise((resolve) => {
+        finishWrite = resolve;
+      }),
+    );
+    const { result } = renderHook(() =>
+      useProfileConfigWriter({
+        editingProfile: "game",
+        getEditingProfile: () => "game",
+        updateProfileConfigFields,
+        loadProfileConfig: vi.fn(async () => undefined),
+        applyConfigPatch: vi.fn(),
+        replaceConfig: vi.fn(),
+      }),
+    );
+    act(() => void result.current.saveConfigField("target_fps", 60));
+    const finished = vi.fn();
+    const flushing = result.current.flushConfigChanges().then(finished);
+    expect(updateProfileConfigFields).toHaveBeenCalledWith("game", {
+      target_fps: 60,
+    });
+    expect(finished).not.toHaveBeenCalled();
+    await act(async () => {
+      finishWrite({ success: true });
+      await flushing;
+    });
+    expect(finished).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(PROFILE_CONFIG_SAVE_DELAY_MS);
+    expect(updateProfileConfigFields).toHaveBeenCalledOnce();
+  });
+
+  test("persists queued edits without replacing a power-mode load in progress", async () => {
+    let canEdit = true;
+    const updateProfileConfigFields = vi.fn().mockResolvedValue({
+      success: true,
+      config: { ...getDefaults(), target_fps: 60 },
+    });
+    const applyConfigPatch = vi.fn();
+    const replaceConfig = vi.fn();
+    const { result } = renderHook(() =>
+      useProfileConfigWriter({
+        editingProfile: "game",
+        editingPowerMode: "handheld",
+        getEditingProfile: () => "game",
+        getEditingPowerMode: () => "handheld",
+        canEditConfig: () => canEdit,
+        updateProfileConfigFields,
+        loadProfileConfig: vi.fn(async () => undefined),
+        applyConfigPatch,
+        replaceConfig,
+      }),
+    );
+    act(() => void result.current.saveConfigField("target_fps", 60));
+    canEdit = false;
+    act(() => void result.current.saveConfigField("target_fps", 120));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROFILE_CONFIG_SAVE_DELAY_MS);
+    });
+    expect(updateProfileConfigFields).toHaveBeenCalledWith(
+      "game",
+      { target_fps: 60 },
+      "handheld",
+    );
+    expect(applyConfigPatch).toHaveBeenCalledOnce();
+    expect(replaceConfig).not.toHaveBeenCalled();
+  });
+
   test("coalesces a control burst into one latest-value profile patch", async () => {
     const canonicalConfig = {
       ...getDefaults(),
@@ -164,8 +233,8 @@ describe("profile configuration writer", () => {
       }),
     );
 
-    act(() =>
-      void result.current.saveConfigField("scaling_supersampling", true),
+    act(
+      () => void result.current.saveConfigField("scaling_supersampling", true),
     );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(PROFILE_CONFIG_SAVE_DELAY_MS);
@@ -281,6 +350,56 @@ describe("profile configuration writer", () => {
       target_fps: 90,
     });
     expect(replaceConfig).not.toHaveBeenCalled();
+  });
+
+  test("keeps queued writes bound to their power mode", async () => {
+    let currentMode = "handheld";
+    const replaceConfig = vi.fn();
+    const updateProfileConfigFields = vi.fn(async (_profile, changes) => ({
+      success: true,
+      config: { ...getDefaults(), ...changes },
+      message: "",
+      error: null,
+    }));
+    const { result, rerender } = renderHook(
+      ({ mode }) =>
+        useProfileConfigWriter({
+          editingProfile: "game",
+          editingPowerMode: mode,
+          getEditingProfile: () => "game",
+          getEditingPowerMode: () => currentMode,
+          updateProfileConfigFields,
+          loadProfileConfig: vi.fn(async () => undefined),
+          applyConfigPatch: vi.fn(),
+          replaceConfig,
+        }),
+      { initialProps: { mode: currentMode } },
+    );
+    act(() => void result.current.saveConfigField("target_fps", 60));
+    currentMode = "docked";
+    rerender({ mode: currentMode });
+    act(() => void result.current.saveConfigField("target_fps", 144));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROFILE_CONFIG_SAVE_DELAY_MS);
+    });
+    expect(updateProfileConfigFields).toHaveBeenNthCalledWith(
+      1,
+      "game",
+      { target_fps: 60 },
+      "handheld",
+    );
+    expect(replaceConfig).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROFILE_CONFIG_SAVE_DELAY_MS);
+    });
+    expect(updateProfileConfigFields).toHaveBeenNthCalledWith(
+      2,
+      "game",
+      { target_fps: 144 },
+      "docked",
+    );
+    expect(replaceConfig).toHaveBeenCalledOnce();
+    expect(replaceConfig.mock.calls[0][0].target_fps).toBe(144);
   });
 
   test("flushes the final queued patch when Decky unmounts the panel", async () => {

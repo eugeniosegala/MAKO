@@ -55,6 +55,9 @@ const nullableResponseFixtures = {
   config: {
     success: false,
     config: null,
+    separate_power_modes: true,
+    power_mode: "docked",
+    power_source: "handheld",
     message: "",
     error: null,
   } satisfies ConfigResult,

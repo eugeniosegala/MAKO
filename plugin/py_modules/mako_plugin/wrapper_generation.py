@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 import re
 import shlex
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, Optional, cast
 
 from .config_schema import DEFAULT_PROFILE_NAME, ProfileData
 from .config_schema_generated import (
@@ -67,7 +67,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 70
+WRAPPER_FORMAT_VERSION = 71
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -723,6 +723,17 @@ def wrapper_profile_configuration_lines(
         if vkbasalt_profile_config_dir is not None
         else Path("/nonexistent/mako-vkbasalt")
     )
+    def launch_config(profile_name: str) -> ConfigurationData:
+        config = dict(profile_config(profile_data, profile_name, profile_settings))
+        variants = profile_data.get("power_profiles", {}).get(profile_name, {})
+        # Layer discovery is fixed at launch. Keep every lane that any saved
+        # power mode may need; the Renderer selects the actual startup profile.
+        for field in ("frame_generation_provisioned", "scaling_enabled"):
+            config[field] = config[field] or any(
+                settings.get(field, config[field]) for settings in variants.values()
+            )
+        return cast(ConfigurationData, config)
+
     current_profile = profile_data["current_profile"]
     app_id_fallback = ""
     for environment_name in reversed(STEAM_APP_ID_ENV_KEYS):
@@ -783,11 +794,7 @@ def wrapper_profile_configuration_lines(
     ])
 
     for profile_name in profile_data["profiles"]:
-        config = profile_config(
-            profile_data,
-            profile_name,
-            profile_settings,
-        )
+        config = launch_config(profile_name)
         lines.append(f"    {shlex.quote(profile_name)})")
         lines.extend(
             f"        {line}" for line in config_lines(config)
@@ -803,11 +810,7 @@ def wrapper_profile_configuration_lines(
         )
         lines.append("        ;;")
 
-    fallback_config = profile_config(
-        profile_data,
-        current_profile,
-        profile_settings,
-    )
+    fallback_config = launch_config(current_profile)
     lines.append("    *)")
     lines.extend(
         f"        {line}"

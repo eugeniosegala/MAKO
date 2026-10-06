@@ -14,6 +14,7 @@ import { useProfileManagement } from "../hooks/useProfileManagement";
 import { useInstallationActions } from "../hooks/useInstallationActions";
 import { useProfileSession } from "../hooks/useProfileSession";
 import { useProfileConfigWriter } from "../hooks/useProfileConfigWriter";
+import { PowerProfileControls } from "./PowerProfileControls";
 import { StatusDisplay } from "./StatusDisplay";
 import { InstallationButton } from "./InstallationButton";
 import { ConfigurationSection } from "./ConfigurationSection";
@@ -51,6 +52,12 @@ export function Content() {
   const {
     config,
     vkBasaltConfigPath,
+    powerMode,
+    separatePowerModes,
+    powerSource,
+    getEditingPowerMode,
+    isConfigLoading,
+    canEditConfig,
     applyConfigPatch,
     replaceConfig,
     loadMakoConfig,
@@ -69,6 +76,7 @@ export function Content() {
 
   const {
     mainRunningApp,
+    powerSource: currentPowerSource,
     editingProfile,
     selectEditingProfile,
     getEditingProfile,
@@ -85,8 +93,12 @@ export function Content() {
   const {
     saveConfigChanges: handleConfigChanges,
     saveConfigField: handleConfigChange,
+    flushConfigChanges,
   } = useProfileConfigWriter({
     editingProfile,
+    editingPowerMode: powerMode,
+    getEditingPowerMode,
+    canEditConfig,
     getEditingProfile,
     updateProfileConfigFields,
     loadProfileConfig: loadMakoConfig,
@@ -200,16 +212,32 @@ export function Content() {
             {mainRunningApp && (
               <RuntimeStatusCard runtimeState={scalingRuntimeState} />
             )}
-            <FeatureSettings
-              config={config}
-              disabled={engineUpdateRequired}
-              runtimeState={scalingRuntimeState}
-              scalingModelCompatible={modelStatus.ls1?.compatible ?? null}
+            <PowerProfileControls
               profileName={editingProfile}
-              vkBasaltConfigPath={vkBasaltConfigPath}
-              onConfigChange={handleConfigChange}
-              onConfigUpdate={handleConfigChanges}
+              enabled={separatePowerModes}
+              powerMode={powerMode}
+              powerSource={currentPowerSource ?? powerSource}
+              disabled={isConfigLoading}
+              flushConfigChanges={flushConfigChanges}
+              loadProfileConfig={loadMakoConfig}
             />
+            {isConfigLoading && (
+              <PanelSectionRow>
+                {t("POWER_LOADING", "Loading profile settings...")}
+              </PanelSectionRow>
+            )}
+            <div hidden={isConfigLoading}>
+              <FeatureSettings
+                config={config}
+                disabled={engineUpdateRequired}
+                runtimeState={scalingRuntimeState}
+                scalingModelCompatible={modelStatus.ls1?.compatible ?? null}
+                profileName={editingProfile}
+                vkBasaltConfigPath={vkBasaltConfigPath}
+                onConfigChange={handleConfigChange}
+                onConfigUpdate={handleConfigChanges}
+              />
+            </div>
           </>
         )}
 
@@ -218,12 +246,14 @@ export function Content() {
         {isInstalled && <FgmodClipboardButton />}
 
         {isInstalled && (
-          <ConfigurationSection
-            config={config}
-            onConfigChange={handleConfigChange}
-            onConfigUpdate={handleConfigChanges}
-            includeAdvancedRendering={false}
-          />
+          <div hidden={isConfigLoading}>
+            <ConfigurationSection
+              config={config}
+              onConfigChange={handleConfigChange}
+              onConfigUpdate={handleConfigChanges}
+              includeAdvancedRendering={false}
+            />
+          </div>
         )}
 
         <PanelSectionRow>

@@ -1648,4 +1648,6 @@ class InstallationService(BaseService):
             merged_data["current_profile"] = DEFAULT_PROFILE_NAME
             self.log.info("No existing profiles found, created default profile")
 
-        return merged_data
+        return ConfigurationManager._with_power_profiles(
+            existing_profile_data, merged_data
+        )

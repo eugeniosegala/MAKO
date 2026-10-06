@@ -212,6 +212,12 @@ namespace ls {
         static constexpr float maximumFlowScale = 1.0F;
     };
 
+    enum class PowerSource : uint8_t { Unknown, Handheld, Docked };
+
+    /// Read system power supplies; a dock/display connection alone is irrelevant.
+    [[nodiscard]] PowerSource detectPowerSource(
+        const std::filesystem::path& root = "/sys/class/power_supply");
+
     /// game profile configuration
     struct GameConf {
         /// name of the profile
@@ -279,7 +285,12 @@ namespace ls {
         bool performance_mode{GameConfDefaults::performanceMode};
         /// pacing method
         Pacing pacing{GameConfDefaults::pacing};
+        /// Optional handheld/docked settings, in that order. Identity stays shared.
+        std::vector<GameConf> power_profiles;
     };
+
+    [[nodiscard]] GameConf profileForPowerSource(
+        const GameConf& profile, PowerSource source);
 
     /// Whether this profile should retain the spatial reconstruction lane.
     /// Native Resolution is the model-free baseline inside that lane so a
@@ -376,6 +387,8 @@ namespace ls {
         /// @return list of game profiles
         [[nodiscard]] const auto& profiles() const { return this->profileConfs; }
 
+        PowerSource power_source{PowerSource::Unknown};
+
         /// write the configuration back to file
         /// @param path path to configuration file
         /// @throws ls::error on failure
@@ -390,7 +403,7 @@ namespace ls {
     public:
         /// create a new configuration watcher
         /// @throws ls::error on failure
-        WatchedConfig();
+        explicit WatchedConfig(std::filesystem::path powerSupplyRoot = "/sys/class/power_supply");
 
         /// reload the configuration from disk if it has changed
         /// @throws ls::error on failure
@@ -402,6 +415,8 @@ namespace ls {
         [[nodiscard]] const auto& get() const { return this->configFile; }
     private:
         ConfigFile configFile;
+        std::filesystem::path powerSupplyRoot;
+        std::chrono::steady_clock::time_point nextPowerPoll;
 
         std::filesystem::path path;
         std::chrono::time_point<std::chrono::file_clock> last_timestamp;

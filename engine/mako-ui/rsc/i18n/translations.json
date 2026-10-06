@@ -179,7 +179,14 @@
       "dynamicCadenceProbeIntervalDesc": "Recovery check interval: 0.1 s may hitch often; 2 s is default; 3 s checks least often. Test per game.",
       "secondsSuffix": "s",
       "targetFps": "Target FPS",
-      "targetFpsDesc": "Desired output rate; for example, 60 to 90 FPS uses an average 1.5x cadence"
+      "targetFpsDesc": "Desired output rate; for example, 60 to 90 FPS uses an average 1.5x cadence",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     },
     "pt-BR": {
       "activeIn": "Processos correspondentes",
@@ -322,7 +329,14 @@
       "dynamicCadenceProbeIntervalDesc": "Intervalo de checagem: 0,1 s pode causar engasgos frequentes; 2 s é o padrão; 3 s checa menos. Teste por jogo.",
       "secondsSuffix": "s",
       "targetFps": "FPS alvo",
-      "targetFpsDesc": "Taxa de saída desejada; por exemplo, 60 para 90 FPS usa uma cadência média de 1,5x"
+      "targetFpsDesc": "Taxa de saída desejada; por exemplo, 60 para 90 FPS usa uma cadência média de 1,5x",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     },
     "pt-PT": {
       "activeIn": "Processos correspondentes",
@@ -465,7 +479,14 @@
       "dynamicCadenceProbeIntervalDesc": "Intervalo de verificação: 0,1 s pode causar falhas frequentes; 2 s é a predefinição; 3 s verifica menos vezes. Teste jogo a jogo.",
       "secondsSuffix": "s",
       "targetFps": "FPS alvo",
-      "targetFpsDesc": "Taxa de saída pretendida; por exemplo, 60 para 90 FPS utiliza uma cadência média de 1,5x"
+      "targetFpsDesc": "Taxa de saída pretendida; por exemplo, 60 para 90 FPS utiliza uma cadência média de 1,5x",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     },
     "es": {
       "activeIn": "Procesos coincidentes",
@@ -608,7 +629,14 @@
       "dynamicCadenceProbeIntervalDesc": "Intervalo de revisión: 0,1 s puede causar tirones frecuentes; 2 s es el valor predeterminado; 3 s revisa menos. Prueba cada juego.",
       "secondsSuffix": "s",
       "targetFps": "FPS objetivo",
-      "targetFpsDesc": "Frecuencia de salida deseada; por ejemplo, de 60 a 90 FPS usa una cadencia media de 1,5x"
+      "targetFpsDesc": "Frecuencia de salida deseada; por ejemplo, de 60 a 90 FPS usa una cadencia media de 1,5x",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     },
     "ko": {
       "activeIn": "일치하는 프로세스",
@@ -751,7 +779,14 @@
       "dynamicCadenceProbeIntervalDesc": "복구 확인 간격입니다. 0.1초는 자주 끊길 수 있고, 기본값은 2초이며, 3초는 가장 적게 확인합니다. 게임별로 시험하세요.",
       "secondsSuffix": "초",
       "targetFps": "목표 FPS",
-      "targetFpsDesc": "원하는 출력 속도입니다. 예를 들어 60에서 90 FPS는 평균 1.5x 케이던스를 사용합니다"
+      "targetFpsDesc": "원하는 출력 속도입니다. 예를 들어 60에서 90 FPS는 평균 1.5x 케이던스를 사용합니다",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     },
     "ja": {
       "activeIn": "一致するプロセス",
@@ -894,7 +929,14 @@
       "dynamicCadenceProbeIntervalDesc": "回復の確認間隔。0.1 秒は引っかかりが増える場合があり、既定は 2 秒、3 秒は確認が最も少なくなります。ゲームごとに試してください。",
       "secondsSuffix": "秒",
       "targetFps": "目標 FPS",
-      "targetFpsDesc": "目標出力レートです。たとえば 60 から 90 FPS では平均 1.5x のケイデンスを使用します"
+      "targetFpsDesc": "目標出力レートです。たとえば 60 から 90 FPS では平均 1.5x のケイデンスを使用します",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     },
     "uk": {
       "activeIn": "Відповідні процеси",
@@ -1037,7 +1079,14 @@
       "dynamicCadenceProbeIntervalDesc": "Інтервал перевірки: 0,1 с може часто спричиняти ривки; типово 2 с; 3 с перевіряє найрідше. Перевіряйте для кожної гри.",
       "secondsSuffix": "с",
       "targetFps": "Цільовий FPS",
-      "targetFpsDesc": "Бажана вихідна частота; наприклад, від 60 до 90 FPS використовує середній ритм 1,5x"
+      "targetFpsDesc": "Бажана вихідна частота; наприклад, від 60 до 90 FPS використовує середній ритм 1,5x",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     },
     "zh": {
       "activeIn": "匹配进程",
@@ -1180,7 +1229,14 @@
       "dynamicCadenceProbeIntervalDesc": "恢复检测间隔：0.1 秒可能频繁卡顿；默认 2 秒；3 秒检测最少。请逐个游戏测试。",
       "secondsSuffix": "秒",
       "targetFps": "目标 FPS",
-      "targetFpsDesc": "期望的输出帧率；例如，从 60 到 90 FPS 使用平均 1.5x 帧节奏"
+      "targetFpsDesc": "期望的输出帧率；例如，从 60 到 90 FPS 使用平均 1.5x 帧节奏",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     },
     "de": {
       "activeIn": "Zugeordnete Prozesse",
@@ -1323,7 +1379,14 @@
       "dynamicCadenceProbeIntervalDesc": "Prüfintervall der Wiederherstellung: 0,1 s kann häufig ruckeln; 2 s ist der Standard; 3 s prüft am seltensten. Pro Spiel testen.",
       "secondsSuffix": "s",
       "targetFps": "Ziel-FPS",
-      "targetFpsDesc": "Gewünschte Ausgaberate; 60 auf 90 FPS nutzt zum Beispiel eine durchschnittliche 1,5x-Kadenz"
+      "targetFpsDesc": "Gewünschte Ausgaberate; 60 auf 90 FPS nutzt zum Beispiel eine durchschnittliche 1,5x-Kadenz",
+      "powerProfiles": "Power Profiles",
+      "separatePowerModes": "Separate AC / battery settings",
+      "powerProfilesDesc": "Frame Generation, Scaling and Renderer performance switch automatically on AC power or battery, even with this window closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+      "editPowerMode": "Editing settings for",
+      "powerShared": "Shared / fallback",
+      "powerHandheld": "Handheld (Battery)",
+      "powerDocked": "Docked (AC Power)"
     }
   }
 }

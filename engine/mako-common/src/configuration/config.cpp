@@ -4,6 +4,7 @@
 #include "atomic_write.hpp"
 #include "mako-common/helpers/errors.hpp"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
@@ -376,6 +377,7 @@ namespace {
             .pacing = parcingFromString(tbl["pacing"].value_or<std::string>("none"))
         };
 
+        if (conf.gpu && conf.gpu->empty()) conf.gpu.reset();
         validateGameConf(conf);
         if (conf.dynamic_cadence_recovery) {
             conf.adaptive_auto_base_fps_cap = false;
@@ -384,6 +386,72 @@ namespace {
             conf.base_fps_cap = 0;
         }
         return conf;
+    }
+    toml::table gameConfTable(const GameConf& conf) {
+        toml::table profile;
+        profile.insert("name", conf.name);
+
+        if (!conf.active_in.empty()) {
+            if (conf.active_in.size() == 1) {
+                profile.insert("active_in", conf.active_in.front());
+            } else {
+                toml::array active_in;
+                for (const auto& entry : conf.active_in)
+                    active_in.push_back(entry);
+                profile.insert("active_in", active_in);
+            }
+        }
+        if (conf.gpu)
+            profile.insert("gpu", conf.gpu.value_or(""));
+        profile.insert("multiplier", static_cast<int64_t>(conf.multiplier));
+        profile.insert(
+            "frame_generation_provisioned",
+            conf.frame_generation_provisioned
+        );
+        profile.insert("frame_generation_enabled", conf.frame_generation_enabled);
+        profile.insert("scaling_enabled", conf.scaling_enabled);
+        profile.insert(
+            "swapchain_image_count_compatibility",
+            conf.swapchain_image_count_compatibility
+        );
+        profile.insert("scaling_method", scalingMethodName(conf.scaling_method));
+        profile.insert("scaling_factor", conf.scaling_factor);
+        profile.insert("scaling_supersampling", conf.scaling_supersampling);
+        profile.insert("scaling_sharpness", conf.scaling_sharpness);
+        profile.insert(
+            "frame_generation_refresh_threshold",
+            static_cast<int64_t>(conf.frame_generation_refresh_threshold)
+        );
+        profile.insert("base_fps_cap", static_cast<int64_t>(conf.base_fps_cap));
+        profile.insert("adaptive", conf.adaptive);
+        profile.insert(
+            "adaptive_auto_base_fps_cap", conf.adaptive_auto_base_fps_cap
+        );
+        profile.insert(
+            "adaptive_fractional_real_frame_priority",
+            adaptiveFractionalRealFramePriorityName(
+                conf.adaptive_fractional_real_frame_priority
+            )
+        );
+        profile.insert("target_fps", static_cast<int64_t>(conf.target_fps));
+        profile.insert("adaptive_max_multiplier", static_cast<int64_t>(conf.adaptive_max_multiplier));
+        profile.insert("adaptive_stable_cadence", conf.adaptive_stable_cadence);
+        profile.insert("gamescope_vrr_mode", gamescopeVrrModeName(conf.gamescope_vrr_mode));
+        profile.insert("dynamic_cadence_recovery", conf.dynamic_cadence_recovery);
+        profile.insert(
+            "dynamic_cadence_probe_interval_seconds",
+            conf.dynamic_cadence_probe_interval_seconds
+        );
+        profile.insert("ultra_performance", conf.ultra_performance);
+        profile.insert("flow_scale", conf.flow_scale);
+        profile.insert("performance_mode", conf.performance_mode);
+        switch (conf.pacing) {
+            case Pacing::None:
+                profile.insert("pacing", "none");
+                break;
+        }
+
+        return profile;
     }
     /// parse the global configuration from the environment
     GlobalConf parseGlobalConfFromEnv() {
@@ -572,9 +640,30 @@ ConfigFile::ConfigFile(const std::filesystem::path& path) {
     }
 
     auto profiles = table["profile"];
-    if (profiles && profiles.is_array_of_tables())
-        for (const auto& profile : *profiles.as_array())
-            this->profileConfs.push_back(parseGameConf(*profile.as_table()));
+    if (profiles && profiles.is_array_of_tables()) {
+        for (const auto& profile : *profiles.as_array()) {
+            const auto& base = *profile.as_table();
+            auto conf = parseGameConf(base);
+            if (base.contains("handheld") || base.contains("docked")) {
+                for (const auto* mode : {"handheld", "docked"}) {
+                    const auto* settings = base[mode].as_table();
+                    if (!settings)
+                        throw ls::error("power profiles require handheld and docked tables");
+                    auto merged = base;
+                    merged.erase("handheld");
+                    merged.erase("docked");
+                    for (const auto& [key, value] : *settings) {
+                        if (key == "name" || key == "active_in" ||
+                                key == "handheld" || key == "docked")
+                            throw ls::error("power profile identity must remain shared");
+                        merged.insert_or_assign(key, value);
+                    }
+                    conf.power_profiles.push_back(parseGameConf(merged));
+                }
+            }
+            this->profileConfs.push_back(std::move(conf));
+        }
+    }
 }
 
 void ConfigFile::write(const std::filesystem::path& path) const {
@@ -589,67 +678,15 @@ void ConfigFile::write(const std::filesystem::path& path) const {
 
     toml::array profiles;
     for (const auto& conf : this->profileConfs) {
-        toml::table profile;
-        profile.insert("name", conf.name);
-
-        if (!conf.active_in.empty()) {
-            if (conf.active_in.size() == 1) {
-                profile.insert("active_in", conf.active_in.front());
-            } else {
-                toml::array active_in;
-                for (const auto& entry : conf.active_in)
-                    active_in.push_back(entry);
-                profile.insert("active_in", active_in);
+        auto profile = gameConfTable(conf);
+        if (conf.power_profiles.size() == 2) {
+            for (size_t index = 0; index < 2; ++index) {
+                auto settings = gameConfTable(conf.power_profiles[index]);
+                settings.erase("name");
+                settings.erase("active_in");
+                settings.insert_or_assign("gpu", conf.power_profiles[index].gpu.value_or(""));
+                profile.insert(index == 0 ? "handheld" : "docked", settings);
             }
-        }
-        if (conf.gpu)
-            profile.insert("gpu", conf.gpu.value_or(""));
-        profile.insert("multiplier", static_cast<int64_t>(conf.multiplier));
-        profile.insert(
-            "frame_generation_provisioned",
-            conf.frame_generation_provisioned
-        );
-        profile.insert("frame_generation_enabled", conf.frame_generation_enabled);
-        profile.insert("scaling_enabled", conf.scaling_enabled);
-        profile.insert(
-            "swapchain_image_count_compatibility",
-            conf.swapchain_image_count_compatibility
-        );
-        profile.insert("scaling_method", scalingMethodName(conf.scaling_method));
-        profile.insert("scaling_factor", conf.scaling_factor);
-        profile.insert("scaling_supersampling", conf.scaling_supersampling);
-        profile.insert("scaling_sharpness", conf.scaling_sharpness);
-        profile.insert(
-            "frame_generation_refresh_threshold",
-            static_cast<int64_t>(conf.frame_generation_refresh_threshold)
-        );
-        profile.insert("base_fps_cap", static_cast<int64_t>(conf.base_fps_cap));
-        profile.insert("adaptive", conf.adaptive);
-        profile.insert(
-            "adaptive_auto_base_fps_cap", conf.adaptive_auto_base_fps_cap
-        );
-        profile.insert(
-            "adaptive_fractional_real_frame_priority",
-            adaptiveFractionalRealFramePriorityName(
-                conf.adaptive_fractional_real_frame_priority
-            )
-        );
-        profile.insert("target_fps", static_cast<int64_t>(conf.target_fps));
-        profile.insert("adaptive_max_multiplier", static_cast<int64_t>(conf.adaptive_max_multiplier));
-        profile.insert("adaptive_stable_cadence", conf.adaptive_stable_cadence);
-        profile.insert("gamescope_vrr_mode", gamescopeVrrModeName(conf.gamescope_vrr_mode));
-        profile.insert("dynamic_cadence_recovery", conf.dynamic_cadence_recovery);
-        profile.insert(
-            "dynamic_cadence_probe_interval_seconds",
-            conf.dynamic_cadence_probe_interval_seconds
-        );
-        profile.insert("ultra_performance", conf.ultra_performance);
-        profile.insert("flow_scale", conf.flow_scale);
-        profile.insert("performance_mode", conf.performance_mode);
-        switch (conf.pacing) {
-            case Pacing::None:
-                profile.insert("pacing", "none");
-                break;
         }
 
         profiles.push_back(profile);
@@ -669,7 +706,8 @@ void ConfigFile::write(const std::filesystem::path& path) const {
     }
 }
 
-WatchedConfig::WatchedConfig() : path(findConfigurationFile()) {
+WatchedConfig::WatchedConfig(std::filesystem::path powerRoot)
+    : powerSupplyRoot(std::move(powerRoot)), path(findConfigurationFile()) {
     if (std::getenv("MAKO_ENV")) {
         auto& config = this->configFile;
         config.global() = parseGlobalConfFromEnv();
@@ -683,20 +721,38 @@ WatchedConfig::WatchedConfig() : path(findConfigurationFile()) {
 
     this->configFile = ConfigFile(this->path);
     this->last_timestamp = std::filesystem::last_write_time(this->path);
+    if (std::any_of(this->configFile.profiles().begin(), this->configFile.profiles().end(),
+            [](const auto& profile) { return !profile.power_profiles.empty(); }))
+        this->configFile.power_source = detectPowerSource(this->powerSupplyRoot);
+    this->nextPowerPoll = std::chrono::steady_clock::now() + std::chrono::seconds(2);
 }
 
 bool WatchedConfig::update() {
     if (std::getenv("MAKO_ENV"))
         return false;
 
+    bool powerChanged = false;
+    const auto pollNow = std::chrono::steady_clock::now();
+    if (pollNow >= this->nextPowerPoll) {
+        this->nextPowerPoll = pollNow + std::chrono::seconds(2);
+        const auto source = std::any_of(this->configFile.profiles().begin(),
+                this->configFile.profiles().end(), [](const auto& profile) {
+                    return !profile.power_profiles.empty();
+                }) ? detectPowerSource(this->powerSupplyRoot) : PowerSource::Unknown;
+        // A transient read failure retains the last confirmed source.
+        if (source != PowerSource::Unknown && source != this->configFile.power_source) {
+            this->configFile.power_source = source;
+            powerChanged = true;
+        }
+    }
     const auto now = std::filesystem::last_write_time(this->path);
     if (now == this->last_timestamp)
-        return false;
+        return powerChanged;
 
     const auto retryNow = std::chrono::steady_clock::now();
     if (this->failed_timestamp && *this->failed_timestamp == now &&
             retryNow < this->next_parse_retry)
-        return false;
+        return powerChanged;
 
     // Advance the observed timestamp only after parsing succeeds. Decky may
     // briefly expose a partially-written TOML file; retaining the old stamp
@@ -707,8 +763,10 @@ bool WatchedConfig::update() {
     } catch (...) {
         this->failed_timestamp = now;
         this->next_parse_retry = retryNow + configurationParseRetryDelay;
+        if (powerChanged) return true;
         throw;
     }
+    new_config.power_source = this->configFile.power_source;
     this->configFile = std::move(new_config);
     this->last_timestamp = now;
     this->failed_timestamp.reset();
@@ -735,4 +793,54 @@ std::filesystem::path ls::findConfigurationFile() {
 
     // finally, use system-wide config
     return "/etc/mako-render/conf.toml";
+}
+
+PowerSource ls::detectPowerSource(const std::filesystem::path& root) {
+    const auto read = [](const std::filesystem::path& path) {
+        std::ifstream stream(path);
+        std::string value;
+        std::getline(stream, value);
+        return value;
+    };
+    std::error_code error;
+    std::filesystem::directory_iterator entries(root, error);
+    if (error) return PowerSource::Unknown;
+    bool battery = false;
+    bool powered = false;
+    bool supply = false;
+    bool incomplete = false;
+    size_t count = 0;
+    for (auto end = std::filesystem::directory_iterator{}; entries != end;
+            entries.increment(error)) {
+        if (error || ++count > 64) return PowerSource::Unknown;
+        const auto path = entries->path();
+        if (read(path / "scope") == "Device") continue;
+        const auto type = read(path / "type");
+        if (type == "Battery") {
+            if (read(path / "present") != "0") battery = true;
+        } else if (type == "Mains" || type == "USB" || type == "USB_C" ||
+                type == "USB_PD" || type == "USB_DCP" || type == "USB_CDP" ||
+                type == "USB_ACA" || type == "Wireless") {
+            supply = true;
+            const auto online = read(path / "online");
+            if (online == "1") powered = true;
+            if (online != "0") incomplete = true;
+        } else if (type.empty()) {
+            incomplete = true;
+        }
+    }
+    if (error) return PowerSource::Unknown;
+    if (powered) return PowerSource::Docked;
+    return battery && supply && !incomplete
+        ? PowerSource::Handheld : PowerSource::Unknown;
+}
+
+GameConf ls::profileForPowerSource(const GameConf& profile, const PowerSource source) {
+    auto result = profile.power_profiles.size() == 2 && source != PowerSource::Unknown
+        ? profile.power_profiles[source == PowerSource::Handheld ? 0 : 1]
+        : profile;
+    result.name = profile.name;
+    result.active_in = profile.active_in;
+    result.power_profiles.clear();
+    return result;
 }

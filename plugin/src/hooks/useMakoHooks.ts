@@ -172,37 +172,67 @@ export function useMakoConfig() {
   const [config, setConfig] = useState<ConfigurationData>(() => getDefaults());
   const [vkBasaltConfigPath, setVkBasaltConfigPath] = useState("");
   const loadRequestId = useRef(0);
+  const [isConfigLoading, setIsConfigLoading] = useState(false);
+  const configLoadingRef = useRef(false);
+  const canEditConfig = useCallback(() => !configLoadingRef.current, []);
+  const [powerMode, setPowerMode] = useState("shared");
+  const [separatePowerModes, setSeparatePowerModes] = useState(false);
+  const [powerSource, setPowerSource] = useState("");
+  const powerModeRef = useRef("shared");
+  const getEditingPowerMode = useCallback(() => powerModeRef.current, []);
 
-  const loadMakoConfig = useCallback(async (profileName?: string) => {
-    const requestId = ++loadRequestId.current;
-    setVkBasaltConfigPath("");
-    try {
-      const result = profileName
-        ? await getProfileConfig(profileName)
-        : await getMakoConfig();
-      if (requestId !== loadRequestId.current) return;
-      if (result.success && result.config) {
-        // Older installed configurations (or a backend that has not yet been
-        // reloaded) may not contain fields introduced by a newer frontend.
-        // Preserve the generated defaults for any fields missing from the
-        // response so an in-place plugin update never renders undefined values.
-        setConfig({ ...getDefaults(), ...result.config });
-        setVkBasaltConfigPath(result.vkbasalt_config_path || "");
-      } else {
-        console.log(
-          "MAKO Renderer config not available, using defaults:",
-          result.error,
-        );
+  const loadMakoConfig = useCallback(
+    async (profileName?: string, mode?: string) => {
+      const requestId = ++loadRequestId.current;
+      configLoadingRef.current = true;
+      setIsConfigLoading(true);
+      setVkBasaltConfigPath("");
+      const resetConfig = () => {
+        powerModeRef.current = "shared";
+        setPowerMode("shared");
+        setSeparatePowerModes(false);
+        setPowerSource("");
         setConfig(getDefaults());
         setVkBasaltConfigPath("");
+      };
+      try {
+        const result = profileName
+          ? await (mode
+              ? getProfileConfig(profileName, mode)
+              : getProfileConfig(profileName))
+          : await getMakoConfig();
+        if (requestId !== loadRequestId.current) return;
+        if (result.success && result.config) {
+          // Older installed configurations (or a backend that has not yet been
+          // reloaded) may not contain fields introduced by a newer frontend.
+          // Preserve the generated defaults for any fields missing from the
+          // response so an in-place plugin update never renders undefined values.
+          powerModeRef.current = result.power_mode || "shared";
+          setPowerMode(powerModeRef.current);
+          setSeparatePowerModes(Boolean(result.separate_power_modes));
+          setPowerSource(result.power_source || "");
+          setConfig({ ...getDefaults(), ...result.config });
+          setVkBasaltConfigPath(result.vkbasalt_config_path || "");
+        } else {
+          console.log(
+            "MAKO Renderer config not available, using defaults:",
+            result.error,
+          );
+          resetConfig();
+        }
+      } catch (error) {
+        if (requestId !== loadRequestId.current) return;
+        console.error("Error loading MAKO Renderer config:", error);
+        resetConfig();
+      } finally {
+        if (requestId === loadRequestId.current) {
+          configLoadingRef.current = false;
+          setIsConfigLoading(false);
+        }
       }
-    } catch (error) {
-      if (requestId !== loadRequestId.current) return;
-      console.error("Error loading MAKO Renderer config:", error);
-      setConfig(getDefaults());
-      setVkBasaltConfigPath("");
-    }
-  }, []);
+    },
+    [],
+  );
 
   const updateConfig = useCallback(
     async (newConfig: ConfigurationData): Promise<ConfigUpdateResult> => {
@@ -251,6 +281,12 @@ export function useMakoConfig() {
 
   return {
     config,
+    powerMode,
+    separatePowerModes,
+    powerSource,
+    getEditingPowerMode,
+    isConfigLoading,
+    canEditConfig,
     vkBasaltConfigPath,
     setConfig,
     applyConfigPatch,

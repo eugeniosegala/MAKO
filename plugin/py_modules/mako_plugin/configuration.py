@@ -4,7 +4,7 @@ import json
 import re
 from pathlib import Path
 from threading import RLock
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, cast
 
 from .build_flavor import LOCAL_DEVELOPMENT_BUILD
 from .base_service import BaseService
@@ -14,6 +14,8 @@ from .config_schema import (
     DEFAULT_PROFILE_NAME,
     PROFILE_KIND_GAME,
     PROFILE_KIND_PROCESS,
+    POWER_PROFILE_FIELDS,
+    POWER_MODES,
 )
 from .config_schema_generated import (
     ConfigurationData,
@@ -32,6 +34,7 @@ from .constants import (
     VKBASALT_MANIFEST_FILENAME_32,
     VKBASALT_SHADER_ASSET_FILENAMES,
 )
+from .host_environment import detect_power_source
 from .managed_files import write_managed_text_atomically
 from .process_detection import (
     detect_processes_for_steam_app,
@@ -535,7 +538,7 @@ class ConfigurationService(BaseService):
                                         f"Using default configuration due to parse error: {str(e)}",
                                         config=config)
 
-    def get_profile_config(self, profile_name: str) -> ConfigurationResponse:
+    def get_profile_config(self, profile_name: str, power_mode: str = "") -> ConfigurationResponse:
         """Read one saved profile without changing the runtime selection."""
         try:
             profile_data = self._get_profile_data()
@@ -547,11 +550,21 @@ class ConfigurationService(BaseService):
                 )
 
             metadata = self._read_profile_metadata(profile_data)
+            source = detect_power_source()
+            variants = profile_data.get("power_profiles", {}).get(profile_name)
+            mode = power_mode or source
+            if mode not in (*POWER_MODES, "", "shared"):
+                raise ValueError("unsupported power profile mode")
             config = self._config_for_profile(profile_data, profile_name)
+            if variants and mode in POWER_MODES:
+                config = ConfigurationManager.validate_config({**config, **variants[mode]})
             return self._success_response(
                 ConfigurationResponse,
                 f"Profile '{profile_name}' retrieved successfully",
                 config=config,
+                separate_power_modes=bool(variants),
+                power_mode=mode if variants and mode in POWER_MODES else "shared",
+                power_source=source,
                 vkbasalt_config_path=str(
                     self._vkbasalt_config_path(profile_name, metadata)
                 ),
@@ -1318,6 +1331,7 @@ class ConfigurationService(BaseService):
                 profile=detail,
                 changed=changed,
                 game_running=bool(detected_processes),
+                power_source=detect_power_source(),
             )
         except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
             self.log.error("Error synchronising current profile: %s", error)
@@ -1338,7 +1352,8 @@ class ConfigurationService(BaseService):
             return self._persist_profile_config(profile_name, config)
 
     def _persist_profile_config(
-            self, profile_name: str, config: ConfigurationData
+            self, profile_name: str, config: ConfigurationData,
+            profile_data: Optional[ProfileData] = None,
     ) -> ConfigurationResponse:
         """Update configuration for a specific profile
 
@@ -1350,7 +1365,7 @@ class ConfigurationService(BaseService):
             ConfigurationResponse with success status
         """
         try:
-            profile_data = self._get_profile_data()
+            profile_data = profile_data if profile_data is not None else self._get_profile_data()
 
             if profile_name not in profile_data["profiles"]:
                 return self._error_response(ConfigurationResponse,
@@ -1388,8 +1403,37 @@ class ConfigurationService(BaseService):
             self.log.error(error_msg)
             return self._error_response(ConfigurationResponse, str(e), config=None)
 
+    def set_profile_power_modes(self, profile_name: str, enabled: bool) -> ConfigurationResponse:
+        """Opt in by cloning current Renderer settings; opt out preserves fallback."""
+        with self._configuration_write_lock:
+            try:
+                if not isinstance(enabled, bool):
+                    raise ValueError("enabled must be a boolean")
+                data = self._get_profile_data()
+                if profile_name not in data["profiles"]:
+                    raise ValueError("profile does not exist")
+                variants = data.setdefault("power_profiles", {})
+                if enabled and profile_name not in variants:
+                    config = self._config_for_profile(data, profile_name)
+                    settings = cast(ConfigurationPatch, {
+                        key: config[key] for key in POWER_PROFILE_FIELDS
+                    })
+                    variants[profile_name] = {
+                        "handheld": settings.copy(),
+                        "docked": settings.copy(),
+                    }
+                elif not enabled:
+                    variants.pop(profile_name, None)
+                self._save_profile_data(data)
+                script_result = self.update_mako_script_from_profile_data(data)
+                if not script_result["success"]:
+                    raise OSError(script_result["error"] or "could not update launch wrapper")
+                return self.get_profile_config(profile_name)
+            except (OSError, ValueError, TypeError) as error:
+                return self._error_response(ConfigurationResponse, str(error), config=None)
+
     def update_profile_config_fields(
-            self, profile_name: str, changes: ConfigurationPatch
+            self, profile_name: str, changes: ConfigurationPatch, power_mode: str = ""
     ) -> ConfigurationResponse:
         """Merge validated field changes into the latest saved profile.
 
@@ -1399,10 +1443,12 @@ class ConfigurationService(BaseService):
         profile after the editor selection changes.
         """
         with self._configuration_write_lock:
-            return self._update_profile_config_fields(profile_name, changes)
+            return self._update_profile_config_fields(
+                profile_name, changes, *([power_mode] if power_mode else [])
+            )
 
     def _update_profile_config_fields(
-            self, profile_name: str, changes: ConfigurationPatch
+            self, profile_name: str, changes: ConfigurationPatch, power_mode: str = ""
     ) -> ConfigurationResponse:
         """Execute one profile patch while holding the write lock."""
         try:
@@ -1424,11 +1470,34 @@ class ConfigurationService(BaseService):
                     config=None,
                 )
 
+            variants = profile_data.get("power_profiles", {}).get(profile_name)
+            mode = power_mode or detect_power_source() or "shared"
+            if mode not in (*POWER_MODES, "shared"):
+                raise ValueError("unsupported power profile mode")
+            if power_mode in POWER_MODES and not variants:
+                raise ValueError("separate power settings are no longer enabled")
             current_config = self._config_for_profile(profile_data, profile_name)
+            if variants and mode in POWER_MODES:
+                current_config.update(variants[mode])
             merged_config = ConfigurationManager.validate_config({
                 **current_config,
                 **changes,
             })
+            if variants and mode in POWER_MODES:
+                variants[mode] = cast(ConfigurationPatch, {
+                    key: merged_config[key] for key in POWER_PROFILE_FIELDS
+                })
+                shared = self._config_for_profile(profile_data, profile_name)
+                shared.update({
+                    key: value for key, value in changes.items()
+                    if key not in POWER_PROFILE_FIELDS
+                })
+                # Keep the common fallback intact; the Renderer resolves power at runtime.
+                result = self._persist_profile_config(
+                    profile_name, ConfigurationManager.validate_config(shared), profile_data
+                )
+                result["config"] = merged_config if result["success"] else None
+                return result
             return self._persist_profile_config(profile_name, merged_config)
         except (OSError, IOError, ValueError, TypeError) as error:
             self.log.error(

@@ -155,32 +155,32 @@ std::optional<std::pair<IdentType, GameConf>> ls::findProfile(
 
     // check for the environment option first
     if (allowEnvironmentProfile && std::getenv("MAKO_ENV") != nullptr)
-        return std::make_pair(IdentType::OVERRIDE, profiles.front());
+        return std::make_pair(IdentType::OVERRIDE, profileForPowerSource(profiles.front(), config.power_source));
 
     // then override first
     if (id.override.has_value()) {
         const auto profile = matchByName(profiles, id.override.value());
         if (profile.has_value())
-            return std::make_pair(IdentType::OVERRIDE, profile.value());
+            return std::make_pair(IdentType::OVERRIDE, profileForPowerSource(profile.value(), config.power_source));
     }
 
     // then check executable
     const auto exe_profile = matchEndsWithId(profiles, id.executable);
     if (exe_profile.has_value())
-        return std::make_pair(IdentType::EXECUTABLE, exe_profile.value());
+        return std::make_pair(IdentType::EXECUTABLE, profileForPowerSource(exe_profile.value(), config.power_source));
 
     // if present, check wine executable next
     if (id.wine_executable.has_value()) {
         const auto wine_profile = matchEndsWithId(profiles, id.wine_executable.value());
         if (wine_profile.has_value())
-            return std::make_pair(IdentType::WINE_EXECUTABLE, wine_profile.value());
+            return std::make_pair(IdentType::WINE_EXECUTABLE, profileForPowerSource(wine_profile.value(), config.power_source));
     }
 
     // finally, fallback to process name
     if (!id.process_name.empty()) {
         const auto proc_profile = matchById(profiles, id.process_name);
         if (proc_profile.has_value())
-            return std::make_pair(IdentType::PROCESS_NAME, proc_profile.value());
+            return std::make_pair(IdentType::PROCESS_NAME, profileForPowerSource(proc_profile.value(), config.power_source));
     }
 
     // A fallback keeps the layer initialized before an unsaved game has an
@@ -189,7 +189,7 @@ std::optional<std::pair<IdentType, GameConf>> ls::findProfile(
     if (id.fallback.has_value()) {
         const auto profile = matchByName(profiles, id.fallback.value());
         if (profile.has_value())
-            return std::make_pair(IdentType::FALLBACK, profile.value());
+            return std::make_pair(IdentType::FALLBACK, profileForPowerSource(profile.value(), config.power_source));
     }
 
     return std::nullopt;

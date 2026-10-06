@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 const { callableMock } = vi.hoisted(() => ({
-  callableMock: vi.fn((method: string) => vi.fn((...args: unknown[]) =>
-    Promise.resolve({ method, args })))
+  callableMock: vi.fn((method: string) =>
+    vi.fn((...args: unknown[]) => Promise.resolve({ method, args })),
+  ),
 }));
 
 vi.mock("@decky/api", () => ({ callable: callableMock }));
@@ -48,17 +49,23 @@ describe("Decky RPC contract", () => {
       "sync_current_profile",
       "update_profile_config",
       "update_profile_config_fields",
+      "set_profile_power_modes",
     ]);
   });
 
   test("forwards a complete configuration object without reshaping it", async () => {
     const api = await import("../../src/api/makoApi");
-    const config = (await import("../../src/config/configSchema")).getDefaults();
+    const config = (
+      await import("../../src/config/configSchema")
+    ).getDefaults();
 
     await api.updateMakoConfigFromObject(config);
 
-    const updateIndex = callableMock.mock.calls.findIndex(([method]) => method === "update_mako_config");
-    const updateBinding = callableMock.mock.results[updateIndex]?.value as ReturnType<typeof vi.fn>;
+    const updateIndex = callableMock.mock.calls.findIndex(
+      ([method]) => method === "update_mako_config",
+    );
+    const updateBinding = callableMock.mock.results[updateIndex]
+      ?.value as ReturnType<typeof vi.fn>;
     expect(updateBinding).toHaveBeenCalledWith(config);
   });
 

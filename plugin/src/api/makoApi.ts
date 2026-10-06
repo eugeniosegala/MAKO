@@ -67,6 +67,9 @@ export interface ConfigResult {
   success: boolean;
   config: Nullable<MakoConfig>;
   vkbasalt_config_path?: string;
+  separate_power_modes?: boolean;
+  power_mode?: string;
+  power_source?: string;
   message: string;
   error: Nullable<string>;
 }
@@ -160,6 +163,7 @@ export interface ProfileResult {
   profile?: Nullable<ProfileDetails>;
   changed?: Nullable<boolean>;
   game_running?: Nullable<boolean>;
+  power_source?: string;
   message: string;
   error: Nullable<string>;
 }
@@ -304,7 +308,7 @@ export const checkFrameGenerationModel = callable<
 >("check_frame_generation_model");
 export const getDllStats = callable<[], DllStatsResult>("get_dll_stats");
 export const getMakoConfig = callable<[], ConfigResult>("get_mako_config");
-export const getProfileConfig = callable<[string], ConfigResult>(
+export const getProfileConfig = callable<[string, string?], ConfigResult>(
   "get_profile_config",
 );
 export const getRuntimeStatus = callable<[string?], RuntimeStatusResult>(
@@ -387,6 +391,10 @@ export const updateProfileConfig = callable<
   ConfigUpdateResult
 >("update_profile_config");
 export const updateProfileConfigFields = callable<
-  [string, ConfigurationPatch],
+  [string, ConfigurationPatch, string?],
   ConfigUpdateResult
 >("update_profile_config_fields");
+
+export const setProfilePowerModes = callable<[string, boolean], ConfigResult>(
+  "set_profile_power_modes",
+);

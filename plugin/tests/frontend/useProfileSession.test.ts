@@ -4,8 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 const decky = vi.hoisted(() => ({
   router: {
     MainRunningApp: undefined as
-      | { appid: number; display_name: string }
-      | undefined,
+      { appid: number; display_name: string } | undefined,
   },
 }));
 
@@ -122,6 +121,49 @@ describe("profile runtime session", () => {
       await vi.advanceTimersByTimeAsync(2000);
     });
     expect(syncCurrentProfile).toHaveBeenCalledTimes(2);
+  });
+
+  test("reloads a live game's settings after AC/battery changes", async () => {
+    decky.router.MainRunningApp = { appid: 42, display_name: "Game" };
+    const loadProfileConfig = vi.fn(async () => undefined);
+    const syncCurrentProfile = vi.fn().mockResolvedValue({
+      success: true,
+      game_running: true,
+      profile_name: "game",
+      power_source: "handheld",
+    });
+    renderHook(() =>
+      useProfileSession({
+        isInstalled: true,
+        loadProfileConfig,
+        syncCurrentProfile,
+      }),
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+    loadProfileConfig.mockClear();
+    syncCurrentProfile.mockResolvedValue({
+      success: true,
+      game_running: true,
+      profile_name: "game",
+      power_source: "",
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(loadProfileConfig).not.toHaveBeenCalled();
+    syncCurrentProfile.mockResolvedValue({
+      success: true,
+      game_running: true,
+      profile_name: "game",
+      power_source: "docked",
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000);
+    });
+    expect(loadProfileConfig).toHaveBeenCalledOnce();
+    expect(loadProfileConfig).toHaveBeenCalledWith("game");
   });
 
   test("loads the currently selected editor profile when installation appears", async () => {

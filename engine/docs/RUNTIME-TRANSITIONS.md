@@ -24,8 +24,8 @@ The process-wide backend is created lazily when the first active swapchain needs
 `Root::update()` is reached from application presentation, but work is bounded and change-driven:
 
 1. Compositor refresh, presentation, and HDR feedback update their owned state independently.
-2. Configuration is checked at most every 250 ms; an unchanged file is not reparsed or replanned.
-3. A changed file is parsed and profile matching is repeated.
+2. Configuration is checked at most every 250 ms. Optional AC/battery profiles sample system power supplies at most every two seconds; profiles without power sets do not read those supplies. An unchanged file is not reparsed.
+3. A changed file is parsed and profile matching is repeated. A confirmed power-source change repeats matching against the existing configuration, without a file write or parse. The resolved power set retains the profile identity and enters the same transition planner.
 4. Process-static fields are projected back to their applied values while compatible fields continue.
 5. Each live swapchain receives a `ProfileUpdatePlan` based on its applied profile, private resources, generated capacity, and current extent support.
 6. The live-safe merge is applied with only the necessary state resets; other values stay pending at their owning boundary.

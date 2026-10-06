@@ -36,6 +36,8 @@ namespace mako::ui {
         Q_OBJECT
 
         Q_PROPERTY(QStringListModel* profiles READ calculateProfileListModel NOTIFY refreshUI)
+        Q_PROPERTY(bool separate_power_modes READ getSeparatePowerModes WRITE separatePowerModesUpdated NOTIFY refreshUI)
+        Q_PROPERTY(int power_mode READ getPowerMode WRITE powerModeSelected NOTIFY refreshUI)
         Q_PROPERTY(int profile_index READ getProfileIndex WRITE profileSelected NOTIFY refreshUI)
         Q_PROPERTY(QVariantList running_games READ getRunningGames NOTIFY runningGamesChanged)
         Q_PROPERTY(bool scanning_games READ isScanningGames NOTIFY runningGamesChanged)
@@ -177,6 +179,21 @@ namespace mako::ui {
         [[nodiscard]] QStringListModel* calculateProfileListModel() const {
             return this->m_profile_list_model;
         }
+        [[nodiscard]] bool getSeparatePowerModes() const {
+            return isValidProfileIndex() && this->m_profiles.at(
+                static_cast<size_t>(m_profile_index)).power_profiles.size() == 2;
+        }
+        [[nodiscard]] int getPowerMode() const { return m_power_mode; }
+        [[nodiscard]] const ls::GameConf& editingProfile() const {
+            const auto& base = m_profiles.at(static_cast<size_t>(m_profile_index));
+            return getSeparatePowerModes() && m_power_mode > 0
+                ? base.power_profiles.at(static_cast<size_t>(m_power_mode - 1)) : base;
+        }
+        [[nodiscard]] ls::GameConf& editingProfile() {
+            auto& base = m_profiles.at(static_cast<size_t>(m_profile_index));
+            return getSeparatePowerModes() && m_power_mode > 0
+                ? base.power_profiles.at(static_cast<size_t>(m_power_mode - 1)) : base;
+        }
         [[nodiscard]] int getProfileIndex() const {
             return this->m_profile_index;
         }
@@ -239,7 +256,7 @@ namespace mako::ui {
 
 #define VALIDATE_AND_GET_PROFILE(default) \
     if (!isValidProfileIndex()) return default; \
-    auto& conf = this->m_profiles.at(static_cast<size_t>(this->m_profile_index));
+    auto& conf = this->editingProfile();
 
         [[nodiscard]] bool isValidProfileIndex() const {
             return this->m_profile_index >= 0 && std::cmp_less(this->m_profile_index, this->m_profiles.size());
@@ -495,6 +512,7 @@ namespace mako::ui {
     setters:
         void profileSelected(int idx) {
             this->m_profile_index = idx;
+            this->m_power_mode = 0;
             emit refreshUI();
         }
 
@@ -600,7 +618,26 @@ namespace mako::ui {
 
 #define VALIDATE_AND_GET_PROFILE() \
     if (!isValidProfileIndex()) return; \
-    auto& conf = this->m_profiles.at(static_cast<size_t>(this->m_profile_index));
+    auto& conf = this->editingProfile();
+
+        void powerModeSelected(int mode) {
+            if (mode < 0 || mode > 2 || (mode > 0 && !getSeparatePowerModes())) return;
+            m_power_mode = mode;
+            emit refreshUI();
+        }
+        void separatePowerModesUpdated(bool enabled) {
+            if (!isValidProfileIndex()) return;
+            auto& base = m_profiles.at(static_cast<size_t>(m_profile_index));
+            if (enabled && base.power_profiles.empty()) {
+                auto copy = base;
+                base.power_profiles = {copy, copy};
+                m_power_mode = ls::detectPowerSource() == ls::PowerSource::Docked ? 2 : 1;
+            } else if (!enabled) {
+                base.power_profiles.clear();
+                m_power_mode = 0;
+            }
+            MARK_DIRTY()
+        }
 
         void multiplierUpdated(size_t multiplier) {
             VALIDATE_AND_GET_PROFILE()
@@ -808,7 +845,8 @@ namespace mako::ui {
 
         Q_INVOKABLE void addActiveIn(const QString& name) {
             if (name.trimmed().isEmpty()) return;
-            VALIDATE_AND_GET_PROFILE()
+            if (!isValidProfileIndex()) return;
+            auto& conf = m_profiles.at(static_cast<size_t>(m_profile_index));
             auto& active_in = conf.active_in;
             active_in.push_back(name.toStdString());
 
@@ -819,7 +857,8 @@ namespace mako::ui {
             MARK_DIRTY()
         }
         Q_INVOKABLE void removeActiveIn() {
-            VALIDATE_AND_GET_PROFILE()
+            if (!isValidProfileIndex()) return;
+            auto& conf = m_profiles.at(static_cast<size_t>(m_profile_index));
             if (this->m_active_in_index < 0 || std::cmp_greater_equal(static_cast<size_t>(this->m_active_in_index), conf.active_in.size()))
                 return;
 
@@ -849,12 +888,14 @@ namespace mako::ui {
             model->setData(model->index(model->rowCount() - 1), name);
 
             this->m_profile_index = static_cast<int>(this->m_profiles.size() - 1);
+            this->m_power_mode = 0;
             MARK_DIRTY()
         }
         Q_INVOKABLE void renameProfile(const QString& name) {
             if (name.trimmed().isEmpty()) return;
 
-            VALIDATE_AND_GET_PROFILE()
+            if (!isValidProfileIndex()) return;
+            auto& conf = m_profiles.at(static_cast<size_t>(m_profile_index));
             renameVkBasaltProfile(conf.name, name.toStdString());
             conf.name = name.toStdString();
             auto& model = this->m_profile_list_model;
@@ -865,6 +906,7 @@ namespace mako::ui {
             if (!isValidProfileIndex())
                 return;
 
+            m_power_mode = 0;
             deleteVkBasaltProfile(static_cast<size_t>(this->m_profile_index));
             auto& profiles = this->m_profiles;
             profiles.erase(profiles.begin() + this->m_profile_index);
@@ -898,6 +940,7 @@ namespace mako::ui {
         bool m_scanning_games{false};
         bool m_capture_failed{false};
 
+        int m_power_mode{0};
         ls::GlobalConf m_global;
         std::vector<ls::GameConf> m_profiles;
         ls::LaunchConf m_launch;

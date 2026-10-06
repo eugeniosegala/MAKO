@@ -15,4 +15,6 @@ MAKO Decky's panel composes independently owned state and view modules. Keep pro
 | Flatpak setup | `src/components/FlatpaksModal.tsx` | Owns extension and application operations and their status display. |
 | Shared presentation | `src/components/MakoUi.tsx`, `ContentNotices.tsx`, and `RuntimeStatusCard.tsx` | Renders controls, notices, and status without persisting profile state. |
 
+`PowerProfileControls.tsx` renders the shared/native power-profile toggle and editing-set selector. `useMakoHooks.ts` retains the backend's resolved editing set and guards pending loads; `useProfileConfigWriter.ts` keys queued patches by both profile and power set, so a source change cannot move an old edit to the new set. The toggle flushes pending edits before cloning or removing power sets. `useProfileSession.ts` refreshes the editor after a live game's confirmed AC/battery change.
+
 The schema source is `shared_config.py`; `src/config/generatedConfigSchema.ts` is generated. Decky's translation source is `defaults/i18n/`; `src/i18n/languages.json` is generated. Follow [testing](../../TESTING.md) after moving a component boundary, and preserve keyboard, gamepad, focus, selected-order, and profile-switch behavior in the focused frontend tests.

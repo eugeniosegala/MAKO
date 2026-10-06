@@ -4,6 +4,8 @@ This document owns MAKO's transitional compatibility and cleanup policy. It is n
 
 The persisted `allow_fp16` boolean remains the canonical global precision choice; upgrades preserve both true and false values. The corrected runtime applies false even under Ultra Performance and across LSFG and MAKO Scaler, and reports unavailable true requests rather than silently selecting FP32. LS1 always uses FP32 independently of this setting. No stored-value rewrite is needed or performed.
 
+Optional AC/battery profile tables extend Renderer configuration version 2 without rewriting existing profiles. Profiles without these tables retain their previous behavior; opting in clones the existing native settings and opting out restores the retained base. No legacy-value migration is required. Older editors may discard these optional tables, so the configuration guides require matching current components.
+
 ## Policy
 
 Generated files and user data have different lifecycles:

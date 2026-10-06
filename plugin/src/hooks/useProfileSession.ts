@@ -23,13 +23,15 @@ export function useProfileSession({
   loadProfileConfig,
   syncCurrentProfile,
 }: ProfileSessionOptions) {
-  const [mainRunningApp, setMainRunningApp] = useState<
-    AppOverview | undefined
-  >(undefined);
+  const [mainRunningApp, setMainRunningApp] = useState<AppOverview | undefined>(
+    undefined,
+  );
   const [editingProfile, setEditingProfile] =
     useState<string>(DEFAULT_PROFILE_NAME);
   const editingProfileRef = useRef<string>(DEFAULT_PROFILE_NAME);
   const gameWasRunningRef = useRef(false);
+  const lastPowerSource = useRef<string | undefined>(undefined);
+  const [powerSource, setPowerSource] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (isInstalled) {
@@ -59,7 +61,7 @@ export function useProfileSession({
               : undefined;
           const editingProfileChanged = Boolean(
             nextEditingProfile &&
-              nextEditingProfile !== editingProfileRef.current,
+            nextEditingProfile !== editingProfileRef.current,
           );
 
           // On exit, reset the editor before unlocking profile controls. On
@@ -74,8 +76,17 @@ export function useProfileSession({
             editingProfileRef.current = nextEditingProfile;
             setEditingProfile(nextEditingProfile);
           }
+          const powerChanged =
+            Boolean(result.power_source) &&
+            lastPowerSource.current !== undefined &&
+            result.power_source !== lastPowerSource.current;
+          lastPowerSource.current =
+            result.power_source || lastPowerSource.current || "";
+          setPowerSource(result.power_source || "");
           if (editingProfileChanged && nextEditingProfile) {
             await loadProfileConfig(nextEditingProfile);
+          } else if (gameIsRunning && powerChanged) {
+            await loadProfileConfig(editingProfileRef.current);
           }
         }
       } finally {
@@ -99,13 +110,11 @@ export function useProfileSession({
     setEditingProfile(profileName);
   }, []);
 
-  const getEditingProfile = useCallback(
-    () => editingProfileRef.current,
-    [],
-  );
+  const getEditingProfile = useCallback(() => editingProfileRef.current, []);
 
   return {
     mainRunningApp,
+    powerSource,
     editingProfile,
     selectEditingProfile,
     getEditingProfile,

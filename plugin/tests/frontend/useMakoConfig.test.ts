@@ -90,6 +90,46 @@ describe("MAKO configuration persistence", () => {
   });
   afterEach(cleanup);
 
+  test("locks editing during power-mode loads and clears metadata on failure", async () => {
+    const { result } = renderHook(() => useMakoConfig());
+    await waitFor(() => expect(result.current.isConfigLoading).toBe(false));
+    mocks.getProfileConfig.mockResolvedValue({
+      success: true,
+      config: { ...getDefaults(), target_fps: 60 },
+      separate_power_modes: true,
+      power_mode: "handheld",
+      power_source: "docked",
+    });
+    await act(() => result.current.loadMakoConfig("game", "handheld"));
+    expect(result.current.powerMode).toBe("handheld");
+    expect(result.current.separatePowerModes).toBe(true);
+    expect(result.current.powerSource).toBe("docked");
+    expect(result.current.canEditConfig()).toBe(true);
+
+    let finishLoad!: (value: { success: boolean; error: string }) => void;
+    mocks.getProfileConfig.mockReturnValue(
+      new Promise((resolve) => {
+        finishLoad = resolve;
+      }),
+    );
+    let loading!: Promise<void>;
+    act(() => {
+      loading = result.current.loadMakoConfig("game", "docked");
+    });
+    expect(result.current.isConfigLoading).toBe(true);
+    expect(result.current.canEditConfig()).toBe(false);
+    await act(async () => {
+      finishLoad({ success: false, error: "read failed" });
+      await loading;
+    });
+    expect(result.current.isConfigLoading).toBe(false);
+    expect(result.current.canEditConfig()).toBe(true);
+    expect(result.current.powerMode).toBe("shared");
+    expect(result.current.getEditingPowerMode()).toBe("shared");
+    expect(result.current.separatePowerModes).toBe(false);
+    expect(result.current.powerSource).toBe("");
+  });
+
   test("keeps a newer profile load when an older request completes late", async () => {
     let finishInitialLoad!: (value: {
       success: boolean;

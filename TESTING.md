@@ -69,6 +69,8 @@ ctest --test-dir engine/build/local --output-on-failure
 
 Use `-DMAKO_BUILD_UI=ON` when Qt 6 Base and Declarative development packages are installed. Shader changes must regenerate their adjacent embedded payloads with the owning generator; never edit generated SPIR-V arrays or hashes directly.
 
+AC/battery profile coverage includes native parsing/serialization, system-supply detection, selection by explicit profile, power-only watcher changes, transient-read retention, and Qt editor persistence in `watched-configuration` and `ui-backend-contract`. Decky's power-profile, game-profile, RPC, editor-session, and save-queue tests cover independently deployed contracts, shared fields, lifecycle preservation, layer discovery, and delayed edits across mode changes. These temporary supply fixtures do not establish actual unplug/replug behavior, Flatpak sysfs visibility, or game transition behavior; qualify those separately on hardware and retain the existing restart-boundary limits.
+
 ## Selecting MAKO Gym coverage
 
 MAKO Gym is an optional sibling checkout for targeted hardware work. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.

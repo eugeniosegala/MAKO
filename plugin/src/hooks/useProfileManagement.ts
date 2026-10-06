@@ -251,12 +251,17 @@ export function useProfileManagement() {
   );
 
   const handleUpdateProfileConfigFields = useCallback(
-    async (profileName: string, changes: ConfigurationPatch) => {
+    async (
+      profileName: string,
+      changes: ConfigurationPatch,
+      powerMode?: string,
+    ) => {
       setIsLoading(true);
       try {
         const result: ConfigUpdateResult = await updateProfileConfigFields(
           profileName,
           changes,
+          ...(powerMode ? ([powerMode] as [string]) : []),
         );
         if (!result.success) {
           console.error("Failed to update profile fields:", result.error);

@@ -228,6 +228,29 @@ ApplicationWindow {
                 }
 
                 Group {
+                    name: t.powerProfiles
+                    enabled: backend.available
+
+                    GroupEntry {
+                        title: t.separatePowerModes
+                        description: t.powerProfilesDesc
+                        CheckBox {
+                            checked: backend.separate_power_modes
+                            onToggled: backend.separate_power_modes = checked
+                        }
+                    }
+                    GroupEntry {
+                        title: t.editPowerMode
+                        visible: backend.separate_power_modes
+                        ComboBox {
+                            model: [t.powerShared, t.powerHandheld, t.powerDocked]
+                            currentIndex: backend.power_mode
+                            onActivated: backend.power_mode = currentIndex
+                        }
+                    }
+                }
+
+                Group {
                     name: t.profileMatching
                     enabled: backend.available
 

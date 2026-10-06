@@ -98,6 +98,9 @@ class ConfigurationPathFields(TypedDict, total=False):
     """Optional editor metadata available from profile-read operations."""
 
     vkbasalt_config_path: str
+    separate_power_modes: bool
+    power_mode: str
+    power_source: str
 
 
 class ConfigurationResponse(ServiceResponse, ConfigurationPathFields):
@@ -169,6 +172,7 @@ class ProfileResponse(ServiceResponse, total=False):
     profile: Optional[ProfileDetails]
     changed: Optional[bool]
     game_running: Optional[bool]
+    power_source: str
 
 
 RuntimeApplicationPhase = Literal[

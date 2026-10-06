@@ -77,7 +77,87 @@ namespace {
             left.ultra_performance == right.ultra_performance &&
             left.flow_scale == right.flow_scale &&
             left.performance_mode == right.performance_mode &&
-            left.pacing == right.pacing;
+            left.pacing == right.pacing &&
+            left.power_profiles.size() == right.power_profiles.size() &&
+            std::equal(left.power_profiles.begin(), left.power_profiles.end(),
+                right.power_profiles.begin(), sameGameConf);
+    }
+
+    void testPowerProfiles(const std::filesystem::path& directory) {
+        const auto root = directory / "power_supply";
+        std::filesystem::create_directories(root / "AC");
+        writeText(root / "AC/type", "USB_C\n");
+        writeText(root / "AC/online", "0\n");
+        expect(ls::detectPowerSource(root) == ls::PowerSource::Unknown,
+            "An offline supply without a system battery must be unknown");
+        std::filesystem::create_directories(root / "BAT");
+        writeText(root / "BAT/type", "Battery\n");
+        writeText(root / "BAT/status", "Full\n");
+        expect(ls::detectPowerSource(root) == ls::PowerSource::Handheld,
+            "A full battery must not imply AC power");
+        writeText(root / "BAT/scope", "Device\n");
+        expect(ls::detectPowerSource(root) == ls::PowerSource::Unknown,
+            "Peripheral batteries must not select Handheld");
+        writeText(root / "BAT/scope", "System\n");
+        const auto path = directory / "power.toml";
+        writeText(path, R"(version = 2
+[global]
+allow_fp16 = false
+[[profile]]
+name = "game"
+active_in = "Game.exe"
+gpu = "Other GPU"
+adaptive = true
+target_fps = 90
+[profile.handheld]
+target_fps = 60
+gpu = ""
+[profile.docked]
+target_fps = 144
+)");
+        ls::ConfigFile parsed(path);
+        expect(parsed.profiles().front().power_profiles.size() == 2,
+            "Both native power tables must be parsed");
+        parsed.write(path);
+        const ls::ConfigFile roundTrip(path);
+        expect(roundTrip.profiles().front().power_profiles[0].adaptive &&
+                !roundTrip.profiles().front().power_profiles[0].gpu &&
+                roundTrip.profiles().front().power_profiles[1].target_fps == 144,
+            "Sparse power settings must inherit and round-trip, including cleared GPUs");
+        ls::Identification identity;
+        identity.override = "game";
+        for (const auto source : {ls::PowerSource::Unknown, ls::PowerSource::Handheld, ls::PowerSource::Docked}) {
+            parsed.power_source = source;
+            const auto selected = ls::findProfile(parsed, identity);
+            expect(selected && selected->second.target_fps ==
+                    (source == ls::PowerSource::Unknown ? 90U : source == ls::PowerSource::Handheld ? 60U : 144U) &&
+                    selected->second.name == "game" && selected->second.active_in.front() == "Game.exe" &&
+                    selected->second.power_profiles.empty(),
+                "Explicit profile selection must resolve power without changing identity");
+        }
+        setenv("MAKO_CONFIG", path.c_str(), 1);
+        ls::WatchedConfig watched(root);
+        expect(watched.get().power_source == ls::PowerSource::Handheld,
+            "The startup watcher must select battery settings");
+        const auto timestamp = std::filesystem::last_write_time(path);
+        writeText(root / "AC/online", "1\n");
+        std::this_thread::sleep_for(std::chrono::milliseconds(2050));
+        expect(watched.update() && watched.get().power_source == ls::PowerSource::Docked &&
+                std::filesystem::last_write_time(path) == timestamp,
+            "A power transition must reload selection without rewriting TOML");
+        writeText(root / "AC/online", "unknown\n");
+        std::this_thread::sleep_for(std::chrono::milliseconds(2050));
+        expect(!watched.update() && watched.get().power_source == ls::PowerSource::Docked,
+            "Transient power read failures must retain the confirmed runtime source");
+        for (const auto invalid : {"[profile.handheld]\ntarget_fps = 60\n",
+                "[profile.handheld]\nname = 'other'\n[profile.docked]\n",
+                "[profile.handheld]\ntarget_fps = 0\n[profile.docked]\n"}) {
+            writeText(path, std::string("version = 2\n[[profile]]\nname = 'game'\n") + invalid);
+            bool rejected = false;
+            try { static_cast<void>(ls::ConfigFile(path)); }
+            catch (const std::exception&) { rejected = true; }
+            expect(rejected, "Invalid power profiles must be rejected");
+        }
     }
 
     constexpr std::string_view validConfiguration = R"(version = 2
@@ -203,6 +283,9 @@ int main() {
     const auto directory = std::filesystem::temp_directory_path() /
         ("mako-config-test-" + std::to_string(static_cast<long long>(::getpid())));
     std::filesystem::create_directories(directory);
+
+    unsetenv("MAKO_ENV");
+    testPowerProfiles(directory);
 
     const auto defaultPath = directory / "default.toml";
     ls::ConfigFile::createDefaultConfigFile(defaultPath);

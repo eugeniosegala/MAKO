@@ -127,6 +127,61 @@ void test_scaling_properties() {
     require_property("maximum_scaling_sharpness", "float", false, true);
 }
 
+void test_power_profile_editor() {
+    require_property("separate_power_modes", "bool", true, false);
+    require_property("power_mode", "int", true, false);
+    QTemporaryDir directory;
+    require(directory.isValid(), "power profile fixture failed");
+    const auto path = directory.filePath("conf.toml");
+    const auto previousConfig = qgetenv("MAKO_CONFIG");
+    const auto previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    qputenv("MAKO_CONFIG", path.toUtf8());
+    qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launch.toml").toUtf8());
+    ls::ConfigFile fixture;
+    ls::GameConf game;
+    game.name = "game";
+    game.target_fps = 90;
+    game.active_in = {"Game.exe"};
+    fixture.global().allow_fp16 = false;
+    fixture.profiles() = {game};
+    fixture.write(path.toStdString());
+    {
+        mako::ui::Backend backend;
+        backend.separatePowerModesUpdated(true);
+        backend.powerModeSelected(1);
+        require(backend.getTargetFPS() == 90, "Handheld did not clone shared settings");
+        backend.targetFPSUpdated(60);
+        backend.powerModeSelected(2);
+        require(backend.getTargetFPS() == 90, "Handheld edits changed Docked settings");
+        backend.targetFPSUpdated(144);
+        backend.addActiveIn(QStringLiteral("New.exe"));
+        backend.renameProfile(QStringLiteral("renamed"));
+        backend.powerModeSelected(0);
+        require(backend.getTargetFPS() == 90 && !backend.getAllowFP16(),
+            "Power settings changed fallback or global precision");
+    }
+    const ls::ConfigFile saved(path.toStdString());
+    const auto& base = saved.profiles().front();
+    require(base.name == "renamed" && base.active_in.size() == 2 &&
+            base.power_profiles[0].target_fps == 60 &&
+            base.power_profiles[1].target_fps == 144,
+        "Qt did not save separate native settings with shared identity");
+    {
+        mako::ui::Backend backend;
+        backend.powerModeSelected(2);
+        require(backend.getTargetFPS() == 144, "Qt did not reload Decky-compatible power tables");
+        backend.separatePowerModesUpdated(false);
+        require(backend.getTargetFPS() == 90 && backend.getPowerMode() == 0,
+            "Disabling separate settings did not restore the fallback");
+    }
+    require(ls::ConfigFile(path.toStdString()).profiles().front().power_profiles.empty(),
+        "Qt left disabled power tables behind");
+    if (previousConfig.isNull()) qunsetenv("MAKO_CONFIG");
+    else qputenv("MAKO_CONFIG", previousConfig);
+    if (previousLaunch.isNull()) qunsetenv("MAKO_LAUNCH_CONFIG");
+    else qputenv("MAKO_LAUNCH_CONFIG", previousLaunch);
+}
+
 void test_multiplier_limits() {
     static_assert(ls::GameConfLimits::minimumMultiplier == 2);
     static_assert(ls::GameConfLimits::maximumMultiplier == 5);
@@ -735,6 +790,7 @@ int main(int argc, char* argv[]) {
     try {
         test_installed_launcher_selection();
         test_scaling_properties();
+        test_power_profile_editor();
         test_multiplier_limits();
         test_fractional_adaptive_preset();
         test_feature_group_order_and_ownership();

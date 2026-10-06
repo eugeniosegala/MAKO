@@ -38,6 +38,30 @@ scaling_supersampling = false
 scaling_sharpness = 0.8
 ```
 
+### AC and battery settings
+
+In the Qt UI, enable **Separate AC / battery settings** under **Power Profiles**, then choose **Editing settings for** to edit Handheld, Docked, or Shared / fallback. Enabling it copies the existing Renderer settings into both power sets. Turning it off removes the two sets and restores Shared / fallback. Selecting a set in either editor changes which values you edit; the running Renderer continues to select settings from the detected power source.
+
+The optional `handheld` and `docked` tables belong to the preceding `[[profile]]`. Both tables must exist when the feature is enabled. They inherit omitted Renderer settings from that profile and cannot override its name or process matches. For example:
+
+```toml
+[[profile]]
+name = "My game"
+active_in = ["Game.exe"]
+adaptive = true
+target_fps = 90
+
+[profile.handheld]
+target_fps = 60
+
+[profile.docked]
+target_fps = 120
+```
+
+The Renderer selects Handheld on battery and Docked on confirmed AC power, including a charger without a dock. It samples Linux system power supplies at startup and at most once every two seconds during presentation, without rewriting configuration or requiring either UI to remain open. An external display alone does not select Docked. Unknown power at startup uses the base profile; a transient read failure during play retains the last confirmed source. Peripheral batteries are ignored. Sandboxes without readable system power supplies use the base profile at startup.
+
+Frame Generation, Scaling, GPU selection, and Renderer performance controls can differ. Process matching, global DLL/FP16 settings, Shaders, and launcher settings stay shared. Normal live, recreation, and restart requirements apply to every power switch. `MAKO_PROFILE` still selects the profile identity and then resolves its power set; `MAKO_ENV` remains an explicit environment-only configuration. Use current matching editors and Renderer builds: older editors may discard these optional tables when saving.
+
 ### Launcher exclusions
 
 MAKO keeps known launcher and web-helper processes inactive while allowing their child games to match normally. The shared [launcher exclusion registry](../mako-common/launcher_exclusions.json) is the source for both MAKO Renderer and MAKO Decky. Contributors changing it must update [the compatibility ledger](../../CLEANUPS.md), run `just generate-launcher-exclusions`, and verify with `just check-launcher-exclusions`.

@@ -204,10 +204,10 @@ class Plugin:
         return self.configuration_service.get_config()
 
     async def get_profile_config(
-            self, profile_name: str
+            self, profile_name: str, power_mode: str = ""
     ) -> ConfigurationResponse:
         """Read a saved profile without making it the runtime profile."""
-        return self.configuration_service.get_profile_config(profile_name)
+        return self.configuration_service.get_profile_config(profile_name, power_mode)
 
     async def get_runtime_status(
             self, profile_name: str = ""
@@ -353,12 +353,15 @@ class Plugin:
 
         return self.configuration_service.update_profile_config(profile_name, validated_config)
 
+    async def set_profile_power_modes(self, profile_name: str, enabled: bool) -> ConfigurationResponse:
+        return self.configuration_service.set_profile_power_modes(profile_name, enabled)
+
     async def update_profile_config_fields(
-            self, profile_name: str, changes: ConfigurationPatch
+            self, profile_name: str, changes: ConfigurationPatch, power_mode: str = ""
     ) -> ConfigurationResponse:
         """Merge independent UI field changes into one canonical profile."""
         return self.configuration_service.update_profile_config_fields(
-            profile_name, changes
+            profile_name, changes, power_mode
         )
 
     async def get_launch_option(self) -> LaunchOptionResponse:

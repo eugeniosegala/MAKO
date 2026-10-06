@@ -383,5 +383,15 @@
   "MODEL_WARNING_LS1": "LS1 is unavailable for the selected model setting. MAKO Scaler preserves the selected precision.",
   "MODEL_WARNING_LSFG": "Frame Generation is unavailable at the selected precision or model setting. Use a supported public Lossless Scaling model, or turn FP16 off for an FP32-only model.",
   "MODEL_WARNING_UPDATE": "Apply available MAKO Decky and Renderer updates, then restart. If unresolved, verify Lossless Scaling files and collect diagnostics.",
-  "MODEL_WARNING_CHECK_UPDATES": "Check for MAKO Decky updates"
+  "MODEL_WARNING_CHECK_UPDATES": "Check for MAKO Decky updates",
+  "POWER_SEPARATE": "Separate AC / battery settings",
+  "POWER_EDIT_MODE": "Editing settings for",
+  "POWER_SHARED": "Shared / fallback",
+  "POWER_HANDHELD": "Handheld (Battery)",
+  "POWER_DOCKED": "Docked (AC Power)",
+  "POWER_CURRENT_AC": "Current power: AC",
+  "POWER_CURRENT_BATTERY": "Current power: Battery",
+  "POWER_CURRENT_UNKNOWN": "Power source unavailable; Shared / fallback settings apply at startup.",
+  "POWER_HELP": "Frame Generation, Scaling and Renderer performance switch automatically, even with the panel closed. Restart rules still apply. Matching, globals, shaders and launcher settings stay shared. Turning this off restores Shared / fallback settings.",
+  "POWER_LOADING": "Loading profile settings..."
 }
