@@ -85,6 +85,13 @@ const customShaderButtonStyle: CSSProperties = {
   overflowWrap: "anywhere",
 };
 
+const compactCustomShaderButtonStyle: CSSProperties = {
+  ...customShaderButtonStyle,
+  minHeight: "30px",
+  padding: "3px 6px",
+  fontSize: "11px",
+};
+
 export function ShadersConfigurationGroup({
   config,
   isDefaultProfile,
@@ -338,7 +345,7 @@ export function ShadersConfigurationGroup({
                   >
                     {onAddShader && (
                       <DialogButton
-                        style={customShaderButtonStyle}
+                        style={compactCustomShaderButtonStyle}
                         disabled={busy}
                         onClick={() =>
                           runShaderAction(async () => {
@@ -362,7 +369,7 @@ export function ShadersConfigurationGroup({
                     )}
                     {onRefreshShaders && (
                       <DialogButton
-                        style={customShaderButtonStyle}
+                        style={compactCustomShaderButtonStyle}
                         disabled={busy}
                         onClick={() => runShaderAction(onRefreshShaders)}
                       >
