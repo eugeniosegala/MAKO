@@ -291,105 +291,117 @@ export function ShadersConfigurationGroup({
           <PanelSectionRow>
             <Field
               label={t("CONFIG_VKBASALT_SHADER", "Effects")}
-              description={t(
-                "CONFIG_VKBASALT_SHADER_DESC",
-                "Effects run in selection order; uncheck and recheck to move one last. Stacking increases GPU load, especially with heavier effects such as HDR Look. Test per game and monitor GPU usage.",
-              )}
               childrenLayout="below"
               childrenContainerWidth="max"
             >
-              <EffectsChecklist
-                key={profileName}
-                options={shaderOptions}
-                initialSelection={selectedEffects}
-                onChange={(value) => onConfigChange(VKBASALT_SHADER, value)}
-              />
-            </Field>
-          </PanelSectionRow>
-
-          {(onAddShader || onRefreshShaders) && (
-            <PanelSectionRow>
               <MakoFocusable
-                flow-children="row"
+                flow-children="column"
                 noFocusRing
-                style={{
-                  display: "flex",
-                  alignItems: "stretch",
-                  gap: "12px",
-                  width: "100%",
-                  minWidth: 0,
-                  padding: "6px 0",
-                }}
+                style={{ width: "100%", minWidth: 0, paddingBottom: "6px" }}
               >
-                {onAddShader && (
-                  <DialogButton
-                    className="Mako_DialogButton Mako_DialogButton--neutral"
+                <EffectsChecklist
+                  key={profileName}
+                  options={shaderOptions}
+                  initialSelection={selectedEffects}
+                  onChange={(value) => onConfigChange(VKBASALT_SHADER, value)}
+                />
+                <MakoInfo
+                  className="Mako_OptionDescription"
+                  data-mako-info="true"
+                  style={{
+                    marginTop: "8px",
+                    color: "#acb2b8",
+                    fontSize: "10px",
+                    lineHeight: "14px",
+                  }}
+                >
+                  {t(
+                    "CONFIG_VKBASALT_SHADER_DESC",
+                    "Effects run in selection order; uncheck and recheck to move one last. Stacking increases GPU load, especially with heavier effects such as HDR Look. Test per game and monitor GPU usage.",
+                  )}
+                </MakoInfo>
+
+                {(onAddShader || onRefreshShaders) && (
+                  <MakoFocusable
+                    flow-children="row"
+                    noFocusRing
                     style={{
-                      ...customShaderButtonStyle,
-                      ...makoDialogButtonStyle(
-                        focusedAction === "add",
-                        "neutral",
-                      ),
+                      display: "flex",
+                      alignItems: "stretch",
+                      gap: "12px",
+                      width: "100%",
+                      minWidth: 0,
+                      boxSizing: "border-box",
+                      padding: "18px 4px 8px",
                     }}
-                    onGamepadFocus={() => setFocusedAction("add")}
-                    onGamepadBlur={() => setFocusedAction(null)}
-                    disabled={busy}
-                    onClick={() =>
-                      runShaderAction(async () => {
-                        const file = await openFilePicker(
-                          FileSelectionType.FILE,
-                          "/home",
-                          true,
-                          true,
-                          undefined,
-                          ["fx"],
-                          false,
-                          false,
-                        ).catch(() => null);
-                        if (file?.realpath || file?.path)
-                          await onAddShader(file.realpath || file.path);
-                      })
-                    }
                   >
-                    {t("CONFIG_VKBASALT_CUSTOM_ADD", "Add Custom Shader")}
-                  </DialogButton>
+                    {onAddShader && (
+                      <DialogButton
+                        className="Mako_DialogButton Mako_DialogButton--neutral"
+                        style={{
+                          ...customShaderButtonStyle,
+                          ...makoDialogButtonStyle(
+                            focusedAction === "add",
+                            "neutral",
+                          ),
+                        }}
+                        onGamepadFocus={() => setFocusedAction("add")}
+                        onGamepadBlur={() => setFocusedAction(null)}
+                        disabled={busy}
+                        onClick={() =>
+                          runShaderAction(async () => {
+                            const file = await openFilePicker(
+                              FileSelectionType.FILE,
+                              "/home",
+                              true,
+                              true,
+                              undefined,
+                              ["fx"],
+                              false,
+                              false,
+                            ).catch(() => null);
+                            if (file?.realpath || file?.path)
+                              await onAddShader(file.realpath || file.path);
+                          })
+                        }
+                      >
+                        {t("CONFIG_VKBASALT_CUSTOM_ADD", "Add Custom Shader")}
+                      </DialogButton>
+                    )}
+                    {onRefreshShaders && (
+                      <DialogButton
+                        className="Mako_DialogButton Mako_DialogButton--neutral"
+                        style={{
+                          ...customShaderButtonStyle,
+                          ...makoDialogButtonStyle(
+                            focusedAction === "refresh",
+                            "neutral",
+                          ),
+                        }}
+                        onGamepadFocus={() => setFocusedAction("refresh")}
+                        onGamepadBlur={() => setFocusedAction(null)}
+                        disabled={busy}
+                        onClick={() => runShaderAction(onRefreshShaders)}
+                      >
+                        {t("CONFIG_VKBASALT_CUSTOM_REFRESH", "Refresh")}
+                      </DialogButton>
+                    )}
+                  </MakoFocusable>
                 )}
-                {onRefreshShaders && (
-                  <DialogButton
-                    className="Mako_DialogButton Mako_DialogButton--neutral"
-                    style={{
-                      ...customShaderButtonStyle,
-                      ...makoDialogButtonStyle(
-                        focusedAction === "refresh",
-                        "neutral",
-                      ),
-                    }}
-                    onGamepadFocus={() => setFocusedAction("refresh")}
-                    onGamepadBlur={() => setFocusedAction(null)}
-                    disabled={busy}
-                    onClick={() => runShaderAction(onRefreshShaders)}
-                  >
-                    {t("CONFIG_VKBASALT_CUSTOM_REFRESH", "Refresh")}
-                  </DialogButton>
+                <MakoInfo style={{ width: "100%", paddingBottom: "8px" }}>
+                  <MakoInlineTip tone="info">
+                    {t(
+                      "CONFIG_VKBASALT_CUSTOM_HELP",
+                      "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+                    )}
+                  </MakoInlineTip>
+                </MakoInfo>
+                {shaderError && (
+                  <MakoInlineTip tone="warning">{shaderError}</MakoInlineTip>
                 )}
               </MakoFocusable>
-            </PanelSectionRow>
-          )}
-          <PanelSectionRow>
-            <MakoInfo style={{ width: "100%", padding: "4px 0 12px" }}>
-              <MakoInlineTip tone="info">
-                {t(
-                  "CONFIG_VKBASALT_CUSTOM_HELP",
-                  "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
-                )}
-              </MakoInlineTip>
-            </MakoInfo>
+            </Field>
           </PanelSectionRow>
-          {shaderError && (
-            <PanelSectionRow>
-              <MakoInlineTip tone="warning">{shaderError}</MakoInlineTip>
-            </PanelSectionRow>
-          )}
 
           <PanelSectionRow>
             <Field
