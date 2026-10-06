@@ -58,6 +58,7 @@ class RpcContractTests(unittest.TestCase):
             raise AssertionError(f"frontend interface {name} was not found")
         return {
             field_match.group(1): {
+                "type": field_match.group(3).strip(),
                 "optional": bool(field_match.group(2)),
                 "nullable": (
                     "Nullable<" in field_match.group(3)
@@ -162,6 +163,9 @@ class RpcContractTests(unittest.TestCase):
                     set(backend_response.__optional_keys__),
                 )
                 backend_hints = get_type_hints(backend_response)
+                for field_name, annotation in backend_hints.items():
+                    if annotation is bool:
+                        self.assertEqual(frontend_contract[field_name]["type"], "boolean")
                 self.assertEqual(
                     {
                         field_name

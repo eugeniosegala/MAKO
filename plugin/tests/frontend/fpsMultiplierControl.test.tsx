@@ -192,6 +192,60 @@ afterEach(() => {
 });
 
 describe("Frame Generation controls", () => {
+  test("refresh matching defaults off and preserves an editable fallback", () => {
+    window.SP_REACT = React;
+    const config = { ...getDefaults(), adaptive: true };
+    const onConfigChange = vi.fn(async () => undefined);
+    const onConfigUpdate = vi.fn(async () => undefined);
+    const { rerender } = render(
+      <FpsMultiplierControl
+        config={config}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+    const toggle = screen.getByText("Match Display Refresh Rate");
+    expect(config.adaptive_target_refresh_rate).toBe(false);
+    expect(toggle.getAttribute("data-checked")).toBe("false");
+    expect(screen.getByText("Target FPS (90)")).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(onConfigChange).toHaveBeenCalledExactlyOnceWith(
+      "adaptive_target_refresh_rate",
+      true,
+    );
+    expect(onConfigUpdate).not.toHaveBeenCalled();
+
+    rerender(
+      <FpsMultiplierControl
+        config={{ ...config, adaptive_target_refresh_rate: true }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+    const fallback = screen
+      .getByText("Fallback Target FPS (90)")
+      .closest<HTMLElement>('[data-slider-field="true"]')!;
+    expect(fallback.getAttribute("data-value")).toBe("90");
+    expect(
+      screen.getByText(/This editor estimates caps from the fallback/),
+    ).toBeTruthy();
+    fireEvent.click(within(fallback).getByText("D-pad right"));
+    expect(onConfigChange).toHaveBeenLastCalledWith("target_fps", 91);
+    fireEvent.click(screen.getByText("Match Display Refresh Rate"));
+    expect(onConfigChange).toHaveBeenLastCalledWith(
+      "adaptive_target_refresh_rate",
+      false,
+    );
+    rerender(
+      <FpsMultiplierControl
+        config={{ ...config, adaptive: false }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+    expect(screen.queryByText("Match Display Refresh Rate")).toBeNull();
+  });
+
   test("shows one 0x-capable multiplier slider for the selected mode", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
@@ -351,9 +405,7 @@ describe("Frame Generation controls", () => {
         .getAttribute("data-checked"),
     ).toBe("true");
     expect(
-      screen.getByText(
-        /Enable before launch to load Frame Generation/,
-      ),
+      screen.getByText(/Enable before launch to load Frame Generation/),
     ).toBeTruthy();
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();

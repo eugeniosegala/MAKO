@@ -15,6 +15,7 @@ The script builds only the portable-policy targets. It supplies deterministic cl
 
 - warm-up, ramping, multiplier ceilings, target behavior, and reset boundaries;
 - Fractional placement, near-target native preference, Smooth Cadence, and cadence recovery;
+- opt-in display-refresh targets, bounded 90/60/100 Hz transitions, missing-feedback fallback, manual-target restoration, and matching Steady/Fractional caps;
 - Fixed refresh budgeting and direct ordered-FIFO acquire recovery;
 - generated-frame request, admission, scheduling, and delivery accounting;
 - acquire and present recovery policy, private-transition state, and swapchain retirement; and

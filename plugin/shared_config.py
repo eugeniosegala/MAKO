@@ -317,6 +317,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "toml"
     },
 
+    "adaptive_target_refresh_rate": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "follow confirmed display refresh in Adaptive while retaining Target FPS as the fallback",
+        "location": "toml"
+    },
+
     "adaptive_max_multiplier": {
         "fieldType": ConfigFieldType.INTEGER,
         "default": 3,

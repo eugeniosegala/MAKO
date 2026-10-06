@@ -21,6 +21,7 @@ import {
   ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
   ADAPTIVE_MINIMUM_BASE_FPS,
   ADAPTIVE_STABLE_CADENCE,
+  ADAPTIVE_TARGET_REFRESH_RATE,
   type AdaptiveFractionalRealFramePriority,
   FRAME_GENERATION_ENABLED,
   FRAME_GENERATION_PROVISIONED,
@@ -271,6 +272,22 @@ export function FpsMultiplierControl({
             <>
               <PanelSectionRow>
                 <ToggleField
+                  label={t(
+                    "ADAPTIVE_TARGET_REFRESH_RATE",
+                    "Match Display Refresh Rate",
+                  )}
+                  description={t(
+                    "ADAPTIVE_TARGET_REFRESH_RATE_DESC",
+                    "Off by default. Follows the current Gamescope display refresh rate during play, within Renderer limits. Uses the saved Target FPS when refresh information is unavailable.",
+                  )}
+                  checked={config.adaptive_target_refresh_rate ?? false}
+                  onChange={(value) =>
+                    onConfigChange(ADAPTIVE_TARGET_REFRESH_RATE, value)
+                  }
+                />
+              </PanelSectionRow>
+              <PanelSectionRow>
+                <ToggleField
                   label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive")}
                   description={
                     <>
@@ -350,11 +367,22 @@ export function FpsMultiplierControl({
               )}
               <PanelSectionRow>
                 <SliderField
-                  label={`${t("ADAPTIVE_TARGET_FPS", "Target FPS")} (${targetFps})`}
-                  description={t(
-                    "ADAPTIVE_TARGET_FPS_DESC",
-                    "Desired output FPS. Fractional may mix ratios; Steady Base Cap starts at half the target and can align a validated lower integer ratio.",
-                  )}
+                  label={`${
+                    config.adaptive_target_refresh_rate
+                      ? t("ADAPTIVE_FALLBACK_TARGET_FPS", "Fallback Target FPS")
+                      : t("ADAPTIVE_TARGET_FPS", "Target FPS")
+                  } (${targetFps})`}
+                  description={
+                    config.adaptive_target_refresh_rate
+                      ? t(
+                          "ADAPTIVE_FALLBACK_TARGET_FPS_DESC",
+                          "Used when display refresh is unavailable. This editor estimates caps from the fallback; the live target and caps follow display refresh.",
+                        )
+                      : t(
+                          "ADAPTIVE_TARGET_FPS_DESC",
+                          "Desired output FPS. Fractional may mix ratios; Steady Base Cap starts at half the target and can align a validated lower integer ratio.",
+                        )
+                  }
                   value={targetFps}
                   min={TARGET_FPS_MIN}
                   max={TARGET_FPS_MAX}

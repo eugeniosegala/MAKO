@@ -85,7 +85,8 @@ MAKO Decky and `mako-ui` share this configuration. Edit a profile in one UI at a
 | `frame_generation_enabled` | `true` | Live execution state. `false` is the UI's `0x` position. |
 | `multiplier` | `2` | Fixed total output multiplier, from 2–5. |
 | `adaptive` | `false` | Enables Adaptive instead of Fixed generation. |
-| `target_fps` | `120` | Adaptive output target. MAKO Decky uses a 90 FPS product default. |
+| `target_fps` | `120` | Adaptive output target, or saved fallback when refresh matching is on. MAKO Decky uses a 90 FPS product default. |
+| `adaptive_target_refresh_rate` | `false` | Matches Adaptive's output target to confirmed Gamescope display refresh, clamped to the Renderer’s 10–1000 FPS range. Applies live; unavailable or zero refresh uses the saved `target_fps`. Fixed ignores this choice. |
 | `adaptive_max_multiplier` | `3` | Adaptive multiplier ceiling, from 2–5. |
 | `adaptive_auto_base_fps_cap` | `false` | Enables Steady Base Cap behavior. |
 | `adaptive_fractional_real_frame_priority` | `auto` | Fractional real-frame preference: `auto`, `low`, `medium`, `high`, or `very-high`. |
@@ -97,6 +98,8 @@ MAKO Decky and `mako-ui` share this configuration. Edit a profile in one UI at a
 | `dynamic_cadence_probe_interval_seconds` | `2.0` | Recovery interval from 0.1–3 seconds. |
 
 See [Adaptive validation](ADAPTIVE-VALIDATION.md) for detailed scheduling and cadence behavior.
+
+**Match Display Refresh Rate** is off by default in MAKO Decky and the standalone Qt UI. When enabled, handheld, TV, and monitor refresh changes update the running target without either editor open. Steady Base Cap, Fractional Real Frame Priority, and output pacing use that same applied target. The saved `target_fps` remains editable as **Fallback Target FPS** and is never overwritten by display feedback. Editor cap estimates use this fallback; Decky's Live Status reports the applied target. Outside Gamescope, or when confirmed refresh feedback is unavailable, MAKO retains the fallback. The option follows the refresh rate selected by Gamescope; it does not change display settings or the multiplier ceiling.
 
 #### Choosing a mode in the Qt UI
 
@@ -194,7 +197,7 @@ Set `MAKO_ENV=1` to build one profile from environment variables instead of TOML
 
 - global: `MAKO_DLL_PATH`, `MAKO_NO_FP16`;
 - Fixed and identity: `MAKO_GPU`, `MAKO_MULTIPLIER`, `MAKO_FRAME_GENERATION_PROVISIONED`, `MAKO_FRAME_GENERATION_ENABLED`, `MAKO_FRAME_GENERATION_REFRESH_THRESHOLD`, `MAKO_BASE_FPS_CAP`;
-- Adaptive: `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`, `MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS`;
+- Adaptive: `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_TARGET_REFRESH_RATE`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`, `MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS`;
 - Scaling: `MAKO_SCALING_ENABLED`, `MAKO_SCALING_METHOD`, `MAKO_SCALING_FACTOR`, `MAKO_SCALING_SUPERSAMPLING`, `MAKO_SCALING_SHARPNESS`, `MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY`; and
 - resources: `MAKO_ULTRA_PERFORMANCE`, `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`.
 

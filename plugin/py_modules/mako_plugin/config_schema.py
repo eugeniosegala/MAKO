@@ -382,6 +382,8 @@ class ConfigurationManager:
             "adaptive_fractional_real_frame_priority = "
             f"{_toml_string(config['adaptive_fractional_real_frame_priority'])}",
             f"target_fps = {config['target_fps']}",
+            "adaptive_target_refresh_rate = "
+            f"{str(config['adaptive_target_refresh_rate']).lower()}",
             f"adaptive_max_multiplier = {config['adaptive_max_multiplier']}",
             f"adaptive_stable_cadence = {str(config['adaptive_stable_cadence']).lower()}",
             f"gamescope_vrr_mode = {_toml_string(config['gamescope_vrr_mode'])}",

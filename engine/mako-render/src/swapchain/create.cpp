@@ -133,6 +133,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         this->diagnosticsState.contextId, layerRoleName
     );
     this->runtimeStatusState.requestedProfile = this->profile;
+    this->profile.target_fps = adaptiveTargetFpsForDisplay(
+        this->profile.target_fps, this->profile.adaptive,
+        this->profile.adaptive_target_refresh_rate, this->gamescopeRefreshHz
+    );
     this->runtimeStatusState.stateRevision = runtimeStateRevision;
     const DiagnosticsContextScope diagnosticsContext(
         this->diagnosticsState.contextId

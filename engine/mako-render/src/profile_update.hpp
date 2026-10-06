@@ -674,7 +674,21 @@ namespace mako::layer {
         };
     };
 
-    /// Adaptive owns an explicit output target. Fixed + Dynamic Cadence
+    /// Resolve only an opted-in Adaptive target. The saved fallback is never
+    /// overwritten by display feedback; the scheduler retains its supported range.
+    [[nodiscard]] constexpr uint32_t adaptiveTargetFpsForDisplay(
+            const uint32_t fallbackTargetFps, const bool adaptive,
+            const bool matchDisplayRefresh,
+            const std::optional<uint32_t> displayRefreshHz) noexcept {
+        if (!adaptive || !matchDisplayRefresh || !displayRefreshHz ||
+                *displayRefreshHz == 0)
+            return fallbackTargetFps;
+        return std::clamp(*displayRefreshHz,
+            ls::GameConfLimits::minimumTargetFps,
+            ls::GameConfLimits::maximumTargetFps);
+    }
+
+    /// Adaptive owns the resolved applied output target. Fixed + Dynamic Cadence
     /// Recovery instead follows a confirmed Gamescope refresh rate and treats
     /// the selected Fixed multiplier as a ceiling. Without that external
     /// signal, Fixed remains exact rather than borrowing a hidden target.
@@ -766,7 +780,8 @@ namespace mako::layer {
             const bool frameGenerationPrivateRebuildAvailable = false,
             const bool spatialScalingActivationSupported = true,
             const bool spatialScalingEffectiveExtentUnchanged = false,
-            const bool spatialSupersamplingEffectiveExtentUnchanged = false) {
+            const bool spatialSupersamplingEffectiveExtentUnchanged = false,
+            const std::optional<uint32_t> displayRefreshHz = std::nullopt) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
@@ -902,6 +917,10 @@ namespace mako::layer {
         const bool frameGenerationChanged =
             current.frame_generation_enabled !=
                 applied.frame_generation_enabled;
+        applied.target_fps = adaptiveTargetFpsForDisplay(
+            next.target_fps, applied.adaptive,
+            applied.adaptive_target_refresh_rate, displayRefreshHz
+        );
         const bool refreshRateThresholdChanged =
             current.frame_generation_refresh_threshold !=
                 applied.frame_generation_refresh_threshold;

@@ -41,6 +41,68 @@ namespace {
 }
 
 int main() {
+    const auto resolveDisplayTarget = [](const ls::GameConf& applied,
+            const ls::GameConf& requested, std::optional<uint32_t> refresh) {
+        return planProfileUpdate(applied, requested, 3, true, false,
+            false, true, false, false, refresh);
+    };
+    auto savedTarget = adaptiveProfile();
+    expect(resolveDisplayTarget(savedTarget, savedTarget, 60)
+                .appliedProfile.target_fps == 90,
+        "Refresh targeting must default off and preserve existing targets");
+    auto automaticTarget = savedTarget;
+    automaticTarget.adaptive_target_refresh_rate = true;
+    auto displayApplied = savedTarget;
+    for (const auto refresh : {90U, 60U, 100U, 144U, 360U, 5U, 2000U}) {
+        const auto plan = resolveDisplayTarget(displayApplied, automaticTarget, refresh);
+        const auto target = std::clamp(refresh,
+            ls::GameConfLimits::minimumTargetFps,
+            ls::GameConfLimits::maximumTargetFps);
+        expect(plan.appliedProfile.target_fps == target &&
+                plan.appliedProfile.adaptive_target_refresh_rate &&
+                !plan.decision.swapchainRecreationDeferred &&
+                !plan.decision.processRestartDeferred,
+            "Display transitions must apply a bounded target without rebuilding resources");
+        expect(plan.decision.generationPolicyChanged ==
+                (displayApplied.target_fps != target),
+            "Display transitions must reset Fractional scheduling only when the target changes");
+        displayApplied = plan.appliedProfile;
+        expect(generationSchedulerPolicy(displayApplied, refresh)->targetFps == target,
+            "Scheduler policy must consume the applied display target");
+        auto steady = displayApplied;
+        steady.adaptive_auto_base_fps_cap = true;
+        expect(effectiveBaseFpsCap(steady) == std::max(adaptiveMinimumBaseFps, target / 2.0),
+            "Steady's automatic cap must track the applied display target");
+        auto fractional = displayApplied;
+        fractional.adaptive_fractional_real_frame_priority =
+            ls::AdaptiveFractionalRealFramePriority::High;
+        expect(effectiveBaseFpsCap(fractional) == target * 3.0 / 4.0,
+            "Fractional real-frame priority must track the applied display target");
+    }
+    for (const auto missing : {std::optional<uint32_t>{}, std::optional<uint32_t>{0}}) {
+        const auto plan = resolveDisplayTarget(displayApplied, automaticTarget, missing);
+        expect(plan.appliedProfile.target_fps == 90 &&
+                plan.decision.generationPolicyChanged,
+            "Missing or zero refresh must restore the saved fallback live");
+    }
+    automaticTarget.target_fps = 120;
+    const auto changedFallback = resolveDisplayTarget(displayApplied, automaticTarget, 100);
+    expect(changedFallback.appliedProfile.target_fps == 100 &&
+            automaticTarget.target_fps == 120,
+        "Display targeting must never overwrite the requested manual fallback");
+    const auto repeated = resolveDisplayTarget(changedFallback.appliedProfile, automaticTarget, 100);
+    expect(repeated.decision.action == ProfileUpdateAction::NoRuntimeChange,
+        "Repeated profile reads must retain the resolved target without resetting policy");
+    automaticTarget.adaptive_target_refresh_rate = false;
+    expect(resolveDisplayTarget(changedFallback.appliedProfile, automaticTarget, 100)
+                .appliedProfile.target_fps == 120,
+        "Disabling display targeting must restore the saved manual target");
+    automaticTarget.adaptive_target_refresh_rate = true;
+    automaticTarget.adaptive = false;
+    expect(resolveDisplayTarget(savedTarget, automaticTarget, 60)
+                .appliedProfile.target_fps == 120,
+        "Fixed mode must ignore the dormant Adaptive refresh choice");
+
     auto fractionalPacing = adaptiveProfile();
     fractionalPacing.frame_generation_provisioned = true;
     for (const bool smooth : {false, true}) {

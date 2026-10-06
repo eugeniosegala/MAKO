@@ -53,6 +53,7 @@ int main() {
         ls::AdaptiveFractionalRealFramePriority::High;
     requested.performance_mode = true;
     requested.flow_scale = 0.5F;
+    requested.adaptive_target_refresh_rate = true;
 
     const mako::layer::RuntimeStatusRecord record{
         .phase = mako::layer::RuntimeApplicationPhase::Draining,
@@ -96,6 +97,9 @@ int main() {
         "profile name was not JSON escaped");
     expect(json.find("\"multiplier\":5") != std::string::npos,
         "requested multiplier missing");
+    expect(json.find("\"adaptive_target_refresh_rate\":true") != std::string::npos &&
+            json.find("\"adaptive_target_refresh_rate\":false") != std::string::npos,
+        "requested and applied refresh targeting choices missing");
     expect(json.find(
             "\"adaptive_fractional_real_frame_priority\":\"high\""
         ) != std::string::npos,

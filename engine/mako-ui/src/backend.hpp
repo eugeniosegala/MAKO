@@ -78,6 +78,7 @@ namespace mako::ui {
         Q_PROPERTY(QString adaptive_fractional_real_frame_priority READ getAdaptiveFractionalRealFramePriority WRITE adaptiveFractionalRealFramePriorityUpdated NOTIFY refreshUI)
         Q_PROPERTY(double adaptive_fractional_real_frame_priority_cap READ getAdaptiveFractionalRealFramePriorityCap NOTIFY refreshUI)
         Q_PROPERTY(uint target_fps READ getTargetFPS WRITE targetFPSUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool adaptive_target_refresh_rate READ getAdaptiveTargetRefreshRate WRITE adaptiveTargetRefreshRateUpdated NOTIFY refreshUI)
         Q_PROPERTY(size_t adaptive_max_multiplier READ getAdaptiveMaxMultiplier WRITE adaptiveMaxMultiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive_stable_cadence READ getAdaptiveStableCadence WRITE adaptiveStableCadenceUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString gamescope_vrr_mode READ getGamescopeVrrMode WRITE gamescopeVrrModeUpdated NOTIFY refreshUI)
@@ -385,6 +386,10 @@ namespace mako::ui {
         [[nodiscard]] uint getTargetFPS() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::targetFps)
             return conf.target_fps;
+        }
+        [[nodiscard]] bool getAdaptiveTargetRefreshRate() const {
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptiveTargetRefreshRate)
+            return conf.adaptive_target_refresh_rate;
         }
         [[nodiscard]] size_t getAdaptiveMaxMultiplier() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptiveMaxMultiplier)
@@ -771,6 +776,11 @@ namespace mako::ui {
                 static_cast<uint>(ls::GameConfLimits::minimumTargetFps),
                 static_cast<uint>(ls::GameConfLimits::maximumTargetFps)
             );
+            MARK_DIRTY()
+        }
+        void adaptiveTargetRefreshRateUpdated(bool enabled) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.adaptive_target_refresh_rate = enabled;
             MARK_DIRTY()
         }
         void adaptiveMaxMultiplierUpdated(size_t adaptive_max_multiplier) {

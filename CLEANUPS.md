@@ -6,6 +6,8 @@ The persisted `allow_fp16` boolean remains the canonical global precision choice
 
 Optional AC/battery profile tables extend Renderer configuration version 2 without rewriting existing profiles. Profiles without these tables retain their previous behavior; opting in clones the existing native settings and opting out restores the retained base. No legacy-value migration is required. Older editors may discard these optional tables, so the configuration guides require matching current components.
 
+The optional `adaptive_target_refresh_rate` boolean defaults to false for existing configuration and for older schema-5 runtime records. No saved-target migration or wrapper-format change is required: display feedback affects only the applied target, while `target_fps` remains the requested manual fallback. Native configuration, Decky profile persistence, and runtime-status regression tests preserve these defaults and distinguish requested and applied targets.
+
 ## Policy
 
 Generated files and user data have different lifecycles:

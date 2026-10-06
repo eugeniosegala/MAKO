@@ -52,6 +52,7 @@ adaptive = false
 adaptive_auto_base_fps_cap = false
 adaptive_fractional_real_frame_priority = 'auto'
 target_fps = 120
+adaptive_target_refresh_rate = false
 adaptive_max_multiplier = 3
 adaptive_stable_cadence = true
 gamescope_vrr_mode = 'follow-steam'
@@ -349,6 +350,9 @@ namespace {
                         )
                 ),
             .target_fps = tbl["target_fps"].value_or(GameConfDefaults::targetFps),
+            .adaptive_target_refresh_rate = tbl["adaptive_target_refresh_rate"].value_or(
+                GameConfDefaults::adaptiveTargetRefreshRate
+            ),
             .adaptive_max_multiplier = tbl["adaptive_max_multiplier"].value_or(
                 GameConfDefaults::adaptiveMaxMultiplier
             ),
@@ -434,6 +438,7 @@ namespace {
             )
         );
         profile.insert("target_fps", static_cast<int64_t>(conf.target_fps));
+        profile.insert("adaptive_target_refresh_rate", conf.adaptive_target_refresh_rate);
         profile.insert("adaptive_max_multiplier", static_cast<int64_t>(conf.adaptive_max_multiplier));
         profile.insert("adaptive_stable_cadence", conf.adaptive_stable_cadence);
         profile.insert("gamescope_vrr_mode", gamescopeVrrModeName(conf.gamescope_vrr_mode));
@@ -574,6 +579,11 @@ namespace {
         }
         const char* target_fps = std::getenv("MAKO_TARGET_FPS");
         if (target_fps) conf.target_fps = static_cast<uint32_t>(std::stoul(target_fps));
+        const char* adaptive_target_refresh_rate =
+            std::getenv("MAKO_ADAPTIVE_TARGET_REFRESH_RATE");
+        if (adaptive_target_refresh_rate)
+            conf.adaptive_target_refresh_rate =
+                std::string(adaptive_target_refresh_rate) != "0";
         const char* adaptive_max_multiplier = std::getenv("MAKO_ADAPTIVE_MAX_MULTIPLIER");
         if (adaptive_max_multiplier)
             conf.adaptive_max_multiplier = static_cast<size_t>(std::stoul(adaptive_max_multiplier));

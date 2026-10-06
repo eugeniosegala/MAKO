@@ -62,6 +62,26 @@ const status = (contexts: RuntimeContextState[]): RuntimeStatusResult => ({
 });
 
 describe("runtime scaling availability", () => {
+  test("live status reports the applied display target instead of the saved fallback", () => {
+    const automatic = {
+      ...context,
+      requested: {
+        ...context.requested,
+        adaptive_target_refresh_rate: true,
+        target_fps: 90,
+      },
+      applied: {
+        ...context.applied,
+        adaptive_target_refresh_rate: true,
+        target_fps: 60,
+      },
+    } as RuntimeContextState;
+    expect(
+      runtimeScalingUiState(status([automatic]), "game")
+        .frameGenerationTargetFps,
+    ).toBe(60);
+  });
+
   test("exposes an unproven Gamescope WSI surface for the active profile", () => {
     expect(scalingInactiveReason(status([context]), "game")).toBe(
       "gamescope-wsi-surface-unproven",

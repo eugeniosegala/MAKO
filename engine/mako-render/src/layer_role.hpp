@@ -154,6 +154,8 @@ namespace mako::layer {
             profile.adaptive_fractional_real_frame_priority =
                 ls::GameConfDefaults::adaptiveFractionalRealFramePriority;
             profile.target_fps = ls::GameConfDefaults::targetFps;
+            profile.adaptive_target_refresh_rate =
+                ls::GameConfDefaults::adaptiveTargetRefreshRate;
             profile.adaptive_max_multiplier =
                 ls::GameConfDefaults::adaptiveMaxMultiplier;
             profile.adaptive_stable_cadence =

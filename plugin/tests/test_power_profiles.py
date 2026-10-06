@@ -52,6 +52,21 @@ target_fps = 90
             with patch("py_modules.mako_plugin.configuration.detect_power_source", return_value=source):
                 self.assertEqual(target, self.service.get_profile_config("game")["config"]["target_fps"])
 
+    def test_refresh_target_defaults_and_power_mode_round_trip(self):
+        self.assertFalse(self.service.get_profile_config("game")["config"]["adaptive_target_refresh_rate"])
+        self.service.set_profile_power_modes("game", True)
+        self.assertTrue(self.service.update_profile_config_fields("game", {
+            "adaptive_target_refresh_rate": True, "target_fps": 100,
+        }, "docked")["success"])
+        saved = ConfigurationManager.parse_toml_content_multi_profile(self.service.config_file_path.read_text())
+        self.assertTrue(saved["power_profiles"]["game"]["docked"]["adaptive_target_refresh_rate"])
+        self.assertFalse(saved["power_profiles"]["game"]["handheld"]["adaptive_target_refresh_rate"])
+        self.assertFalse(saved["profiles"]["game"]["adaptive_target_refresh_rate"])
+        self.assertEqual(100, saved["power_profiles"]["game"]["docked"]["target_fps"])
+        self.assertEqual(saved, ConfigurationManager.parse_toml_content_multi_profile(
+            ConfigurationManager.generate_toml_content_multi_profile(saved)
+        ))
+
     def test_shared_fields_and_lifecycle_preserve_variants(self):
         self.service.set_profile_power_modes("game", True)
         result = self.service.update_profile_config_fields("game", {"target_fps": 120, "active_in": "New.exe", "allow_fp16": True, "enable_zink": True}, "docked")

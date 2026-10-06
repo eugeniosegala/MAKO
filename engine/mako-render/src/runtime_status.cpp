@@ -278,6 +278,8 @@ namespace {
                     profile.adaptive_fractional_real_frame_priority
                ))
                << ",\"target_fps\":" << profile.target_fps
+               << ",\"adaptive_target_refresh_rate\":"
+               << profile.adaptive_target_refresh_rate
                << ",\"adaptive_max_multiplier\":"
                << profile.adaptive_max_multiplier
                << ",\"adaptive_stable_cadence\":"

@@ -71,6 +71,8 @@ Use `-DMAKO_BUILD_UI=ON` when Qt 6 Base and Declarative development packages are
 
 AC/battery profile coverage includes native parsing/serialization, system-supply detection, selection by explicit profile, power-only watcher changes, transient-read retention, and Qt editor persistence in `watched-configuration` and `ui-backend-contract`. Decky's power-profile, game-profile, RPC, editor-session, and save-queue tests cover independently deployed contracts, shared fields, lifecycle preservation, layer discovery, and delayed edits across mode changes. These temporary supply fixtures do not establish actual unplug/replug behavior, Flatpak sysfs visibility, or game transition behavior; qualify those separately on hardware and retain the existing restart-boundary limits.
 
+Adaptive display-refresh matching is covered by `profile-update`, native configuration round trips, Qt backend persistence, Decky power-profile and runtime-status contracts, and frontend controls. Portable tests cover disabled defaults, display-rate changes, the Renderer’s 10–1000 FPS bounds, fallback restoration, Fixed isolation, target-dependent caps, and older runtime records. Real handheld/TV/monitor hotplug and Steam refresh changes still require game evidence under Gamescope; non-Gamescope sessions intentionally retain the saved fallback.
+
 ## Selecting MAKO Gym coverage
 
 MAKO Gym is an optional sibling checkout for targeted hardware work. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.

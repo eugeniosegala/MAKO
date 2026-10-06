@@ -38,6 +38,7 @@ def _profile(name: str, multiplier: int) -> dict[str, object]:
         "adaptive_auto_base_fps_cap": False,
         "adaptive_fractional_real_frame_priority": "high",
         "target_fps": 90,
+        "adaptive_target_refresh_rate": False,
         "adaptive_max_multiplier": multiplier,
         "adaptive_stable_cadence": True,
         "dynamic_cadence_recovery": False,
@@ -197,6 +198,28 @@ class RuntimeStateTests(unittest.TestCase):
                 "frame_generation_provisioned"
             ]
         )
+
+    def test_refresh_target_is_optional_for_older_records_and_strict_when_present(self):
+        legacy = self._record(context=1)
+        for profile in (legacy["requested"], legacy["applied"]):
+            profile.pop("adaptive_target_refresh_rate")
+        self._write("old-target.json", legacy)
+        automatic = self._record(context=2)
+        for profile in (automatic["requested"], automatic["applied"]):
+            profile["adaptive_target_refresh_rate"] = True
+            profile["adaptive"] = True
+        automatic["applied"]["target_fps"] = 60
+        self._write("automatic-target.json", automatic)
+        invalid = self._record(context=3)
+        invalid["applied"]["adaptive_target_refresh_rate"] = "true"
+        self._write("invalid-target.json", invalid)
+
+        contexts = {entry["context"]: entry for entry in self.service.get_status()["contexts"]}
+        self.assertEqual({1, 2}, contexts.keys())
+        self.assertFalse(contexts[1]["applied"]["adaptive_target_refresh_rate"])
+        self.assertTrue(contexts[2]["applied"]["adaptive_target_refresh_rate"])
+        self.assertEqual(90, contexts[2]["requested"]["target_fps"])
+        self.assertEqual(60, contexts[2]["applied"]["target_fps"])
 
     def test_stale_pid_identity_is_ignored_without_mutating_files(self):
         path = self._write(

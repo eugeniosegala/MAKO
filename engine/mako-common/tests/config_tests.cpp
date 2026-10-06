@@ -68,6 +68,8 @@ namespace {
             left.adaptive_fractional_real_frame_priority ==
                 right.adaptive_fractional_real_frame_priority &&
             left.target_fps == right.target_fps &&
+            left.adaptive_target_refresh_rate ==
+                right.adaptive_target_refresh_rate &&
             left.adaptive_max_multiplier == right.adaptive_max_multiplier &&
             left.adaptive_stable_cadence == right.adaptive_stable_cadence &&
             left.gamescope_vrr_mode == right.gamescope_vrr_mode &&
@@ -111,6 +113,7 @@ adaptive = true
 target_fps = 90
 [profile.handheld]
 target_fps = 60
+adaptive_target_refresh_rate = true
 gpu = ""
 [profile.docked]
 target_fps = 144
@@ -121,6 +124,11 @@ target_fps = 144
         parsed.write(path);
         const ls::ConfigFile roundTrip(path);
         expect(roundTrip.profiles().front().power_profiles[0].adaptive &&
+                roundTrip.profiles().front().power_profiles[0]
+                    .adaptive_target_refresh_rate &&
+                !roundTrip.profiles().front().adaptive_target_refresh_rate &&
+                !roundTrip.profiles().front().power_profiles[1]
+                    .adaptive_target_refresh_rate &&
                 !roundTrip.profiles().front().power_profiles[0].gpu &&
                 roundTrip.profiles().front().power_profiles[1].target_fps == 144,
             "Sparse power settings must inherit and round-trip, including cleared GPUs");
@@ -182,6 +190,7 @@ base_fps_cap = 60
 adaptive_auto_base_fps_cap = true
 adaptive_fractional_real_frame_priority = "high"
 target_fps = 144
+adaptive_target_refresh_rate = true
 adaptive_max_multiplier = 4
 dynamic_cadence_recovery = true
 dynamic_cadence_probe_interval_seconds = 0.1
@@ -218,6 +227,7 @@ int main() {
             defaults.adaptive_fractional_real_frame_priority ==
                 ls::GameConfDefaults::adaptiveFractionalRealFramePriority &&
             defaults.target_fps == ls::GameConfDefaults::targetFps &&
+            !defaults.adaptive_target_refresh_rate &&
             defaults.adaptive_max_multiplier ==
                 ls::GameConfDefaults::adaptiveMaxMultiplier &&
             defaults.adaptive_stable_cadence ==
@@ -360,6 +370,8 @@ int main() {
         "The accepted configuration must replace the previous profile set");
     expect(config.get().profiles().front().target_fps == 144,
         "The accepted configuration must expose its new policy");
+    expect(config.get().profiles().front().adaptive_target_refresh_rate,
+        "The accepted configuration must expose automatic refresh targeting");
     expect(config.get().profiles().front().dynamic_cadence_recovery,
         "The accepted configuration must expose dynamic cadence recovery");
     expect(config.get().profiles().front().dynamic_cadence_probe_interval_seconds == 0.1F,
@@ -714,6 +726,7 @@ scaling_sharpness = 0.5
     setenv("MAKO_BASE_FPS_CAP", "30", 1);
     setenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP", "1", 1);
     setenv("MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY", "high", 1);
+    setenv("MAKO_ADAPTIVE_TARGET_REFRESH_RATE", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS", "0.5", 1);
     setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
@@ -726,6 +739,11 @@ scaling_sharpness = 0.5
     setenv("MAKO_SCALING_SUPERSAMPLING", "1", 1);
     setenv("MAKO_SCALING_SHARPNESS", "0.75", 1);
     const ls::WatchedConfig environmentConfig;
+    expect(environmentConfig.get().profiles().front().adaptive_target_refresh_rate,
+        "Environment profiles must accept automatic refresh targeting");
+    setenv("MAKO_ADAPTIVE_TARGET_REFRESH_RATE", "0", 1);
+    expect(!ls::WatchedConfig{}.get().profiles().front().adaptive_target_refresh_rate,
+        "Environment profiles must accept explicitly disabled refresh targeting");
     expect(environmentConfig.get().profiles().front().dynamic_cadence_recovery &&
             environmentConfig.get().profiles().front()
                 .dynamic_cadence_probe_interval_seconds == 0.5F &&
@@ -764,6 +782,7 @@ scaling_sharpness = 0.5
     unsetenv("MAKO_ADAPTIVE");
     unsetenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");
     unsetenv("MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY");
+    unsetenv("MAKO_ADAPTIVE_TARGET_REFRESH_RATE");
     unsetenv("MAKO_BASE_FPS_CAP");
     unsetenv("MAKO_ENV");
 

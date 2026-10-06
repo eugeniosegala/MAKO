@@ -128,6 +128,7 @@ void test_scaling_properties() {
 }
 
 void test_power_profile_editor() {
+    require_property("adaptive_target_refresh_rate", "bool", true, false);
     require_property("separate_power_modes", "bool", true, false);
     require_property("power_mode", "int", true, false);
     QTemporaryDir directory;
@@ -149,9 +150,14 @@ void test_power_profile_editor() {
         mako::ui::Backend backend;
         backend.separatePowerModesUpdated(true);
         backend.powerModeSelected(1);
+        require(!backend.getAdaptiveTargetRefreshRate(),
+            "Refresh targeting must be off for an existing profile");
+        backend.adaptiveTargetRefreshRateUpdated(true);
         require(backend.getTargetFPS() == 90, "Handheld did not clone shared settings");
         backend.targetFPSUpdated(60);
         backend.powerModeSelected(2);
+        require(!backend.getAdaptiveTargetRefreshRate(),
+            "Handheld refresh targeting changed Docked settings");
         require(backend.getTargetFPS() == 90, "Handheld edits changed Docked settings");
         backend.targetFPSUpdated(144);
         backend.addActiveIn(QStringLiteral("New.exe"));
@@ -164,6 +170,9 @@ void test_power_profile_editor() {
     const auto& base = saved.profiles().front();
     require(base.name == "renamed" && base.active_in.size() == 2 &&
             base.power_profiles[0].target_fps == 60 &&
+            base.power_profiles[0].adaptive_target_refresh_rate &&
+            !base.power_profiles[1].adaptive_target_refresh_rate &&
+            !base.adaptive_target_refresh_rate &&
             base.power_profiles[1].target_fps == 144,
         "Qt did not save separate native settings with shared identity");
     {
@@ -337,13 +346,19 @@ void test_feature_group_order_and_ownership() {
         frame_generation_group_start,
         group_start - frame_generation_group_start
     );
-    require(frame_generation_group.count(QStringLiteral("GroupEntry {")) == 14 &&
+    require(frame_generation_group.count(QStringLiteral("GroupEntry {")) == 15 &&
             frame_generation_group.count(QStringLiteral(
-                "visible: backend.frame_generation_provisioned")) == 13,
+                "visible: backend.frame_generation_provisioned")) == 14,
         "Frame Generation must retain its provisioning switch while keeping live controls visible at 0x");
     require(frame_generation_group.contains(QStringLiteral(
                 "title: t.gamescopeVrrMode")),
         "Frame Generation must expose its Gamescope VRR choice");
+    require(frame_generation_group.contains(QStringLiteral(
+                "checked: backend.adaptive_target_refresh_rate")) &&
+            frame_generation_group.contains(QStringLiteral(
+                "onToggled: backend.adaptive_target_refresh_rate = checked")) &&
+            frame_generation_group.contains(QStringLiteral("? t.fallbackTargetFps : t.targetFps")),
+        "Adaptive must expose refresh matching and its saved fallback");
     require(frame_generation_group.contains(QStringLiteral(
                 "checked: backend.frame_generation_provisioned")) &&
             frame_generation_group.contains(QStringLiteral(

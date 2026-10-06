@@ -356,8 +356,24 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: t.targetFps
-                        description: t.targetFpsDesc
+                        title: t.adaptiveTargetRefreshRate
+                        description: t.adaptiveTargetRefreshRateDesc
+                        visible: backend.frame_generation_provisioned
+                        enabled: backend.adaptive
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.adaptive_target_refresh_rate
+                            onToggled: backend.adaptive_target_refresh_rate = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: backend.adaptive_target_refresh_rate
+                            ? t.fallbackTargetFps : t.targetFps
+                        description: backend.adaptive_target_refresh_rate
+                            ? t.fallbackTargetFpsDesc : t.targetFpsDesc
                         visible: backend.frame_generation_provisioned
                         enabled: backend.adaptive
 

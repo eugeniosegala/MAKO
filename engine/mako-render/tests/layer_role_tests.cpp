@@ -23,6 +23,7 @@ namespace {
         profile.adaptive = true;
         profile.multiplier = 4;
         profile.target_fps = 120;
+        profile.adaptive_target_refresh_rate = true;
         profile.scaling_enabled = true;
         profile.scaling_method = ls::ScalingMethod::Mako;
         profile.scaling_factor = 2.0F;
@@ -42,7 +43,8 @@ int main() {
             lower.scaling_method == ls::ScalingMethod::Ls1Performance,
         "the lower layer must retain Ultra Performance's effective scaler");
     expect(!lower.frame_generation_provisioned &&
-            !lower.frame_generation_enabled && !lower.adaptive,
+            !lower.frame_generation_enabled && !lower.adaptive &&
+            !lower.adaptive_target_refresh_rate,
         "the lower layer must never own frame generation");
     expect(generatedFrameCapacityForActivePolicy(lower) == 0,
         "the lower layer must not report a generated-image capacity request");

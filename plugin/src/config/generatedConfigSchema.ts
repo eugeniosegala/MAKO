@@ -160,6 +160,7 @@ export const ADAPTIVE = "adaptive" as const;
 export const ADAPTIVE_AUTO_BASE_FPS_CAP = "adaptive_auto_base_fps_cap" as const;
 export const ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY = "adaptive_fractional_real_frame_priority" as const;
 export const TARGET_FPS = "target_fps" as const;
+export const ADAPTIVE_TARGET_REFRESH_RATE = "adaptive_target_refresh_rate" as const;
 export const ADAPTIVE_MAX_MULTIPLIER = "adaptive_max_multiplier" as const;
 export const ADAPTIVE_STABLE_CADENCE = "adaptive_stable_cadence" as const;
 export const GAMESCOPE_VRR_MODE = "gamescope_vrr_mode" as const;
@@ -290,6 +291,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     fieldType: ConfigFieldType.INTEGER,
     default: 90,
     description: "target displayed framerate for adaptive frame generation"
+  },
+  adaptive_target_refresh_rate: {
+    name: "adaptive_target_refresh_rate",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "follow confirmed display refresh in Adaptive while retaining Target FPS as the fallback"
   },
   adaptive_max_multiplier: {
     name: "adaptive_max_multiplier",
@@ -455,6 +462,7 @@ export interface ConfigurationData {
   adaptive_auto_base_fps_cap: boolean;
   adaptive_fractional_real_frame_priority: string;
   target_fps: number;
+  adaptive_target_refresh_rate: boolean;
   adaptive_max_multiplier: number;
   adaptive_stable_cadence: boolean;
   gamescope_vrr_mode: string;
@@ -507,6 +515,7 @@ export function getDefaults(): ConfigurationData {
     adaptive_auto_base_fps_cap: true,
     adaptive_fractional_real_frame_priority: "auto",
     target_fps: 90,
+    adaptive_target_refresh_rate: false,
     adaptive_max_multiplier: 3,
     adaptive_stable_cadence: true,
     gamescope_vrr_mode: "follow-steam",
@@ -552,6 +561,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     adaptive_auto_base_fps_cap: ConfigFieldType.BOOLEAN,
     adaptive_fractional_real_frame_priority: ConfigFieldType.STRING,
     target_fps: ConfigFieldType.INTEGER,
+    adaptive_target_refresh_rate: ConfigFieldType.BOOLEAN,
     adaptive_max_multiplier: ConfigFieldType.INTEGER,
     adaptive_stable_cadence: ConfigFieldType.BOOLEAN,
     gamescope_vrr_mode: ConfigFieldType.STRING,

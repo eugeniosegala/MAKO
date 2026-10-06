@@ -44,6 +44,8 @@ The transition engine keeps three facts distinct:
 
 `ProfileUpdatePlan::appliedProfile` is a merge. It starts from the requested profile, restores values that cannot cross the current boundary, then classifies the remaining effective differences. A pending restart or recreation must not block an independent live update.
 
+With `adaptive_target_refresh_rate` enabled, the applied Adaptive target is projected from confirmed Gamescope refresh at swapchain creation, profile application, and refresh transitions. The requested `target_fps` retains the saved fallback; missing or zero feedback restores it. Scheduler policy, caps, bridge output, and pacing consume the applied target together. A changed effective target resets scheduling even when Smooth Cadence is off, without allocating resources or writing configuration. Refresh changes during confirmed Steam UI suspension use the existing policy-reset gate and coalesce until gameplay returns. Fixed mode leaves the option dormant.
+
 For example, a write that changes Base FPS Cap and Flow Scale applies the cap while preparing a private FG replacement. The old Flow Scale remains applied until handoff. Selecting `0x` later still applies immediately, and reverting Flow Scale before handoff cancels the replacement.
 
 ## Transition matrix
@@ -57,7 +59,7 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Gamescope VRR and Allow Tearing feedback | Live | Explicit requested/capable/active VRR can change Steady Adaptive's higher-multiplier cap eligibility, enable full-batch FIFO for a validated higher Steady rung, or hand an already accepted constant Fractional rung to FIFO. Fixed Smooth Cadence and qualified Adaptive handoffs retain ordered FIFO pacing. Only affected pacing helpers reset; Allow Tearing is diagnostic only. |
 | Per-profile Gamescope VRR choice | Live during a matched MAKO launch | A separate launch helper temporarily changes Gamescope's live VRR value for On or Off and restores the prior value when the game ends. Follow Steam does nothing. MAKO Renderer observes the resulting feedback on its normal sampling cycle. |
 | Fixed/Adaptive mode or multiplier | Live within current capacity; otherwise private FG replacement or recreation | Dormant mode values are saved without resetting the active mode. |
-| Adaptive target, ceiling, Smooth Cadence, Fractional Real Frame Priority, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. Automatic Real Frame Priority preserves the existing Fractional policy. |
+| Adaptive target, display-refresh matching, ceiling, Smooth Cadence, Fractional Real Frame Priority, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. Automatic Real Frame Priority preserves the existing Fractional policy. |
 | Dynamic Cadence probe interval | Live | Reschedules an inactive probe without discarding validated cadence or an active confirmation. |
 | Base FPS Cap, Adaptive auto-cap, and explicit Fractional priority cap | Live while generation is active; dormant while Off | Resets the real-frame pacer and affected scheduler policy. Explicit Fractional priority owns the effective cap only in Fractional Adaptive. |
 | Scaling enable | Restart | Existing and naturally recreated contexts retain process-start scaling and layer membership. |

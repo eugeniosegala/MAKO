@@ -182,7 +182,8 @@ ProfileUpdateDecision Swapchain::updateProfile(
         privateFrameGenerationRebuildAvailable,
         this->info.spatialScalingActivationSupported,
         spatialScalingEffectiveExtentUnchanged,
-        spatialSupersamplingEffectiveExtentUnchanged
+        spatialSupersamplingEffectiveExtentUnchanged,
+        this->gamescopeRefreshHz
     );
     auto decision = plan.decision;
     if (decision.frameGenerationPrivateRebuild) {
@@ -684,6 +685,23 @@ void Swapchain::updateGamescopeRefreshRate(
         this->profile, this->gamescopeRefreshHz
     );
     this->gamescopeRefreshHz = refreshHz;
+    const auto previousTarget = this->profile.target_fps;
+    this->profile.target_fps = adaptiveTargetFpsForDisplay(
+        this->runtimeStatusState.requestedProfile.target_fps,
+        this->profile.adaptive, this->profile.adaptive_target_refresh_rate,
+        refreshHz
+    );
+    const bool automaticTargetChanged = previousTarget != this->profile.target_fps;
+    const auto refreshUpdateNow = DiagnosticsClock::now();
+    const bool confirmedSteamMenuSuspension =
+        this->privateOrderedTransport &&
+        this->gamescopeFocus.fresh(refreshUpdateNow) &&
+        this->gamescopeFocus.gameFocused == false;
+    if (automaticTargetChanged) {
+        this->recoveryState.generatedImageAdmission.reset();
+        this->recoveryState.orderedAcquireRecovery.reset();
+        this->recoveryState.pipelineBusyRecovery.reset();
+    }
     this->realFramePacer.reset();
     this->smoothCadenceBaseCap.reset();
     this->smoothCadencePacerHandoff.reset();
@@ -699,6 +717,7 @@ void Swapchain::updateGamescopeRefreshRate(
         this->diagnosticsState.fixedGeneratedFrames = 0;
         this->diagnosticsState.fixedSkippedFrames = 0;
         if (!generationIsEnabled) {
+            this->generationPolicyResetGate.cancel();
             this->recoveryState.historyWarmupRemaining = 0;
             this->recoveryState.orderedAcquireRecovery.reset();
             if (this->adaptiveScheduler)
@@ -707,19 +726,23 @@ void Swapchain::updateGamescopeRefreshRate(
             this->recoveryState.generatedImageAdmission.reset();
             this->recoveryState.orderedAcquireRecovery.reset();
             this->recoveryState.pipelineBusyRecovery.reset();
-            if (!this->resetGenerationScheduler(
-                    DiagnosticsClock::now(), "refresh-rate-threshold")) {
+            if (this->generationPolicyResetGate.request(
+                    confirmedSteamMenuSuspension) &&
+                    !this->resetGenerationScheduler(
+                        refreshUpdateNow, "refresh-rate-threshold")) {
                 this->recoveryState.historyWarmupRemaining =
                     AdaptiveScheduler::historyWarmupFrameCount();
             }
         }
     } else if (generationIsEnabled &&
             ((this->profile.adaptive &&
-              this->profile.adaptive_stable_cadence) ||
+              (this->profile.adaptive_stable_cadence || automaticTargetChanged)) ||
              (!this->profile.adaptive &&
               this->profile.dynamic_cadence_recovery))) {
-        if (!this->resetGenerationScheduler(
-                DiagnosticsClock::now(), "gamescope-refresh-change")) {
+        if (this->generationPolicyResetGate.request(
+                confirmedSteamMenuSuspension) &&
+                !this->resetGenerationScheduler(
+                    refreshUpdateNow, "gamescope-refresh-change")) {
             this->recoveryState.historyWarmupRemaining =
                 AdaptiveScheduler::historyWarmupFrameCount();
         }

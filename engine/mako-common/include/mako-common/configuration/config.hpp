@@ -172,6 +172,7 @@ namespace ls {
             adaptiveFractionalRealFramePriority =
                 AdaptiveFractionalRealFramePriority::Auto;
         static constexpr uint32_t targetFps = 120;
+        static constexpr bool adaptiveTargetRefreshRate = false;
         static constexpr size_t adaptiveMaxMultiplier = 3;
         static constexpr bool adaptiveStableCadence = true;
         static constexpr GamescopeVrrMode gamescopeVrrMode =
@@ -265,6 +266,8 @@ namespace ls {
             };
         /// desired displayed framerate when adaptive mode is enabled
         uint32_t target_fps{GameConfDefaults::targetFps};
+        /// Follow confirmed display refresh in Adaptive; target_fps stays the fallback.
+        bool adaptive_target_refresh_rate{GameConfDefaults::adaptiveTargetRefreshRate};
         /// maximum total multiplier Adaptive may use
         size_t adaptive_max_multiplier{GameConfDefaults::adaptiveMaxMultiplier};
         /// prefer a validated even display-divisor cadence when safe
