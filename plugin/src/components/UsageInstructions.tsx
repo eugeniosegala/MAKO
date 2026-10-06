@@ -36,7 +36,7 @@ export function UsageInstructions() {
         >
           {t(
             "USAGE_DESC",
-            "Add this Steam launch option to enable MAKO Frame Generation, Scaling, or both.",
+            "Add this Steam launch option to enable MAKO Frame Generation, Scaling, or both. MAKO Scaler and shaders work without Lossless Scaling. Frame Generation and LS1 require it.",
           )}
         </div>
       </MakoInfo>

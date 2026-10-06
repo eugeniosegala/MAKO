@@ -215,7 +215,7 @@
   "PROFILE_CANNOT_RENAME_TITLE": "Não é possível renomear o perfil padrão",
   "PROFILE_CANNOT_RENAME_MSG": "O perfil padrão não pode ser renomeado",
   "USAGE_TITLE": "Instruções de uso",
-  "USAGE_DESC": "Adicione esta opção de inicialização no Steam para usar Geração de Quadros, Scaling ou ambos no MAKO.",
+  "USAGE_DESC": "Adicione esta opção de inicialização no Steam para usar Geração de Quadros, Scaling ou ambos no MAKO. MAKO Scaler e shaders funcionam sem Lossless Scaling. Geração de Quadros e LS1 exigem Lossless Scaling.",
   "CLIPBOARD_COPIED": "Copiado para a área de transferência",
   "CLIPBOARD_COPYING": "Copiando...",
   "CLIPBOARD_COPY_LAUNCH": "Copiar opção de inicialização",

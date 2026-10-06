@@ -215,7 +215,7 @@
   "PROFILE_CANNOT_RENAME_TITLE": "기본 프로필 이름 변경 불가",
   "PROFILE_CANNOT_RENAME_MSG": "기본 프로필의 이름은 변경할 수 없습니다",
   "USAGE_TITLE": "사용 방법",
-  "USAGE_DESC": "이 Steam 실행 옵션을 추가하면 MAKO 프레임 생성, 스케일링 또는 둘 다 사용할 수 있습니다.",
+  "USAGE_DESC": "이 Steam 실행 옵션을 추가하면 MAKO 프레임 생성, 스케일링 또는 둘 다 사용할 수 있습니다. MAKO Scaler와 셰이더는 Lossless Scaling 없이 작동합니다. 프레임 생성과 LS1에는 Lossless Scaling이 필요합니다.",
   "CLIPBOARD_COPIED": "클립보드에 복사됨",
   "CLIPBOARD_COPYING": "복사 중...",
   "CLIPBOARD_COPY_LAUNCH": "실행 옵션 복사",

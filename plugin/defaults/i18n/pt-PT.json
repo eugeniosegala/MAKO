@@ -215,7 +215,7 @@
   "PROFILE_CANNOT_RENAME_TITLE": "Não é possível mudar o nome do perfil predefinido",
   "PROFILE_CANNOT_RENAME_MSG": "Não é possível mudar o nome do perfil predefinido",
   "USAGE_TITLE": "Instruções de utilização",
-  "USAGE_DESC": "Adicione esta opção de arranque ao jogo no Steam para ativar a geração de fotogramas, o redimensionamento ou ambos no MAKO.",
+  "USAGE_DESC": "Adicione esta opção de arranque ao jogo no Steam para ativar a geração de fotogramas, o redimensionamento ou ambos no MAKO. MAKO Scaler e shaders funcionam sem Lossless Scaling. Geração de Fotogramas e LS1 exigem Lossless Scaling.",
   "CLIPBOARD_COPIED": "Copiado para a área de transferência",
   "CLIPBOARD_COPYING": "A copiar...",
   "CLIPBOARD_COPY_LAUNCH": "Copiar opção de arranque",

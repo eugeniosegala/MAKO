@@ -215,7 +215,7 @@
   "PROFILE_CANNOT_RENAME_TITLE": "No se puede renombrar el perfil predeterminado",
   "PROFILE_CANNOT_RENAME_MSG": "El perfil predeterminado no se puede renombrar",
   "USAGE_TITLE": "Instrucciones de uso",
-  "USAGE_DESC": "Añade esta opción de lanzamiento en Steam para activar Generación de cuadros, Escalado o ambos en MAKO.",
+  "USAGE_DESC": "Añade esta opción de lanzamiento en Steam para activar Generación de cuadros, Escalado o ambos en MAKO. MAKO Scaler y los shaders funcionan sin Lossless Scaling. La generación de fotogramas y LS1 requieren Lossless Scaling.",
   "CLIPBOARD_COPIED": "Copiado al portapapeles",
   "CLIPBOARD_COPYING": "Copiando...",
   "CLIPBOARD_COPY_LAUNCH": "Copiar opción de lanzamiento",

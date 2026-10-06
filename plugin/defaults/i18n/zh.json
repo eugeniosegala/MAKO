@@ -215,7 +215,7 @@
   "PROFILE_CANNOT_RENAME_TITLE": "无法重命名默认配置文件",
   "PROFILE_CANNOT_RENAME_MSG": "不能重命名默认配置文件",
   "USAGE_TITLE": "使用说明",
-  "USAGE_DESC": "将此启动选项添加到 Steam 游戏，即可使用 MAKO 帧生成、缩放或两者同时启用。",
+  "USAGE_DESC": "将此启动选项添加到 Steam 游戏，即可使用 MAKO 帧生成、缩放或两者同时启用。 MAKO Scaler 和着色器无需 Lossless Scaling 即可运行。帧生成和 LS1 需要 Lossless Scaling。",
   "CLIPBOARD_COPIED": "已复制到剪贴板",
   "CLIPBOARD_COPYING": "正在复制...",
   "CLIPBOARD_COPY_LAUNCH": "复制启动选项",

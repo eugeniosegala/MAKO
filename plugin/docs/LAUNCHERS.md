@@ -1,6 +1,6 @@
 # Third-party launcher setup
 
-Install MAKO Renderer through MAKO Decky first, then follow the guide for your launcher. **Flatpak Setup** shows the exact **Wrapper path for this device**; the examples below use the standard SteamOS path `/home/deck/.local/bin/mako-run`.
+Install MAKO Renderer through MAKO Decky first, then follow the guide for your launcher. MAKO Scaler and Shaders work without Lossless Scaling; only Frame Generation and LS1 require it. **Flatpak Setup** shows the exact **Wrapper path for this device**; the examples below use the standard SteamOS path `/home/deck/.local/bin/mako-run`.
 
 - [Heroic](#heroic)
 - [Lutris](#lutris)

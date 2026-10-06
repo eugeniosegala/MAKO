@@ -215,7 +215,7 @@
   "PROFILE_CANNOT_RENAME_TITLE": "デフォルトプロファイルの名前は変更できません",
   "PROFILE_CANNOT_RENAME_MSG": "デフォルトプロファイルの名前は変更できません",
   "USAGE_TITLE": "使用方法",
-  "USAGE_DESC": "この起動オプションを Steam のゲームに追加すると、MAKO のフレーム生成、スケーリング、または両方を使えます。",
+  "USAGE_DESC": "この起動オプションを Steam のゲームに追加すると、MAKO のフレーム生成、スケーリング、または両方を使えます。 MAKO Scaler とシェーダーは Lossless Scaling なしで動作します。フレーム生成と LS1 には Lossless Scaling が必要です。",
   "CLIPBOARD_COPIED": "クリップボードにコピーしました",
   "CLIPBOARD_COPYING": "コピー中...",
   "CLIPBOARD_COPY_LAUNCH": "起動オプションをコピー",

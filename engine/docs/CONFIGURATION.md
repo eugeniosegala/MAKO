@@ -14,7 +14,7 @@ Options marked **Restart** apply on the next launch. See [Runtime transitions](R
 
 ## Lossless Scaling availability
 
-Lossless Scaling is optional. The Qt UI keeps profiles, Frame Generation, Scaling, and Shaders accessible when the DLL is missing and displays one compact **Lossless Scaling** notice with an availability bullet and an **Install** action. Turn Frame Generation off and choose **MAKO Scaler** and/or **Shaders** for a setup without it. Saved and environment DLL paths are retained even when their files are absent; availability is checked by the features that need the DLL rather than by configuration parsing. Install Lossless Scaling or correct its path for Frame Generation and LS1, then restart the game. The notice refreshes after a DLL path edit or when the Qt window becomes active.
+**MAKO Scaler and Shaders work without Lossless Scaling; only Frame Generation and LS1 require it.** All profile controls remain editable and save normally when the DLL is missing. For a setup without it, turn Frame Generation off and choose **MAKO Scaler** and/or **Shaders**. The configuration app shows an availability warning. To use Frame Generation or LS1, install Lossless Scaling or correct its DLL path, then restart the game.
 
 ## Profiles
 

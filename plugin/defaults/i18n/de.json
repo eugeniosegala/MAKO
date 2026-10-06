@@ -215,7 +215,7 @@
   "PROFILE_CANNOT_RENAME_TITLE": "Standardprofil kann nicht umbenannt werden",
   "PROFILE_CANNOT_RENAME_MSG": "Das Standardprofil kann nicht umbenannt werden",
   "USAGE_TITLE": "Nutzungshinweise",
-  "USAGE_DESC": "Fügen Sie diese Steam-Startoption hinzu, um MAKO Frame Generation, Skalierung oder beides zu aktivieren.",
+  "USAGE_DESC": "Fügen Sie diese Steam-Startoption hinzu, um MAKO Frame Generation, Skalierung oder beides zu aktivieren. MAKO Scaler und Shader funktionieren ohne Lossless Scaling. Frame Generation und LS1 benötigen Lossless Scaling.",
   "CLIPBOARD_COPIED": "In die Zwischenablage kopiert",
   "CLIPBOARD_COPYING": "Wird kopiert…",
   "CLIPBOARD_COPY_LAUNCH": "Startoption kopieren",

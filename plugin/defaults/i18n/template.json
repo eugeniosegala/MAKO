@@ -215,7 +215,7 @@
   "PROFILE_CANNOT_RENAME_TITLE": "Cannot rename default profile",
   "PROFILE_CANNOT_RENAME_MSG": "The default profile cannot be renamed",
   "USAGE_TITLE": "Usage Instructions",
-  "USAGE_DESC": "Add this Steam launch option to enable MAKO Frame Generation, Scaling, or both.",
+  "USAGE_DESC": "Add this Steam launch option to enable MAKO Frame Generation, Scaling, or both. MAKO Scaler and shaders work without Lossless Scaling. Frame Generation and LS1 require it.",
   "CLIPBOARD_COPIED": "Copied to clipboard",
   "CLIPBOARD_COPYING": "Copying...",
   "CLIPBOARD_COPY_LAUNCH": "Copy Launch Option",

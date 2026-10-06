@@ -1,6 +1,6 @@
 # MAKO Decky troubleshooting
 
-These instructions apply to published ZIPs and local development builds.
+These instructions apply to published ZIPs and local development builds. MAKO Scaler and Shaders work without Lossless Scaling; only Frame Generation and LS1 require it.
 
 ## HDR is unavailable by design
 
