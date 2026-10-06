@@ -8,12 +8,13 @@ import os
 from pathlib import Path
 import re
 import stat
+import subprocess
 from typing import Iterator, Sequence, TypedDict
 
 from .base_service import BaseService
 from .managed_files import (
     copy_managed_file_atomically, managed_install_transaction,
-    write_managed_text_atomically,
+    write_managed_text_atomically, sync_managed_directory,
 )
 from .types import RemotePlayResponse, RuntimeContextState
 
@@ -51,7 +52,10 @@ class RemotePlayService(BaseService):
     def _native_client(path: Path) -> bool:
         if path.is_symlink() or not path.is_file() or not os.access(path, os.X_OK):
             return False
-        with path.open("rb") as stream:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                return False
             header = stream.read(20)
         return len(header) >= 20 and header[:6] == b"\x7fELF\x02\x01" and header[18:20] == b"\x3e\0"
 
@@ -59,8 +63,9 @@ class RemotePlayService(BaseService):
         if self.client.is_symlink():
             return False
         try:
-            with self.client.open("rb") as stream:
-                return MARKER in stream.read(256)
+            descriptor = os.open(self.client, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+            with os.fdopen(descriptor, "rb") as stream:
+                return stat.S_ISREG(os.fstat(stream.fileno()).st_mode) and MARKER in stream.read(256)
         except OSError:
             return False
 
@@ -72,10 +77,12 @@ class RemotePlayService(BaseService):
             try:
                 executable = os.readlink(proc / "exe").removesuffix(" (deleted)")
                 arguments = (proc / "cmdline").read_bytes().split(b"\0") if Path(executable).name.startswith("python") else []
-                if executable in paths or (
-                    Path(executable).name.startswith("python") and
-                    len(arguments) > 1 and os.fsdecode(arguments[1]) in paths
-                ):
+                script = None
+                if len(arguments) > 1 and not arguments[1].startswith(b"-"):
+                    script = Path(os.fsdecode(arguments[1]))
+                    if not script.is_absolute():
+                        script = Path(os.readlink(proc / "cwd")) / script
+                if executable in paths or (script is not None and str(script.resolve()) in paths):
                     pids.append(int(proc.name))
             except (OSError, ValueError):
                 continue
@@ -113,6 +120,9 @@ class RemotePlayService(BaseService):
         descriptor = os.open(self.lock_path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
         with os.fdopen(descriptor, "r+") as lock:
             # Decky may run as root; the Steam user's self-contained wrapper reads this lock.
+            identity = os.fstat(lock.fileno())
+            if not stat.S_ISREG(identity.st_mode) or identity.st_nlink != 1:
+                raise ValueError("Remote Play launch lock is not a private regular file")
             owner = self.user_home.stat()
             os.fchown(lock.fileno(), owner.st_uid, owner.st_gid)
             try:
@@ -124,9 +134,7 @@ class RemotePlayService(BaseService):
             yield
 
     def _read_state(self) -> RemotePlayOverrideState:
-        if self.state.is_symlink():
-            raise ValueError("Remote Play state is a symlink")
-        raw = json.loads(self.state.read_text())
+        raw = json.loads(self._read_record(self.state))
         if not isinstance(raw, dict) or raw.get("version") != 1 or raw.get("enabled") is not True or raw.get("profile") != REMOTE_PLAY_PROFILE:
             raise ValueError("Invalid Remote Play override state")
         digest = raw.get("wrapper_sha256")
@@ -134,12 +142,69 @@ class RemotePlayService(BaseService):
             raise ValueError("Invalid Remote Play wrapper checksum")
         return RemotePlayOverrideState(version=1, enabled=True, profile=REMOTE_PLAY_PROFILE, wrapper_sha256=digest)
 
-    def _validate_backup(self) -> RemotePlayOverrideState:
+    @staticmethod
+    def _read_record(path: Path) -> str:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise ValueError("Remote Play record is not a regular file")
+            content = stream.read(4097)
+            if len(content) > 4096:
+                raise ValueError("Remote Play record is too large")
+            return content.decode("utf-8")
+
+    def _validate_backup(self, *, for_removal: bool = False) -> RemotePlayOverrideState:
         if not self._native_client(self.backup):
             raise ValueError("Original Steam client backup is unavailable or invalid")
-        if self.checksum.is_symlink() or self._digest(self.backup) != self.checksum.read_text().strip():
+        identity = self.backup.stat()
+        if identity.st_uid != self.user_home.stat().st_uid or identity.st_mode & (stat.S_ISUID | stat.S_ISGID):
+            raise ValueError("Original Steam client backup has unexpected ownership or privileges")
+        if self._digest(self.backup) != self._read_record(self.checksum).strip():
             raise ValueError("Original Steam client backup checksum mismatch")
-        return self._read_state()
+        try:
+            return self._read_state()
+        except (OSError, ValueError):
+            # A lost sidecar must not strand an exactly known managed wrapper.
+            # Unfamiliar/altered payloads still require manual recovery.
+            expected = hashlib.sha256(self._payload().encode()).hexdigest()
+            if not for_removal or self._digest(self.client) != expected:
+                raise
+            return RemotePlayOverrideState(version=1, enabled=True, profile=REMOTE_PLAY_PROFILE, wrapper_sha256=expected)
+
+    def _payload(self) -> str:
+        return Path(__file__).with_name("remote_play_launch.py").read_text().replace(
+            "home = Path('__MAKO_USER_HOME__')", f"home = Path({str(self.user_home)!r})",
+        )
+
+    @contextmanager
+    def transaction(self, extra_paths: Sequence[Path] = ()) -> Iterator[None]:
+        """Rollback MAKO writes without restoring over a foreign Steam update."""
+        expected = {hashlib.sha256(self._payload().encode()).hexdigest()}
+        for path in (self.client, self.backup):
+            if path.is_file() and not path.is_symlink():
+                expected.add(self._digest(path))
+        def owned(path: Path) -> bool:
+            if path != self.client:
+                return True
+            try:
+                return self._digest(path) in expected
+            except (OSError, ValueError):
+                return False
+        paths = [self.client, self.backup, self.checksum, self.state, *extra_paths]
+        with managed_install_transaction(paths, self.log, rollback_guard=owned):
+            yield
+
+    @staticmethod
+    def _check_interpreter() -> None:
+        try:
+            result = subprocess.run(
+                ["/usr/bin/python3", "-I", "-c", "import fcntl, hashlib, tomllib; assert hasattr(hashlib, 'file_digest')"],
+                capture_output=True, timeout=5, check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            raise ValueError("Remote Play requires a working system Python 3.11 or newer") from error
+        if result.returncode:
+            raise ValueError("Remote Play requires a working system Python 3.11 or newer")
 
     def install_locked(self) -> None:
         """Called under mutation(), after the canonical profile is prepared."""
@@ -147,6 +212,12 @@ class RemotePlayService(BaseService):
             state = self._validate_backup()
             if self._digest(self.client) != state["wrapper_sha256"]:
                 raise ValueError("Steam client wrapper changed; refusing replacement")
+            payload = self._payload()
+            if hashlib.sha256(payload.encode()).hexdigest() != state["wrapper_sha256"]:
+                self._check_interpreter()
+                compile(payload, "streaming_client", "exec")
+                with self.transaction():
+                    self._commit_wrapper(payload, state["wrapper_sha256"], self.backup.stat())
             return
         for path in (self.backup, self.checksum, self.state):
             if path.exists() or path.is_symlink():
@@ -161,27 +232,40 @@ class RemotePlayService(BaseService):
             raise ValueError("Steam streaming client has unexpected ownership or privileges")
         if not self.mako_script_path.is_file() or not os.access(self.mako_script_path, os.X_OK):
             raise ValueError("Install MAKO Renderer first")
-        payload = Path(__file__).with_name("remote_play_launch.py").read_text().replace(
-            "home = Path('__MAKO_USER_HOME__')", f"home = Path({str(self.user_home)!r})",
-        )
+        self._check_interpreter()
+        payload = self._payload()
         compile(payload, "streaming_client", "exec")
         original_hash = self._digest(self.client, original_stat.st_uid)
-        paths = [self.client, self.backup, self.checksum, self.state]
-        with managed_install_transaction(paths, self.log):
+        with self.transaction():
             # Keep a privileged copy private until its bytes have been verified.
             copy_managed_file_atomically(self.client, self.backup, 0o600, self.log)
             if self._digest(self.backup) != original_hash or self._digest(self.client, original_stat.st_uid) != original_hash:
                 raise ValueError("Steam updated during override installation")
+            os.chown(self.backup, original_stat.st_uid, original_stat.st_gid, follow_symlinks=False)
             os.chmod(self.backup, stat.S_IMODE(original_stat.st_mode), follow_symlinks=False)
-            write_managed_text_atomically(self.checksum, original_hash + "\n", 0o600, self.log)
-            state = RemotePlayOverrideState(
-                version=1, enabled=True, profile=REMOTE_PLAY_PROFILE,
-                wrapper_sha256=hashlib.sha256(payload.encode()).hexdigest(),
-            )
-            write_managed_text_atomically(self.state, json.dumps(state) + "\n", 0o600, self.log)
-            write_managed_text_atomically(self.client, payload, stat.S_IMODE(original_stat.st_mode), self.log)
-            for path in paths:
-                os.chown(path, original_stat.st_uid, original_stat.st_gid, follow_symlinks=False)
+            owner = (original_stat.st_uid, original_stat.st_gid)
+            write_managed_text_atomically(self.checksum, original_hash + "\n", 0o600, self.log, owner=owner)
+            self._commit_wrapper(payload, original_hash, original_stat)
+
+    def _commit_wrapper(self, payload: str, previous_hash: str, permissions: os.stat_result) -> None:
+        state = RemotePlayOverrideState(
+            version=1, enabled=True, profile=REMOTE_PLAY_PROFILE,
+            wrapper_sha256=hashlib.sha256(payload.encode()).hexdigest(),
+        )
+        write_managed_text_atomically(self.state, json.dumps(state) + "\n", 0o600, self.log, owner=(permissions.st_uid, permissions.st_gid))
+        # Commit readable recovery dependencies before exposing the wrapper.
+        descriptor = os.open(self.backup, os.O_RDONLY | os.O_NOFOLLOW)
+        try:
+            os.fsync(descriptor)
+        finally:
+            os.close(descriptor)
+        sync_managed_directory(self.client.parent)
+        sync_managed_directory(self.config_dir)
+        def unchanged() -> bool:
+            return not self.running_pids() and self._digest(self.client, permissions.st_uid) == previous_hash
+        write_managed_text_atomically(self.client, payload, stat.S_IMODE(permissions.st_mode), self.log,
+                                     owner=(permissions.st_uid, permissions.st_gid), replace_guard=unchanged)
+        sync_managed_directory(self.client.parent)
 
     def install(self) -> None:
         with self.mutation():
@@ -189,7 +273,17 @@ class RemotePlayService(BaseService):
 
     def remove(self) -> None:
         with self.mutation():
-            state = self._validate_backup()
+            if not self.backup.exists() and not self.backup.is_symlink() and self._native_client(self.client):
+                # Restoration already moved the original, or Steam replaced it.
+                # Never replace that working native client just to clear state.
+                self._read_state()
+                with self.transaction():
+                    self.checksum.unlink(missing_ok=True)
+                    sync_managed_directory(self.client.parent)
+                    self.state.unlink()
+                    sync_managed_directory(self.config_dir)
+                return
+            state = self._validate_backup(for_removal=True)
             installed = self._installed()
             if self.client.is_symlink() or not self.client.is_file():
                 raise ValueError("Steam client entry is missing or a symlink; manual recovery required")
@@ -197,15 +291,27 @@ class RemotePlayService(BaseService):
                 raise ValueError("Steam client wrapper changed; refusing to overwrite it")
             if not installed and not self._native_client(self.client):
                 raise ValueError("Steam client entry changed unexpectedly; manual recovery required")
-            with managed_install_transaction([self.client, self.backup, self.checksum, self.state], self.log):
-                if installed:
+            with self.transaction():
+                if installed and self._digest(self.client) == state["wrapper_sha256"]:
                     os.replace(self.backup, self.client)
-                else:
+                elif self._native_client(self.client):
                     # Steam already replaced the entry point. Retire our stale
                     # backup; never restore it over the updated Steam binary.
                     self.backup.unlink()
+                else:
+                    raise ValueError("Steam client changed during restoration")
+                sync_managed_directory(self.client.parent)
                 self.checksum.unlink()
-                self.state.unlink()
+                sync_managed_directory(self.client.parent)
+                self.state.unlink(missing_ok=True)
+                sync_managed_directory(self.config_dir)
+
+    def refresh_installed_payload(self) -> bool:
+        """Upgrade only an already enabled, intact override; never install implicitly."""
+        if not self._installed() or self._digest(self.client) == hashlib.sha256(self._payload().encode()).hexdigest():
+            return False
+        self.install()
+        return True
 
     def restore_before_uninstall(self) -> None:
         if self._installed() or self.state.exists():

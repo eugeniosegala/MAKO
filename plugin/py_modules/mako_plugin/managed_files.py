@@ -7,7 +7,7 @@ import secrets
 import shutil
 import stat
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from typing import Any
 
 
@@ -54,7 +54,9 @@ def _create_staged_file(
 
 
 def write_managed_text_atomically(
-        destination: Path, content: str, mode: int, logger: Any) -> bool:
+        destination: Path, content: str, mode: int, logger: Any, *,
+        owner: tuple[int, int] | None = None,
+        replace_guard: Callable[[], bool] | None = None) -> bool:
     """Atomically replace a generated MAKO text file only when needed."""
     try:
         file_mode = destination.lstat().st_mode
@@ -64,6 +66,7 @@ def write_managed_text_atomically(
                 and actual_mode & 0o700 == mode & 0o700
                 and actual_mode & ~mode == 0
                 and destination.read_text(encoding="utf-8") == content
+                and (owner is None or (destination.stat().st_uid, destination.stat().st_gid) == owner)
         ):
             logger.debug("Generated MAKO file already current: %s", destination)
             return False
@@ -81,8 +84,12 @@ def write_managed_text_atomically(
         with output:
             output.write(content)
             output.flush()
+            if owner is not None:
+                os.fchown(output.fileno(), *owner)
             os.fsync(output.fileno())
 
+        if replace_guard is not None and not replace_guard():
+            raise OSError(f"Destination changed before replacement: {destination}")
         temporary_path.replace(destination)
         logger.info("Wrote generated MAKO file to %s", destination)
         return True
@@ -97,14 +104,26 @@ def write_managed_text_atomically(
         temporary_path.unlink(missing_ok=True)
 
 
+def sync_managed_directory(directory: Path) -> None:
+    """Persist an ordered directory-entry change when a caller requires it."""
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 @contextmanager
-def managed_install_transaction(paths: list[Path], logger: Any) -> Iterator[None]:
+def managed_install_transaction(paths: list[Path], logger: Any, *,
+        rollback_guard: Callable[[Path], bool] | None = None) -> Iterator[None]:
     """Restore the selected installation if a later install step fails.
 
     Callers must atomically replace these files, never modify their inodes.
     Adjacent hard-link backups preserve modes and symlinks without duplicating
     libraries or depending on /tmp's filesystem. Unsupported hard links fall
-    back to a copy before any installation writes begin.
+    back to a copy before any installation writes begin. An optional rollback
+    guard leaves externally changed destinations untouched and retains their
+    recovery snapshots instead of restoring over them.
     """
     backups: list[tuple[Path, Path | None]] = []
     directories: list[Path] = []
@@ -135,6 +154,11 @@ def managed_install_transaction(paths: list[Path], logger: Any) -> Iterator[None
             failures = []
             for path, backup in reversed(backups):
                 try:
+                    if rollback_guard is not None and not rollback_guard(path):
+                        if backup is not None:
+                            retained.add(backup.parent)
+                        failures.append(f"{path}: changed externally; left untouched")
+                        continue
                     if backup is None:
                         path.unlink(missing_ok=True)
                     else:

@@ -19,7 +19,6 @@ from .dll_detection import DllDetectionService
 from .configuration import ConfigurationService
 from .runtime_state import RuntimeStateService
 from .remote_play import RemotePlayService, REMOTE_PLAY_PROFILE
-from .managed_files import managed_install_transaction
 from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
 from .config_schema_generated import ConfigurationPatch
 from .flatpak_service import (
@@ -134,10 +133,9 @@ class Plugin:
         remote = self.remote_play_service
         configuration = self.configuration_service
         with remote.mutation(), configuration._configuration_write_lock:
-            paths = [remote.client, remote.backup, remote.checksum, remote.state,
-                     configuration.config_file_path, configuration.profile_metadata_path,
+            paths = [configuration.config_file_path, configuration.profile_metadata_path,
                      configuration.wrapper_profile_settings_path, configuration.mako_script_path]
-            with managed_install_transaction(paths, remote.log):
+            with remote.transaction(paths):
                 configuration.ensure_remote_play_profile(REMOTE_PLAY_PROFILE)
                 remote.install_locked()
 
@@ -732,6 +730,12 @@ class Plugin:
                 decky.logger.info("Installed the diagnostics helper")
         except OSError as error:
             decky.logger.warning("Could not install the diagnostics helper: %s", error)
+
+        try:
+            if await asyncio.to_thread(self.remote_play_service.refresh_installed_payload):
+                decky.logger.info("MAKO Decky: refreshed the enabled Remote Play launch payload")
+        except (OSError, ValueError) as error:
+            decky.logger.warning("MAKO Decky: Remote Play payload refresh deferred: %s", error)
 
         await self._start_flatpak_vrr_monitor()
 

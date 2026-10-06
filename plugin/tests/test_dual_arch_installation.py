@@ -1283,6 +1283,33 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertEqual(destination.read_bytes(), b"existing")
         self.assertEqual(list(self.root.glob(".managed-file.*")), [])
 
+    def test_atomic_text_owner_failure_never_publishes_unreadable_replacement(self):
+        destination = self.root / 'owned-text'
+        destination.write_text('existing')
+        with patch.object(managed_files_module.os, 'fchown', side_effect=OSError('owner failure')):
+            with self.assertRaisesRegex(OSError, 'owner failure'):
+                managed_files_module.write_managed_text_atomically(
+                    destination, 'replacement', 0o600, self.service.log,
+                    owner=(os.getuid(), os.getgid()),
+                )
+        self.assertEqual('existing', destination.read_text())
+        self.assertEqual([], list(self.root.glob('.owned-text.*')))
+
+    def test_atomic_text_guard_preserves_external_replacement(self):
+        destination = self.root / 'guarded-text'
+        destination.write_text('existing')
+        def changed():
+            external = self.root / 'external'
+            external.write_text('updated externally')
+            external.replace(destination)
+            return False
+        with self.assertRaisesRegex(OSError, 'changed before replacement'):
+            managed_files_module.write_managed_text_atomically(
+                destination, 'replacement', 0o600, self.service.log, replace_guard=changed,
+            )
+        self.assertEqual('updated externally', destination.read_text())
+        self.assertEqual([], list(self.root.glob('.guarded-text.*')))
+
     def test_install_preserves_unmanaged_neighbouring_files(self):
         unmanaged_file = self.service.local_lib_dir.parent / "user-note.txt"
         unmanaged_file.parent.mkdir(parents=True, exist_ok=True)

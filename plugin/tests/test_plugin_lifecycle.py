@@ -58,7 +58,13 @@ class PluginLifecycleTests(unittest.TestCase):
             ) or {"success": True, "disabled_apps": []},
         )
 
-        asyncio.run(plugin._main())
+        plugin.remote_play_service = SimpleNamespace(
+            refresh_installed_payload=lambda: calls.append("remote-play-payload") or False,
+        )
+        async def inline(function, *arguments):
+            return function(*arguments)
+        with patch("py_modules.mako_plugin.plugin.asyncio.to_thread", inline):
+            asyncio.run(plugin._main())
         plugin._start_flatpak_vrr_monitor.assert_awaited_once()
 
         self.assertEqual(calls, [
@@ -68,6 +74,7 @@ class PluginLifecycleTests(unittest.TestCase):
             "gamescope-wsi-manifest",
             "postprocess-manifests",
             "diagnostics-helper",
+            "remote-play-payload",
         ])
 
     def test_main_stops_before_migrations_on_unsupported_host(self):
