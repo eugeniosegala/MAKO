@@ -51,6 +51,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 - **Gamescope recovery:** Keeps native presentation running and resumes generation once game cadence stabilizes.
 - **Automatic profiles:** Saves per-game renderer and compatibility settings, matched by Steam app ID or process.
 - **Launcher integration:** Per-game setup for Heroic, Lutris, and EmuDeck, including Steam shortcuts.
+- **Native Steam Remote Play (experimental):** Opt-in frame generation, scaling, and shaders on the receiving device, controlled from MAKO Decky or the Qt UI. See [setup and recovery](plugin/docs/REMOTE-PLAY.md).
 
 ## What MAKO is
 
