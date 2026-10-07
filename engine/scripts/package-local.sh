@@ -119,7 +119,10 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
                 libvulkan-dev mesa-common-dev \
                 qt6-base-dev qt6-base-dev-tools \
                 qt6-tools-dev qt6-tools-dev-tools \
-                qt6-declarative-dev qt6-declarative-dev-tools
+                qt6-declarative-dev qt6-declarative-dev-tools \
+                qml6-module-qtqml qml6-module-qtqml-models qml6-module-qtqml-workerscript \
+                qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts \
+                qml6-module-qtquick-templates qml6-module-qtquick-window
             git clone --depth=1 -b "$MAKO_VULKAN_HEADERS_REVISION" \
                 https://github.com/KhronosGroup/Vulkan-Headers /tmp/vkh
             rm -rf /usr/include/vulkan /usr/include/vk_video

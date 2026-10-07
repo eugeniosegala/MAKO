@@ -173,6 +173,12 @@ class PathAndPackageContractTests(unittest.TestCase):
             "apt-get install -y -qq", 1
         )[1].split("git clone", 1)[0]
         self.assertRegex(portable_dependencies, r"\bnodejs\b")
+        for module in (
+            "qml6-module-qtqml", "qml6-module-qtqml-models", "qml6-module-qtqml-workerscript",
+            "qml6-module-qtquick", "qml6-module-qtquick-controls", "qml6-module-qtquick-layouts",
+            "qml6-module-qtquick-templates", "qml6-module-qtquick-window",
+        ):
+            self.assertIn(module, portable_dependencies)
 
     def test_services_share_the_installed_plugin_root(self):
         self.assertEqual(PLUGIN_ROOT.resolve(), PLUGIN_DIR)

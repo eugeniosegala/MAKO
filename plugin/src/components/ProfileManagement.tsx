@@ -35,6 +35,18 @@ import {
 
 const PROFILES_COLLAPSED_KEY = "mako-profiles-collapsed";
 
+const profileActionButtonStyle: CSSProperties = {
+  width: "100%",
+  minWidth: 0,
+  height: "34px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
+  padding: "4px 8px",
+  fontSize: "12px",
+};
+
 interface TextInputModalProps {
   title: string;
   description: string;
@@ -353,7 +365,7 @@ export function ProfileManagement({
                 <DialogButton
                   className="Mako_DialogButton"
                   style={{
-                    width: "100%",
+                    ...profileActionButtonStyle,
                     ...makoDialogButtonStyle(focusedAction === "create"),
                   }}
                   onClick={showCreateProfile}
@@ -366,15 +378,7 @@ export function ProfileManagement({
                 <DialogButton
                   className="Mako_DialogButton"
                   style={{
-                    width: "100%",
-                    minWidth: 0,
-                    height: "34px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    padding: "4px 8px",
-                    fontSize: "12px",
+                    ...profileActionButtonStyle,
                     ...makoDialogButtonStyle(focusedAction === "edit"),
                   }}
                   onClick={showRenameProfile}
@@ -393,15 +397,7 @@ export function ProfileManagement({
                 <DialogButton
                   className="Mako_DialogButton Mako_DialogButton--danger"
                   style={{
-                    width: "100%",
-                    minWidth: 0,
-                    height: "34px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "6px",
-                    padding: "4px 8px",
-                    fontSize: "12px",
+                    ...profileActionButtonStyle,
                     ...makoDialogButtonStyle(
                       focusedAction === "delete",
                       "danger",

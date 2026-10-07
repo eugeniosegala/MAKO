@@ -87,6 +87,8 @@ This fallback applies only to `scripts/package-local.sh`. Manual CMake builds st
 
 Local native Linux packaging can use the host SDK when it passes the Vulkan header check and Qt ABI guard. The package check rejects a UI that needs symbols newer than Qt 6.4. If either check fails, set `MAKO_PORTABLE_PACKAGE=1` to use the portable baseline with Docker or Podman. Non-Linux packaging and all public native releases require one of those runtimes.
 
+The Ubuntu 22.04 portable builder installs the Qt QML runtime modules required by offscreen UI tests alongside the Qt development packages. Its system Python 3.10 exercises disabled Remote Play status and refusal to activate on an unsupported interpreter; stream activation still requires system Python 3.11 or newer.
+
 ## Fast SteamOS development build
 
 For native Steam-game iteration, use the persistent incremental build instead of the release packager:

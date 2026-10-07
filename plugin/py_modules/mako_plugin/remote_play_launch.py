@@ -10,7 +10,6 @@ import re
 import stat
 from pathlib import Path
 import sys
-import tomllib
 from typing import Callable, Mapping, TypedDict
 
 
@@ -72,6 +71,11 @@ def read_record(path: Path) -> str:
 
 def selected_profile(config: Path) -> dict:
     """Resolve the saved editor selection once, before launching a stream."""
+    # Disabled status and activation's interpreter check also run on Python 3.10.
+    try:
+        import tomllib
+    except ImportError as error:
+        raise ValueError("Remote Play requires a working system Python 3.11 or newer") from error
     with open_regular(config) as stream:
         content = stream.read().decode("utf-8")
     data = tomllib.loads(content)

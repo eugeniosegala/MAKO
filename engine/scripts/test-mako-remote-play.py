@@ -50,6 +50,14 @@ class RemotePlayCommandTests(unittest.TestCase):
         self.assertFalse(self.command('refresh')['installed'])
         self.assertEqual(ELF, self.client.read_bytes())
 
+    @unittest.skipIf(SYSTEM_PYTHON_SUPPORTED, 'system Python supports Remote Play activation')
+    def test_unsupported_system_python_preserves_original(self):
+        response = self.command('install', success=False)
+        self.assertIn('Python 3.11', response['error'])
+        self.assertEqual(ELF, self.client.read_bytes())
+        self.assertFalse(self.client.with_name('streaming_client.mako-original').exists())
+        self.assertFalse((self.config.parent / 'native-remote-play.json').exists())
+
     def test_install_restore_keep_original(self):
         self.assertTrue(self.command('install')['installed'])
         state = self.config.parent / 'native-remote-play.json'
