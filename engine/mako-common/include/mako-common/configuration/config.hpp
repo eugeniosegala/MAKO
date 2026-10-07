@@ -7,12 +7,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
 namespace ls {
+
+    namespace detail { class PowerSourceMonitor; }
 
     /// global configuration
     struct GlobalConf {
@@ -410,6 +413,12 @@ namespace ls {
         /// create a new configuration watcher
         /// @throws ls::error on failure
         explicit WatchedConfig(std::filesystem::path powerSupplyRoot = "/sys/class/power_supply");
+        ~WatchedConfig();
+
+        WatchedConfig(const WatchedConfig&) = delete;
+        WatchedConfig& operator=(const WatchedConfig&) = delete;
+        WatchedConfig(WatchedConfig&&) noexcept;
+        WatchedConfig& operator=(WatchedConfig&&) noexcept;
 
         /// reload the configuration from disk if it has changed
         /// @throws ls::error on failure
@@ -420,9 +429,14 @@ namespace ls {
         /// @return configuration file
         [[nodiscard]] const auto& get() const { return this->configFile; }
     private:
+        void configurePowerMonitoring(bool startup);
+        bool updatePowerSource();
+
         ConfigFile configFile;
         std::filesystem::path powerSupplyRoot;
         std::chrono::steady_clock::time_point nextPowerPoll;
+        bool powerProfilesEnabled{false};
+        std::unique_ptr<detail::PowerSourceMonitor> powerMonitor;
 
         std::filesystem::path path;
         std::chrono::time_point<std::chrono::file_clock> last_timestamp;

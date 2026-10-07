@@ -332,6 +332,7 @@ PY
 
 built_layer_64=""
 built_cli=""
+built_remote_play_sdr=""
 installed_cli=""
 built_layer_32=""
 built_spatial_layer_64=""
@@ -434,6 +435,7 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   if [[ "$deploy_engine" == true ]]; then
     built_layer_64="$engine_build_dir/mako-render/$renderer_library_filename"
     built_cli="$engine_build_dir/mako-cli/${cli_relative_path##*/}"
+    built_remote_play_sdr="$engine_build_dir/scripts/mako_remote_play/libmako-remote-play-sdr.so"
     installed_cli="$HOME/$cli_relative_path"
     built_spatial_layer_64="$engine_build_dir/mako-render/$spatial_library_filename"
     built_spatial_manifest_64="$engine_build_dir/mako-render/private-scaling-manifest/${spatial_manifest_relative_path##*/}"
@@ -457,6 +459,7 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   fi
   for layer_path in \
       "$built_cli" \
+      "$built_remote_play_sdr" \
       "$built_layer_64" "$built_layer_32" \
       "$built_spatial_layer_64" "$built_spatial_layer_32" \
       "$built_spatial_manifest_64" "$built_spatial_manifest_32" \
@@ -637,6 +640,13 @@ if [[ -n "$built_layer_64" ]]; then
   copy_file "$built_vkbasalt_library_64" "$installed_vkbasalt_library_64"
   copy_file "$built_vkbasalt_manifest_64" "$installed_vkbasalt_manifest_64"
   copy_file "$built_cli" "$installed_cli"
+  copy_file "$built_remote_play_sdr" \
+    "$HOME/.local/share/mako-render/mako_remote_play/libmako-remote-play-sdr.so"
+  if ! cmp -s "$built_remote_play_sdr" \
+      "$HOME/.local/share/mako-render/mako_remote_play/libmako-remote-play-sdr.so"; then
+    echo "Installed Remote Play SDR helper differs from the development build." >&2
+    exit 1
+  fi
   if [[ ! -x "$installed_cli" ]] || ! cmp -s "$built_cli" "$installed_cli"; then
     echo "Installed Renderer CLI differs from the development build: $installed_cli" >&2
     exit 1

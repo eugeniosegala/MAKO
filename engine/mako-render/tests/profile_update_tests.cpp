@@ -350,6 +350,142 @@ int main() {
             decision.refreshRateThresholdChanged,
         "Refresh threshold changes must apply live");
 
+    struct RefreshGuardCapMode {
+        bool adaptive;
+        bool steady;
+        ls::AdaptiveFractionalRealFramePriority priority;
+        std::optional<double> generatedCap;
+    };
+    using Priority = ls::AdaptiveFractionalRealFramePriority;
+    const RefreshGuardCapMode refreshGuardCapModes[]{
+        {false, false, Priority::Auto, std::nullopt},
+        {true, false, Priority::Auto, std::nullopt},
+        {true, true, Priority::Auto, 45.0},
+        {true, false, Priority::Low, 54.0},
+        {true, false, Priority::Medium, 60.0},
+        {true, false, Priority::High, 67.5},
+        {true, false, Priority::VeryHigh, 72.0},
+    };
+    const AdaptiveSchedulerSnapshot staleCapRelease{
+        .automaticBaseCapSuppressed = true,
+    };
+    const AdaptiveSchedulerSnapshot refreshGuardCadence{
+        .phase = AdaptiveSchedulerPhase::StableCadence,
+        .generationLimit = 1,
+        .validatedGenerationLimit = 1,
+        .stableCadenceLimit = 1,
+        .stableCadenceEvaluationActive = false,
+        .smoothedBaseFps = 30.0,
+    };
+    const GamescopePresentationFeedback refreshGuardVrr{
+        .vrrEnabled = true,
+        .vrrCapable = true,
+        .vrrActive = true,
+    };
+    for (const auto manualCap : {0U, 40U}) {
+        for (const auto& mode : refreshGuardCapModes) {
+            auto requested = savedTarget;
+            requested.adaptive = mode.adaptive;
+            requested.adaptive_auto_base_fps_cap = mode.steady;
+            requested.adaptive_fractional_real_frame_priority = mode.priority;
+            requested.adaptive_stable_cadence = true;
+            requested.adaptive_target_refresh_rate = true;
+            requested.frame_generation_refresh_threshold = 60;
+            requested.base_fps_cap = manualCap;
+            const auto paused = resolveDisplayTarget(requested, requested, 60)
+                .appliedProfile;
+            expect(!effectiveFrameGenerationEnabled(paused, 60) &&
+                    effectiveBaseFpsCap(paused, 40) == manualCap &&
+                    effectiveBaseFpsCap(paused, 60) == manualCap,
+                "The display guard must release Adaptive caps and retain only the manual cap");
+            expect(effectiveBaseFpsCap(paused, staleCapRelease, 60) == manualCap &&
+                    effectiveBaseFpsCap(paused, staleCapRelease, {}, 60) == manualCap &&
+                    effectiveBaseFpsCap(paused, staleCapRelease, refreshGuardVrr, 60)
+                        == manualCap,
+                "Stale scheduler or VRR state must not override the paused manual cap");
+            expect(!fractionalBaseCapPacesOutputs(paused, manualCap, true, 60),
+                "Refresh-paused generation must not reserve Fractional output deadlines");
+            expect(!smoothCadenceBaseCapEligible(paused, true, false, 60) &&
+                    !smoothCadencePacerHandoffGenerationLimit(
+                        paused, true, false, 60, refreshGuardCadence, refreshGuardVrr),
+                "The display guard must also release cadence-derived pacing owners");
+
+            const auto resumed = resolveDisplayTarget(paused, requested, 90)
+                .appliedProfile;
+            const double resumedCap = mode.generatedCap.value_or(manualCap);
+            expect(effectiveFrameGenerationEnabled(resumed, 90) &&
+                    effectiveBaseFpsCap(resumed, 90) == resumedCap &&
+                    effectiveBaseFpsCap(resumed, {}, refreshGuardVrr, 90) == resumedCap,
+                "Generation and target-derived caps must resume with the applied display target");
+            const auto missing = resolveDisplayTarget(paused, requested, std::nullopt)
+                .appliedProfile;
+            expect(effectiveFrameGenerationEnabled(missing, std::nullopt) &&
+                    effectiveBaseFpsCap(missing, std::nullopt) == resumedCap &&
+                    missing.target_fps == requested.target_fps,
+                "Missing refresh feedback must restore normal caps and the fallback target");
+            auto explicitlyOff = paused;
+            explicitlyOff.frame_generation_enabled = false;
+            expect(effectiveBaseFpsCap(explicitlyOff, 60) == 0.0,
+                "Explicit Frame Generation Off must retain its existing all-caps-dormant policy");
+            explicitlyOff.frame_generation_enabled = true;
+            explicitlyOff.frame_generation_provisioned = false;
+            expect(effectiveBaseFpsCap(explicitlyOff, 60) == 0.0,
+                "An unprovisioned process must not acquire a manual cap through the display guard");
+            expect(requested.base_fps_cap == manualCap &&
+                    paused.base_fps_cap == manualCap &&
+                    paused.frame_generation_enabled &&
+                    paused.adaptive_auto_base_fps_cap == mode.steady &&
+                    paused.adaptive_fractional_real_frame_priority == mode.priority,
+                "Display pausing must preserve saved cap choices and live generation intent");
+        }
+    }
+
+    auto steadyRefreshGuard = savedTarget;
+    steadyRefreshGuard.adaptive_auto_base_fps_cap = true;
+    steadyRefreshGuard.adaptive_target_refresh_rate = true;
+    steadyRefreshGuard.frame_generation_refresh_threshold = 60;
+    const auto pausedSteady = resolveDisplayTarget(
+        steadyRefreshGuard, steadyRefreshGuard, 60).appliedProfile;
+    RealFramePacer refreshGuardPacer;
+    const auto capNow = RealFramePacer::TimePoint{} + std::chrono::seconds(1);
+    static_cast<void>(refreshGuardPacer.schedule(capNow, 30.0));
+    expect(refreshGuardPacer.schedule(capNow + std::chrono::milliseconds(1), 30.0)
+                > capNow + std::chrono::milliseconds(1),
+        "The regression fixture must begin with a pending half-target cap deadline");
+    const auto pauseNow = capNow + std::chrono::milliseconds(2);
+    expect(refreshGuardPacer.schedule(pauseNow,
+                effectiveBaseFpsCap(pausedSteady, {}, {}, 60)) == pauseNow,
+        "Refresh pausing must discard a previously scheduled automatic cap delay");
+    auto withoutRefreshGuard = steadyRefreshGuard;
+    withoutRefreshGuard.frame_generation_refresh_threshold = 0;
+    const auto guardDisabled = resolveDisplayTarget(
+        pausedSteady, withoutRefreshGuard, 60);
+    expect(guardDisabled.decision.action == ProfileUpdateAction::ApplyLive &&
+            guardDisabled.decision.baseFpsCapChanged &&
+            effectiveBaseFpsCap(guardDisabled.appliedProfile, 60) == 30.0,
+        "Disabling the refresh guard must restore the automatic cap and reset pacing live");
+    const auto guardEnabled = resolveDisplayTarget(
+        guardDisabled.appliedProfile, steadyRefreshGuard, 60);
+    expect(guardEnabled.decision.action == ProfileUpdateAction::ApplyLive &&
+            guardEnabled.decision.baseFpsCapChanged &&
+            effectiveBaseFpsCap(guardEnabled.appliedProfile, 60) == 0.0,
+        "Enabling the refresh guard must release the automatic cap and reset pacing live");
+    auto manualTargetGuard = steadyRefreshGuard;
+    manualTargetGuard.adaptive_target_refresh_rate = false;
+    const auto pausedManualTarget = resolveDisplayTarget(
+        manualTargetGuard, manualTargetGuard, 60).appliedProfile;
+    expect(pausedManualTarget.target_fps == 90 &&
+            effectiveBaseFpsCap(pausedManualTarget, 60) == 0.0 &&
+            effectiveBaseFpsCap(pausedManualTarget, 61) == 45.0,
+        "Refresh-cap release must also work with a manually selected Adaptive target");
+    auto editedManual = steadyRefreshGuard;
+    editedManual.base_fps_cap = 40;
+    const auto pausedManualEdit = resolveDisplayTarget(pausedSteady, editedManual, 60);
+    expect(pausedManualEdit.decision.action == ProfileUpdateAction::ApplyLive &&
+            pausedManualEdit.decision.baseFpsCapChanged &&
+            effectiveBaseFpsCap(pausedManualEdit.appliedProfile, 60) == 40.0,
+        "Manual cap edits must reset pacing while the refresh guard owns the pause");
+
     const auto adaptiveSchedulerPolicy = generationSchedulerPolicy(current, 60);
     expect(adaptiveSchedulerPolicy &&
             adaptiveSchedulerPolicy->targetFps == current.target_fps &&

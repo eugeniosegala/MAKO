@@ -28,6 +28,7 @@ for candidate_icon in \
     fi
 done
 decky_renderer_relative_paths=(
+    ".local/share/mako-render/mako_remote_play/libmako-remote-play-sdr.so"
     ".local/share/mako-render/lib/libmako-render.so"
     ".local/share/mako-render/lib32/libmako-render.so"
     ".local/share/mako-render/lib/libmako-render-scaling.so"

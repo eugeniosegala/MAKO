@@ -163,6 +163,8 @@ namespace {
     constexpr auto adaptiveFailedProbeCooldown = std::chrono::seconds(15);
     constexpr auto adaptiveInterruptedProbeCooldown = std::chrono::seconds(2);
     constexpr auto adaptiveStableRearmDuration = std::chrono::seconds(2);
+    constexpr auto adaptiveLowerLoadCadenceWindowDuration =
+        std::chrono::milliseconds(250);
     constexpr auto adaptivePlanDiagnosticInterval = std::chrono::seconds(1);
     constexpr auto adaptiveFastBurstDiagnosticInterval = std::chrono::seconds(1);
     // Start Fractional workload at the nearest-output phase rather than the
@@ -2704,11 +2706,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
     if (!this->state.ramp.targetDeficitSince) {
         this->state.ramp.lowerLoadSample.reset();
         this->state.ramp.targetDeficitSince = now;
-        return;
     }
-    if (now - *this->state.ramp.targetDeficitSince <
-            adaptiveTargetDeficitDuration)
-        return;
 
     const size_t nextLimit = this->state.outputPlanner.generationLimit + 1;
     const bool failedRampPending =
@@ -2726,19 +2724,35 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         return;
     }
 
-    if (awaitingMenuReturnTargetRecovery || !failedLoadRecovered) {
+    const bool requalifyingBaseline =
+        awaitingMenuReturnTargetRecovery || !failedLoadRecovered;
+    if (this->state.outputPlanner.generationLimit > 0 ||
+            requalifyingBaseline) {
         // Use the existing cadence qualification envelope and rearm interval.
-        // A missing/failed delivery, timing reset, or moving source breaks the
-        // sample. Neither elapsed cooldown nor one lucky frame replaces proof.
-        const double minimumBaseFps = lowerLoad.since
-            ? std::min(lowerLoad.minimumBaseFps, baseFps) : baseFps;
-        const double maximumBaseFps = lowerLoad.since
-            ? std::max(lowerLoad.maximumBaseFps, baseFps) : baseFps;
-        if (!lowerLoad.since || maximumBaseFps > minimumBaseFps *
+        // Qualify short windows of the existing source estimate. Regular
+        // short/long frame patterns must not look like changing game scenes.
+        // Missing/failed delivery and timing resets still break continuity.
+        if (!lowerLoad.since)
+            lowerLoad.since = now;
+        lowerLoad.intervalSecondsSum += 1.0 / baseFps;
+        lowerLoad.frames++;
+        if (lowerLoad.intervalSecondsSum <
+                std::chrono::duration<double>(
+                    adaptiveLowerLoadCadenceWindowDuration).count())
+            return;
+        const double sampledBaseFps = static_cast<double>(lowerLoad.frames) /
+            lowerLoad.intervalSecondsSum;
+        lowerLoad.intervalSecondsSum = 0.0;
+        lowerLoad.frames = 0;
+        const double minimumBaseFps = lowerLoad.minimumBaseFps > 0.0
+            ? std::min(lowerLoad.minimumBaseFps, sampledBaseFps) : sampledBaseFps;
+        const double maximumBaseFps = lowerLoad.maximumBaseFps > 0.0
+            ? std::max(lowerLoad.maximumBaseFps, sampledBaseFps) : sampledBaseFps;
+        if (maximumBaseFps > minimumBaseFps *
                 adaptiveStableCadenceMaximumCandidateSpreadRatio) {
             lowerLoad.since = now;
-            lowerLoad.minimumBaseFps = baseFps;
-            lowerLoad.maximumBaseFps = baseFps;
+            lowerLoad.minimumBaseFps = sampledBaseFps;
+            lowerLoad.maximumBaseFps = sampledBaseFps;
         } else {
             lowerLoad.minimumBaseFps = minimumBaseFps;
             lowerLoad.maximumBaseFps = maximumBaseFps;
@@ -2752,22 +2766,27 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
                 ? this->state.menuReturnLoadGuard.baselineBaseFps : 0.0
         );
         retryBaselineBaseFps = lowerLoad.maximumBaseFps;
-        this->diagnostics->rearm(
-            "adaptive-rearm-ready",
-            awaitingMenuReturnTargetRecovery ? "menu-return" : "ramp-rejected",
-            this->state.ramp.consecutiveFailures,
-            this->state.outputPlanner.generationLimit,
-            Clock::duration::zero(),
-            oldBaselineBaseFps,
-            retryBaselineBaseFps,
-            "stable-target-deficit-rebased"
-        );
+        if (requalifyingBaseline) {
+            this->diagnostics->rearm(
+                "adaptive-rearm-ready",
+                awaitingMenuReturnTargetRecovery ? "menu-return" : "ramp-rejected",
+                this->state.ramp.consecutiveFailures,
+                this->state.outputPlanner.generationLimit,
+                Clock::duration::zero(),
+                oldBaselineBaseFps,
+                retryBaselineBaseFps,
+                "stable-target-deficit-rebased"
+            );
+        }
         this->state.menuReturnLoadGuard.reset();
         if (failedRampPending)
             this->state.ramp.failedBaselineBaseFps = retryBaselineBaseFps;
         // Keep failure counts and their backoff; the next actual trial must
         // still earn its real-frame cost and pass the delivery test.
     }
+    if (now - *this->state.ramp.targetDeficitSince <
+            adaptiveTargetDeficitDuration)
+        return;
     lowerLoad.reset();
 
     this->state.ramp.previousLimit = this->state.outputPlanner.generationLimit;

@@ -206,7 +206,7 @@ build_layer() {
 
     if [[ "$architecture" == "64-bit" ]]; then
         build_cli=ON
-        build_targets+=(mako-cli)
+        build_targets+=(mako-cli mako-remote-play-sdr)
     else
         install_libdir=lib32
     fi

@@ -12,7 +12,9 @@ import subprocess
 from typing import Iterator, Sequence, TypedDict
 
 import logging
-from .remote_play_launch import launch_settings, open_regular, selected_profile
+from .remote_play_launch import (
+    launch_settings, open_regular, selected_profile, check_sdr_helper, SDR_HELPER_RELATIVE_PATH,
+)
 from .managed_files import (
     copy_managed_file_atomically, managed_install_transaction,
     write_managed_text_atomically, sync_managed_directory,
@@ -243,7 +245,9 @@ class RemotePlayOverride:
         return Path(__file__).with_name("remote_play_launch.py").read_text().replace(
             "home = Path('__MAKO_USER_HOME__')", f"home = Path({str(self.user_home)!r})",
         ).replace("runner=Path('__MAKO_RUNNER_PATH__')", f"runner=Path({str(self.mako_script_path)!r})").replace(
-            "config=Path('__MAKO_CONFIG_PATH__')", f"config=Path({str(self.config_file_path)!r})")
+            "config=Path('__MAKO_CONFIG_PATH__')", f"config=Path({str(self.config_file_path)!r})").replace(
+            "sdr_helper=Path('__MAKO_SDR_HELPER_PATH__')",
+            f"sdr_helper=Path({str(self.mako_script_path.parent.parent / SDR_HELPER_RELATIVE_PATH)!r})")
 
     @contextmanager
     def transaction(self, extra_paths: Sequence[Path] = ()) -> Iterator[None]:
@@ -290,9 +294,9 @@ class RemotePlayOverride:
             state = self._validate_backup()
             if self._digest(self.client) != state["wrapper_sha256"]:
                 raise ValueError("Steam client wrapper changed; refusing replacement")
+            self._check_launcher()
             payload = self._payload()
             if hashlib.sha256(payload.encode()).hexdigest() != state["wrapper_sha256"]:
-                self._check_launcher()
                 self._check_interpreter()
                 compile(payload, "streaming_client", "exec")
                 with self.transaction():
@@ -328,6 +332,10 @@ class RemotePlayOverride:
     def _check_launcher(self) -> None:
         if not self.mako_script_path.is_file() or not os.access(self.mako_script_path, os.X_OK):
             raise ValueError("Install MAKO Renderer first")
+        try:
+            check_sdr_helper(self.mako_script_path.parent.parent / SDR_HELPER_RELATIVE_PATH)
+        except (OSError, ValueError) as error:
+            raise ValueError("Install the current MAKO Renderer Remote Play SDR helper") from error
         if self.mako_script_path.name == 'mako-run':
             descriptor = os.open(self.mako_script_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             with os.fdopen(descriptor, 'rb') as stream:

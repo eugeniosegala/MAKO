@@ -248,7 +248,7 @@
   "ADAPTIVE_TARGET_FPS": "Цільовий FPS",
   "ADAPTIVE_TARGET_FPS_DESC": "Бажаний вихідний FPS. Дробовий адаптивний режим може поєднувати множники; стабільний базовий ліміт починає з половини цілі й може узгодити перевірений нижчий цілий множник.",
   "ADAPTIVE_TARGET_REFRESH_RATE": "Match Display Refresh Rate",
-  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "Використовує частоту оновлення дисплея як цільовий FPS.",
+  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "Узгоджує цільовий FPS із частотою оновлення поточного дисплея. Автоматично оновлює його під час гри, коли ви змінюєте дисплей або частоту оновлення.",
   "ADAPTIVE_FALLBACK_TARGET_FPS": "Fallback Target FPS",
   "ADAPTIVE_FALLBACK_TARGET_FPS_DESC": "Використовується, якщо частоту не виявлено. Для редагування вимкніть узгодження частоти.",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "Стабільний базовий ліміт FPS",

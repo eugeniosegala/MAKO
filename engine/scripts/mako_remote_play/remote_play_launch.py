@@ -20,6 +20,7 @@ class LaunchPaths(TypedDict):
     config: Path
     runner: Path
     lock: Path
+    sdr_helper: Path
 
 
 class LaunchSettings(TypedDict):
@@ -39,7 +40,10 @@ REMOVED_ENVIRONMENT = (
     "ENABLE_MAKO_SPATIAL_SCALING", "DISABLE_MAKO_SPATIAL_SCALING",
     "ENABLE_GAMESCOPE_WSI", "MAKO_SPLIT_LAYER_CHAIN", "MANGOHUD",
     "VKBASALT_CONFIG_RELOAD", "MAKO_EXTERNAL_VULKAN_LAYER",
+    "MAKO_REMOTE_PLAY_SDR",
 )
+SDR_HELPER_RELATIVE_PATH = 'share/mako-render/mako_remote_play/libmako-remote-play-sdr.so'
+SDR_HELPER_MARKER = b'MAKO_REMOTE_PLAY_SDR_HELPER_V1'
 MANAGED_LAYERS = (
     "VK_LAYER_MAKO_render", "VK_LAYER_MAKO_spatial_scaling",
     "VK_LAYER_FROG_gamescope_wsi_x86_64", "VK_LAYER_VKBASALT_post_processing",
@@ -67,6 +71,24 @@ def read_record(path: Path) -> str:
         if len(content) > 4096:
             raise ValueError("launch record is too large")
         return content.decode("utf-8")
+
+
+def check_sdr_helper(path: Path) -> None:
+    """Reject missing, redirected, wrong-architecture or stale helper payloads."""
+    if not path.is_absolute() or re.search(r'[\s:]', str(path)):
+        raise ValueError('Remote Play SDR helper path cannot contain loader separators')
+    with open_regular(path) as stream:
+        payload = stream.read(1024 * 1024 + 1)
+    if (len(payload) > 1024 * 1024 or len(payload) < 20 or
+            payload[:6] != b'\x7fELF\x02\x01' or payload[16:20] != b'\x03\0\x3e\0' or
+            SDR_HELPER_MARKER not in payload):
+        raise ValueError('Install the current MAKO Renderer Remote Play SDR helper')
+
+
+def without_sdr_preload(value: str) -> str:
+    """Remove only MAKO's helper, preserving Steam and user preload entries."""
+    return ' '.join(entry for entry in re.split(r'[\s:]+', value) if entry and
+                    Path(entry).name != Path(SDR_HELPER_RELATIVE_PATH).name)
 
 
 def selected_profile(config: Path) -> dict:
@@ -166,6 +188,12 @@ def launch(paths: LaunchPaths, arguments: list[str], execute: Callable,
     clean = dict(os.environ if environment is None else environment)
     for key in REMOVED_ENVIRONMENT:
         clean.pop(key, None)
+    if 'LD_PRELOAD' in clean:
+        preload = without_sdr_preload(clean['LD_PRELOAD'])
+        if preload:
+            clean['LD_PRELOAD'] = preload
+        else:
+            clean.pop('LD_PRELOAD')
     clean.update({key: "1" for key in PASSTHROUGH_DISABLE_ENVIRONMENT})
     if "VK_INSTANCE_LAYERS" in clean:
         clean["VK_INSTANCE_LAYERS"] = ":".join(
@@ -201,6 +229,7 @@ def launch(paths: LaunchPaths, arguments: list[str], execute: Callable,
         profile_name = profile["name"]
         if not paths["runner"].is_file() or not os.access(paths["runner"], os.X_OK):
             raise ValueError("MAKO launcher unavailable")
+        check_sdr_helper(paths['sdr_helper'])
         default_shader = None
         if paths['runner'].name == 'mako-launch':
             if clean.get('XDG_CONFIG_HOME'):
@@ -228,7 +257,9 @@ def launch(paths: LaunchPaths, arguments: list[str], execute: Callable,
         # the Renderer owns settings, model availability, and power selection.
         command = [str(paths["runner"]), "/usr/bin/env",
                    "-u", "GALLIUM_DRIVER", "-u", "MESA_LOADER_DRIVER_OVERRIDE",
-                   "-u", "__GLX_VENDOR_LIBRARY_NAME", str(original), *arguments]
+                   "-u", "__GLX_VENDOR_LIBRARY_NAME", "MAKO_REMOTE_PLAY_SDR=1",
+                   'LD_PRELOAD=' + ' '.join(filter(None, (str(paths['sdr_helper']), clean.get('LD_PRELOAD')))),
+                   str(original), *arguments]
         execute(command[0], command, active)
         return 0
     except (OSError, ValueError, TypeError, KeyError) as error:
@@ -252,6 +283,7 @@ def main() -> int:
         config=Path('__MAKO_CONFIG_PATH__'),
         runner=Path('__MAKO_RUNNER_PATH__'),
         lock=config_dir / "native-remote-play.lock",
+        sdr_helper=Path('__MAKO_SDR_HELPER_PATH__'),
     )
     # Keep the shared lease through the exec chain and the stream lifetime.
     # This also protects the handoff while mako-run is still preparing its environment.

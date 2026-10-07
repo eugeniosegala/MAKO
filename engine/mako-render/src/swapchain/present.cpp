@@ -108,9 +108,9 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         automaticBaseCapSuppressed =
             effectiveBaseFpsCap(
                 this->profile, schedulerSnapshot,
-                this->gamescopePresentationFeedback
+                this->gamescopePresentationFeedback, this->gamescopeRefreshHz
             ) <= 0.0 &&
-            effectiveBaseFpsCap(this->profile) > 0.0;
+            effectiveBaseFpsCap(this->profile, this->gamescopeRefreshHz) > 0.0;
         cadenceBaseCapEligible = smoothCadenceBaseCapEligible(
             this->profile,
             this->privateOrderedTransport,
@@ -201,7 +201,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         : cadenceBaseCap.framesPerSecond.value_or(
             effectiveBaseFpsCap(
                 this->profile, schedulerSnapshot,
-                this->gamescopePresentationFeedback
+                this->gamescopePresentationFeedback, this->gamescopeRefreshHz
             )
         );
     const auto limiterDeadline = this->realFramePacer.schedule(
@@ -213,7 +213,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         this->privateOrderedTransport && !this->info.variableSurface &&
             !this->info.gamescopeScalingSurface && !this->spatialScaler &&
             !this->wsiPresentTimingQuery && !hasPresentTiming(lowerNextChain) &&
-            !this->recoveryState.orderedAcquireRecovery.active()
+            !this->recoveryState.orderedAcquireRecovery.active(),
+        this->gamescopeRefreshHz
     );
     if (!fractionalDeadlinePacing) {
         this->realFramePacer.resetOutputs();

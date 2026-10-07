@@ -308,7 +308,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                       this->profile.adaptive_fractional_real_frame_priority
                   )
                   << " effective_base_fps_cap="
-                  << effectiveBaseFpsCap(this->profile)
+                  << effectiveBaseFpsCap(this->profile, this->gamescopeRefreshHz)
                   << " adaptive_max_multiplier="
                   << this->profile.adaptive_max_multiplier
                   << " stable_cadence="

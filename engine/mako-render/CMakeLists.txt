@@ -178,6 +178,7 @@ if(BUILD_TESTING)
     # Keep portable build and CTest membership together so the shell runner
     # cannot drift when another policy test is added.
     add_custom_target(mako-portable-policy-test-binaries)
+    add_dependencies(mako-portable-policy-test-binaries mako-power-source-monitor-tests)
     function(mako_register_portable_policy_test target test_name)
         add_dependencies(mako-portable-policy-test-binaries ${target})
         set_tests_properties(${test_name} PROPERTIES

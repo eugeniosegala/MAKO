@@ -194,7 +194,14 @@ target_fps = 144
         const auto timestamp = std::filesystem::last_write_time(path);
         writeText(root / "AC/online", "1\n");
         std::this_thread::sleep_for(std::chrono::milliseconds(2050));
-        expect(watched.update() && watched.get().power_source == ls::PowerSource::Docked &&
+        bool changed = watched.update();
+        const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        while (watched.get().power_source != ls::PowerSource::Docked &&
+                std::chrono::steady_clock::now() < deadline) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            changed = watched.update() || changed;
+        }
+        expect(changed && watched.get().power_source == ls::PowerSource::Docked &&
                 std::filesystem::last_write_time(path) == timestamp,
             "A power transition must reload selection without rewriting TOML");
         writeText(root / "AC/online", "unknown\n");

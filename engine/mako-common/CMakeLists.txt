@@ -2,6 +2,7 @@ set(COMMON_SOURCES
     "src/configuration/config.cpp"
     "src/configuration/detection.cpp"
     "src/configuration/launch.cpp"
+    "src/configuration/power_source.cpp"
     "src/configuration/vkbasalt.cpp"
     "src/helpers/errors.cpp"
     "src/helpers/paths.cpp"
@@ -21,6 +22,9 @@ set(COMMON_SOURCES
     "src/vulkan/vulkan.cpp")
 
 add_library(mako-common STATIC ${COMMON_SOURCES})
+
+find_package(Threads REQUIRED)
+target_link_libraries(mako-common PUBLIC Threads::Threads)
 
 target_include_directories(mako-common
     PUBLIC include)
@@ -53,6 +57,14 @@ if(BUILD_TESTING)
     target_include_directories(mako-config-tests PRIVATE src)
     add_test(NAME watched-configuration
         COMMAND mako-config-tests)
+
+    add_executable(mako-power-source-monitor-tests
+        "tests/power_source_monitor_tests.cpp")
+    target_link_libraries(mako-power-source-monitor-tests PRIVATE mako-common)
+    target_include_directories(mako-power-source-monitor-tests PRIVATE src)
+    add_test(NAME power-source-monitor COMMAND mako-power-source-monitor-tests)
+    set_tests_properties(power-source-monitor PROPERTIES
+        LABELS "portable-policy" TIMEOUT 15)
 
     add_executable(mako-launch-config-tests
         "tests/launch_config_tests.cpp")

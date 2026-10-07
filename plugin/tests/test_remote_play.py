@@ -17,11 +17,14 @@ from py_modules.mako_plugin.config_schema import ConfigurationManager
 from py_modules.mako_plugin.configuration import ConfigurationService
 from py_modules.mako_plugin.plugin import Plugin
 from py_modules.mako_plugin.remote_play import RemotePlayService
-from py_modules.mako_plugin.remote_play_launch import launch, LaunchPaths, MANAGED_LAYERS
+from py_modules.mako_plugin.remote_play_launch import (
+    launch, LaunchPaths, MANAGED_LAYERS, SDR_HELPER_RELATIVE_PATH, SDR_HELPER_MARKER,
+)
 
 SELECTED_PROFILE = "stream-quality"
 
 ELF = b"\x7fELF\x02\x01" + b"\0" * 12 + b"\x3e\0" + b"synthetic client"
+SDR_ELF = ELF[:16] + b'\x03\0\x3e\0' + SDR_HELPER_MARKER
 
 
 class RemotePlayTests(unittest.TestCase):
@@ -43,6 +46,24 @@ class RemotePlayTests(unittest.TestCase):
         self.service.mako_script_path.parent.mkdir(parents=True)
         self.service.mako_script_path.write_text("#!/bin/sh\n# MAKO_LAUNCH_RENDERER_REQUIRED\n")
         self.service.mako_script_path.chmod(0o755)
+        helper = self.service.mako_script_path.parent.parent / SDR_HELPER_RELATIVE_PATH
+        helper.parent.mkdir(parents=True)
+        helper.write_bytes(Path(os.environ['MAKO_TEST_SDR_HELPER']).read_bytes() if os.environ.get('MAKO_TEST_SDR_HELPER') else SDR_ELF)
+
+    def test_missing_sdr_helper_refuses_install_but_does_not_prevent_restore(self):
+        helper = self.service.mako_script_path.parent.parent / SDR_HELPER_RELATIVE_PATH
+        helper.unlink()
+        with self.assertRaisesRegex(ValueError, 'SDR helper'):
+            self.service.install()
+        self.assertEqual(ELF, self.service.client.read_bytes())
+        self.assertFalse(self.service.backup.exists())
+        helper.write_bytes(SDR_ELF)
+        self.service.install()
+        helper.unlink()
+        with self.assertRaisesRegex(ValueError, 'SDR helper'):
+            self.service.install()
+        self.service.remove()
+        self.assertEqual(ELF, self.service.client.read_bytes())
 
     def test_idempotent_install_and_restore_preserve_original_permissions(self):
         self.service.install()
@@ -693,7 +714,10 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
             environment.update(GAMESCOPE_WAYLAND_DISPLAY='gamescope-0', WAYLAND_DISPLAY='gamescope-0')
         result = subprocess.run([str(self.service.client), '-0'], env=environment, capture_output=True, timeout=5)
         self.assertEqual(0, result.returncode, result.stderr.decode())
-        return dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if item)
+        values = dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if item)
+        self.assertEqual('1', values['MAKO_REMOTE_PLAY_SDR'])
+        self.assertEqual(str(self.service.mako_script_path.parent.parent / SDR_HELPER_RELATIVE_PATH), values['LD_PRELOAD'])
+        return values
 
     def test_real_launcher_feature_matrix_and_native_zink_exclusion(self):
         for fg, scaling, shaders in ((False, False, False), (True, False, False),
@@ -804,6 +828,7 @@ class RemoteLaunchTests(unittest.TestCase):
         self.paths["config"].write_text('version=2\n[[profile]]\nname="stream-quality"\n')
         self.paths["runner"].write_text("#!/bin/sh\n")
         self.paths["runner"].chmod(0o755)
+        self.paths['sdr_helper'].write_bytes(SDR_ELF)
         self.calls = []
         self.args = ["--appid", "123", "session value", "$(literal)"]
 
@@ -898,6 +923,45 @@ class RemoteLaunchTests(unittest.TestCase):
         self.assertEqual(str(self.paths["original"]), self.calls[0][0])
         self.assertEqual("1", self.calls[0][2]["DISABLE_MAKO"])
         self.assertEqual("1", self.calls[0][2]["DISABLE_MAKO_SPATIAL_SCALING"])
+
+    def test_sdr_preload_is_applied_only_at_native_client_exec(self):
+        inherited = f'/steam/overlay.so:{self.paths["sdr_helper"].parent}/libmako-remote-play-sdr.so /user/overlay.so'
+        launch(self.paths, self.args, lambda *args: self.calls.append(args),
+               {'LD_PRELOAD': inherited, 'MAKO_REMOTE_PLAY_SDR': '1'})
+        _, command, environment = self.calls[-1]
+        self.assertNotIn('MAKO_REMOTE_PLAY_SDR', environment)
+        self.assertEqual('/steam/overlay.so /user/overlay.so', environment['LD_PRELOAD'])
+        self.assertIn('MAKO_REMOTE_PLAY_SDR=1', command)
+        self.assertIn(f'LD_PRELOAD={self.paths["sdr_helper"]} /steam/overlay.so /user/overlay.so', command)
+        launch(self.paths, self.args, lambda *args: self.calls.append(args),
+               {'LD_PRELOAD': inherited, 'MAKO_REMOTE_PLAY_SDR': '1'}, allow_override=False)
+        self.assertEqual(str(self.paths['original']), self.calls[-1][0])
+        self.assertEqual('/steam/overlay.so /user/overlay.so', self.calls[-1][2]['LD_PRELOAD'])
+        self.assertNotIn('MAKO_REMOTE_PLAY_SDR', self.calls[-1][2])
+
+    def test_invalid_sdr_helpers_keep_native_streaming_available(self):
+        helper = self.paths['sdr_helper']
+        for content in (b'not ELF', SDR_ELF.replace(b'\x02\x01', b'\x01\x01'), SDR_ELF.replace(SDR_HELPER_MARKER, b'stale')):
+            with self.subTest(content=content):
+                helper.write_bytes(content)
+                self.run_launch()
+                self.assertEqual(str(self.paths['original']), self.calls[-1][0])
+        helper.unlink()
+        self.run_launch()
+        self.assertEqual(str(self.paths['original']), self.calls[-1][0])
+        os.mkfifo(helper)
+        self.run_launch()
+        self.assertEqual(str(self.paths['original']), self.calls[-1][0])
+        helper.unlink()
+        target = helper.with_suffix('.target')
+        target.write_bytes(SDR_ELF)
+        helper.symlink_to(target)
+        self.run_launch()
+        self.assertEqual(str(self.paths['original']), self.calls[-1][0])
+        self.paths['sdr_helper'] = target.with_name('unsafe:helper.so')
+        self.paths['sdr_helper'].write_bytes(SDR_ELF)
+        self.run_launch()
+        self.assertEqual(str(self.paths['original']), self.calls[-1][0])
 
     def test_passthrough_disables_the_complete_managed_chain_but_preserves_other_layers(self):
         from py_modules.mako_plugin import constants

@@ -599,12 +599,14 @@ namespace mako::layer {
             } stabilization;
 
             struct Ramp {
-                // A stale pre-menu/failed-probe baseline can be replaced only
-                // by a continuous, delivered sample of the current lower load.
+                // Higher promotions and stale-baseline replacement require
+                // a continuous, delivered sample of the current lower load.
                 struct LowerLoadSample {
                     std::optional<TimePoint> since;
                     double minimumBaseFps{0.0};
                     double maximumBaseFps{0.0};
+                    double intervalSecondsSum{0.0};
+                    size_t frames{0};
                     bool deliveryObserved{false};
 
                     void reset() { *this = {}; }

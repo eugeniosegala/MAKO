@@ -248,7 +248,7 @@
   "ADAPTIVE_TARGET_FPS": "目标 FPS",
   "ADAPTIVE_TARGET_FPS_DESC": "目标输出 FPS。小数倍率可混合倍率；稳定基础 FPS 上限从目标的一半开始，可对齐已验证的较低整数倍率。",
   "ADAPTIVE_TARGET_REFRESH_RATE": "Match Display Refresh Rate",
-  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "将屏幕刷新率用作目标 FPS。",
+  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "将目标 FPS 与当前屏幕刷新率匹配。游戏过程中切换屏幕或更改刷新率时会自动更新。",
   "ADAPTIVE_FALLBACK_TARGET_FPS": "Fallback Target FPS",
   "ADAPTIVE_FALLBACK_TARGET_FPS_DESC": "无法检测刷新率时使用。关闭刷新率匹配后即可编辑。",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "稳定基础 FPS 上限",

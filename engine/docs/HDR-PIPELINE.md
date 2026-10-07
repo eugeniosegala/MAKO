@@ -29,6 +29,8 @@ MAKO Decky's scaling and explicit Gamescope WSI compatibility paths admit a guar
 
 If an explicit HDR swapchain reaches this SDR-only policy, MAKO disables generation for that swapchain and passes real frames through.
 
+Native Steam Remote Play additionally enforces SDL3 sRGB renderer creation through its process-scoped packaged helper. `MAKO_DISABLE_HDR_EXPOSURE` is MAKO policy and does not itself override an application's SDL colourspace selection. The shared [Remote Play owner](../../plugin/docs/REMOTE-PLAY.md#sdr-output) supplies that startup policy for both Decky and Qt; it does not relabel HDR pixels or change the Renderer colour classifier. HDR stream input and SDL tone mapping still require independent hardware validation.
+
 ## Gamescope application-HDR evidence
 
 `GamescopeHdrFeedbackReader` samples compositor properties outside the presentation path. A nested game server may publish the relevant properties on server zero, so the reader accepts a root display only when it belongs to the same Gamescope process.

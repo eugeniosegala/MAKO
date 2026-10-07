@@ -248,7 +248,7 @@
   "ADAPTIVE_TARGET_FPS": "Ziel-FPS",
   "ADAPTIVE_TARGET_FPS_DESC": "Gewünschte Ausgabe-FPS. Fractional kann Verhältnisse mischen; der konstante Basis-Cap beginnt bei der Hälfte des Ziels und kann sich an einem validierten niedrigeren ganzzahligen Verhältnis ausrichten.",
   "ADAPTIVE_TARGET_REFRESH_RATE": "Match Display Refresh Rate",
-  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "Verwendet die Bildschirmfrequenz als Ziel-FPS.",
+  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "Passt die Ziel-FPS an die aktuelle Bildschirmfrequenz an. Aktualisiert sie während des Spiels automatisch, wenn du den Bildschirm oder die Bildwiederholrate wechselst.",
   "ADAPTIVE_FALLBACK_TARGET_FPS": "Fallback Target FPS",
   "ADAPTIVE_FALLBACK_TARGET_FPS_DESC": "Wird verwendet, wenn die Frequenzerkennung fehlschlägt. Zum Bearbeiten die Anpassung deaktivieren.",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "Konstanter Basis-Cap",

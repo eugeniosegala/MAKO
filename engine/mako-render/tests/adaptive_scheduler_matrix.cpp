@@ -43,7 +43,9 @@ namespace {
         const auto interval = std::chrono::duration_cast<std::chrono::nanoseconds>(
             std::chrono::duration<double>(1.0 / baseFps)
         );
-        const size_t totalFrames = static_cast<size_t>(std::ceil(baseFps * 15.0));
+        // Include qualification and evaluation of all four adjacent rungs
+        // before measuring the same final five seconds of steady output.
+        const size_t totalFrames = static_cast<size_t>(std::ceil(baseFps * 25.0));
         const size_t sampleFrames = static_cast<size_t>(std::ceil(baseFps * 5.0));
         const size_t sampleStart = totalFrames - sampleFrames;
 
@@ -56,6 +58,9 @@ namespace {
         for (size_t frame = 0; frame < totalFrames; ++frame) {
             now += interval;
             const auto timestamps = scheduler.planFrame(now, false);
+            scheduler.reportGeneratedFrameDelivery({
+                timestamps.size(), timestamps.size(),
+            });
             valid = valid && timestamps.size() <= maximumMultiplier - 1;
             float previousTimestamp = 0.0F;
             for (const float timestamp : timestamps) {

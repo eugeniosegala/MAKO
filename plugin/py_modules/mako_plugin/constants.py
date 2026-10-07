@@ -186,6 +186,7 @@ CLI_DIR = f"{MAKO_ROOT}/bin"
 # also removes a Decky-supplied native payload. A cross-component contract test
 # keeps the independently packaged Python and shell implementations aligned.
 DECKY_NATIVE_RENDERER_RELATIVE_PATHS = (
+    f"{MAKO_ROOT}/mako_remote_play/libmako-remote-play-sdr.so",
     f"{LOCAL_LIB}/{LIB_FILENAME}",
     f"{LOCAL_LIB32}/{LIB_FILENAME}",
     f"{LOCAL_LIB}/{SPATIAL_SCALING_LIB_FILENAME}",

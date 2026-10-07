@@ -147,6 +147,7 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.registered_json32_file = registered_dir / JSON32_FILENAME
         self.service.cli_file = self.root / "bin/mako-cli"
         self.service.vrr_lease_file = self.root / "bin/mako-vrr-lease"
+        self.service.remote_play_sdr_file = self.root / 'share/mako-render/mako_remote_play/libmako-remote-play-sdr.so'
         self.service.mako_launch_script_path = self.root / "bin/mako-run"
         self.service.diagnostics_script_path = self.root / "bin/mako-diagnostics"
         self.service.engine_state_file = self.root / "installed-engine.json"
@@ -233,7 +234,7 @@ class DualArchInstallationTests(unittest.TestCase):
             },
         }).encode("utf-8")
 
-    def _archive(self, include_32bit: bool = True) -> Path:
+    def _archive(self, include_32bit: bool = True, include_sdr_helper: bool = False) -> Path:
         archive_path = self.root / "engine.tar.xz"
         members = {
             "bin/mako-vrr-lease": b"#!/usr/bin/env python3\n",
@@ -311,6 +312,8 @@ class DualArchInstallationTests(unittest.TestCase):
                 ),
             })
 
+        if include_sdr_helper:
+            members['share/mako-render/mako_remote_play/libmako-remote-play-sdr.so'] = b'packaged SDR helper'
         with tarfile.open(archive_path, "w:xz") as archive:
             for name, content in members.items():
                 info = tarfile.TarInfo(name)
@@ -387,6 +390,22 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertFalse(self.service._native_payload_exists(
             ACTIVE_RENDERER_OWNER_STANDALONE, False,
         ))
+
+    def test_sdr_helper_extraction_rollback_and_cleanup(self):
+        from py_modules.mako_plugin.managed_files import managed_install_transaction
+        helper = self.service.remote_play_sdr_file
+        self.service._extract_and_install_files(self._archive(include_sdr_helper=True))
+        self.assertEqual(b'packaged SDR helper', helper.read_bytes())
+        self.assertEqual(0o644, helper.stat().st_mode & 0o777)
+        helper.write_bytes(b'previous helper')
+        with self.assertRaisesRegex(OSError, 'late failure'):
+            with managed_install_transaction(self.service._decky_renderer_files(), _Logger()):
+                self.service._extract_and_install_files(self._archive(include_sdr_helper=True))
+                raise OSError('late failure')
+        self.assertEqual(b'previous helper', helper.read_bytes())
+        result = self.service.uninstall()
+        self.assertTrue(result['success'], result)
+        self.assertFalse(helper.exists())
 
     def test_installs_and_rewrites_both_layer_architectures(self):
         self.service._extract_and_install_files(self._archive())

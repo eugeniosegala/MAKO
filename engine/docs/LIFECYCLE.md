@@ -56,6 +56,8 @@ Costs are qualitative: **negligible** is cached state, arithmetic, or a nonblock
 | HDR stability | Evaluated from feedback changes; 750 ms of uninterrupted agreement | Clock comparisons only, **negligible** | Prevents color-pipeline rebuilds from transient HDR evidence. Unknown evidence cancels the candidate and retains the last confirmed state |
 | Runtime status publication | Only when requested/applied/pending state changes | Atomic small-file replacement, **low but not steady-state work** | Status is observational and cannot block rendering on cleanup errors. The first publisher performs one bounded cleanup of unlocked MAKO-owned stale entries |
 
+**Match Display Refresh Rate** uses the refresh value already read by the shared Gamescope monitor. Its toggle changes Adaptive target selection, not the monitor cadence; HDR, focus, VRR, and presentation policy still consume the compositor feedback when matching is off. Enabling matching adds no X11 read, worker, or polling loop.
+
 There is no general 10-second, 15-second, or 60-second health sweep. Longer intervals in MAKO are scheduler or recovery backoffs reached only after a specific failure or experiment; they are not background polling.
 
 ### Event-driven capability and allocation probes
@@ -75,6 +77,7 @@ There is no general 10-second, 15-second, or 60-second health sweep. Longer inte
 | Probe | Trigger or cadence | Rough work and cost | Effect and safety behavior |
 | --- | --- | --- | --- |
 | Cadence observation | Every application present | Steady-clock samples and allocation-free arithmetic, **negligible** | Drives Fixed refresh budgeting, Adaptive planning, caps, and recovery. It observes application delivery, not physical scanout |
+| Optional AC/battery selection | Configuration checks at most every 250 ms; background reading requested at most every two seconds | Atomic cached source and a nonblocking request, **negligible in presentation** | One sampler per watcher with power sets performs driver reads away from presentation, retains confirmed state on stalled/failed reads, and accumulates no requests. Startup allows 50 ms before Base fallback; normal transition boundaries remain authoritative |
 | Policy-plan admission | Every present that requests generated outputs | Arithmetic and state checks, **negligible** | May shorten or remove the synthetic plan before any backend work while preserving the real frame |
 | Tight-headroom image admission | Once for each planned generated output in HDR or other headroom-tight ordered paths | Zero-time image acquisition, **low per attempted output** | A miss drops synthetic work before the backend starts. Partial Adaptive admission is re-spaced rather than bunched |
 | Private-context readiness | While a live replacement is pending | Zero-time fence and timeline checks, **negligible** | Presentation temporarily uses real frames instead of waiting for device-wide idle |

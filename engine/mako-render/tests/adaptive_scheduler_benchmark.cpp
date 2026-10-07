@@ -51,11 +51,12 @@ namespace {
                 std::chrono::duration<double>(1.0 / benchmark.baseFps)
             );
         const size_t settlingFrames = static_cast<size_t>(
-            benchmark.baseFps * 15.0
+            benchmark.baseFps * 25.0
         );
         for (size_t frame = 0; frame < settlingFrames; ++frame) {
             simulatedNow += interval;
-            static_cast<void>(scheduler.planFrame(simulatedNow, false));
+            const auto plan = scheduler.planFrame(simulatedNow, false);
+            scheduler.reportGeneratedFrameDelivery({plan.size(), plan.size()});
         }
 
         uint64_t checksum = 0;
@@ -73,6 +74,7 @@ namespace {
             for (size_t frame = 0; frame < iterations; ++frame) {
                 simulatedNow += interval;
                 const auto plan = scheduler.planFrame(simulatedNow, false);
+                scheduler.reportGeneratedFrameDelivery({plan.size(), plan.size()});
                 generatedFrameTotal += plan.size();
                 if (!plan.empty()) {
                     checksum += static_cast<uint64_t>(
@@ -84,6 +86,7 @@ namespace {
             for (size_t frame = 0; frame < iterations; ++frame) {
                 simulatedNow += noisyIntervals[frame & 1U];
                 const auto plan = scheduler.planFrame(simulatedNow, false);
+                scheduler.reportGeneratedFrameDelivery({plan.size(), plan.size()});
                 generatedFrameTotal += plan.size();
                 if (!plan.empty()) {
                     checksum += static_cast<uint64_t>(

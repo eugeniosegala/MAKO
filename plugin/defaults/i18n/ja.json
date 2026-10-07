@@ -248,7 +248,7 @@
   "ADAPTIVE_TARGET_FPS": "目標FPS",
   "ADAPTIVE_TARGET_FPS_DESC": "希望する出力 FPS。分数倍率は倍率を混ぜ、安定ベース FPS 制限は目標の半分から始め、検証済みの低い整数倍率に合わせる場合があります。",
   "ADAPTIVE_TARGET_REFRESH_RATE": "Match Display Refresh Rate",
-  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "画面のリフレッシュレートを目標 FPS にします。",
+  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "現在の画面のリフレッシュレートに目標 FPS を合わせます。プレイ中に画面を切り替えたりリフレッシュレートを変更したりすると、自動的に更新されます。",
   "ADAPTIVE_FALLBACK_TARGET_FPS": "Fallback Target FPS",
   "ADAPTIVE_FALLBACK_TARGET_FPS_DESC": "リフレッシュレートを検出できない場合に使用します。編集するには自動追従をオフにしてください。",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "安定ベース FPS 制限",

@@ -8,6 +8,7 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from mako_remote_play.remote_play_launch import SDR_HELPER_RELATIVE_PATH, SDR_HELPER_MARKER
 
 ROOT = Path(__file__).resolve().parent
 ELF = b'\x7fELF\x02\x01' + b'\0' * 12 + b'\x3e\0' + b'test client'
@@ -29,6 +30,10 @@ class RemotePlayCommandTests(unittest.TestCase):
         self.launcher.parent.mkdir(parents=True)
         self.launcher.write_text('#!/bin/sh\nexec "$@"\n')
         self.launcher.chmod(0o750)
+        helper = self.launcher.parent.parent / SDR_HELPER_RELATIVE_PATH
+        helper.parent.mkdir(parents=True)
+        helper.write_bytes(Path(os.environ['MAKO_TEST_SDR_HELPER']).read_bytes() if os.environ.get('MAKO_TEST_SDR_HELPER')
+                           else ELF[:16] + b'\x03\0\x3e\0' + SDR_HELPER_MARKER)
         self.config = self.home / '.config/mako-render/conf.toml'
         self.config.parent.mkdir(parents=True)
         self.config.write_text('version=2\n[[profile]]\nname="stream-quality"\n')
@@ -86,6 +91,8 @@ class RemotePlayCommandTests(unittest.TestCase):
         expected = config.parent / 'vkbasalt/current-profile.conf'
         self.assertEqual(str(expected), values['VKBASALT_CONFIG_FILE'])
         self.assertEqual('1', values['MAKO_FOLLOW_CURRENT_PROFILE'])
+        self.assertEqual('1', values['MAKO_REMOTE_PLAY_SDR'])
+        self.assertEqual(str(self.launcher.parent.parent / SDR_HELPER_RELATIVE_PATH), values['LD_PRELOAD'])
         self.assertEqual('effects = none\n', expected.read_text())
         self.assertNotIn('GALLIUM_DRIVER', values)
         # The stored path survives calls made by the other UI/default config.
@@ -101,6 +108,25 @@ class RemotePlayCommandTests(unittest.TestCase):
         backup.write_bytes(ELF)
         self.command('install', success=False)
         self.assertEqual(ELF, self.client.read_bytes())
+
+    @unittest.skipUnless(os.environ.get('MAKO_TEST_SDR_CLIENT'), 'SDL ABI client supplied by native CTest')
+    def test_sdr_creation_and_native_fallback_through_real_standalone_launcher(self):
+        shutil.copyfile(os.environ['MAKO_TEST_SDR_CLIENT'], self.client)
+        shutil.copyfile(ROOT / 'mako-launch', self.launcher)
+        self.environment['LD_LIBRARY_PATH'] = os.environ['MAKO_TEST_SDL_FIXTURE_DIR']
+        shutil.copyfile(os.environ['MAKO_TEST_SDR_NATIVE_HELPER'], self.launcher.parent.parent / SDR_HELPER_RELATIVE_PATH)
+        if os.environ.get('ASAN_OPTIONS'):
+            self.environment['ASAN_OPTIONS'] = os.environ['ASAN_OPTIONS']
+        self.command('install')
+        result = subprocess.run([str(self.client), 'forced'], env=self.environment, capture_output=True, timeout=5)
+        self.assertEqual(0, result.returncode, result.stderr.decode())
+        self.assertIn('result=sRGB', result.stderr.decode())
+        (self.launcher.parent.parent / SDR_HELPER_RELATIVE_PATH).unlink()
+        result = subprocess.run([str(self.client), 'native'], env=self.environment, capture_output=True, timeout=5)
+        self.assertEqual(0, result.returncode, result.stderr.decode())
+        self.assertIn('Remote Play passthrough', result.stderr.decode())
+        self.assertNotIn('result=sRGB', result.stderr.decode())
+        self.command('remove')
 
     def test_real_standalone_launcher_uses_current_shader_settings(self):
         self.client.write_bytes(Path('/usr/bin/env').read_bytes())

@@ -248,7 +248,7 @@
   "ADAPTIVE_TARGET_FPS": "Target FPS",
   "ADAPTIVE_TARGET_FPS_DESC": "Desired output FPS. Fractional may mix ratios; Steady Base Cap starts at half the target and can align a validated lower integer ratio.",
   "ADAPTIVE_TARGET_REFRESH_RATE": "Match Display Refresh Rate",
-  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "Uses the display refresh rate as Target FPS.",
+  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "Matches Target FPS to the current display refresh rate. Updates automatically during play when you switch displays or change refresh rate.",
   "ADAPTIVE_FALLBACK_TARGET_FPS": "Fallback Target FPS",
   "ADAPTIVE_FALLBACK_TARGET_FPS_DESC": "Used if refresh detection fails. Turn matching off to edit.",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "Steady Base Cap",

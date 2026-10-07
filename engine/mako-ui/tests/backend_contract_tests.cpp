@@ -1138,12 +1138,29 @@ void test_remote_play_shared_command_and_profile_preservation() {
     require(client.open(QIODevice::WriteOnly) && client.write(original) == original.size(), "Remote Play original fixture failed");
     client.close();
     require(client.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner), "Remote Play permissions failed");
+    // Stage the shared command at an installed prefix. Native SDL behavior
+    // has its own CTest; this test validates Qt's async command and recovery.
+    const auto source = QFileInfo(QStringLiteral(MAKO_UI_REMOTE_PLAY_HELPER)).absolutePath();
+    const auto bin = directory.filePath(".local/bin");
+    const auto owner = directory.filePath(".local/share/mako-render/mako_remote_play");
+    require(QDir().mkpath(bin) && QDir().mkpath(owner), "Remote Play package fixture failed");
+    const auto command = bin + "/mako-remote-play";
+    require(QFile::copy(QStringLiteral(MAKO_UI_REMOTE_PLAY_HELPER), command) &&
+        QFile::copy(source + "/mako-launch", bin + "/mako-launch"), "Remote Play commands could not be staged");
+    for (const auto& module : {"__init__.py", "remote_play_core.py", "remote_play_launch.py", "managed_files.py"})
+        require(QFile::copy(source + "/mako_remote_play/" + module, owner + "/" + module), "Remote Play owner could not be staged");
+    auto helperBytes = original;
+    helperBytes[16] = '\x03';
+    helperBytes.append("MAKO_REMOTE_PLAY_SDR_HELPER_V1");
+    QFile sdrHelper(owner + "/libmako-remote-play-sdr.so");
+    require(sdrHelper.open(QIODevice::WriteOnly) && sdrHelper.write(helperBytes) == helperBytes.size(), "Remote Play SDR fixture failed");
+    sdrHelper.close();
     qputenv("HOME", directory.path().toUtf8());
     qputenv("MAKO_CONFIG", config.toUtf8());
     qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launcher.conf").toUtf8());
     qputenv("XDG_CONFIG_HOME", directory.filePath(".config").toUtf8());
     {
-        mako::ui::Backend backend("/proc", QStringLiteral(MAKO_UI_REMOTE_PLAY_HELPER));
+        mako::ui::Backend backend("/proc", command);
         const auto wait = [&backend] {
             QElapsedTimer elapsed;
             elapsed.start();

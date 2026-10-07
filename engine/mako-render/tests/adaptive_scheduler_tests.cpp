@@ -315,16 +315,25 @@ namespace {
         }
 
         AdaptiveFramePlan frame(const std::chrono::nanoseconds interval,
-                const bool acquireBackoff = false) {
+                const bool acquireBackoff = false,
+                const bool reportDelivery = true) {
             this->now += interval;
-            return this->scheduler.planFrame(this->now, acquireBackoff);
+            const auto plan = this->scheduler.planFrame(this->now, acquireBackoff);
+            // Ordinary workload simulations deliver their plan. Fault tests
+            // opt out before supplying their own missing/partial observation.
+            if (reportDelivery)
+                this->scheduler.reportGeneratedFrameDelivery({
+                    plan.size(), plan.size(),
+                });
+            return plan;
         }
 
         AdaptiveFramePlan frameAtFps(const double fps,
-                const bool acquireBackoff = false) {
+                const bool acquireBackoff = false,
+                const bool reportDelivery = true) {
             return this->frame(std::chrono::duration_cast<std::chrono::nanoseconds>(
                 std::chrono::duration<double>(1.0 / fps)
-            ), acquireBackoff);
+            ), acquireBackoff, reportDelivery);
         }
 
         AdaptiveFramePlan deliveredFrameAtFps(const double fps,
@@ -345,13 +354,14 @@ namespace {
         }
 
         AdaptiveFramePlan runAtFps(const double fps,
-                const std::chrono::nanoseconds duration) {
+                const std::chrono::nanoseconds duration,
+                const bool reportDelivery = true) {
             AdaptiveFramePlan result;
             const size_t frames = static_cast<size_t>(
                 std::ceil(fps * std::chrono::duration<double>(duration).count())
             );
             for (size_t i = 0; i < frames; ++i)
-                result = this->frameAtFps(fps);
+                result = this->frameAtFps(fps, false, reportDelivery);
             return result;
         }
     };
@@ -399,7 +409,7 @@ namespace {
         harness.start();
         TraceFingerprint fingerprint;
         for (const auto interval : intervals) {
-            const auto plan = harness.frame(interval);
+            const auto plan = harness.frame(interval, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -472,13 +482,15 @@ namespace {
         require(steady45 == 2958441852441804317ULL,
             "45-to-90 characterization changed: " +
                 std::to_string(steady45));
-        require(boundary425 == 2150815767361452681ULL,
+        // Higher-rung traces include the delivered lower-load qualification;
+        // the target-satisfied 2x and disruption traces retain their identities.
+        require(boundary425 == 10506803357898072879ULL,
             "42.5-to-90 characterization changed: " +
                 std::to_string(boundary425));
-        require(boundary4275 == 7209996886570826541ULL,
+        require(boundary4275 == 15426359556047636635ULL,
             "42.75-to-90 characterization changed: " +
                 std::to_string(boundary4275));
-        require(boundary43 == 1194662062457436213ULL,
+        require(boundary43 == 17608479708632752434ULL,
             "43-to-90 characterization changed: " +
                 std::to_string(boundary43));
         require(disruptions == 3251577126843654263ULL,
@@ -1873,7 +1885,7 @@ namespace {
         harness.start();
         bool reportedMiss = false;
         for (size_t frame = 0; frame < 600; ++frame) {
-            const auto plan = harness.frameAtFps(60.0);
+            const auto plan = harness.frameAtFps(60.0, false, false);
             if (harness.scheduler.snapshot().rampEvaluationActive &&
                     !reportedMiss && !plan.empty()) {
                 harness.scheduler.reportGeneratedFrameDelivery({
@@ -1902,7 +1914,7 @@ namespace {
         harness.start();
         bool reportedPressure = false;
         for (size_t frame = 0; frame < 600; ++frame) {
-            const auto plan = harness.frameAtFps(60.0);
+            const auto plan = harness.frameAtFps(60.0, false, false);
             if (harness.scheduler.snapshot().rampEvaluationActive &&
                     !plan.empty()) {
                 harness.scheduler.reportGeneratedFrameDelivery({
@@ -1961,7 +1973,7 @@ namespace {
                 AdaptiveRecoveryPolicy::OrderedSdr, false, 2s, targetFps,
                 false);
             meaningfulDeficit.start();
-            meaningfulDeficit.runAtFps(lowerRungBaseFps * 0.97, 12s);
+            meaningfulDeficit.runAtFps(lowerRungBaseFps * 0.97, 20s);
             require(meaningfulDeficit.scheduler.snapshot().
                     validatedGenerationLimit == higherMultiplier - 1,
                 "meaningful target deficit could not validate " +
@@ -1987,7 +1999,7 @@ namespace {
     void testFourXPlanUsesEvenInterpolationTimestamps() {
         Harness harness(120, 4);
         harness.start();
-        const auto timestamps = harness.runAtFps(30.0, 10s);
+        const auto timestamps = harness.runAtFps(30.0, 15s);
         requireValidTimestamps(timestamps, 3);
         require(timestamps.size() == 3,
             "30 FPS toward 120 FPS did not settle at the 4x ceiling");
@@ -2002,7 +2014,7 @@ namespace {
     void testFiveXPlanUsesEvenInterpolationTimestamps() {
         Harness harness(120, 5);
         harness.start();
-        harness.runAtFps(24.0, 15s);
+        harness.runAtFps(24.0, 20s);
         require(harness.scheduler.snapshot().validatedGenerationLimit == 4,
             "24 FPS toward 120 FPS did not validate the 5x ceiling");
         AdaptiveFramePlan fullPlan;
@@ -2256,7 +2268,7 @@ namespace {
                         const auto shortInterval = automaticCap ? 14ms : 8ms;
                         const auto longInterval = automaticCap ? 30ms : 32ms;
                         const auto plan = harness.frame(
-                            frame % 2 ? longInterval : shortInterval);
+                            frame % 2 ? longInterval : shortInterval, false, false);
                         requireValidTimestamps(plan, 2);
                         require(!harness.scheduler.historyWarmupActive(),
                             "alternating sub-stall intervals restarted history");
@@ -2270,7 +2282,12 @@ namespace {
                             snapshot.smoothedBaseFps < 60.0,
                         "bursty source cadence locked onto only the fast samples");
                     require(outputs >= 540 && outputs <= 600,
-                        "bursty source lost useful generation or exceeded its ceiling");
+                        "bursty source lost useful generation or exceeded its ceiling: outputs=" +
+                            std::to_string(outputs) + ", limit=" +
+                            std::to_string(snapshot.validatedGenerationLimit) +
+                            ", recovery=" + std::to_string(static_cast<int>(recovery)) +
+                            ", cap=" + std::to_string(automaticCap) +
+                            ", smooth=" + std::to_string(stableCadence));
                     require(harness.diagnostics.count("cadence-refresh") == 0,
                         "bursty source was mistaken for a sustained cadence drop");
                 }
@@ -2669,7 +2686,9 @@ namespace {
                         harness.scheduler.consumeHistoryWarmupFrame(harness.now);
                     }
 
-                    const auto degradedPlan = harness.runAtFps(45.0, 12s);
+                    // Time below target without delivery observations cannot
+                    // release the pre-menu baseline; fresh proof is required.
+                    const auto degradedPlan = harness.runAtFps(45.0, 12s, false);
                     snapshot = harness.scheduler.snapshot();
                     require(!snapshot.rampEvaluationActive &&
                             snapshot.generationLimit == 1 &&
@@ -2821,6 +2840,118 @@ namespace {
             require(harness.scheduler.validatedGenerationLimit() == 2,
                 "delivery recovery with normal source jitter remained stuck");
         }
+    }
+
+    void testHigherPromotionWaitsForSettledDemandAcrossModes() {
+        for (const auto recovery : {AdaptiveRecoveryPolicy::OrderedSdr,
+                AdaptiveRecoveryPolicy::ConservativeHdr}) {
+            for (const bool steady : {false, true}) {
+                for (const bool smooth : {false, true}) {
+                    for (const size_t multiplier : {3u, 4u, 5u}) {
+                        Harness harness(120, multiplier, smooth, recovery,
+                            false, 2s, 120, false, steady);
+                        const double sourceFps = 120.0 / (multiplier - 1);
+                        harness.start();
+                        harness.runAtFps(sourceFps, 20s);
+                        require(harness.scheduler.validatedGenerationLimit() ==
+                                multiplier - 2,
+                            "precondition failed: lower target-proven rung did not settle");
+                        const auto ramps = harness.diagnostics.count("ramp");
+
+                        // Each dip exceeds the old one-second deficit guard,
+                        // but recovers before proving settled higher demand.
+                        for (size_t cycle = 0; cycle < 5; ++cycle) {
+                            harness.runAtFps(sourceFps * 0.90, 1500ms);
+                            harness.runAtFps(sourceFps, 2s);
+                        }
+                        require(harness.diagnostics.count("ramp") == ramps &&
+                                harness.scheduler.validatedGenerationLimit() ==
+                                    multiplier - 2,
+                            "transient demand repeatedly promoted the higher workload");
+
+                        // Real sustained demand, including ordinary frame-time
+                        // jitter, must still reach every configured higher rung.
+                        const auto deficitAt = harness.now;
+                        for (size_t frame = 0;
+                                harness.now - deficitAt < 10s; ++frame)
+                            harness.deliveredFrameAtFps(sourceFps *
+                                (frame % 2 ? 0.79 : 0.81));
+                        require(harness.scheduler.validatedGenerationLimit() ==
+                                multiplier - 1 &&
+                                harness.diagnostics.count("ramp") == ramps + 1,
+                            "settled noisy demand could not promote the higher workload");
+                    }
+                }
+            }
+        }
+    }
+
+    void testHigherPromotionNeedsContinuousDeliveredEvidence() {
+        for (const bool steady : {false, true}) {
+            for (const auto delivered : {std::optional<bool>{false},
+                    std::optional<bool>{}}) {
+                Harness harness(120, 3, false,
+                    AdaptiveRecoveryPolicy::OrderedSdr, false,
+                    2s, 120, false, steady);
+                harness.start();
+                harness.runAtFps(60.0, 12s);
+                const auto ramps = harness.diagnostics.count("ramp");
+                for (size_t frame = 0; frame < 45 * 15; ++frame)
+                    harness.deliveredFrameAtFps(45.0,
+                        frame % 30 == 0 ? delivered : std::optional<bool>{true});
+                require(harness.diagnostics.count("ramp") == ramps,
+                    "missing or failed delivery authorized an ordinary promotion");
+
+                const auto changingAt = harness.now;
+                while (harness.now - changingAt < 10s) {
+                    const auto seconds = std::chrono::duration_cast<
+                        std::chrono::seconds>(harness.now - changingAt).count();
+                    harness.deliveredFrameAtFps(seconds % 2 ? 45.0 : 30.0);
+                }
+                require(harness.diagnostics.count("ramp") == ramps,
+                    "a continuously moving source authorized an ordinary promotion");
+                for (size_t frame = 0; frame < 45 * 10; ++frame)
+                    harness.deliveredFrameAtFps(frame % 2 ? 44.0 : 46.0);
+                require(harness.scheduler.validatedGenerationLimit() == 2,
+                    "healthy settled demand remained stuck after delivery recovery");
+            }
+        }
+    }
+
+    void testOrdinaryPromotionCoexistsWithNativeProbes() {
+        for (const auto interval : {100ms, 500ms, 1000ms, 3000ms}) {
+            for (const bool steady : {false, true}) {
+                Harness harness(120, 3, false,
+                    AdaptiveRecoveryPolicy::OrderedSdr, true,
+                    interval, 120, false, steady);
+                harness.start();
+                harness.runAtFps(45.0, 20s);
+                require(harness.scheduler.validatedGenerationLimit() == 2 &&
+                        harness.diagnostics.contains("dynamic-cadence-probe-rejected"),
+                    "periodic native sampling stranded ordinary higher promotion");
+            }
+        }
+    }
+
+    void testHigherPromotionUsesStrongestQualifiedLowerLoad() {
+        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false);
+        harness.start();
+        harness.runAtFps(60.0, 12s);
+        harness.runAtFps(45.0, 1500ms);
+        for (size_t frame = 0; frame < 500 &&
+                !harness.scheduler.snapshot().rampEvaluationActive; ++frame)
+            harness.deliveredFrameAtFps(44.0);
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "a small settled source variation prevented the higher trial");
+        while (harness.scheduler.snapshot().rampEvaluationActive)
+            harness.deliveredFrameAtFps(34.0);
+        const auto* result = harness.diagnostics.last("ramp-result");
+        require(result && !result->accepted &&
+                result->previousBaseFps > 44.0 &&
+                result->reason == "unpaid-real-frame-cost" &&
+                harness.scheduler.validatedGenerationLimit() == 1,
+            "the higher trial compared its cost only with the lower-load dip");
     }
 
     void testFailedHigherLoadRequalifiesChangedScene() {
@@ -3033,7 +3164,7 @@ namespace {
 
         AdaptiveFramePlan plan;
         for (size_t frame = 0; frame < 1200; ++frame) {
-            plan = harness.frameAtFps(68.0);
+            plan = harness.frameAtFps(68.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3053,7 +3184,7 @@ namespace {
             "target-matched Fractional cadence did not test constant 2x");
 
         for (size_t frame = 0; frame < 180; ++frame) {
-            plan = harness.frameAtFps(60.0);
+            plan = harness.frameAtFps(60.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3087,7 +3218,7 @@ namespace {
 
         AdaptiveFramePlan plan;
         for (size_t frame = 0; frame < 1200; ++frame) {
-            plan = harness.frameAtFps(68.0);
+            plan = harness.frameAtFps(68.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3102,7 +3233,7 @@ namespace {
             "precondition failed: 2x convergence probe did not begin");
 
         for (size_t frame = 0; frame < 180; ++frame) {
-            plan = harness.frameAtFps(68.0);
+            plan = harness.frameAtFps(68.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3227,7 +3358,7 @@ namespace {
             "qualified 3x cadence did not test the cheaper 2x policy");
 
         for (size_t frame = 0; frame < 120; ++frame) {
-            plan = harness.frameAtFps(60.0);
+            plan = harness.frameAtFps(60.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3263,7 +3394,7 @@ namespace {
 
         AdaptiveFramePlan plan;
         for (size_t frame = 0; frame < 120; ++frame) {
-            plan = harness.frameAtFps(56.0);
+            plan = harness.frameAtFps(56.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3285,7 +3416,7 @@ namespace {
             "settling grace did not retain the cheaper 2x workload");
 
         for (size_t frame = 0; frame < 120; ++frame) {
-            plan = harness.frameAtFps(60.0);
+            plan = harness.frameAtFps(60.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3353,7 +3484,7 @@ namespace {
         harness.start();
         const auto deadline = harness.now + 80s;
         while (harness.now < deadline) {
-            const auto plan = harness.frameAtFps(fps);
+            const auto plan = harness.frameAtFps(fps, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3498,7 +3629,7 @@ namespace {
             "precondition failed: moderate-deficit probe did not begin");
 
         for (size_t frame = 0; frame < 120; ++frame) {
-            const auto plan = harness.frameAtFps(24.0);
+            const auto plan = harness.frameAtFps(24.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3541,7 +3672,7 @@ namespace {
 
         AdaptiveFramePlan plan;
         for (size_t frame = 0; frame < 60; ++frame) {
-            plan = harness.frameAtFps(60.0);
+            plan = harness.frameAtFps(60.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = 0,
@@ -3595,7 +3726,7 @@ namespace {
 
         AdaptiveFramePlan plan;
         for (size_t frame = 0; frame < 120; ++frame) {
-            plan = harness.frameAtFps(60.0);
+            plan = harness.frameAtFps(60.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = plan.size(),
@@ -3660,7 +3791,7 @@ namespace {
         harness.start();
         bool reportedPressure = false;
         for (size_t frame = 0; frame < 1000; ++frame) {
-            const auto plan = harness.frameAtFps(47.0);
+            const auto plan = harness.frameAtFps(47.0, false, false);
             const bool probeStarted = harness.diagnostics.contains(
                 "adaptive-stable-cadence-probe"
             );
@@ -3732,7 +3863,7 @@ namespace {
                     );
                 ++frame) {
             const double observedFps = previousPlan.empty() ? 60.0 : 30.0;
-            previousPlan = harness.frameAtFps(observedFps);
+            previousPlan = harness.frameAtFps(observedFps, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = previousPlan.size(),
                 .acceptedForPresentation = previousPlan.size(),
@@ -3818,7 +3949,7 @@ namespace {
             AdaptiveFramePlan::evenlySpaced(1);
         while (!harness.diagnostics.contains("dynamic-cadence-recovered")) {
             const double observedFps = previousPlan.empty() ? 60.0 : 30.0;
-            previousPlan = harness.frameAtFps(observedFps);
+            previousPlan = harness.frameAtFps(observedFps, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = previousPlan.size(),
                 .acceptedForPresentation = previousPlan.size(),
@@ -3858,7 +3989,7 @@ namespace {
             AdaptiveFramePlan::evenlySpaced(1);
         while (!harness.diagnostics.contains("dynamic-cadence-recovered")) {
             const double observedFps = previousPlan.empty() ? 60.0 : 30.0;
-            previousPlan = harness.frameAtFps(observedFps);
+            previousPlan = harness.frameAtFps(observedFps, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = previousPlan.size(),
                 .acceptedForPresentation = previousPlan.size(),
@@ -4033,7 +4164,9 @@ namespace {
             "counterproductive FF7-style 3x probe was accepted");
         const size_t rampsAfterFailure = harness.diagnostics.count("ramp");
 
-        harness.runAtFps(33.4459, 60s);
+        // A lower source alone cannot rebase the failed trial without
+        // continuous delivered evidence, even after the cooldown expires.
+        harness.runAtFps(33.4459, 60s, false);
         require(harness.diagnostics.count("ramp") == rampsAfterFailure &&
                 harness.scheduler.snapshot().validatedGenerationLimit == 1,
             "failed 3x probe retried against a degraded 2x baseline");
@@ -4317,7 +4450,7 @@ namespace {
 
         const size_t bridgesBefore = harness.diagnostics.count("bridge");
         for (size_t frame = 0; frame < 120; ++frame) {
-            const auto plan = harness.frameAtFps(31.0);
+            const auto plan = harness.frameAtFps(31.0, false, false);
             harness.scheduler.reportGeneratedFrameDelivery({
                 .requested = plan.size(),
                 .acceptedForPresentation = 0,
@@ -4550,6 +4683,10 @@ int main() {
         {"menu return does not invent target proof", testMenuReturnDoesNotInventTargetProof},
         {"lower-load requalification coexists with native probes", testLowerLoadRequalificationCoexistsWithNativeProbes},
         {"lower-load requalification needs continuous evidence", testLowerLoadRequalificationNeedsContinuousEvidence},
+        {"higher promotion waits for settled demand across modes", testHigherPromotionWaitsForSettledDemandAcrossModes},
+        {"higher promotion needs continuous delivered evidence", testHigherPromotionNeedsContinuousDeliveredEvidence},
+        {"ordinary promotion coexists with native probes", testOrdinaryPromotionCoexistsWithNativeProbes},
+        {"higher promotion retains strongest lower-load baseline", testHigherPromotionUsesStrongestQualifiedLowerLoad},
         {"failed higher load requalifies changed scene", testFailedHigherLoadRequalifiesChangedScene},
         {"focus return retains conservative fallbacks", testFocusReturnRetainsConservativeFallbacks},
         {"fast focus return retains history and transport settling", testFastFocusReturnCannotBypassHistoryOrTransportSettling},

@@ -409,14 +409,29 @@ namespace mako::layer {
                 ls::AdaptiveFractionalRealFramePriority::Auto;
     }
 
+    /// Preserve the user's live Frame Generation switch while applying the
+    /// optional display guard. Missing Gamescope feedback fails open so an
+    /// unsupported compositor cannot silently disable synthesis.
+    [[nodiscard]] inline bool effectiveFrameGenerationEnabled(
+            const ls::GameConf& profile,
+            const std::optional<uint32_t> gamescopeRefreshHz) {
+        if (!profile.frame_generation_provisioned ||
+                !profile.frame_generation_enabled)
+            return false;
+        return profile.frame_generation_refresh_threshold == 0 ||
+            !gamescopeRefreshHz ||
+            *gamescopeRefreshHz > profile.frame_generation_refresh_threshold;
+    }
+
     /// A capped Fractional plan can prepare its outputs during the existing
     /// source-cap wait. Other modes and timestamped/variable WSI transports
     /// retain their current pacing owner. No additional source cap is created.
     [[nodiscard]] inline bool fractionalBaseCapPacesOutputs(
             const ls::GameConf& profile, const double effectiveCap,
-            const bool untimedOrderedTransport) {
-        return profile.frame_generation_provisioned &&
-            profile.frame_generation_enabled && profile.adaptive &&
+            const bool untimedOrderedTransport,
+            const std::optional<uint32_t> gamescopeRefreshHz = std::nullopt) {
+        return effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
+            profile.adaptive &&
             !profile.adaptive_auto_base_fps_cap && untimedOrderedTransport &&
             std::isfinite(effectiveCap) && effectiveCap > 0.0 &&
             static_cast<double>(profile.target_fps) > effectiveCap;
@@ -426,11 +441,16 @@ namespace mako::layer {
     /// Explicit Fractional priority instead selects its target-relative cap.
     /// Adaptive can still raise its multiplier when the game falls below this
     /// ceiling. Keep the engine's 10 FPS policy floor for unusually low targets.
+    /// The display guard releases both target-derived Adaptive caps while
+    /// preserving the saved manual cap. Explicit Off keeps all caps dormant.
     [[nodiscard]] inline double effectiveBaseFpsCap(
-            const ls::GameConf& profile) {
+            const ls::GameConf& profile,
+            const std::optional<uint32_t> gamescopeRefreshHz = std::nullopt) {
         if (!profile.frame_generation_provisioned ||
                 !profile.frame_generation_enabled)
             return 0.0;
+        if (!effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz))
+            return static_cast<double>(profile.base_fps_cap);
         if (profile.adaptive && profile.adaptive_auto_base_fps_cap) {
             return std::max(
                 adaptiveMinimumBaseFps,
@@ -447,12 +467,15 @@ namespace mako::layer {
     /// authoritative, and a fresh scheduler resets this per-swapchain proof.
     [[nodiscard]] inline double effectiveBaseFpsCap(
             const ls::GameConf& profile,
-            const AdaptiveSchedulerSnapshot& scheduler) {
+            const AdaptiveSchedulerSnapshot& scheduler,
+            const std::optional<uint32_t> gamescopeRefreshHz = std::nullopt) {
+        if (!effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz))
+            return effectiveBaseFpsCap(profile, gamescopeRefreshHz);
         if (profile.adaptive && profile.adaptive_auto_base_fps_cap &&
                 scheduler.automaticBaseCapSuppressed) {
             return 0.0;
         }
-        return effectiveBaseFpsCap(profile);
+        return effectiveBaseFpsCap(profile, gamescopeRefreshHz);
     }
 
     /// Ordered-SDR rescue can release an automatic cap after FIFO masks source
@@ -462,30 +485,17 @@ namespace mako::layer {
     [[nodiscard]] inline double effectiveBaseFpsCap(
             const ls::GameConf& profile,
             const AdaptiveSchedulerSnapshot& scheduler,
-            const GamescopePresentationFeedback& presentationFeedback) {
+            const GamescopePresentationFeedback& presentationFeedback,
+            const std::optional<uint32_t> gamescopeRefreshHz = std::nullopt) {
         if (presentationFeedback.variableRefreshRequested())
-            return effectiveBaseFpsCap(profile);
-        return effectiveBaseFpsCap(profile, scheduler);
+            return effectiveBaseFpsCap(profile, gamescopeRefreshHz);
+        return effectiveBaseFpsCap(profile, scheduler, gamescopeRefreshHz);
     }
 
     [[nodiscard]] inline bool dynamicCadenceRecoveryEnabled(
             const ls::GameConf& profile) {
         return profile.dynamic_cadence_recovery &&
             effectiveBaseFpsCap(profile) <= 0.0;
-    }
-
-    /// Preserve the user's live Frame Generation switch while applying the
-    /// optional display guard. Missing Gamescope feedback fails open so an
-    /// unsupported compositor cannot silently disable synthesis.
-    [[nodiscard]] inline bool effectiveFrameGenerationEnabled(
-            const ls::GameConf& profile,
-            const std::optional<uint32_t> gamescopeRefreshHz) {
-        if (!profile.frame_generation_provisioned ||
-                !profile.frame_generation_enabled)
-            return false;
-        return profile.frame_generation_refresh_threshold == 0 ||
-            !gamescopeRefreshHz ||
-            *gamescopeRefreshHz > profile.frame_generation_refresh_threshold;
     }
 
     /// A proven Steady 2x cadence keeps its established FIFO handoff. Under
@@ -523,7 +533,7 @@ namespace mako::layer {
             !scheduler.stableCadenceEvaluationActive;
         const bool acceptedFractionalVrrInteger =
             !profile.adaptive_auto_base_fps_cap &&
-            effectiveBaseFpsCap(profile) <= 0.0 &&
+            effectiveBaseFpsCap(profile, gamescopeRefreshHz) <= 0.0 &&
             !profile.dynamic_cadence_recovery &&
             presentationFeedback.variableRefreshRequested() &&
             scheduler.phase == AdaptiveSchedulerPhase::StableCadence &&
@@ -754,9 +764,9 @@ namespace mako::layer {
             if (profile.adaptive)
                 outputFps = std::min(outputFps,
                     static_cast<double>(profile.target_fps));
-            else if (effectiveBaseFpsCap(profile) > 0.0)
+            else if (effectiveBaseFpsCap(profile, refreshHz) > 0.0)
                 outputFps = std::min(outputFps,
-                    effectiveBaseFpsCap(profile) *
+                    effectiveBaseFpsCap(profile, refreshHz) *
                         static_cast<double>(profile.multiplier));
         }
         return outputFps;
@@ -945,7 +955,8 @@ namespace mako::layer {
             current.multiplier != applied.multiplier &&
             (!current.adaptive || !applied.adaptive);
         const bool baseFpsCapChanged =
-            effectiveBaseFpsCap(current) != effectiveBaseFpsCap(applied);
+            effectiveBaseFpsCap(current, displayRefreshHz) !=
+                effectiveBaseFpsCap(applied, displayRefreshHz);
         const bool dynamicCadenceProbeIntervalChanged =
             current.dynamic_cadence_probe_interval_seconds !=
                 applied.dynamic_cadence_probe_interval_seconds &&

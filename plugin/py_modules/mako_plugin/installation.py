@@ -45,6 +45,7 @@ from .constants import (
     PLUGIN_ROOT,
 )
 from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
+from .remote_play_launch import SDR_HELPER_RELATIVE_PATH
 from .host_environment import detect_host_environment
 from .layer_manifests import manifest_owner
 from .managed_files import (
@@ -154,6 +155,7 @@ class InstallationService(BaseService):
         )
         self.cli_file = self.user_home / CLI_DIR / CLI_FILENAME
         self.vrr_lease_file = self.user_home / CLI_DIR / VRR_LEASE_FILENAME
+        self.remote_play_sdr_file = self.user_home / '.local' / SDR_HELPER_RELATIVE_PATH
         self.engine_state_file = self.local_lib_dir.parent / "installed-engine.json"
         self.active_renderer_state_file = (
             self.local_lib_dir.parent / ACTIVE_RENDERER_STATE_FILENAME
@@ -565,7 +567,10 @@ class InstallationService(BaseService):
         return RendererFileInventory(
             required_archive=required_destinations,
             optional_32bit_archive=optional_32bit_destinations,
-            optional_archive={f"bin/{CLI_FILENAME}": self.cli_file},
+            # Published 4.0 archives predate native Remote Play. They remain
+            # installable; enabling the override requires the current helper.
+            optional_archive={f"bin/{CLI_FILENAME}": self.cli_file,
+                              SDR_HELPER_RELATIVE_PATH: self.remote_play_sdr_file},
             generated=(
                 self.registered_json_file, self.registered_json32_file,
                 self.gamescope_wsi_compatibility_manifest,

@@ -78,6 +78,10 @@ class RemotePlayContractTests(unittest.TestCase):
         self.assertIn('scripts/mako_remote_play/', cmake)
         packaging = (ROOT / 'engine/scripts/package-local.sh').read_text()
         self.assertIn('"bin/mako-remote-play"', packaging)
+        self.assertIn('"' + remote_play_launch.SDR_HELPER_RELATIVE_PATH + '"', packaging)
+        helper_cmake = (SOURCE / 'CMakeLists.txt').read_text()
+        self.assertIn('CMAKE_SIZEOF_VOID_P EQUAL 8', helper_cmake)
+        self.assertIn('mako-remote-play-sdr', helper_cmake)
         for name in (*MODULES, '__init__.py'):
             self.assertIn('"share/mako-render/mako_remote_play/' + name + '"', packaging)
         self.assertIn(b'OVERRIDE_V3', remote_play_core.MARKER)

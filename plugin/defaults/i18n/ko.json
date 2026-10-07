@@ -248,7 +248,7 @@
   "ADAPTIVE_TARGET_FPS": "목표 FPS",
   "ADAPTIVE_TARGET_FPS_DESC": "목표 출력 FPS입니다. 소수 배율은 배율을 섞고, 안정적 기본 FPS 제한은 절반에서 시작해 검증된 낮은 정수 배율로 맞출 수 있습니다.",
   "ADAPTIVE_TARGET_REFRESH_RATE": "Match Display Refresh Rate",
-  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "화면 주사율을 목표 FPS로 사용합니다.",
+  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "현재 화면 주사율에 목표 FPS를 맞춥니다. 플레이 중 화면을 바꾸거나 주사율을 변경하면 자동으로 업데이트됩니다.",
   "ADAPTIVE_FALLBACK_TARGET_FPS": "Fallback Target FPS",
   "ADAPTIVE_FALLBACK_TARGET_FPS_DESC": "주사율을 감지하지 못하면 사용됩니다. 편집하려면 주사율 맞추기를 끄세요.",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "안정적 기본 FPS 제한",

@@ -53,6 +53,7 @@ printf '%s\\n' "$@" > "$(dirname "$0")/build-args.txt"
         self.built_cli = self.engine / "build/steamos-dev/mako-cli" / paths.CLI_FILENAME
         self.installed_cli = self.home / paths.CLI_DIR / paths.CLI_FILENAME
         self.write(self.built_cli, "#!/bin/sh\n# new model inspector\nexit 0\n", executable=True)
+        self.write(self.engine / 'build/steamos-dev/scripts/mako_remote_play/libmako-remote-play-sdr.so', 'new SDR helper')
         self.write(self.engine / "scripts/manage-vkbasalt-release.py", """
 import pathlib, shutil, sys
 source = pathlib.Path(__file__).parents[1] / 'vkbasalt-fixture'
@@ -135,6 +136,7 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                     self.assertNotIn("--experimental-lsfg-fp16",
                                      (self.engine / "scripts/build-args.txt").read_text())
                     if bits == 64:
+                        self.assertEqual((self.home / '.local/share/mako-render/mako_remote_play/libmako-remote-play-sdr.so').read_text(), 'new SDR helper')
                         self.assertEqual(self.installed_cli.read_bytes(), self.built_cli.read_bytes())
                         self.assertTrue(os.access(self.installed_cli, os.X_OK))
                         self.assertIn("verified installed 64-bit CLI", result.stdout)

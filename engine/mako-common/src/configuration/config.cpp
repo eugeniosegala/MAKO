@@ -2,6 +2,7 @@
 
 #include "mako-common/configuration/config.hpp"
 #include "atomic_write.hpp"
+#include "power_source.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <algorithm>
@@ -10,6 +11,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -730,30 +732,59 @@ WatchedConfig::WatchedConfig(std::filesystem::path powerRoot)
 
     this->configFile = ConfigFile(this->path);
     this->last_timestamp = std::filesystem::last_write_time(this->path);
-    if (std::any_of(this->configFile.profiles().begin(), this->configFile.profiles().end(),
-            [](const auto& profile) { return !profile.power_profiles.empty(); }))
-        this->configFile.power_source = detectPowerSource(this->powerSupplyRoot);
-    this->nextPowerPoll = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    this->configurePowerMonitoring(true);
+}
+
+WatchedConfig::~WatchedConfig() = default;
+WatchedConfig::WatchedConfig(WatchedConfig&&) noexcept = default;
+WatchedConfig& WatchedConfig::operator=(WatchedConfig&&) noexcept = default;
+
+void WatchedConfig::configurePowerMonitoring(const bool startup) {
+    const bool wasEnabled = this->powerProfilesEnabled;
+    this->powerProfilesEnabled = std::any_of(
+        this->configFile.profiles().begin(), this->configFile.profiles().end(),
+        [](const auto& profile) { return !profile.power_profiles.empty(); });
+    if (!this->powerProfilesEnabled) return;
+
+    if (!this->powerMonitor) {
+        try {
+            this->powerMonitor = std::make_unique<detail::PowerSourceMonitor>(
+                this->powerSupplyRoot);
+        } catch (const std::exception& error) {
+            std::cerr << "MAKO Renderer: power source monitor unavailable; "
+                         "retaining the last confirmed settings: "
+                      << error.what() << '\n';
+            return;
+        }
+        if (startup) this->powerMonitor->waitForInitialSample();
+    } else if (!wasEnabled) {
+        this->powerMonitor->requestSample();
+    }
+    if (!wasEnabled)
+        this->nextPowerPoll = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    const auto source = this->powerMonitor->sample();
+    if (source != PowerSource::Unknown) this->configFile.power_source = source;
+}
+
+bool WatchedConfig::updatePowerSource() {
+    if (!this->powerProfilesEnabled || !this->powerMonitor) return false;
+    const auto now = std::chrono::steady_clock::now();
+    if (now >= this->nextPowerPoll) {
+        this->nextPowerPoll = now + std::chrono::seconds(2);
+        this->powerMonitor->requestSample();
+    }
+    const auto source = this->powerMonitor->sample();
+    if (source == PowerSource::Unknown || source == this->configFile.power_source)
+        return false;
+    this->configFile.power_source = source;
+    return true;
 }
 
 bool WatchedConfig::update() {
     if (std::getenv("MAKO_ENV"))
         return false;
 
-    bool powerChanged = false;
-    const auto pollNow = std::chrono::steady_clock::now();
-    if (pollNow >= this->nextPowerPoll) {
-        this->nextPowerPoll = pollNow + std::chrono::seconds(2);
-        const auto source = std::any_of(this->configFile.profiles().begin(),
-                this->configFile.profiles().end(), [](const auto& profile) {
-                    return !profile.power_profiles.empty();
-                }) ? detectPowerSource(this->powerSupplyRoot) : PowerSource::Unknown;
-        // A transient read failure retains the last confirmed source.
-        if (source != PowerSource::Unknown && source != this->configFile.power_source) {
-            this->configFile.power_source = source;
-            powerChanged = true;
-        }
-    }
+    const bool powerChanged = this->updatePowerSource();
     const auto now = std::filesystem::last_write_time(this->path);
     if (now == this->last_timestamp)
         return powerChanged;
@@ -779,6 +810,7 @@ bool WatchedConfig::update() {
     this->configFile = std::move(new_config);
     this->last_timestamp = now;
     this->failed_timestamp.reset();
+    this->configurePowerMonitoring(false);
     return true;
 }
 

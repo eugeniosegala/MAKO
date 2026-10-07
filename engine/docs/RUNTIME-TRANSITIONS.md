@@ -26,7 +26,7 @@ The process-wide backend is created lazily when the first active swapchain needs
 `Root::update()` is reached from application presentation, but work is bounded and change-driven:
 
 1. Compositor refresh, presentation, and HDR feedback update their owned state independently.
-2. Configuration is checked at most every 250 ms. Optional AC/battery profiles sample system power supplies at most every two seconds; profiles without power sets do not read those supplies. An unchanged file is not reparsed.
+2. Configuration is checked at most every 250 ms. When any saved profile has AC/battery sets, the watcher requests a background system-supply reading at most every two seconds and consumes the last confirmed source through an atomic cache. Startup allows up to 50 ms for the first reading, then uses Base if it is still unavailable. No power-supply I/O or worker join runs in presentation; a stalled read retains confirmed state and cannot accumulate requests or workers. Watchers without power sets create no sampler. Removing the sets leaves an existing worker idle after its outstanding read; re-enabling them requests a fresh sample. The worker is joined at watcher teardown before its code and state can be unloaded; that lifetime join can wait for an outstanding driver read to return. An unchanged file is not reparsed.
 3. A changed file is parsed and profile matching is repeated. A confirmed power-source change repeats matching against the existing configuration, without a file write or parse. The resolved power set retains the profile identity and enters the same transition planner.
 4. Process-static fields are projected back to their applied values while compatible fields continue.
 5. Each live swapchain receives a `ProfileUpdatePlan` based on its applied profile, private resources, generated capacity, and current extent support.
@@ -61,7 +61,7 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Frame Generation provisioning | Restart | Adds or removes LSFG application-device interop, backend ownership, and private resources. Scaling-only processes retain the combined Renderer without those FG resources. |
 | Frame Generation `0x` | Live | Releases the effective base cap, resets relevant scheduler and recovery state, and takes the real-frame path without LSFG work. |
 | Frame Generation `2x`–`5x` or Adaptive | Live when startup provisioning succeeded; otherwise restart | Reuses retained interop and private resources, then warms temporal history where required. |
-| Refresh threshold and Gamescope refresh | Live | Re-evaluates effective enablement and refresh-targeted scheduling. |
+| Refresh threshold and Gamescope refresh | Live | Re-evaluates effective enablement and refresh-targeted scheduling. A refresh pause releases Steady and target-derived Fractional caps while retaining the saved manual Base FPS Cap; resuming restores Adaptive cap ownership. Explicit `0x` still makes all caps dormant. |
 | Gamescope VRR and Allow Tearing feedback | Live | Explicit requested/capable/active VRR can change Steady Adaptive's higher-multiplier cap eligibility, enable full-batch FIFO for a validated higher Steady rung, or hand an already accepted constant Fractional rung to FIFO. Fixed Smooth Cadence and qualified Adaptive handoffs retain ordered FIFO pacing. Only affected pacing helpers reset; Allow Tearing is diagnostic only. |
 | Per-profile Gamescope VRR choice | Live during a matched MAKO launch | A separate launch helper temporarily changes Gamescope's live VRR value for On or Off and restores the prior value when the game ends. Follow Steam does nothing. MAKO Renderer observes the resulting feedback on its normal sampling cycle. |
 | Fixed/Adaptive mode or multiplier | Live within current capacity; otherwise private FG replacement or recreation | Dormant mode values are saved without resetting the active mode. |
@@ -177,7 +177,7 @@ Exported image-memory and timeline-semaphore descriptors are scoped until the ba
 
 | Responsibility | Source of truth |
 | --- | --- |
-| Parsing and watched configuration | `mako-common/src/configuration/config.cpp`, `mako-common/include/mako-common/configuration/config.hpp` |
+| Parsing, watched configuration, and background power sampling | `mako-common/src/configuration/config.cpp`, `mako-common/src/configuration/power_source.*`, `mako-common/include/mako-common/configuration/config.hpp` |
 | Polling, profile selection, and backend baselines | `mako-render/src/instance.*` |
 | Merge and transition classification | `mako-render/src/profile_update.hpp` |
 | Private transitions and live application | `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain/resources.cpp`, `mako-render/src/swapchain/profile.cpp` |

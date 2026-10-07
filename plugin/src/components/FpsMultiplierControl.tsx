@@ -383,7 +383,7 @@ export function FpsMultiplierControl({
                   )}
                   description={t(
                     "ADAPTIVE_TARGET_REFRESH_RATE_DESC",
-                    "Uses the display refresh rate as Target FPS.",
+                    "Matches Target FPS to the current display refresh rate. Updates automatically during play when you switch displays or change refresh rate.",
                   )}
                   checked={config.adaptive_target_refresh_rate ?? false}
                   onChange={(value) =>

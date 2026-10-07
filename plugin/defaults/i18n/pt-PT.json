@@ -248,7 +248,7 @@
   "ADAPTIVE_TARGET_FPS": "FPS alvo",
   "ADAPTIVE_TARGET_FPS_DESC": "FPS de saída. O Adaptativo fracionário combina proporções; o limite base estável parte de metade do alvo e pode usar um inteiro inferior validado.",
   "ADAPTIVE_TARGET_REFRESH_RATE": "Match Display Refresh Rate",
-  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "Usa a taxa de atualização do ecrã como FPS alvo.",
+  "ADAPTIVE_TARGET_REFRESH_RATE_DESC": "Adapta o FPS alvo à taxa de atualização do ecrã atual. Atualiza automaticamente durante o jogo ao mudar de ecrã ou alterar a taxa de atualização.",
   "ADAPTIVE_FALLBACK_TARGET_FPS": "Fallback Target FPS",
   "ADAPTIVE_FALLBACK_TARGET_FPS_DESC": "Usado se a deteção da taxa falhar. Desative a opção de acompanhar o ecrã para editar.",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "Limite base estável",
