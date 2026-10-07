@@ -162,10 +162,25 @@ class ConfigurationService(BaseService):
             self._normalize_wrapper_settings,
         )
         self._remove_stale_vkbasalt_profile_configs(expected_profile_configs)
+        self._write_selected_shader_config(metadata=resolved_metadata)
 
     @property
     def selected_shader_config_path(self) -> Path:
         return self.vkbasalt_profile_config_dir / "current-profile.conf"
+
+    def _write_selected_shader_config(
+            self, profile_data: Optional[ProfileData] = None,
+            metadata: Optional[profile_storage.ProfileMetadata] = None,
+    ) -> None:
+        """Refresh the launch-time shader filename for selection-following clients."""
+        data = profile_data or self._get_profile_data()
+        name = data["current_profile"]
+        config = self._config_for_profile(data, name)
+        content = (self._profile_shader_content(name, metadata)
+                   if profile_storage.uses_vkbasalt(config) else "")
+        write_managed_text_atomically(
+            self.selected_shader_config_path, content or "effects = none\n", 0o644, self.log,
+        )
 
     def _write_vkbasalt_profile_configs(
             self,
@@ -627,6 +642,7 @@ class ConfigurationService(BaseService):
                 # The normal settings writer also merges other profile files.
                 # Reuse the file rollback owner for the complete touched state.
                 paths = [self.config_file_path, self.wrapper_profile_settings_path,
+                         self.selected_shader_config_path,
                          self.mako_script_path, *(
                              self._vkbasalt_config_path(name, metadata)
                              for name in data["profiles"]
@@ -683,7 +699,9 @@ class ConfigurationService(BaseService):
                 path = self._vkbasalt_config_path(profile_name, metadata)
                 content = self._profile_shader_content(profile_name, metadata)
                 updated = profile_storage.add_custom_shader_content(content, Path(shader_path))
-                write_managed_text_atomically(path, updated, 0o644, self.log)
+                with managed_install_transaction([path, self.selected_shader_config_path], self.log):
+                    write_managed_text_atomically(path, updated, 0o644, self.log)
+                    self._write_selected_shader_config(data, metadata)
                 return self.get_profile_config(profile_name)
             except (OSError, ValueError, TypeError) as error:
                 return self._error_response(ConfigurationResponse, str(error), config=None)
@@ -1072,44 +1090,6 @@ class ConfigurationService(BaseService):
             self.log.error(error_msg)
             return self._error_response(ProfileResponse, str(e), profile_name=None)
 
-    def ensure_remote_play_profile(self, profile_name: str) -> None:
-        """Create the dedicated native streaming profile without cloning power sets.
-
-        The caller holds the configuration lock and snapshots the canonical
-        files together with the Steam override installation transaction.
-        """
-        data = self._get_profile_data()
-        if profile_name not in data["profiles"]:
-            defaults = ConfigurationManager.get_defaults()
-            defaults.update(data["global_config"])
-            defaults.update({
-                "active_in": "streaming_client, streaming_client.mako-original",
-                "frame_generation_provisioned": True,
-                "frame_generation_enabled": True,
-                "multiplier": 2, "adaptive": False,
-                "base_fps_cap": 30, "target_fps": 60,
-                "scaling_enabled": False,
-            })
-            data["profiles"][profile_name] = ConfigurationManager.validate_config(defaults)
-            metadata = self._read_profile_metadata(data)
-            metadata[profile_name] = profile_storage.profile_metadata_entry(
-                "Remote Play", PROFILE_KIND_PROCESS,
-            )
-            settings = self._read_wrapper_profile_settings()
-            settings[profile_name] = self._normalize_wrapper_settings(defaults)
-            self._save_profile_data(data)
-            # New defaults have no shader integration to prepare. Persist only
-            # the sidecar, avoiding unrelated shader migrations outside this transaction.
-            profile_storage.write_wrapper_profile_settings(
-                self.config_dir, self.wrapper_profile_settings_path,
-                self._WRAPPER_PROFILE_SETTINGS_VERSION, settings,
-                self._write_file, self._normalize_wrapper_settings,
-            )
-            self._write_profile_metadata(metadata)
-        result = self.update_mako_script_from_profile_data(data)
-        if not result["success"]:
-            raise OSError(result.get("error") or "Could not prepare Remote Play launch wrapper")
-
     def delete_profile(self, profile_name: str) -> ProfileResponse:
         """Delete a profile
 
@@ -1376,15 +1356,17 @@ class ConfigurationService(BaseService):
             ProfileResponse with success status
         """
         try:
-            profile_data = self._get_profile_data()
-
-            new_profile_data = ConfigurationManager.set_current_profile(profile_data, profile_name)
-
-            self._save_profile_data(new_profile_data)
-
-            script_result = self.update_mako_script_from_profile_data(new_profile_data)
-            if not script_result["success"]:
-                self.log.warning(f"Failed to update launch script: {script_result['error']}")
+            with self._configuration_write_lock:
+                profile_data = self._get_profile_data()
+                new_profile_data = ConfigurationManager.set_current_profile(profile_data, profile_name)
+                with managed_install_transaction([
+                        self.config_file_path, self.mako_script_path,
+                        self.selected_shader_config_path], self.log):
+                    self._save_profile_data(new_profile_data)
+                    self._write_selected_shader_config(new_profile_data)
+                    script_result = self.update_mako_script_from_profile_data(new_profile_data)
+                    if not script_result["success"]:
+                        raise OSError(script_result.get("error") or "could not update launch wrapper")
 
             self.log.info(f"Set current profile to '{profile_name}'")
 
@@ -1401,17 +1383,23 @@ class ConfigurationService(BaseService):
             self.log.error(error_msg)
             return self._error_response(ProfileResponse, str(e), profile_name=None)
 
-    def sync_current_profile(self, app_id: str = "", remote_profile: str = "") -> ProfileResponse:
-        """Select the saved profile matching a live game or native stream.
+    def sync_current_profile(self, app_id: str = "", remote_running: bool = False, remote_enabled: bool = False) -> ProfileResponse:
+        """Select a live game's match or preserve the chosen stream profile.
 
-        remote_profile is supplied internally after exact native-client detection;
-        it never comes from the public RPC caller or a Steam AppID guess.
+        remote_running is supplied internally after exact native-client detection.
+        Read the selection under the write lock, rather than restoring a profile
+        name sampled before a concurrent Create Profile selection completed.
         A Steam running-app record can outlive its game process briefly. Never
         retain or select a game profile from the app ID alone: require at least
         one live process carrying that ID, then prefer the previously captured
         app profile and fall back to matching its configured process aliases.
-        With no live match, restore the default profile.
+        An enabled native override preserves the editor selection while idle.
+        Other sessions restore the default profile with no live match.
         """
+        with self._configuration_write_lock:
+            return self._sync_current_profile_locked(app_id, remote_running, remote_enabled)
+
+    def _sync_current_profile_locked(self, app_id: str, remote_running: bool, remote_enabled: bool) -> ProfileResponse:
         try:
             profile_data = self._get_profile_data()
             self.migrate_profile_metadata_if_needed()
@@ -1419,13 +1407,12 @@ class ConfigurationService(BaseService):
 
             normalized_app_id = str(app_id or "").strip()
             detected_processes = []
-            if re.fullmatch(r"\d+", normalized_app_id) and normalized_app_id != "0":
+            if not remote_running and re.fullmatch(r"\d+", normalized_app_id) and normalized_app_id != "0":
                 detected_processes = detect_processes_for_steam_app(
                     normalized_app_id
                 )
 
-            remote_running = bool(remote_profile and remote_profile in profile_data["profiles"])
-            target_profile = remote_profile if remote_running else DEFAULT_PROFILE_NAME
+            target_profile = profile_data["current_profile"] if remote_running or remote_enabled else DEFAULT_PROFILE_NAME
             if detected_processes and not remote_running:
                 target_profile = next((
                     profile_name
@@ -1459,13 +1446,10 @@ class ConfigurationService(BaseService):
                 profile_data = ConfigurationManager.set_current_profile(
                     profile_data, target_profile
                 )
-                self._save_profile_data(profile_data)
-                script_result = self.update_mako_script_from_profile_data(
-                    profile_data
-                )
-                if not script_result["success"]:
+                selection_result = self.set_current_profile(target_profile)
+                if not selection_result["success"]:
                     raise OSError(
-                        script_result.get("error")
+                        selection_result.get("error")
                         or "could not update launch wrapper"
                     )
                 self.log.info(

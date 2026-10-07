@@ -410,7 +410,7 @@
   "REMOTE_PLAY_WORKING": "Working…",
   "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
   "REMOTE_PLAY_INSTALL": "Override Remote Play",
-  "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+  "REMOTE_PLAY_DESCRIPTION": "Steamのネイティブストリーミングに選択中のプロファイルを使用します。配信を開始する前にプロファイルを選択してください。Steamのストリーミングクライアントをラッパーに置き換え、元のファイルを保存します。変更前に配信を終了してください。Steamの更新後は再設定が必要になる場合があります。Steam Linkとブラウザー配信には対応していません。",
   "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
   "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
   "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -418,5 +418,9 @@
   "REMOTE_PLAY_OFF": "Remote Play override not installed",
   "REMOTE_PLAY_STATUS": "Status",
   "REMOTE_PLAY_ATTENTION": "Needs attention",
-  "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+  "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+  "PROFILE_CREATE_TITLE": "プロファイルを作成",
+  "PROFILE_CREATE_DESCRIPTION": "選択中のプロファイルの設定から新しいプロファイルを作成します。",
+  "PROFILE_CREATE_BUTTON": "作成",
+  "PROFILE_CREATE_FAILED": "プロファイルを作成できませんでした"
 }

@@ -87,7 +87,7 @@ export function Content() {
     config.dll,
   );
 
-  const { updateProfileConfigFields, syncCurrentProfile } =
+  const { updateProfileConfigFields, syncCurrentProfile, setCurrentProfile } =
     useProfileManagement();
 
   const {
@@ -260,11 +260,16 @@ export function Content() {
         {isInstalled && (
           <ProfileManagement
             editingProfile={editingProfile}
+            onBeforeProfileMutation={flushConfigChanges}
             sessionRunning={remotePlayRunning}
             profileRevision={profileRevision}
             mainRunningApp={mainRunningApp}
             topMargin="18px"
             onProfileChange={async (profileName) => {
+              await flushConfigChanges();
+              const result = await setCurrentProfile(profileName);
+              if (!result.success)
+                throw new Error(result.error || "Could not select profile");
               selectEditingProfile(profileName);
               await loadEditorConfig(profileName);
             }}
@@ -325,7 +330,12 @@ export function Content() {
 
         {isInstalled && (
           <RemotePlaySection
-            onPrepare={flushConfigChanges}
+            onPrepare={async () => {
+              await flushConfigChanges();
+              const result = await setCurrentProfile(getEditingProfile());
+              if (!result.success)
+                throw new Error(result.error || "Could not select profile");
+            }}
             onChanged={() => setProfileRevision((value) => value + 1)}
           />
         )}

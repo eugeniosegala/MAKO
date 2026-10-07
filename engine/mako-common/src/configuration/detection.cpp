@@ -90,6 +90,9 @@ Identification ls::identify() {
     if (fallback && *fallback != '\0')
         id.fallback = std::string(fallback);
 
+    const char* follow = std::getenv("MAKO_FOLLOW_CURRENT_PROFILE");
+    id.follow_current_profile = follow && std::string_view(follow) == "1";
+
     return id;
 }
 
@@ -156,6 +159,14 @@ std::optional<std::pair<IdentType, GameConf>> ls::findProfile(
     // check for the environment option first
     if (allowEnvironmentProfile && std::getenv("MAKO_ENV") != nullptr)
         return std::make_pair(IdentType::OVERRIDE, profileForPowerSource(profiles.front(), config.power_source));
+
+    // Streams follow ordinary saved selections through the existing watcher.
+    // The launch override remains the fallback if the selection is unavailable.
+    if (id.follow_current_profile && config.current_profile) {
+        const auto profile = matchByName(profiles, *config.current_profile);
+        if (profile)
+            return std::make_pair(IdentType::OVERRIDE, profileForPowerSource(*profile, config.power_source));
+    }
 
     // then override first
     if (id.override.has_value()) {

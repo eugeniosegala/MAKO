@@ -95,6 +95,14 @@ if(BUILD_TESTING)
     target_compile_definitions(mako-ui-localization-tests PRIVATE
         MAKO_UI_TRANSLATIONS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/i18n/translations.json")
     add_test(NAME ui-localization-unit COMMAND mako-ui-localization-tests)
+
+    add_executable(mako-ui-profile-dialog-tests "tests/profile_dialog_tests.cpp")
+    target_link_libraries(mako-ui-profile-dialog-tests PRIVATE Qt6::Quick)
+    target_compile_definitions(mako-ui-profile-dialog-tests PRIVATE
+        MAKO_UI_DIALOGS_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/rsc/dialogs")
+    add_test(NAME ui-profile-dialog COMMAND mako-ui-profile-dialog-tests)
+    set_tests_properties(ui-profile-dialog PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")
 endif()
 
 install(TARGETS mako-ui

@@ -390,6 +390,9 @@ namespace ls {
         /// @return list of game profiles
         [[nodiscard]] const auto& profiles() const { return this->profileConfs; }
 
+        /// Editor selection used by the native Remote Play launcher only.
+        std::optional<std::string> current_profile;
+
         PowerSource power_source{PowerSource::Unknown};
 
         /// write the configuration back to file

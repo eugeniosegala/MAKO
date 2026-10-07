@@ -56,36 +56,8 @@ void Backend::runRemotePlayAction(const QString& action) {
 
 void Backend::refreshRemotePlay() { runRemotePlayAction("refresh"); }
 
-bool Backend::editRemotePlayProfile() {
-    if (remotePlayBusy() || !savePendingChanges()) return false;
-    if (remotePlayManaged() && m_remote_play_status.value("configuration_path").toString() !=
-            QString::fromStdString(m_config_path.string())) {
-        m_remote_play_message = QStringLiteral("Open the configuration used by the Remote Play override before editing its profile.");
-        emit refreshUI();
-        return false;
-    }
-    const QString name = QStringLiteral("Remote-Play");
-    const auto index = m_profile_list_model->stringList().indexOf(name);
-    if (index >= 0) {
-        profileSelected(index);
-        return true;
-    }
-    createProfile(name);
-    auto& profile = m_profiles.back();
-    profile.active_in = {"streaming_client", "streaming_client.mako-original"};
-    profile.multiplier = 2;
-    profile.adaptive = false;
-    profile.base_fps_cap = 30;
-    profile.target_fps = 60;
-    m_active_in_list_models.back()->setStringList({"streaming_client", "streaming_client.mako-original"});
-    const bool saved = savePendingChanges();
-    emit refreshUI();
-    return saved;
-}
-
 void Backend::setRemotePlayOverride(const bool enabled) {
     if (remotePlayBusy() || m_remote_play_helper.isEmpty()) return;
-    if (enabled && !editRemotePlayProfile()) return;
     if (!savePendingChanges()) return;
     runRemotePlayAction(enabled ? "install" : "remove");
 }

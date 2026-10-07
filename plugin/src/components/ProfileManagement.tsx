@@ -99,6 +99,7 @@ function TextInputModal({
 
 interface ProfileManagementProps {
   editingProfile?: string;
+  onBeforeProfileMutation?: () => Promise<void>;
   onProfileChange?: (profileName: string) => void | Promise<void>;
   mainRunningApp?: AppOverview;
   sessionRunning?: boolean;
@@ -108,15 +109,16 @@ interface ProfileManagementProps {
 
 export function ProfileManagement({
   editingProfile,
+  onBeforeProfileMutation,
   onProfileChange,
   mainRunningApp,
   topMargin,
   sessionRunning = false,
   profileRevision,
 }: ProfileManagementProps) {
-  const [focusedAction, setFocusedAction] = useState<"edit" | "delete" | null>(
-    null,
-  );
+  const [focusedAction, setFocusedAction] = useState<
+    "create" | "edit" | "delete" | null
+  >(null);
   const [profilesCollapsed, setProfilesCollapsed] = usePersistentCollapseState(
     PROFILES_COLLAPSED_KEY,
     false,
@@ -130,10 +132,12 @@ export function ProfileManagement({
     isLoading,
     switchProfile,
     saveRunningGame,
+    createSelectedProfile,
     renameSelectedProfile,
     deleteSelectedProfile,
   } = useProfileEditorModel({
     editingProfile,
+    onBeforeProfileMutation,
     onProfileChange,
     mainRunningApp,
     profileRevision,
@@ -152,6 +156,21 @@ export function ProfileManagement({
         okText={t("PROFILE_RENAME_BTN", "Rename")}
         cancelText={t("PROFILE_CANCEL_BTN", "Cancel")}
         onOK={(name) => void renameSelectedProfile(name)}
+      />,
+    );
+  };
+
+  const showCreateProfile = () => {
+    showModal(
+      <TextInputModal
+        title={t("PROFILE_CREATE_TITLE", "Create Profile")}
+        description={t(
+          "PROFILE_CREATE_DESCRIPTION",
+          "Create a profile from the selected profile's settings.",
+        )}
+        okText={t("PROFILE_CREATE_BUTTON", "Create")}
+        cancelText={t("PROFILE_CANCEL_BTN", "Cancel")}
+        onOK={(name) => void createSelectedProfile(name)}
       />,
     );
   };
@@ -331,6 +350,19 @@ export function ProfileManagement({
                 flow-children="column"
                 noFocusRing
               >
+                <DialogButton
+                  className="Mako_DialogButton"
+                  style={{
+                    width: "100%",
+                    ...makoDialogButtonStyle(focusedAction === "create"),
+                  }}
+                  onClick={showCreateProfile}
+                  onGamepadFocus={() => setFocusedAction("create")}
+                  onGamepadBlur={() => setFocusedAction(null)}
+                  disabled={isLoading || !!mainRunningApp}
+                >
+                  {t("PROFILE_CREATE_TITLE", "Create Profile")}
+                </DialogButton>
                 <DialogButton
                   className="Mako_DialogButton"
                   style={{

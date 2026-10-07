@@ -18,7 +18,11 @@ Options marked **Restart** apply on the next launch. See [Runtime transitions](R
 
 ## Profiles
 
-Profiles are selected automatically through `active_in`, which may contain Linux executables, Windows executables, process names, or executable-path suffixes. `MAKO_PROFILE` selects an exact profile name and takes priority over automatic matching.
+Both Qt and MAKO Decky can create named profiles without a running game. **Create New Profile** in Qt copies the selected profile's Renderer settings, process matches, both optional power sets, shader selections, and custom shader configuration, then saves and selects the independent copy. Manually created copies do not inherit a Steam AppID association. Rename and delete preserve other profiles; Default (`mako`) cannot be renamed or deleted, and deletion returns to Default when present. Empty, reserved, invalid, and duplicate names show an error. A failed save keeps the previous selection and restores the profile files; correct file access before retrying.
+
+Qt remains a standalone editor: you can browse saved profiles during play, and **Detect Running Game…** records executable matches rather than Decky's automatic Steam session/AppID association. Selecting a profile in Qt changes the editor and the saved selection used by Remote Play; ordinary local games keep their launch-time profile identity. Both editors use the same live and restart setting lifetimes. Edit shared profiles in one UI at a time.
+
+Profiles are selected automatically through `active_in`, which may contain Linux executables, Windows executables, process names, or executable-path suffixes. `MAKO_PROFILE` selects an exact profile name and takes priority over automatic matching. Clients explicitly launched with `MAKO_FOLLOW_CURRENT_PROFILE=1` instead follow a valid root `current_profile` selection on each existing configuration reload, falling back to `MAKO_PROFILE` if that selection is unavailable. Native Remote Play opts into this behavior; ordinary game launchers do not.
 
 If detection cannot find a game, use **Show all applications** or add the executable manually. Match the rendering executable, not a launcher title, Steam display name, ROM filename, or Flatpak application ID.
 
@@ -81,7 +85,7 @@ MAKO Decky and `mako-ui` share this configuration. Edit a profile in one UI at a
 
 ### Native Steam Remote Play
 
-The Qt **Remote Play** controls and MAKO Decky manage one opt-in native Steam override on the receiving device. **Edit Profile** selects or creates the ordinary `Remote-Play` profile; enabling the override preserves an existing profile and its power tables. The native Renderer settings and live/restart lifetimes are unchanged. Shader and launcher settings remain shared across power modes. The override is installation state outside `conf.toml`, so editing the profile alone does not enable it. Close streams before enabling, restoring, or updating it. See [Remote Play](../../plugin/docs/REMOTE-PLAY.md) for the shared owner, launcher differences, and recovery limits.
+The Qt **Remote Play** controls and MAKO Decky manage one opt-in native Steam override on the receiving device. Each stream starts with the saved ordinary profile, including normal Shaders, Scaling, Frame Generation, and optional AC/battery settings. Both editors can copy and select a manually named profile during a stream; later edits target that saved copy and it is reusable for future streams. The Renderer follows the optional root `current_profile` selection through its existing watcher without changing normal game process matching or live/restart lifetimes. Shader and launcher settings remain shared across power modes. The override is installation state outside `conf.toml`, so editing a profile alone does not enable it. Close streams before enabling, restoring, or updating the override; Decky's existing profile dropdown stays locked during a stream. See [Remote Play](../../plugin/docs/REMOTE-PLAY.md) for the shared owner, shader cache, launcher differences, and recovery limits.
 
 ## Profile settings
 

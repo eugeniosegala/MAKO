@@ -9,6 +9,7 @@ LargeDialog {
     signal captured()
     name: strings.detectRunningGame
     onOpened: {
+        backend.clearProfileOperationError();
         games.currentIndex = -1;
         backend.refreshRunningGames(show_all.checked);
     }
@@ -75,6 +76,12 @@ LargeDialog {
         Layout.fillWidth: true
         visible: backend.capture_failed
         text: root.strings.captureGameFailed
+        wrapMode: Text.WordWrap
+    }
+    Label {
+        Layout.fillWidth: true
+        visible: backend.profile_operation_error === "save_failed"
+        text: root.strings.profileSaveFailed
         wrapMode: Text.WordWrap
     }
 

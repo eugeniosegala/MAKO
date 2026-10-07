@@ -11,6 +11,7 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
+#include <QJsonArray>
 #include <QMetaObject>
 #include <QMetaProperty>
 #include <QString>
@@ -1040,6 +1041,86 @@ void test_decky_shader_profile_round_trip_and_owned_deletion() {
     else qputenv("MAKO_VKBASALT_SHADER_DIR", previousShaderDirectory);
 }
 
+void test_saved_editor_selection() {
+    QTemporaryDir directory;
+    require(directory.isValid(), "editor selection fixture failed");
+    const auto previousConfig = qgetenv("MAKO_CONFIG");
+    const auto previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    const auto previousConfigHome = qgetenv("XDG_CONFIG_HOME");
+    const auto config = directory.filePath("conf.toml");
+    qputenv("MAKO_CONFIG", config.toUtf8());
+    qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launcher.conf").toUtf8());
+    qputenv("XDG_CONFIG_HOME", directory.path().toUtf8());
+    for (const auto& [selection, expected] : {
+            std::pair{"", "mako"},
+            std::pair{"# decky-current-profile = \"stream-quality\"\n", "stream-quality"},
+            std::pair{"current_profile = \"mako\"\n# decky-current-profile = \"stream-quality\"\n", "mako"},
+            std::pair{"current_profile = \"deleted\"\n# decky-current-profile = \"stream-quality\"\n", "stream-quality"}}) {
+        QFile file(config);
+        require(file.open(QIODevice::WriteOnly | QIODevice::Truncate), "cannot write editor selection fixture");
+        file.write(QByteArray("version=2\n") + selection +
+            "[[profile]]\nname=\"stream-quality\"\n[[profile]]\nname=\"mako\"\n");
+        file.close();
+        {
+            mako::ui::Backend backend;
+            require(backend.calculateProfileListModel()->stringList().at(backend.getProfileIndex()) ==
+                    QString::fromUtf8(expected), "Qt selection differs from the native stream selection");
+            backend.profileSelected(backend.getProfileIndex());
+        }
+        require(ls::ConfigFile(config.toStdString()).current_profile == expected,
+            "Qt did not persist the ordinary editor selection");
+    }
+    {
+        mako::ui::Backend backend;
+        const auto flush = []() {
+            QEventLoop events;
+            QTimer::singleShot(700, &events, &QEventLoop::quit);
+            events.exec();
+        };
+        backend.enableVkBasaltUpdated(true);
+        backend.vkBasaltSharpeningUpdated(QStringLiteral("cas"));
+        backend.vkBasaltSharpnessUpdated(0.73F);
+        flush();
+        const auto sourcePath = backend.getVkBasaltConfigPath();
+        QFile source(sourcePath);
+        require(source.open(QIODevice::ReadOnly), "cannot read source shaders");
+        const auto sourceContent = source.readAll();
+        const auto cachePath = directory.filePath("vkbasalt/current-profile.conf");
+        QFile cache(cachePath);
+        require(cache.open(QIODevice::ReadOnly) && cache.readAll() == sourceContent,
+            "Qt did not seed selection-following shader content");
+        cache.close();
+        backend.createProfile(QStringLiteral("Future streams"));
+        flush();
+        require(cache.open(QIODevice::ReadOnly) && cache.readAll() == sourceContent,
+            "Creating a profile did not copy selection-following shaders");
+        cache.close();
+        backend.enableVkBasaltUpdated(false);
+        flush();
+        require(cache.open(QIODevice::ReadOnly) && cache.readAll() == "effects = none\n",
+            "Disabling shaders retained the previous effects");
+        cache.close();
+        backend.enableVkBasaltUpdated(true);
+        backend.vkBasaltSharpeningUpdated(QStringLiteral("cas"));
+        backend.vkBasaltSharpnessUpdated(0.91F);
+        flush();
+        require(cache.open(QIODevice::ReadOnly) && cache.readAll().contains("casSharpness = 0.91"),
+            "The stream shader filename did not follow the new profile's edits");
+        cache.close();
+        backend.refreshCustomShaders();
+        require(cache.open(QIODevice::ReadOnly) && cache.readAll().contains("makoReloadGeneration = 1"),
+            "Explicit shader reload did not reach the selection-following stream");
+        source.close();
+        require(source.open(QIODevice::ReadOnly) && source.readAll() == sourceContent,
+            "Changing selected shaders modified the old ordinary profile");
+    }
+    for (const auto& entry : {std::pair{"MAKO_CONFIG", previousConfig},
+            std::pair{"MAKO_LAUNCH_CONFIG", previousLaunch}, std::pair{"XDG_CONFIG_HOME", previousConfigHome}}) {
+        if (entry.second.isNull()) qunsetenv(entry.first);
+        else qputenv(entry.first, entry.second);
+    }
+}
+
 void test_remote_play_shared_command_and_profile_preservation() {
     QTemporaryDir directory;
     require(directory.isValid(), "Remote Play fixture failed");
@@ -1076,7 +1157,7 @@ void test_remote_play_shared_command_and_profile_preservation() {
         backend.refreshRemotePlay();
         wait();
         require(!backend.remotePlayInstalled() && backend.remotePlayAvailable(), "Remote Play was implicitly installed or unavailable");
-        require(backend.editRemotePlayProfile(), "Remote Play profile could not be prepared");
+        backend.createProfile("stream-quality");
         backend.separatePowerModesUpdated(true);
         backend.powerModeSelected(1);
         backend.targetFPSUpdated(72);
@@ -1090,8 +1171,9 @@ void test_remote_play_shared_command_and_profile_preservation() {
             wait();
             require(!backend.remotePlayManaged(), "Qt did not restore the shared Steam override");
             const auto saved = ls::ConfigFile(config.toStdString());
+            require(saved.current_profile == "stream-quality", "override removal lost the editor selection");
             const auto found = std::find_if(saved.profiles().begin(), saved.profiles().end(), [](const auto& profile) {
-                return profile.name == "Remote-Play";
+                return profile.name == "stream-quality";
             });
             require(found != saved.profiles().end() && found->power_profiles.size() == 2 &&
                     found->power_profiles.front().target_fps == 72, "override removal reset existing power settings");
@@ -1100,6 +1182,148 @@ void test_remote_play_shared_command_and_profile_preservation() {
         client.close();
     }
     for (const auto& entry : {std::pair{"HOME", previousHome}, std::pair{"MAKO_CONFIG", previousConfig},
+            std::pair{"MAKO_LAUNCH_CONFIG", previousLaunch}, std::pair{"XDG_CONFIG_HOME", previousConfigHome}}) {
+        if (entry.second.isNull()) qunsetenv(entry.first);
+        else qputenv(entry.first, entry.second);
+    }
+}
+
+void test_profile_management_alignment() {
+    QTemporaryDir directory;
+    require(directory.isValid(), "profile management fixture failed");
+    const auto previousConfig = qgetenv("MAKO_CONFIG");
+    const auto previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    const auto previousConfigHome = qgetenv("XDG_CONFIG_HOME");
+    qputenv("MAKO_CONFIG", directory.filePath("conf.toml").toUtf8());
+    qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launcher.conf").toUtf8());
+    qputenv("XDG_CONFIG_HOME", directory.path().toUtf8());
+    const auto write = [](const QString& path, const QByteArray& content) {
+        QFile file(path);
+        require(file.open(QIODevice::WriteOnly), "cannot write profile fixture");
+        require(file.write(content) == content.size(), "incomplete profile fixture");
+    };
+    const auto read = [](const QString& path) {
+        QFile file(path);
+        require(file.open(QIODevice::ReadOnly), "cannot read profile fixture");
+        return file.readAll();
+    };
+    const auto configPath = directory.filePath("conf.toml");
+    const auto wrapperPath = directory.filePath("profile-wrapper-settings.json");
+    const auto metadataPath = directory.filePath("profile-metadata.json");
+    const auto cachePath = directory.filePath("vkbasalt/current-profile.conf");
+    const auto sourcePath = directory.filePath("vkbasalt/steam-111.conf");
+    require(QDir().mkpath(directory.filePath("vkbasalt")), "cannot prepare profile shaders");
+    ls::ConfigFile config;
+    ls::GameConf source;
+    source.name = "game";
+    source.active_in = {"Game.exe", "ManualAlias"};
+    source.target_fps = 144;
+    auto handheld = source;
+    handheld.target_fps = 60;
+    auto docked = source;
+    docked.target_fps = 120;
+    source.power_profiles = {handheld, docked};
+    ls::GameConf defaults;
+    defaults.name = "mako";
+    // Default is deliberately not the first entry.
+    config.profiles() = {source, defaults};
+    config.current_profile = "game";
+    config.write(configPath.toStdString());
+    write(wrapperPath, R"JSON({"version":1,"profiles":{"game":{"external_vulkan_layer":"vkbasalt","vkbasalt_shader":"custom/Tone","vkbasalt_manage_custom_shaders":true,"force_alsa_audio":true,"future_setting":"keep"}}})JSON");
+    write(metadataPath, R"JSON({"version":1,"profiles":{"game":{"display_name":"Game","kind":"game","steam_app_id":"111","captured_processes":["Game.exe"]},"Future streams":{"steam_app_id":"111"},"Saved streams":{"steam_app_id":"999"}}})JSON");
+    write(sourcePath, "effects = Tone\nTone = /shaders/Tone.fx\nToneStrength = 0.42\n# advanced settings\n");
+    const auto originalSource = read(sourcePath);
+    {
+        mako::ui::Backend backend;
+        require_property("can_manage_profile", "bool", false, false);
+        require_property("profile_operation_error", "QString", false, false);
+        require(backend.canManageProfile() && backend.getProfileIndex() == 0,
+            "saved game selection was not restored");
+        for (const auto& name : {QStringLiteral(" "), QStringLiteral("global"),
+                QStringLiteral("PROFILE"), QStringLiteral("bad/name"), QStringLiteral("bad\nname")})
+            require(!backend.createProfile(name) && backend.profileOperationError() == "invalid_name",
+                "Qt accepted an invalid profile name");
+        require(!backend.createProfile("game") && backend.profileOperationError() == "duplicate_name",
+            "Qt accepted a duplicate profile");
+        backend.targetFPSUpdated(165); // Creation must drain the pending edit.
+        require(backend.createProfile("  Future streams  "), "offline profile copy failed");
+        const auto saved = ls::ConfigFile(configPath.toStdString());
+        require(saved.current_profile == "Future streams" && backend.getProfileIndex() == 2 &&
+                backend.getTargetFPS() == 165 && saved.profiles().back().active_in == source.active_in &&
+                saved.profiles().back().power_profiles.size() == 2 &&
+                saved.profiles().back().power_profiles.front().target_fps == 60 &&
+                saved.profiles().back().power_profiles.back().target_fps == 120,
+            "profile copy lost pending edits, identity, power settings, or saved selection");
+        const auto clonePath = backend.getVkBasaltConfigPath();
+        require(clonePath != sourcePath && read(clonePath) == read(sourcePath) &&
+                read(cachePath) == read(clonePath) && backend.getCustomShaderEffects().size() == 1,
+            "profile copy did not preserve independent custom shader content");
+        require(read(sourcePath) == originalSource,
+            "creating a profile changed the source shader file");
+        auto wrappers = QJsonDocument::fromJson(read(wrapperPath)).object().value("profiles").toObject();
+        require(wrappers.value("Future streams").toObject().value("force_alsa_audio").toBool() &&
+                wrappers.value("Future streams").toObject().value("future_setting").toString() == "keep",
+            "profile copy discarded Decky wrapper fields");
+        const auto metadata = QJsonDocument::fromJson(read(metadataPath)).object().value("profiles").toObject();
+        require(metadata.value("Future streams").toObject().value("kind") == "process" &&
+                metadata.value("Future streams").toObject().value("steam_app_id").isNull() &&
+                metadata.value("Future streams").toObject().value("captured_processes").toArray().isEmpty() &&
+                metadata.value("game").toObject().value("steam_app_id") == "111",
+            "manual copy inherited a Steam association or changed the source association");
+        require(!backend.renameProfile("game") && backend.getProfileIndex() == 2,
+            "duplicate rename changed the selection");
+
+        const auto beforeConfig = read(configPath);
+        const auto beforeWrapper = read(wrapperPath);
+        const auto beforeMetadata = read(metadataPath);
+        const auto beforeShader = read(clonePath);
+        const auto beforeCache = read(cachePath);
+        const auto beforeFiles = QDir(directory.filePath("vkbasalt")).entryList(QDir::Files);
+        require(QFile::setPermissions(configPath, QFileDevice::ReadOwner), "cannot block native profile writes");
+        require(!backend.createProfile("Failed copy") && !backend.renameProfile("Failed rename") &&
+                !backend.deleteProfile(), "profile operation succeeded after a failed native write");
+        backend.profileSelected(1);
+        require(backend.getProfileIndex() == 2 && backend.calculateProfileListModel()->rowCount() == 3 &&
+                backend.profileOperationError() == "save_failed" &&
+                read(configPath) == beforeConfig && read(wrapperPath) == beforeWrapper &&
+                read(metadataPath) == beforeMetadata && read(clonePath) == beforeShader &&
+                read(cachePath) == beforeCache &&
+                QDir(directory.filePath("vkbasalt")).entryList(QDir::Files) == beforeFiles,
+            "failed profile operations changed selection or left partial profile files");
+        require(QFile::setPermissions(configPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner),
+            "cannot unblock native profile writes");
+        require(backend.renameProfile("Saved streams"), "profile rename failed after recovery");
+        const auto renamedPath = backend.getVkBasaltConfigPath();
+        require(!QFileInfo::exists(clonePath) && read(renamedPath) == beforeShader &&
+                ls::ConfigFile(configPath.toStdString()).current_profile == "Saved streams",
+            "rename did not move the shader content and saved selection");
+        require(backend.deleteProfile() && backend.getProfileIndex() == 1 &&
+                !backend.canManageProfile() && !QFileInfo::exists(renamedPath) &&
+                QFileInfo::exists(sourcePath) && ls::ConfigFile(configPath.toStdString()).current_profile == "mako",
+            "deletion did not preserve the source and fall back to Default by name");
+        require(!backend.renameProfile("Renamed Default") && !backend.deleteProfile() &&
+                backend.profileOperationError() == "default_protected",
+            "Qt permitted renaming or deleting Default");
+        backend.profileSelected(-1);
+        backend.profileSelected(99);
+        require(backend.getProfileIndex() == 1, "invalid selection replaced Default");
+        require(backend.createProfile("Reusable offline"), "cannot create from Default without a game");
+        backend.targetFPSUpdated(177);
+        require(QFile::setPermissions(configPath, QFileDevice::ReadOwner), "cannot block a pending save");
+        require(!backend.createProfile("After pending save") && backend.getTargetFPS() == 177 &&
+                backend.calculateProfileListModel()->rowCount() == 3,
+            "failed pending save created a profile or discarded the edit");
+        require(QFile::setPermissions(configPath, QFileDevice::ReadOwner | QFileDevice::WriteOwner),
+            "cannot restore pending-save access");
+        require(backend.createProfile("After pending save") && backend.getTargetFPS() == 177,
+            "creation did not retry and copy the pending edit after recovery");
+    }
+    {
+        mako::ui::Backend backend;
+        require(backend.calculateProfileListModel()->stringList().at(backend.getProfileIndex()) == "After pending save",
+            "new offline profile selection did not survive reopening Qt");
+    }
+    for (const auto& entry : {std::pair{"MAKO_CONFIG", previousConfig},
             std::pair{"MAKO_LAUNCH_CONFIG", previousLaunch}, std::pair{"XDG_CONFIG_HOME", previousConfigHome}}) {
         if (entry.second.isNull()) qunsetenv(entry.first);
         else qputenv(entry.first, entry.second);
@@ -1122,7 +1346,9 @@ int main(int argc, char* argv[]) {
         test_compact_restart_markers();
         test_save_lifetime();
         test_decky_shader_profile_round_trip_and_owned_deletion();
+        test_saved_editor_selection();
         test_remote_play_shared_command_and_profile_preservation();
+        test_profile_management_alignment();
     } catch (const std::exception& error) {
         std::cerr << "mako-ui backend contract test failed: "
                   << error.what() << '\n';

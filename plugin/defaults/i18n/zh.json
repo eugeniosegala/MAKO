@@ -410,7 +410,7 @@
   "REMOTE_PLAY_WORKING": "Working…",
   "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
   "REMOTE_PLAY_INSTALL": "Override Remote Play",
-  "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+  "REMOTE_PLAY_DESCRIPTION": "Steam 原生串流使用所选配置。请在开始串流前选择配置。将 Steam 串流客户端替换为启动包装程序并保留原文件。更改前请关闭串流；Steam 更新后可能需要重新安装覆盖。不支持 Steam Link 和浏览器串流。",
   "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
   "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
   "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -418,5 +418,9 @@
   "REMOTE_PLAY_OFF": "Remote Play override not installed",
   "REMOTE_PLAY_STATUS": "Status",
   "REMOTE_PLAY_ATTENTION": "Needs attention",
-  "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+  "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+  "PROFILE_CREATE_TITLE": "创建配置",
+  "PROFILE_CREATE_DESCRIPTION": "根据所选配置的设置创建新配置。",
+  "PROFILE_CREATE_BUTTON": "创建",
+  "PROFILE_CREATE_FAILED": "无法创建配置"
 }

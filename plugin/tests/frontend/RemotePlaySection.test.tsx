@@ -43,7 +43,7 @@ const idle = {
   available: true,
   running: false,
   frame_generation_active: false,
-  profile_name: "Remote-Play",
+  profile_name: "stream-quality",
   pids: [],
   conflict: false,
 };
@@ -113,7 +113,7 @@ test("R1 hides help but retains native-client availability and action errors", a
     </InfoHiddenContext.Provider>,
   );
   await screen.findByText("Native Steam streaming client unavailable");
-  expect(screen.queryByText(/Uses the Remote Play profile/)).toBeNull();
+  expect(screen.queryByText(/Uses the selected profile/)).toBeNull();
   expect(
     (
       screen.getByRole("button", {
@@ -212,7 +212,7 @@ test.each([
     await waitFor(() =>
       expect(screen.getByRole("status").textContent).toContain(label),
     );
-    expect(screen.queryByText(/Uses the Remote Play profile/)).toBeNull();
+    expect(screen.queryByText(/Uses the selected profile/)).toBeNull();
   },
 );
 

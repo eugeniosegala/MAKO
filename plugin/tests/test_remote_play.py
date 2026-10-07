@@ -16,8 +16,10 @@ from tests.test_game_profiles import _Logger
 from py_modules.mako_plugin.config_schema import ConfigurationManager
 from py_modules.mako_plugin.configuration import ConfigurationService
 from py_modules.mako_plugin.plugin import Plugin
-from py_modules.mako_plugin.remote_play import RemotePlayService, REMOTE_PLAY_PROFILE
+from py_modules.mako_plugin.remote_play import RemotePlayService
 from py_modules.mako_plugin.remote_play_launch import launch, LaunchPaths, MANAGED_LAYERS
+
+SELECTED_PROFILE = "stream-quality"
 
 ELF = b"\x7fELF\x02\x01" + b"\0" * 12 + b"\x3e\0" + b"synthetic client"
 
@@ -261,7 +263,8 @@ class RemotePlayTests(unittest.TestCase):
 
     def test_launch_lease_survives_runner_exec_until_child_exit(self):
         with self.configuration._configuration_write_lock:
-            self.configuration.ensure_remote_play_profile(REMOTE_PLAY_PROFILE)
+            self.configuration.create_profile(SELECTED_PROFILE)
+            self.configuration.set_current_profile(SELECTED_PROFILE)
         ready = self.home / "ready"
         self.service.mako_script_path.write_text(
             "#!/bin/sh\n# MAKO_LAUNCH_RENDERER_REQUIRED\n" + f"touch '{ready}'\nexec /usr/bin/sleep 30\n"
@@ -410,7 +413,11 @@ class RemotePlayTests(unittest.TestCase):
         for change in ({"pid": 124}, {"phase": "preparing"}, {"frame_generation_active": False}):
             self.assertFalse(self.service.get_status([{**context, **change}])["frame_generation_active"])
 
-    def test_plugin_transaction_rolls_back_profile_and_preserves_existing_power_sets(self):
+    def test_install_preserves_selected_profile_without_creating_a_dedicated_profile(self):
+        self.configuration.create_profile(SELECTED_PROFILE)
+        self.configuration.set_current_profile(SELECTED_PROFILE)
+        self.configuration.set_profile_power_modes(SELECTED_PROFILE, True)
+        self.configuration.update_profile_config_fields(SELECTED_PROFILE, {"target_fps": 144}, "docked")
         plugin = Plugin.__new__(Plugin)
         plugin.remote_play_service = self.service
         plugin.configuration_service = self.configuration
@@ -419,19 +426,13 @@ class RemotePlayTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 plugin._install_remote_play_override()
         self.assertEqual(before, self.configuration.config_file_path.read_bytes())
-        self.assertFalse(self.configuration.wrapper_profile_settings_path.exists())
         plugin._install_remote_play_override()
-        remote = self.configuration.get_profile_config(REMOTE_PLAY_PROFILE, "shared")
-        self.assertTrue(remote["success"], remote)
-        self.assertEqual(2, remote["config"]["multiplier"])
-        self.assertEqual(30, remote["config"]["base_fps_cap"])
-        self.assertTrue(remote["config"]["frame_generation_provisioned"])
-        self.assertFalse(remote["separate_power_modes"])
-        self.configuration.set_profile_power_modes(REMOTE_PLAY_PROFILE, True)
-        self.configuration.update_profile_config_fields(REMOTE_PLAY_PROFILE, {"target_fps": 144}, "docked")
+        self.assertEqual(["mako", SELECTED_PROFILE], self.configuration.get_profiles()["profiles"])
+        self.assertEqual(SELECTED_PROFILE, self.service.get_status()["profile_name"])
         self.service.remove()
         plugin._install_remote_play_override()
-        self.assertEqual(144, self.configuration.get_profile_config(REMOTE_PLAY_PROFILE, "docked")["config"]["target_fps"])
+        self.assertEqual(before, self.configuration.config_file_path.read_bytes())
+        self.assertEqual(144, self.configuration.get_profile_config(SELECTED_PROFILE, "docked")["config"]["target_fps"])
 
     def test_qt_alternate_config_is_not_edited_as_the_decky_profile(self):
         from py_modules.mako_plugin.remote_play_core import RemotePlayOverride
@@ -440,7 +441,7 @@ class RemotePlayTests(unittest.TestCase):
         launcher.chmod(0o755)
         config = self.home / 'alternate/conf.toml'
         config.parent.mkdir()
-        config.write_text('version=2\n[[profile]]\nname="Remote-Play"\n')
+        config.write_text('version=2\n[[profile]]\nname="stream-quality"\n')
         owner = RemotePlayOverride(self.home, launcher, config_file=config)
         owner.proc_root = self.service.proc_root
         owner.install()
@@ -457,7 +458,7 @@ class RemotePlayTests(unittest.TestCase):
             with patch.object(self.configuration, 'sync_current_profile') as sync, \
                     patch('py_modules.mako_plugin.plugin.asyncio.to_thread', inline):
                 asyncio.run(plugin.sync_current_profile(''))
-                sync.assert_called_once_with('', '')
+                sync.assert_called_once_with('', False, False)
         self.assertEqual(self.configuration.config_file_path, self.service.config_file_path)
         with self.assertRaisesRegex(ValueError, 'different configuration'):
             plugin._install_remote_play_override()
@@ -468,16 +469,78 @@ class RemotePlayTests(unittest.TestCase):
         self.assertEqual(str(self.home / '.local/bin/mako-run'), saved['launcher_path'])
         self.assertEqual(str(self.configuration.config_file_path), saved['configuration_path'])
 
-    def test_profile_preparation_does_not_rewrite_unrelated_shader_files(self):
-        shader = self.configuration.vkbasalt_global_config_path
-        shader.parent.mkdir(parents=True, exist_ok=True)
-        content = "# advanced user settings\neffects=Custom\nCustom=/tmp/user.fx\n"
-        shader.write_text(content)
-        with patch.object(self.configuration, "_write_vkbasalt_profile_configs") as merge:
-            with self.configuration._configuration_write_lock:
-                self.configuration.ensure_remote_play_profile(REMOTE_PLAY_PROFILE)
-            merge.assert_not_called()
-        self.assertEqual(content, shader.read_text())
+    def test_install_does_not_prepare_or_change_profiles(self):
+        plugin = Plugin.__new__(Plugin)
+        plugin.remote_play_service = self.service
+        plugin.configuration_service = self.configuration
+        before = self.configuration.config_file_path.read_bytes()
+        plugin._install_remote_play_override()
+        self.assertEqual(before, self.configuration.config_file_path.read_bytes())
+        self.assertEqual(["mako"], self.configuration.get_profiles()["profiles"])
+
+    def test_failed_launcher_refresh_rolls_back_manual_and_runtime_selection(self):
+        self.configuration.create_profile(SELECTED_PROFILE)
+        before_config = self.configuration.config_file_path.read_bytes()
+        before_launcher = self.configuration.mako_script_path.read_bytes()
+        def fail_refresh(_data):
+            from py_modules.mako_plugin.managed_files import write_managed_text_atomically
+            write_managed_text_atomically(self.configuration.mako_script_path,
+                                          '# failed wrapper\n', 0o755, self.configuration.log)
+            return {'success': False, 'error': 'launcher failed'}
+        for automatic in (False, True):
+            with self.subTest(automatic=automatic), patch.object(
+                    self.configuration, 'update_mako_script_from_profile_data', side_effect=fail_refresh), \
+                    patch('py_modules.mako_plugin.configuration.detect_processes_for_steam_app', return_value=['Game.exe']), \
+                    patch.object(self.configuration, '_processes_for_config', return_value=['Game.exe']):
+                result = (self.configuration.sync_current_profile('123') if automatic
+                          else self.configuration.set_current_profile(SELECTED_PROFILE))
+                self.assertFalse(result['success'])
+                self.assertIn('launcher failed', result['error'])
+                self.assertEqual(before_config, self.configuration.config_file_path.read_bytes())
+                self.assertEqual(before_launcher, self.configuration.mako_script_path.read_bytes())
+
+    def test_status_follows_saved_selection_and_falls_back_to_launch_identity(self):
+        self.configuration.create_profile(SELECTED_PROFILE)
+        self.configuration.set_current_profile(SELECTED_PROFILE)
+        self.service.install()
+        process = self.service.proc_root / "123"
+        process.mkdir()
+        (process / "exe").symlink_to(self.service.backup)
+        (process / "environ").write_bytes(b"MAKO_PROFILE=stream-quality\0MAKO_FOLLOW_CURRENT_PROFILE=1\0")
+        self.configuration.set_current_profile("mako")
+        self.assertEqual('mako', self.service.get_status()["profile_name"])
+        self.configuration.config_file_path.unlink()
+        self.assertEqual(SELECTED_PROFILE, self.service.get_status()["profile_name"])
+
+    def test_python_entry_phase_does_not_adopt_an_inherited_profile(self):
+        self.configuration.create_profile(SELECTED_PROFILE)
+        self.configuration.set_current_profile(SELECTED_PROFILE)
+        self.service.install()
+        process = self.service.proc_root / "123"
+        process.mkdir()
+        (process / "exe").symlink_to('/usr/bin/python3')
+        (process / "environ").write_bytes(b"MAKO_PROFILE=mako\0")
+        with patch.object(self.service, 'running_pids', return_value=[123]):
+            self.assertEqual(SELECTED_PROFILE, self.service.get_status()["profile_name"])
+
+    def test_running_profile_survives_unreadable_config_and_an_exited_pid(self):
+        self.configuration.create_profile(SELECTED_PROFILE)
+        self.configuration.set_current_profile(SELECTED_PROFILE)
+        self.service.install()
+        process = self.service.proc_root / "124"
+        process.mkdir()
+        (process / "exe").symlink_to(self.service.backup)
+        (process / "environ").write_bytes(b"MAKO_PROFILE=stream-quality\0")
+        for content in (None, '{invalid'):
+            with self.subTest(content=content):
+                if content is None:
+                    self.configuration.config_file_path.unlink()
+                else:
+                    self.configuration.config_file_path.write_text(content)
+                with patch.object(self.service, 'running_pids', return_value=[123, 124]):
+                    status = self.service.get_status()
+                self.assertTrue(status['running'])
+                self.assertEqual(SELECTED_PROFILE, status['profile_name'])
 
     def test_renderer_uninstall_is_blocked_until_safe_steam_restoration(self):
         plugin = Plugin.__new__(Plugin)
@@ -497,20 +560,104 @@ class RemotePlayTests(unittest.TestCase):
             asyncio.run(plugin._uninstall())
             plugin.installation_service.cleanup_on_uninstall.assert_not_called()
 
-    def test_remote_session_selection_keeps_power_source_and_resets_on_exit(self):
+    def test_remote_session_preserves_selected_profile_and_power_source(self):
         with self.configuration._configuration_write_lock:
-            self.configuration.ensure_remote_play_profile(REMOTE_PLAY_PROFILE)
+            self.configuration.create_profile(SELECTED_PROFILE)
+            self.configuration.set_current_profile(SELECTED_PROFILE)
         with patch("py_modules.mako_plugin.configuration.detect_power_source", return_value="docked"):
-            result = self.configuration.sync_current_profile("", REMOTE_PLAY_PROFILE)
+            result = self.configuration.sync_current_profile("", True, True)
             self.assertTrue(result["success"], result)
             self.assertTrue(result["remote_play_running"])
             self.assertTrue(result["game_running"])
             self.assertEqual("docked", result["power_source"])
-            self.assertEqual(REMOTE_PLAY_PROFILE, result["profile_name"])
-            self.assertFalse(self.configuration.sync_current_profile("", REMOTE_PLAY_PROFILE)["changed"])
-            exited = self.configuration.sync_current_profile("")
+            self.assertEqual(SELECTED_PROFILE, result["profile_name"])
+            self.assertFalse(self.configuration.sync_current_profile("", True, True)["changed"])
+            exited = self.configuration.sync_current_profile("", False, True)
             self.assertFalse(exited["remote_play_running"])
-            self.assertEqual("mako", exited["profile_name"])
+            self.assertEqual(SELECTED_PROFILE, exited["profile_name"])
+
+    def test_create_during_stream_preserves_source_and_later_edits_follow_clone(self):
+        self.assertTrue(self.configuration.create_profile(SELECTED_PROFILE)['success'])
+        self.assertTrue(self.configuration.set_current_profile(SELECTED_PROFILE)['success'])
+        self.assertTrue(self.configuration.set_profile_power_modes(SELECTED_PROFILE, True)['success'])
+        for mode, target in (('handheld', 60), ('docked', 144)):
+            self.assertTrue(self.configuration.update_profile_config_fields(
+                SELECTED_PROFILE, {'target_fps': target}, mode)['success'])
+        fx = self.home / 'Tone.fx'
+        fx.write_text('// custom shader')
+        registered = self.configuration.add_profile_shader(SELECTED_PROFILE, str(fx))
+        self.assertTrue(registered['success'])
+        tone_id = next(item['id'] for item in registered['custom_shader_effects'] if item['path'] == str(fx))
+        self.assertTrue(self.configuration.update_profile_config_fields(SELECTED_PROFILE, {
+            'external_vulkan_layer': 'vkbasalt', 'vkbasalt_shader': tone_id,
+            'vkbasalt_manage_custom_shaders': True, 'vkbasalt_sharpness': 0.73,
+        })['success'])
+        source_path = self.configuration._vkbasalt_config_path(SELECTED_PROFILE)
+        original_shader = source_path.read_bytes()
+        original_modes = {mode: self.configuration.get_profile_config(SELECTED_PROFILE, mode)['config']
+                          for mode in ('handheld', 'docked')}
+        self.service.install()
+        process = self.service.proc_root / '123'
+        process.mkdir()
+        (process / 'exe').symlink_to(self.service.backup)
+        (process / 'environ').write_bytes(b'MAKO_PROFILE=stream-quality\0MAKO_FOLLOW_CURRENT_PROFILE=1\0')
+        plugin = Plugin.__new__(Plugin)
+        plugin.remote_play_service = self.service
+        plugin.configuration_service = self.configuration
+        clone = ConfigurationManager.normalize_profile_name('Future streams')
+        async def delayed_status(function, *arguments):
+            status = function(*arguments)
+            # Detection began on the old selection; creation completes before
+            # the async poll returns to the canonical configuration owner.
+            created = self.configuration.create_profile('Future streams', SELECTED_PROFILE)
+            self.assertTrue(created['success'], created)
+            self.assertTrue(self.configuration.set_current_profile(clone)['success'])
+            return status
+        with patch('py_modules.mako_plugin.plugin.asyncio.to_thread', delayed_status), \
+                patch('py_modules.mako_plugin.configuration.detect_processes_for_steam_app') as detect:
+            synced = asyncio.run(plugin.sync_current_profile('999'))
+            detect.assert_not_called()
+        self.assertTrue(synced['remote_play_running'])
+        self.assertFalse(synced['changed'])
+        self.assertEqual(clone, synced['profile_name'])
+        self.assertEqual(clone, self.service.get_status()['profile_name'])
+        self.assertEqual(original_shader, self.configuration.selected_shader_config_path.read_bytes())
+        for mode in original_modes:
+            self.assertEqual(original_modes[mode], self.configuration.get_profile_config(clone, mode)['config'])
+        self.assertTrue(self.configuration.update_profile_config_fields(clone, {
+            'vkbasalt_sharpening': 'cas', 'vkbasalt_sharpness': 0.91, 'target_fps': 120,
+        }, 'docked')['success'])
+        self.assertIn('casSharpness = 0.91', self.configuration.selected_shader_config_path.read_text())
+        self.assertIn(str(fx), self.configuration.selected_shader_config_path.read_text())
+        extra = self.home / 'Heat.fx'
+        extra.write_text('// another custom shader')
+        self.assertTrue(self.configuration.add_profile_shader(clone, str(extra))['success'])
+        self.assertIn(str(extra), self.configuration.selected_shader_config_path.read_text())
+        self.assertTrue(self.configuration.reload_profile_shaders(clone)['success'])
+        self.assertIn('makoReloadGeneration = 1', self.configuration.selected_shader_config_path.read_text())
+        self.assertTrue(self.configuration.delete_profile_shaders(clone, [tone_id])['success'])
+        self.assertNotIn(str(fx), self.configuration.selected_shader_config_path.read_text())
+        self.assertIn(str(extra), self.configuration.selected_shader_config_path.read_text())
+        self.assertEqual(original_shader, source_path.read_bytes())
+        for mode in original_modes:
+            self.assertEqual(original_modes[mode], self.configuration.get_profile_config(SELECTED_PROFILE, mode)['config'])
+        (process / 'exe').unlink()
+        self.assertEqual(clone, self.configuration.sync_current_profile('', False, True)['profile_name'])
+        from py_modules.mako_plugin.remote_play_launch import selected_profile
+        self.assertEqual(clone, selected_profile(self.configuration.config_file_path)['name'])
+
+    def test_failed_selection_restores_shader_cache_as_well_as_current_profile(self):
+        self.assertTrue(self.configuration.create_profile(SELECTED_PROFILE)['success'])
+        self.assertTrue(self.configuration.update_profile_config_fields(SELECTED_PROFILE, {
+            'external_vulkan_layer': 'vkbasalt', 'vkbasalt_shader': 'vibrance',
+        })['success'])
+        before_cache = self.configuration.selected_shader_config_path.read_bytes()
+        before_config = self.configuration.config_file_path.read_bytes()
+        with patch.object(self.configuration, 'update_mako_script_from_profile_data',
+                          return_value={'success': False, 'error': 'launcher failed'}):
+            self.assertFalse(self.configuration.set_current_profile(SELECTED_PROFILE)['success'])
+        self.assertEqual(before_config, self.configuration.config_file_path.read_bytes())
+        self.assertEqual(before_cache, self.configuration.selected_shader_config_path.read_bytes())
 
 
 class RemoteFeatureLaunchTests(unittest.TestCase):
@@ -521,11 +668,12 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
         if not self.service._native_client(self.service.client):
             self.skipTest('native x86_64 env executable unavailable')
         with self.configuration._configuration_write_lock:
-            self.configuration.ensure_remote_play_profile(REMOTE_PLAY_PROFILE)
+            self.configuration.create_profile(SELECTED_PROFILE)
+            self.configuration.set_current_profile(SELECTED_PROFILE)
         self.service.install()
 
     def execute_profile(self, fields, gamescope=False):
-        result = self.configuration.update_profile_config_fields(REMOTE_PLAY_PROFILE, fields)
+        result = self.configuration.update_profile_config_fields(SELECTED_PROFILE, fields)
         self.assertTrue(result['success'], result)
         from py_modules.mako_plugin.constants import (
             GAMESCOPE_WSI_MANIFEST_FILENAME_64, VKBASALT_MANIFEST_FILENAME_64,
@@ -556,7 +704,9 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
                     'scaling_enabled': scaling, 'external_vulkan_layer': 'vkbasalt' if shaders else '',
                     'vkbasalt_shader': 'vibrance', 'enable_zink': True,
                 })
-                self.assertEqual(REMOTE_PLAY_PROFILE, values['MAKO_PROFILE'])
+                self.assertEqual(SELECTED_PROFILE, values['MAKO_PROFILE'])
+                self.assertEqual('1', values['MAKO_FOLLOW_CURRENT_PROFILE'])
+
                 self.assertEqual(str(self.configuration.config_file_path), values['MAKO_CONFIG'])
                 self.assertNotIn('GALLIUM_DRIVER', values)
                 self.assertNotIn('MESA_LOADER_DRIVER_OVERRIDE', values)
@@ -568,15 +718,25 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
                     self.assertEqual('1', values['ENABLE_VKBASALT'])
                     self.assertNotIn('DISABLE_VKBASALT', values)
                     shader = Path(values['VKBASALT_CONFIG_FILE'])
+                    self.assertEqual(self.configuration.selected_shader_config_path, shader)
                     self.assertTrue(shader.is_file())
                     self.assertIn('makoVibrance', shader.read_text())
                 else:
                     self.assertEqual('1', values['DISABLE_VKBASALT'])
 
+    def test_each_stream_reads_the_current_selection_without_reinstalling(self):
+        before = self.service.client.read_bytes()
+        self.assertEqual(SELECTED_PROFILE, self.execute_profile({})['MAKO_PROFILE'])
+        self.assertTrue(self.configuration.set_current_profile('mako')['success'])
+        self.assertEqual('mako', self.execute_profile({})['MAKO_PROFILE'])
+        self.assertTrue(self.configuration.set_current_profile(SELECTED_PROFILE)['success'])
+        self.assertEqual(SELECTED_PROFILE, self.execute_profile({})['MAKO_PROFILE'])
+        self.assertEqual(before, self.service.client.read_bytes())
+
     def test_real_launcher_custom_shaders_wsi_scaling_and_compatible_options(self):
         fx = self.home / 'Custom.fx'
         fx.write_text('// portable registration fixture')
-        self.assertTrue(self.configuration.add_profile_shader(REMOTE_PLAY_PROFILE, str(fx))['success'])
+        self.assertTrue(self.configuration.add_profile_shader(SELECTED_PROFILE, str(fx))['success'])
         values = self.execute_profile({
             'scaling_enabled': True, 'gamescope_wsi_compatibility': True,
             'external_vulkan_layer': 'vkbasalt', 'vkbasalt_shader': 'custom/Custom',
@@ -600,9 +760,9 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
         self.assertIn(str(fx), Path(values['VKBASALT_CONFIG_FILE']).read_text())
 
     def test_real_launcher_mangohud_and_alternate_power_provisioning(self):
-        self.assertTrue(self.configuration.set_profile_power_modes(REMOTE_PLAY_PROFILE, True)['success'])
+        self.assertTrue(self.configuration.set_profile_power_modes(SELECTED_PROFILE, True)['success'])
         for mode in ('shared', 'handheld'):
-            self.assertTrue(self.configuration.update_profile_config_fields(REMOTE_PLAY_PROFILE,
+            self.assertTrue(self.configuration.update_profile_config_fields(SELECTED_PROFILE,
                 {'frame_generation_provisioned': False, 'frame_generation_enabled': False}, mode)['success'])
         values = self.execute_profile({'external_vulkan_layer': 'mangohud'})
         self.assertEqual('1', values['ENABLE_MAKO'])
@@ -616,10 +776,10 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
                               'frame_generation_enabled': False, 'scaling_enabled': False})
         before = self.configuration.mako_script_path.read_bytes()
         settings = json.loads(self.configuration.wrapper_profile_settings_path.read_text())
-        settings['profiles'][REMOTE_PLAY_PROFILE]['external_vulkan_layer'] = 'vkbasalt'
+        settings['profiles'][SELECTED_PROFILE]['external_vulkan_layer'] = 'vkbasalt'
         self.configuration.wrapper_profile_settings_path.write_text(json.dumps(settings))
         data = self.configuration._get_profile_data()
-        data['profiles'][REMOTE_PLAY_PROFILE]['scaling_enabled'] = True
+        data['profiles'][SELECTED_PROFILE]['scaling_enabled'] = True
         self.configuration._save_profile_data(data)
         result = subprocess.run([str(self.service.client), '-0'], capture_output=True,
                                 env={'PATH': '/usr/bin:/bin', 'HOME': str(self.home)}, timeout=5)
@@ -640,8 +800,8 @@ class RemoteLaunchTests(unittest.TestCase):
         self.paths["original"].write_bytes(ELF)
         self.paths["original"].chmod(0o755)
         self.paths["checksum"].write_text(hashlib.sha256(ELF).hexdigest())
-        self.paths["state"].write_text(json.dumps({"version": 1, "enabled": True, "profile": REMOTE_PLAY_PROFILE}))
-        self.paths["config"].write_text('version=2\n[[profile]]\nname="Remote-Play"\n')
+        self.paths["state"].write_text(json.dumps({"version": 3, "enabled": True}))
+        self.paths["config"].write_text('version=2\n[[profile]]\nname="stream-quality"\n')
         self.paths["runner"].write_text("#!/bin/sh\n")
         self.paths["runner"].chmod(0o755)
         self.calls = []
@@ -651,20 +811,40 @@ class RemoteLaunchTests(unittest.TestCase):
         return launch(self.paths, self.args, execute or (lambda *args: self.calls.append(args)), {
             "GALLIUM_DRIVER": "zink", "ENABLE_MAKO": "1", "MAKO_PROFILE": "other",
             "ENABLE_VKBASALT": "1", "SteamAppId": "123",
+            "MAKO_ENV": "1", "MAKO_FOLLOW_CURRENT_PROFILE": "1",
             "ENABLE_MAKO_SPATIAL_SCALING": "1",
             "VK_INSTANCE_LAYERS": "VK_LAYER_MAKO_spatial_scaling:VK_LAYER_MAKO_render:other",
         })
 
+    def test_root_selection_precedes_old_comments_and_missing_selection_uses_default(self):
+        profiles = '\n[[profile]]\nname="mako"\n[[profile]]\nname="user-choice"\n'
+        for selection, expected in (
+            ('current_profile="user-choice"\n# decky-current-profile = "mako"', 'user-choice'),
+            ('# decky-current-profile = "user-choice"', 'user-choice'),
+            ('  #  decky-current-profile="user-choice"  ', 'user-choice'),
+            ('current_profile="deleted"\n# decky-current-profile = "user-choice"', 'user-choice'),
+            ('current_profile="deleted"', 'mako'),
+            ('', 'mako'),
+        ):
+            with self.subTest(selection=selection):
+                self.paths['config'].write_text('version=2\n' + selection + profiles)
+                self.assertEqual(expected, ConfigurationManager.parse_toml_content_multi_profile(
+                    self.paths['config'].read_text())['current_profile'])
+                self.assertEqual(0, self.run_launch())
+                self.assertEqual(expected, self.calls[-1][2]['MAKO_PROFILE'])
+
     def test_delegates_power_and_model_free_profiles_to_canonical_runner(self):
         for extra in ("", '[profile.handheld]\nframe_generation_enabled=false\n[profile.docked]\nframe_generation_enabled=true\n', 'scaling_enabled=true\nframe_generation_provisioned=false\n'):
             with self.subTest(extra=extra):
-                self.paths["config"].write_text('version=2\n[[profile]]\nname="Remote-Play"\n' + extra)
+                self.paths["config"].write_text('version=2\n[[profile]]\nname="stream-quality"\n' + extra)
                 self.calls.clear()
                 self.assertEqual(0, self.run_launch())
                 executable, arguments, environment = self.calls[0]
                 self.assertEqual(str(self.paths["runner"]), executable)
                 self.assertEqual(self.args, arguments[-len(self.args):])
-                self.assertEqual(REMOTE_PLAY_PROFILE, environment["MAKO_PROFILE"])
+                self.assertEqual(SELECTED_PROFILE, environment["MAKO_PROFILE"])
+                self.assertEqual('1', environment['MAKO_FOLLOW_CURRENT_PROFILE'])
+                self.assertNotIn('MAKO_ENV', environment)
                 self.assertEqual("123", environment["SteamAppId"])
                 self.assertNotIn("GALLIUM_DRIVER", environment)
                 self.assertNotIn("ENABLE_VKBASALT", environment)
@@ -730,12 +910,14 @@ class RemoteLaunchTests(unittest.TestCase):
             'VK_INSTANCE_LAYERS': ':'.join((*MANAGED_LAYERS, 'VK_LAYER_VALVE_steam_overlay_64', 'custom')),
             'ENABLE_GAMESCOPE_WSI': '1', 'MANGOHUD': '1', 'ENABLE_VKBASALT': '1',
             'MAKO_SPLIT_LAYER_CHAIN': '2', 'VKBASALT_CONFIG_RELOAD': '1',
+            'MAKO_FOLLOW_CURRENT_PROFILE': '1', 'MAKO_ENV': '1',
         }, allow_override=False)
         env = self.calls[0][2]
         self.assertEqual('VK_LAYER_VALVE_steam_overlay_64:custom', env['VK_INSTANCE_LAYERS'])
         for key in ('DISABLE_MAKO','DISABLE_GAMESCOPE_WSI','DISABLE_MAKO_SPATIAL_SCALING','DISABLE_VKBASALT','DISABLE_MANGOHUD'):
             self.assertEqual('1', env[key])
-        for key in ('ENABLE_GAMESCOPE_WSI', 'MANGOHUD', 'ENABLE_VKBASALT', 'MAKO_SPLIT_LAYER_CHAIN', 'VKBASALT_CONFIG_RELOAD'):
+        for key in ('ENABLE_GAMESCOPE_WSI', 'MANGOHUD', 'ENABLE_VKBASALT', 'MAKO_SPLIT_LAYER_CHAIN', 'VKBASALT_CONFIG_RELOAD',
+                    'MAKO_FOLLOW_CURRENT_PROFILE', 'MAKO_ENV'):
             self.assertNotIn(key, env)
 
     def test_corrupt_original_never_executes_and_exec_failure_retries_once(self):

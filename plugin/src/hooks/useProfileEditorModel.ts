@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppOverview, DropdownOption } from "@decky/ui";
 import {
   captureGameProfile,
+  createProfile,
   deleteProfile,
   getProfiles,
   type ProfileDetails,
@@ -14,6 +15,7 @@ import t from "../i18n/i18n";
 
 interface ProfileEditorModelOptions {
   editingProfile?: string;
+  onBeforeProfileMutation?: () => Promise<void>;
   onProfileChange?: (profileName: string) => void | Promise<void>;
   mainRunningApp?: AppOverview;
   profileRevision?: number;
@@ -23,12 +25,13 @@ interface ProfileEditorModelOptions {
  * Owns the editable profile list and its backend transactions.
  *
  * This is deliberately separate from runtime profile synchronisation: the
- * offline dropdown selects a profile to edit and must never become a runtime
- * override. A running game is captured explicitly and otherwise locks the
- * editor to the profile selected by the runtime session.
+ * offline dropdown selects a profile to edit and use for the next native stream;
+ * local games retain automatic matching. A running game is captured explicitly
+ * and otherwise locks the editor to the profile selected by the runtime session.
  */
 export function useProfileEditorModel({
   editingProfile,
+  onBeforeProfileMutation,
   onProfileChange,
   mainRunningApp,
   profileRevision,
@@ -104,9 +107,10 @@ export function useProfileEditorModel({
   );
 
   const notifyProfileChanged = async (profileName: string) => {
-    const resolvedProfile = await loadProfiles(profileName);
-    await onProfileChange?.(resolvedProfile || profileName);
-    return resolvedProfile;
+    await loadProfiles(profileName);
+    await onProfileChange?.(profileName);
+    editingProfileRef.current = profileName;
+    setSelectedProfile(profileName);
   };
 
   const switchProfile = async (profileName: string) => {
@@ -115,9 +119,9 @@ export function useProfileEditorModel({
       if (!profiles.includes(profileName)) {
         throw new Error(`Profile '${profileName}' does not exist`);
       }
+      await onProfileChange?.(profileName);
       editingProfileRef.current = profileName;
       setSelectedProfile(profileName);
-      await onProfileChange?.(profileName);
     } catch (error) {
       showErrorToast(
         t("PROFILE_SWITCH_FAILED", "Failed to switch profile"),
@@ -132,6 +136,7 @@ export function useProfileEditorModel({
     if (!mainRunningApp) return;
     setIsLoading(true);
     try {
+      await onBeforeProfileMutation?.();
       const result = await captureGameProfile(
         String(mainRunningApp.appid),
         mainRunningApp.display_name,
@@ -146,8 +151,6 @@ export function useProfileEditorModel({
           ? `${mainRunningApp.display_name}: ${result.profile.processes.join(", ")}`
           : mainRunningApp.display_name,
       );
-      editingProfileRef.current = result.profile_name;
-      setSelectedProfile(result.profile_name);
       await notifyProfileChanged(result.profile_name);
     } catch (error) {
       showErrorToast(
@@ -159,15 +162,32 @@ export function useProfileEditorModel({
     }
   };
 
+  const createSelectedProfile = async (name: string) => {
+    setIsLoading(true);
+    try {
+      await onBeforeProfileMutation?.();
+      const result = await createProfile(name, selectedProfile);
+      if (!result.success || !result.profile_name)
+        throw new Error(result.error || "Could not create profile");
+      await notifyProfileChanged(result.profile_name);
+    } catch (error) {
+      showErrorToast(
+        t("PROFILE_CREATE_FAILED", "Could not create profile"),
+        String(error),
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const renameSelectedProfile = async (newName: string) => {
     setIsLoading(true);
     try {
+      await onBeforeProfileMutation?.();
       const result = await renameProfile(selectedProfile, newName);
       if (!result.success || !result.profile_name) {
         throw new Error(result.error || "Unknown error");
       }
-      editingProfileRef.current = result.profile_name;
-      setSelectedProfile(result.profile_name);
       await notifyProfileChanged(result.profile_name);
       showSuccessToast(t("PROFILE_RENAMED", "Profile renamed"), newName);
     } catch (error) {
@@ -183,12 +203,11 @@ export function useProfileEditorModel({
   const deleteSelectedProfile = async () => {
     setIsLoading(true);
     try {
+      await onBeforeProfileMutation?.();
       const deletedName = selectedDetails?.display_name || selectedProfile;
       const result = await deleteProfile(selectedProfile);
       if (!result.success) throw new Error(result.error || "Unknown error");
       const nextProfile = result.current_profile || DEFAULT_PROFILE_NAME;
-      editingProfileRef.current = nextProfile;
-      setSelectedProfile(nextProfile);
       await notifyProfileChanged(nextProfile);
       showSuccessToast(t("PROFILE_DELETED", "Profile deleted"), deletedName);
     } catch (error) {
@@ -223,6 +242,7 @@ export function useProfileEditorModel({
     isLoading,
     switchProfile,
     saveRunningGame,
+    createSelectedProfile,
     renameSelectedProfile,
     deleteSelectedProfile,
   };

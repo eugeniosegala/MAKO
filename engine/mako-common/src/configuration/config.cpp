@@ -641,6 +641,7 @@ ConfigFile::ConfigFile(const std::filesystem::path& path) {
     }
 
     auto global = table["global"];
+    this->current_profile = table["current_profile"].value<std::string>();
     if (global && global.is_table()) {
         this->globalConf = parseGlobalConf(*global.as_table());
     }
@@ -675,6 +676,8 @@ ConfigFile::ConfigFile(const std::filesystem::path& path) {
 void ConfigFile::write(const std::filesystem::path& path) const {
     toml::table table;
     table.insert("version", ConfigFile::formatVersion);
+    if (this->current_profile)
+        table.insert("current_profile", *this->current_profile);
 
     toml::table global;
     if (this->globalConf.dll)

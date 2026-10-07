@@ -176,7 +176,7 @@ export function RemotePlaySection({
                   >
                     {t(
                       "REMOTE_PLAY_DESCRIPTION",
-                      "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+                      "Uses the selected profile for native Steam streams. Select a profile before starting a stream. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
                     )}
                   </MakoInfo>
                 }

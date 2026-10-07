@@ -385,8 +385,7 @@ class ConfigurationManager:
         global_config = profile_data["global_config"]
         lines = [
             f"version = {CONFIG_FORMAT_VERSION}",
-            f"# {CURRENT_PROFILE_COMMENT_KEY} = "
-            f"{_toml_string(profile_data['current_profile'])}",
+            f"current_profile = {_toml_string(profile_data['current_profile'])}",
             "",
             "[global]",
         ]
@@ -479,6 +478,8 @@ class ConfigurationManager:
             if match and match.group(1) in profiles:
                 current = match.group(1)
                 break
+        if isinstance(data.get("current_profile"), str) and data["current_profile"] in profiles:
+            current = data["current_profile"]
         result = ProfileData(current_profile=current, profiles=profiles, global_config=global_config)
         if power_profiles:
             result["power_profiles"] = power_profiles

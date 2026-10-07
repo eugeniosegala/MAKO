@@ -33,31 +33,44 @@ class RemotePlayContractTests(unittest.TestCase):
         self.assertEqual({key: type_shape(value) for key, value in remote_play_core.RemotePlayResponse.__annotations__.items()},
                          {key: type_shape(value) for key, value in types.RemotePlayResponse.__annotations__.items()})
         backend = (ROOT / 'engine/mako-ui/src/remote_play.cpp').read_text()
-        self.assertIn('QStringLiteral("' + remote_play_core.REMOTE_PLAY_PROFILE + '")', backend)
+        self.assertNotIn('editRemotePlayProfile', backend)
 
     def test_discovery_inputs_and_shader_identity_use_existing_owners(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / 'conf.toml'
             sidecar = config.parent / 'profile-wrapper-settings.json'
-            sidecar.write_text('{"version":1,"profiles":{"Remote-Play":{"external_vulkan_layer":"vkbasalt"}}}')
-            settings = remote_play_launch.launch_settings({'name': 'Remote-Play'}, config)
+            sidecar.write_text('{"version":1,"profiles":{"stream-quality":{"external_vulkan_layer":"vkbasalt"}}}')
+            settings = remote_play_launch.launch_settings({'name': 'stream-quality'}, config)
             self.assertEqual(Path(settings['MAKO_LAUNCH_VKBASALT_CONFIG']).name,
-                             vkbasalt_profile_config_filename('Remote-Play'))
+                             vkbasalt_profile_config_filename('stream-quality'))
+            sidecar.write_text('{"version":1,"profiles":{"mako":{"external_vulkan_layer":"vkbasalt"}}}')
+            settings = remote_play_launch.launch_settings({'name': 'mako'}, config)
+            self.assertEqual(Path(settings['MAKO_LAUNCH_VKBASALT_CONFIG']),
+                             config.parent.parent / 'vkBasalt' / 'vkBasalt.conf')
+            sidecar.write_text('{"version":1,"profiles":{"stream-quality":{"external_vulkan_layer":"vkbasalt"}}}')
             (config.parent / 'profile-metadata.json').write_text(
-                '{"version":1,"profiles":{"Remote-Play":{"steam_app_id":"42"}}}')
-            settings = remote_play_launch.launch_settings({'name': 'Remote-Play'}, config)
+                '{"version":1,"profiles":{"stream-quality":{"steam_app_id":"42"}}}')
+            settings = remote_play_launch.launch_settings({'name': 'stream-quality'}, config)
             self.assertEqual(Path(settings['MAKO_LAUNCH_VKBASALT_CONFIG']).name,
-                             vkbasalt_profile_config_filename('Remote-Play', '42'))
+                             vkbasalt_profile_config_filename('stream-quality', '42'))
+            following = remote_play_launch.launch_settings({'name': 'stream-quality'}, config, follow_current=True)
+            self.assertEqual(config.parent / 'vkbasalt/current-profile.conf',
+                             Path(following['MAKO_LAUNCH_VKBASALT_CONFIG']))
         generator = (ROOT / 'plugin/py_modules/mako_plugin/wrapper_generation.py').read_text()
         tree = ast.parse(generator)
         literals = [node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)]
-        self.assertTrue(any('MAKO_PROFILE:-' in text and 'Remote-Play' in text for text in literals))
+        self.assertTrue(any('MAKO_PROFILE:-' in text and 'MAKO_LAUNCH_RENDERER_REQUIRED' in text for text in literals))
         for key in remote_play_launch.LaunchSettings.__annotations__:
             self.assertTrue(any(key in text for text in literals), key)
             self.assertTrue(any(text.startswith('unset ') and key in text for text in literals), key)
         qt = (ROOT / 'engine/mako-ui/src/backend.cpp').read_text()
         self.assertIn('QCryptographicHash::Sha256', qt)
         self.assertIn('.toHex().left(12)', qt)
+        self.assertIn('/ "current-profile.conf"', qt)
+        decky = (ROOT / 'plugin/py_modules/mako_plugin/configuration.py').read_text()
+        self.assertIn('/ "current-profile.conf"', decky)
+        native = (ROOT / 'engine/mako-common/src/configuration/detection.cpp').read_text()
+        self.assertIn('"MAKO_FOLLOW_CURRENT_PROFILE"', native)
 
     def test_native_package_contains_command_and_private_owner(self):
         cmake = (ROOT / 'engine/CMakeLists.txt').read_text()
@@ -67,8 +80,7 @@ class RemotePlayContractTests(unittest.TestCase):
         self.assertIn('"bin/mako-remote-play"', packaging)
         for name in (*MODULES, '__init__.py'):
             self.assertIn('"share/mako-render/mako_remote_play/' + name + '"', packaging)
-        self.assertIn(b'OVERRIDE_V2', remote_play_core.MARKER)
-        self.assertIn(b'OVERRIDE_V1', remote_play_core.LEGACY_MARKER)
+        self.assertIn(b'OVERRIDE_V3', remote_play_core.MARKER)
 
     def test_freshness_check_never_repairs_missing_or_stale_bindings(self):
         with tempfile.TemporaryDirectory() as directory:

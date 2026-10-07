@@ -727,6 +727,7 @@ class GameProfileTests(unittest.TestCase):
             managed_results,
             [
                 (self.service.config_file_path, True),
+                (self.service.selected_shader_config_path, False),
                 (self.service.mako_script_path, False),
             ],
         )
@@ -759,6 +760,7 @@ class GameProfileTests(unittest.TestCase):
             managed_results,
             [
                 (self.service.config_file_path, True),
+                (self.service.selected_shader_config_path, False),
                 (self.service.mako_script_path, False),
             ],
         )
@@ -794,6 +796,7 @@ class GameProfileTests(unittest.TestCase):
             managed_results,
             [
                 (self.service.config_file_path, False),
+                (self.service.selected_shader_config_path, False),
                 (self.service.mako_script_path, True),
             ],
         )

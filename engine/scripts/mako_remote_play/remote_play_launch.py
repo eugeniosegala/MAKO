@@ -1,11 +1,12 @@
 #!/usr/bin/python3
-# MAKO_NATIVE_REMOTE_PLAY_OVERRIDE_V2
+# MAKO_NATIVE_REMOTE_PLAY_OVERRIDE_V3
 """Self-contained Steam entry point; installed independently of either UI."""
 
 import fcntl
 import hashlib
 import json
 import os
+import re
 import stat
 from pathlib import Path
 import sys
@@ -34,6 +35,7 @@ class LaunchSettings(TypedDict):
 REMOVED_ENVIRONMENT = (
     "GALLIUM_DRIVER", "MESA_LOADER_DRIVER_OVERRIDE", "__GLX_VENDOR_LIBRARY_NAME",
     "ENABLE_MAKO", "MAKO_PROFILE", "MAKO_PROFILE_FALLBACK", "MAKO_CONFIG",
+    "MAKO_FOLLOW_CURRENT_PROFILE", "MAKO_ENV",
     "ENABLE_VKBASALT", "VKBASALT_CONFIG_FILE", "MAKO_PRESENT_DIAGNOSTICS",
     "ENABLE_MAKO_SPATIAL_SCALING", "DISABLE_MAKO_SPATIAL_SCALING",
     "ENABLE_GAMESCOPE_WSI", "MAKO_SPLIT_LAYER_CHAIN", "MANGOHUD",
@@ -68,7 +70,33 @@ def read_record(path: Path) -> str:
         return content.decode("utf-8")
 
 
-def launch_settings(profile: dict, config: Path) -> LaunchSettings:
+def selected_profile(config: Path) -> dict:
+    """Resolve the saved editor selection once, before launching a stream."""
+    with open_regular(config) as stream:
+        content = stream.read().decode("utf-8")
+    data = tomllib.loads(content)
+    if data.get("version") != 2:
+        raise ValueError("unsupported configuration version")
+    profiles = data.get("profile", [])
+    if not isinstance(profiles, list) or not profiles or any(
+        not isinstance(profile, dict) or not isinstance(profile.get("name"), str)
+        or not profile["name"] for profile in profiles
+    ):
+        raise ValueError("selected profile unavailable")
+    name = data.get("current_profile")
+    # Preserve editor selections saved by older Decky versions on first launch.
+    if not isinstance(name, str) or not any(profile['name'] == name for profile in profiles):
+        for line in content.splitlines():
+            match = re.fullmatch(r'\s*#\s*decky-current-profile\s*=\s*"([^"]+)"\s*', line)
+            if match and any(profile['name'] == match[1] for profile in profiles):
+                name = match[1]
+                break
+    return next((profile for profile in profiles if profile["name"] == name),
+                next((profile for profile in profiles if profile["name"] == "mako"), profiles[0]))
+
+
+def launch_settings(profile: dict, config: Path, *, default_shader: Path | None = None,
+                    follow_current: bool = False) -> LaunchSettings:
     """Read only process-start discovery inputs; Renderer owns actual settings."""
     modes = [profile]
     for mode in ('handheld', 'docked'):
@@ -112,6 +140,12 @@ def launch_settings(profile: dict, config: Path) -> LaunchSettings:
         if isinstance(app_id, str) and app_id.isascii() and app_id.isdigit():
             shader_name = 'steam-' + app_id + '.conf'
     shader = config.parent / 'vkbasalt' / shader_name
+    if profile['name'] == 'mako':
+        shader = default_shader if default_shader is not None else config.parent.parent / 'vkBasalt' / 'vkBasalt.conf'
+    if follow_current:
+        # Editors replace this cache when saving/selecting an ordinary profile.
+        # vkBasalt can keep its startup filename and reload the selected content.
+        shader = config.parent / 'vkbasalt' / 'current-profile.conf'
     return LaunchSettings(
         MAKO_LAUNCH_RENDERER_REQUIRED='1' if required('frame_generation_provisioned', True) or scaling else '0',
         MAKO_LAUNCH_SPATIAL_REQUIRED='1' if scaling and wsi else '0',
@@ -157,26 +191,27 @@ def launch(paths: LaunchPaths, arguments: list[str], execute: Callable,
         if not allow_override:
             raise ValueError("override launch lock unavailable")
         state = json.loads(read_record(paths["state"]))
-        if not isinstance(state, dict) or type(state.get('version')) is not int or state.get("version") not in (1, 2) or state.get("enabled") is not True:
+        if not isinstance(state, dict) or type(state.get('version')) is not int or state.get("version") != 3 or state.get("enabled") is not True:
             raise ValueError("override disabled")
-        profile_name = state.get("profile")
-        if not isinstance(profile_name, str) or not profile_name:
-            raise ValueError("invalid profile identity")
-        with open_regular(paths["config"]) as stream:
-            config = tomllib.load(stream)
-        if config.get("version") != 2 or not any(
-            isinstance(profile, dict) and profile.get("name") == profile_name
-            for profile in config.get("profile", [])
-        ):
-            raise ValueError("Remote Play profile unavailable")
+        profile = selected_profile(paths["config"])
+        profile_name = profile["name"]
         if not paths["runner"].is_file() or not os.access(paths["runner"], os.X_OK):
             raise ValueError("MAKO launcher unavailable")
-        profile = next(profile for profile in config['profile'] if isinstance(profile, dict) and profile.get('name') == profile_name)
-        settings = launch_settings(profile, paths['config'])
+        default_shader = None
+        if paths['runner'].name == 'mako-launch':
+            if clean.get('XDG_CONFIG_HOME'):
+                default_shader = Path(clean['XDG_CONFIG_HOME']) / 'vkBasalt' / 'vkBasalt.conf'
+            elif clean.get('HOME'):
+                default_shader = Path(clean['HOME']) / '.config/vkBasalt/vkBasalt.conf'
+            else:
+                default_shader = Path('/etc/vkBasalt.conf')
+        settings = launch_settings(profile, paths['config'], default_shader=default_shader,
+                                   follow_current=True)
         active = dict(clean)
         active.pop("DISABLE_MAKO", None)
         active.pop("DISABLE_MAKO_SPATIAL_SCALING", None)
         active["MAKO_PROFILE"] = profile_name
+        active["MAKO_FOLLOW_CURRENT_PROFILE"] = '1'
         active['MAKO_CONFIG'] = str(paths['config'])
         if paths['runner'].name == 'mako-launch':
             if settings['MAKO_LAUNCH_EXTERNAL_LAYER'] == 'vkbasalt':

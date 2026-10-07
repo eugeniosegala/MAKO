@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   captureGameProfile: vi.fn(),
+  createProfile: vi.fn(),
   deleteProfile: vi.fn(),
   getProfiles: vi.fn(),
   renameProfile: vi.fn(),
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../../src/api/makoApi", () => ({
   captureGameProfile: mocks.captureGameProfile,
+  createProfile: mocks.createProfile,
   deleteProfile: mocks.deleteProfile,
   getProfiles: mocks.getProfiles,
   renameProfile: mocks.renameProfile,
@@ -70,7 +72,7 @@ describe("profile editor model", () => {
     expect(mocks.captureGameProfile).not.toHaveBeenCalled();
   });
 
-  test("refreshes a newly installed process profile without changing the offline selection", async () => {
+  test("refreshes a newly created process profile without changing the offline selection", async () => {
     const { result, rerender } = renderHook(
       ({ profileRevision }) =>
         useProfileEditorModel({ editingProfile: "mako", profileRevision }),
@@ -79,14 +81,14 @@ describe("profile editor model", () => {
     await waitFor(() => expect(result.current.profileOptions).toHaveLength(2));
     mocks.getProfiles.mockResolvedValue({
       success: true,
-      profiles: ["mako", "game-123", "Remote-Play"],
+      profiles: ["mako", "game-123", "new-profile"],
       current_profile: "mako",
       profile_details: [
         defaultProfile,
         gameProfile,
         {
-          profile_name: "Remote-Play",
-          display_name: "Remote Play",
+          profile_name: "new-profile",
+          display_name: "New Profile",
           kind: "process",
           processes: ["streaming_client"],
         },
@@ -112,6 +114,123 @@ describe("profile editor model", () => {
     expect(mocks.showErrorToast).toHaveBeenCalledWith(
       "Failed to switch profile",
       "Error: Profile 'missing-profile' does not exist",
+    );
+  });
+
+  test("creates an ordinary profile from the selection and selects the result", async () => {
+    const onProfileChange = vi.fn(async () => undefined);
+    const { result } = renderHook(() =>
+      useProfileEditorModel({ onProfileChange }),
+    );
+    await waitFor(() => expect(result.current.profileOptions).toHaveLength(2));
+    mocks.createProfile.mockResolvedValue({
+      success: true,
+      profile_name: "Streaming",
+    });
+    mocks.getProfiles.mockResolvedValue({
+      success: true,
+      profiles: ["mako", "game-123", "Streaming"],
+      current_profile: "mako",
+    });
+    await act(() => result.current.createSelectedProfile("Streaming"));
+    expect(mocks.createProfile).toHaveBeenCalledWith("Streaming", "mako");
+    expect(onProfileChange).toHaveBeenCalledWith("Streaming");
+    expect(result.current.selectedProfile).toBe("Streaming");
+    expect(mocks.captureGameProfile).not.toHaveBeenCalled();
+  });
+
+  test.each(["create", "rename", "delete", "capture"])(
+    "%s waits for pending settings before mutating profiles",
+    async (operation) => {
+      let finishSave!: () => void;
+      const onBeforeProfileMutation = vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSave = resolve;
+          }),
+      );
+      const { result } = renderHook(() =>
+        useProfileEditorModel({
+          editingProfile: "game-123",
+          onBeforeProfileMutation,
+          mainRunningApp: { appid: 123, display_name: "Test Game" } as never,
+        }),
+      );
+      await waitFor(() =>
+        expect(result.current.profileOptions).toHaveLength(2),
+      );
+      const mutation =
+        operation === "create"
+          ? mocks.createProfile
+          : operation === "rename"
+            ? mocks.renameProfile
+            : operation === "delete"
+              ? mocks.deleteProfile
+              : mocks.captureGameProfile;
+      mutation.mockResolvedValue({
+        success: true,
+        profile_name: "game-123",
+        current_profile: "mako",
+      });
+      let pending!: Promise<void>;
+      act(() => {
+        pending =
+          operation === "create"
+            ? result.current.createSelectedProfile("copy")
+            : operation === "rename"
+              ? result.current.renameSelectedProfile("renamed")
+              : operation === "delete"
+                ? result.current.deleteSelectedProfile()
+                : result.current.saveRunningGame();
+      });
+      expect(result.current.isLoading).toBe(true);
+      expect(mutation).not.toHaveBeenCalled();
+      await act(async () => {
+        finishSave();
+        await pending;
+      });
+      expect(mutation).toHaveBeenCalledOnce();
+    },
+  );
+
+  test("a failed preparation prevents profile creation", async () => {
+    const { result } = renderHook(() =>
+      useProfileEditorModel({
+        onBeforeProfileMutation: async () => {
+          throw new Error("save failed");
+        },
+      }),
+    );
+    await waitFor(() => expect(result.current.profileOptions).toHaveLength(2));
+    await act(() => result.current.createSelectedProfile("copy"));
+    expect(mocks.createProfile).not.toHaveBeenCalled();
+    expect(result.current.selectedProfile).toBe("mako");
+  });
+
+  test("a created profile is not shown as selected when persistence fails", async () => {
+    const { result } = renderHook(() =>
+      useProfileEditorModel({
+        onProfileChange: async () => {
+          throw new Error("selection failed");
+        },
+      }),
+    );
+    await waitFor(() => expect(result.current.profileOptions).toHaveLength(2));
+    mocks.createProfile.mockResolvedValue({
+      success: true,
+      profile_name: "Streaming",
+    });
+    mocks.getProfiles.mockResolvedValue({
+      success: true,
+      profiles: ["mako", "Streaming"],
+      current_profile: "mako",
+    });
+    await act(() => result.current.createSelectedProfile("Streaming"));
+    expect(result.current.selectedProfile).toBe("mako");
+    expect(result.current.profileOptions).toHaveLength(2);
+    expect(mocks.showErrorToast).toHaveBeenCalledWith(
+      "Could not create profile",
+      "Error: selection failed",
     );
   });
 

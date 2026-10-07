@@ -20,8 +20,11 @@ const mocks = vi.hoisted(() => ({
   getProfileConfig: vi.fn(),
   updateProfileConfigFields: vi.fn(),
   syncCurrentProfile: vi.fn(),
+  setCurrentProfile: vi.fn(),
   deleteProfileShaders: vi.fn(),
   reloadProfileShaders: vi.fn(),
+  createProfile: vi.fn(),
+  getProfiles: vi.fn(),
 }));
 function pass({ children }: { children: React.ReactNode }) {
   return <div>{children}</div>;
@@ -41,6 +44,8 @@ vi.mock("../../src/api/makoApi", () => ({
   getProfileConfig: mocks.getProfileConfig,
   deleteProfileShaders: mocks.deleteProfileShaders,
   reloadProfileShaders: mocks.reloadProfileShaders,
+  createProfile: mocks.createProfile,
+  getProfiles: mocks.getProfiles,
 }));
 vi.mock("../../src/hooks/useMakoHooks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/hooks/useMakoHooks")>()),
@@ -55,6 +60,7 @@ vi.mock("../../src/hooks/useProfileManagement", () => ({
   useProfileManagement: () => ({
     updateProfileConfigFields: mocks.updateProfileConfigFields,
     syncCurrentProfile: mocks.syncCurrentProfile,
+    setCurrentProfile: mocks.setCurrentProfile,
   }),
 }));
 vi.mock("../../src/hooks/useModelStatus", () => ({
@@ -73,9 +79,37 @@ vi.mock("../../src/components/MakoUi", () => ({
 vi.mock("../../src/components/ContentNotices", () => ({
   ContentNotices: empty,
 }));
-vi.mock("../../src/components/ProfileManagement", () => ({
-  ProfileManagement: empty,
-}));
+vi.mock("../../src/components/ProfileManagement", async () => {
+  const { useProfileEditorModel } =
+    await import("../../src/hooks/useProfileEditorModel");
+  return {
+    ProfileManagement: ({
+      onProfileChange,
+      onBeforeProfileMutation,
+      editingProfile,
+    }: {
+      onProfileChange: (name: string) => Promise<void>;
+      onBeforeProfileMutation: () => Promise<void>;
+      editingProfile: string;
+    }) => {
+      const { createSelectedProfile } = useProfileEditorModel({
+        editingProfile,
+        onProfileChange,
+        onBeforeProfileMutation,
+      });
+      return (
+        <>
+          <button onClick={() => void onProfileChange("Streaming")}>
+            Select Streaming
+          </button>
+          <button onClick={() => void createSelectedProfile("Streaming")}>
+            Create Streaming
+          </button>
+        </>
+      );
+    },
+  };
+});
 vi.mock("../../src/components/StatusDisplay", () => ({ StatusDisplay: empty }));
 vi.mock("../../src/components/InstallationButton", () => ({
   InstallationButton: empty,
@@ -171,6 +205,16 @@ beforeEach(() => {
   mocks.saveGate = null;
   mocks.reloadProfileShaders.mockResolvedValue({ success: true });
   mocks.deleteProfileShaders.mockResolvedValue({ success: true });
+  mocks.setCurrentProfile.mockResolvedValue({ success: true });
+  mocks.getProfiles.mockResolvedValue({
+    success: true,
+    profiles: ["mako", "Streaming"],
+    current_profile: "mako",
+  });
+  mocks.createProfile.mockResolvedValue({
+    success: true,
+    profile_name: "Streaming",
+  });
   mocks.getProfileConfig.mockImplementation(
     async (_name: string, mode?: string) => ({
       success: true,
@@ -203,6 +247,102 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+test("profile selection drains queued edits before persisting the stream selection", async () => {
+  render(<Content />);
+  await act(async () => {});
+  let finishSave!: () => void;
+  mocks.saveGate = new Promise<void>((resolve) => {
+    finishSave = resolve;
+  });
+  fireEvent.change(screen.getByLabelText("Shared shader sharpness"), {
+    target: { value: "0.73" },
+  });
+  fireEvent.click(screen.getByText("Select Streaming"));
+  await act(async () => {});
+  expect(mocks.setCurrentProfile).not.toHaveBeenCalled();
+  await act(async () => {
+    finishSave();
+  });
+  expect(mocks.updateProfileConfigFields).toHaveBeenCalledWith(
+    "mako",
+    { vkbasalt_sharpness: 0.73 },
+    "handheld",
+  );
+  expect(mocks.setCurrentProfile).toHaveBeenCalledWith("Streaming");
+  expect(mocks.getProfileConfig).toHaveBeenLastCalledWith("Streaming");
+});
+
+test("new profiles copy settings only after the real save queue finishes", async () => {
+  render(<Content />);
+  await act(async () => {});
+  let finishSave!: () => void;
+  mocks.saveGate = new Promise<void>((resolve) => {
+    finishSave = resolve;
+  });
+  let copiedSharpness = 0;
+  mocks.createProfile.mockImplementation(async () => {
+    copiedSharpness = mocks.sharpness;
+    return { success: true, profile_name: "Streaming" };
+  });
+  fireEvent.change(screen.getByLabelText("Shared shader sharpness"), {
+    target: { value: "0.73" },
+  });
+  fireEvent.click(screen.getByText("Create Streaming"));
+  await act(async () => {});
+  expect(mocks.createProfile).not.toHaveBeenCalled();
+  await act(async () => {
+    finishSave();
+  });
+  expect(mocks.createProfile).toHaveBeenCalledWith("Streaming", "mako");
+  expect(copiedSharpness).toBe(0.73);
+  expect(mocks.setCurrentProfile).toHaveBeenCalledWith("Streaming");
+});
+
+test("creating a profile in a stream redirects later edits and retains selection after exit", async () => {
+  let selected = "mako";
+  let streaming = true;
+  mocks.syncCurrentProfile.mockImplementation(async () => ({
+    success: true,
+    profile_name: selected,
+    game_running: streaming,
+    remote_play_running: streaming,
+    power_source: mocks.powerSource,
+  }));
+  mocks.setCurrentProfile.mockImplementation(async (profile: string) => {
+    selected = profile;
+    return { success: true };
+  });
+  render(<Content />);
+  await act(async () => {});
+  fireEvent.change(screen.getByLabelText("Shared shader sharpness"), {
+    target: { value: "0.73" },
+  });
+  fireEvent.click(screen.getByText("Create Streaming"));
+  await act(async () => {});
+  expect(mocks.createProfile).toHaveBeenCalledWith("Streaming", "mako");
+  expect(selected).toBe("Streaming");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  fireEvent.change(screen.getByLabelText("Shared shader sharpness"), {
+    target: { value: "0.91" },
+  });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(mocks.updateProfileConfigFields).toHaveBeenLastCalledWith(
+    "Streaming",
+    { vkbasalt_sharpness: 0.91 },
+    "handheld",
+  );
+  streaming = false;
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(mocks.getProfileConfig).toHaveBeenLastCalledWith("Streaming");
+  expect(selected).toBe("Streaming");
 });
 
 test("shader refresh drains saves before requesting a rebuild and preserves the editing power set", async () => {

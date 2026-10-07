@@ -67,7 +67,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 72
+WRAPPER_FORMAT_VERSION = 73
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -836,7 +836,7 @@ def wrapper_profile_configuration_lines(
     # including edits made by Qt while this generated cache remains installed.
     # Keep activation/ordering in this existing owner and consume inputs once.
     lines.extend([
-        'if [ "${MAKO_PROFILE:-}" = "Remote-Play" ] && [ -n "${MAKO_LAUNCH_RENDERER_REQUIRED:-}" ]; then',
+        'if [ -n "${MAKO_PROFILE:-}" ] && [ -n "${MAKO_LAUNCH_RENDERER_REQUIRED:-}" ]; then',
         '    mako_renderer_required="$MAKO_LAUNCH_RENDERER_REQUIRED"',
         '    mako_spatial_scaling_required="${MAKO_LAUNCH_SPATIAL_REQUIRED:-0}"',
         '    mako_gamescope_wsi_required="${MAKO_LAUNCH_WSI_REQUIRED:-0}"',

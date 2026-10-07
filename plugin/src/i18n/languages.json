@@ -411,7 +411,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Verwendet das ausgewählte Profil für native Steam-Streams. Wähle ein Profil, bevor du einen Stream startest. Ersetzt den Steam-Streaming-Client durch einen Wrapper und sichert das Original. Beende Streams vor Änderungen; nach Steam-Updates muss die Überschreibung eventuell neu installiert werden. Steam Link und Browser-Streaming werden nicht unterstützt.",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -419,7 +419,11 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "Profil erstellen",
+    "PROFILE_CREATE_DESCRIPTION": "Ein Profil aus den Einstellungen des ausgewählten Profils erstellen.",
+    "PROFILE_CREATE_BUTTON": "Erstellen",
+    "PROFILE_CREATE_FAILED": "Profil konnte nicht erstellt werden"
   },
   "es": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -833,7 +837,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Usa el perfil seleccionado para las transmisiones nativas de Steam. Selecciona un perfil antes de iniciar una transmisión. Sustituye el cliente de transmisión de Steam por un lanzador y conserva el original. Cierra las transmisiones antes de cambiarlo; las actualizaciones de Steam pueden requerir reinstalar la sustitución. Steam Link y la transmisión por navegador no son compatibles.",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -841,7 +845,11 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "Crear perfil",
+    "PROFILE_CREATE_DESCRIPTION": "Crea un perfil con los ajustes del perfil seleccionado.",
+    "PROFILE_CREATE_BUTTON": "Crear",
+    "PROFILE_CREATE_FAILED": "No se pudo crear el perfil"
   },
   "ja": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "高度なオプションは {path} で編集できます。MAKO は上記のコントロールのみを統合し、その他の設定はすべて保持します。手動による高度な変更は次回の起動時に適用されます。デフォルトプロファイルはこのグローバルファイルを使用します。",
@@ -1255,7 +1263,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Steamのネイティブストリーミングに選択中のプロファイルを使用します。配信を開始する前にプロファイルを選択してください。Steamのストリーミングクライアントをラッパーに置き換え、元のファイルを保存します。変更前に配信を終了してください。Steamの更新後は再設定が必要になる場合があります。Steam Linkとブラウザー配信には対応していません。",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -1263,7 +1271,11 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "プロファイルを作成",
+    "PROFILE_CREATE_DESCRIPTION": "選択中のプロファイルの設定から新しいプロファイルを作成します。",
+    "PROFILE_CREATE_BUTTON": "作成",
+    "PROFILE_CREATE_FAILED": "プロファイルを作成できませんでした"
   },
   "ko": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -1677,7 +1689,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Steam 기본 스트리밍에 선택한 프로필을 사용합니다. 스트리밍을 시작하기 전에 프로필을 선택하세요. Steam 스트리밍 클라이언트를 래퍼로 교체하고 원본을 보존합니다. 변경 전에 스트리밍을 종료하세요. Steam 업데이트 후에는 재설치가 필요할 수 있습니다. Steam Link와 브라우저 스트리밍은 지원되지 않습니다.",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -1685,7 +1697,11 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "프로필 만들기",
+    "PROFILE_CREATE_DESCRIPTION": "선택한 프로필의 설정으로 새 프로필을 만듭니다.",
+    "PROFILE_CREATE_BUTTON": "만들기",
+    "PROFILE_CREATE_FAILED": "프로필을 만들 수 없습니다"
   },
   "language_metadata": {
     "en": {
@@ -2128,7 +2144,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Usa o perfil selecionado para transmissões nativas do Steam. Selecione um perfil antes de iniciar a transmissão. Substitui o cliente de transmissão do Steam por um wrapper e preserva o original. Feche as transmissões antes de alterar; atualizações do Steam podem exigir reinstalar a substituição. Steam Link e transmissão pelo navegador não são compatíveis.",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -2136,7 +2152,11 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "Criar perfil",
+    "PROFILE_CREATE_DESCRIPTION": "Cria um perfil com as configurações do perfil selecionado.",
+    "PROFILE_CREATE_BUTTON": "Criar",
+    "PROFILE_CREATE_FAILED": "Não foi possível criar o perfil"
   },
   "pt-PT": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -2550,7 +2570,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Usa o perfil selecionado para transmissões nativas do Steam. Seleciona um perfil antes de iniciar a transmissão. Substitui o cliente de transmissão do Steam por um wrapper e preserva o original. Fecha as transmissões antes de alterar; as atualizações do Steam podem exigir reinstalar a substituição. Steam Link e transmissão pelo navegador não são suportados.",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -2558,7 +2578,11 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "Criar perfil",
+    "PROFILE_CREATE_DESCRIPTION": "Cria um perfil com as definições do perfil selecionado.",
+    "PROFILE_CREATE_BUTTON": "Criar",
+    "PROFILE_CREATE_FAILED": "Não foi possível criar o perfil"
   },
   "steam_language_map": {
     "english": "en",
@@ -2986,7 +3010,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the selected profile for native Steam streams. Select a profile before starting a stream. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -2994,7 +3018,11 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "Create Profile",
+    "PROFILE_CREATE_DESCRIPTION": "Create a profile from the selected profile's settings.",
+    "PROFILE_CREATE_BUTTON": "Create",
+    "PROFILE_CREATE_FAILED": "Could not create profile"
   },
   "uk": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -3408,7 +3436,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Використовує вибраний профіль для нативних трансляцій Steam. Виберіть профіль перед початком трансляції. Замінює клієнт трансляції Steam обгорткою та зберігає оригінал. Закрийте трансляції перед змінами; після оновлення Steam може знадобитися повторне встановлення підміни. Steam Link і трансляції в браузері не підтримуються.",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -3416,7 +3444,11 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "Створити профіль",
+    "PROFILE_CREATE_DESCRIPTION": "Створити профіль із налаштувань вибраного профілю.",
+    "PROFILE_CREATE_BUTTON": "Створити",
+    "PROFILE_CREATE_FAILED": "Не вдалося створити профіль"
   },
   "zh": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -3830,7 +3862,7 @@
     "REMOTE_PLAY_WORKING": "Working…",
     "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
     "REMOTE_PLAY_INSTALL": "Override Remote Play",
-    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_DESCRIPTION": "Steam 原生串流使用所选配置。请在开始串流前选择配置。将 Steam 串流客户端替换为启动包装程序并保留原文件。更改前请关闭串流；Steam 更新后可能需要重新安装覆盖。不支持 Steam Link 和浏览器串流。",
     "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
     "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
     "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -3838,6 +3870,10 @@
     "REMOTE_PLAY_OFF": "Remote Play override not installed",
     "REMOTE_PLAY_STATUS": "Status",
     "REMOTE_PLAY_ATTENTION": "Needs attention",
-    "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+    "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+    "PROFILE_CREATE_TITLE": "创建配置",
+    "PROFILE_CREATE_DESCRIPTION": "根据所选配置的设置创建新配置。",
+    "PROFILE_CREATE_BUTTON": "创建",
+    "PROFILE_CREATE_FAILED": "无法创建配置"
   }
 }

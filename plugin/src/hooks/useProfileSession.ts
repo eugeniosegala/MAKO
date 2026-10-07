@@ -15,8 +15,8 @@ interface ProfileSessionOptions {
  * Coordinates the profile being edited with Decky's running-game state.
  *
  * A live game locks the editor to its resolved profile. After that game exits,
- * the editor returns to Default exactly once; later offline profile selections
- * remain untouched until another game starts.
+ * the editor follows the backend's idle selection exactly once. Native streams
+ * retain their selected profile on exit. Offline choices remain until launch.
  */
 export function useProfileSession({
   isInstalled,
@@ -30,6 +30,9 @@ export function useProfileSession({
     useState<string>(DEFAULT_PROFILE_NAME);
   const editingProfileRef = useRef<string>(DEFAULT_PROFILE_NAME);
   const gameWasRunningRef = useRef(false);
+  const remoteWasRunningRef = useRef(false);
+  const initializedProfileRef = useRef(false);
+  const selectionRevisionRef = useRef(0);
   const [remotePlayRunning, setRemotePlayRunning] = useState(false);
   const lastPowerSource = useRef<string | undefined>(undefined);
   const [powerSource, setPowerSource] = useState<string | undefined>(undefined);
@@ -49,11 +52,16 @@ export function useProfileSession({
       if (syncInFlight) return;
 
       syncInFlight = true;
+      const selectionRevision = selectionRevisionRef.current;
       try {
         const result = await syncCurrentProfile(
           runningApp ? String(runningApp.appid) : undefined,
         );
-        if (!cancelled && result.success) {
+        if (
+          !cancelled &&
+          result.success &&
+          selectionRevision === selectionRevisionRef.current
+        ) {
           const remoteRunning = Boolean(result.remote_play_running);
           const gameIsRunning = Boolean(
             result.game_running && (runningApp || remoteRunning),
@@ -61,9 +69,14 @@ export function useProfileSession({
           setRemotePlayRunning(remoteRunning);
           const nextEditingProfile = gameIsRunning
             ? result.profile_name || DEFAULT_PROFILE_NAME
-            : gameWasRunningRef.current
-              ? DEFAULT_PROFILE_NAME
-              : undefined;
+            : remoteWasRunningRef.current
+              ? result.profile_name || editingProfileRef.current
+              : gameWasRunningRef.current
+                ? result.profile_name || DEFAULT_PROFILE_NAME
+                : !initializedProfileRef.current
+                  ? result.profile_name
+                  : undefined;
+          initializedProfileRef.current = true;
           const editingProfileChanged = Boolean(
             nextEditingProfile &&
             nextEditingProfile !== editingProfileRef.current,
@@ -79,6 +92,7 @@ export function useProfileSession({
             gameIsRunning && !remoteRunning ? runningApp : undefined,
           );
           gameWasRunningRef.current = gameIsRunning;
+          remoteWasRunningRef.current = remoteRunning;
           if (gameIsRunning && editingProfileChanged && nextEditingProfile) {
             editingProfileRef.current = nextEditingProfile;
             setEditingProfile(nextEditingProfile);
@@ -113,6 +127,8 @@ export function useProfileSession({
   }, [loadProfileConfig, syncCurrentProfile]);
 
   const selectEditingProfile = useCallback((profileName: string) => {
+    selectionRevisionRef.current += 1;
+    initializedProfileRef.current = true;
     editingProfileRef.current = profileName;
     setEditingProfile(profileName);
   }, []);

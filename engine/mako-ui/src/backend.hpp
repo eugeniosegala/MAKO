@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
 #include <memory>
 #include <map>
 #include <utility>
@@ -40,6 +41,8 @@ namespace mako::ui {
         Q_PROPERTY(bool separate_power_modes READ getSeparatePowerModes WRITE separatePowerModesUpdated NOTIFY refreshUI)
         Q_PROPERTY(int power_mode READ getPowerMode WRITE powerModeSelected NOTIFY refreshUI)
         Q_PROPERTY(int profile_index READ getProfileIndex WRITE profileSelected NOTIFY refreshUI)
+        Q_PROPERTY(bool can_manage_profile READ canManageProfile NOTIFY refreshUI)
+        Q_PROPERTY(QString profile_operation_error READ profileOperationError NOTIFY refreshUI)
         Q_PROPERTY(QVariantList running_games READ getRunningGames NOTIFY runningGamesChanged)
         Q_PROPERTY(bool scanning_games READ isScanningGames NOTIFY runningGamesChanged)
         Q_PROPERTY(bool capture_failed READ captureFailed NOTIFY runningGamesChanged)
@@ -138,9 +141,13 @@ namespace mako::ui {
         [[nodiscard]] QString remotePlayMessage() const { return m_remote_play_message; }
         Q_INVOKABLE void refreshRemotePlay();
         Q_INVOKABLE void setRemotePlayOverride(bool enabled);
-        Q_INVOKABLE bool editRemotePlayProfile();
         Q_INVOKABLE void refreshRunningGames(bool includeAllApplications = false);
         Q_INVOKABLE bool captureRunningGame(int index, bool createProfile);
+        [[nodiscard]] bool canManageProfile() const {
+            return isValidProfileIndex() && m_profiles.at(static_cast<size_t>(m_profile_index)).name != "mako";
+        }
+        [[nodiscard]] QString profileOperationError() const { return m_profile_operation_error; }
+        Q_INVOKABLE void clearProfileOperationError() { m_profile_operation_error.clear(); emit refreshUI(); }
         Q_INVOKABLE bool openVkBasaltConfig();
         Q_INVOKABLE bool addCustomShader(const QString& path);
         Q_INVOKABLE void refreshCustomShaders();
@@ -542,12 +549,7 @@ namespace mako::ui {
 #undef VALIDATE_AND_GET_PROFILE
 
     setters:
-        void profileSelected(int idx) {
-            this->m_profile_index = idx;
-            this->m_shader_load_error.clear();
-            this->m_power_mode = 0;
-            emit refreshUI();
-        }
+        void profileSelected(int idx);
 
         void activeInSelected(int idx) {
             this->m_active_in_index = idx;
@@ -916,55 +918,9 @@ namespace mako::ui {
             MARK_DIRTY()
         }
 
-        Q_INVOKABLE void createProfile(const QString& name) {
-            if (name.trimmed().isEmpty()) return;
-
-            ls::GameConf conf;
-            conf.name = name.toStdString();
-            this->m_profiles.push_back(std::move(conf));
-            this->m_vkbasalt_profiles.emplace_back();
-            this->m_active_in_list_models.push_back(new QStringListModel({}, this));
-
-            auto& model = this->m_profile_list_model;
-            model->insertRow(model->rowCount());
-            model->setData(model->index(model->rowCount() - 1), name);
-
-            this->m_profile_index = static_cast<int>(this->m_profiles.size() - 1);
-            this->m_power_mode = 0;
-            MARK_DIRTY()
-        }
-        Q_INVOKABLE void renameProfile(const QString& name) {
-            if (name.trimmed().isEmpty()) return;
-
-            if (!isValidProfileIndex()) return;
-            auto& conf = m_profiles.at(static_cast<size_t>(m_profile_index));
-            renameVkBasaltProfile(conf.name, name.toStdString());
-            conf.name = name.toStdString();
-            auto& model = this->m_profile_list_model;
-            model->setData(model->index(this->m_profile_index), name);
-            MARK_DIRTY()
-        }
-        Q_INVOKABLE void deleteProfile() {
-            if (!isValidProfileIndex())
-                return;
-
-            m_power_mode = 0;
-            deleteVkBasaltProfile(static_cast<size_t>(this->m_profile_index));
-            auto& profiles = this->m_profiles;
-            profiles.erase(profiles.begin() + this->m_profile_index);
-            this->m_vkbasalt_profiles.erase(
-                this->m_vkbasalt_profiles.begin() + this->m_profile_index
-            );
-            auto& active_in_models = this->m_active_in_list_models;
-            active_in_models.erase(active_in_models.begin() + this->m_profile_index);
-            auto& model = this->m_profile_list_model;
-            model->removeRow(this->m_profile_index);
-            if (!this->m_profiles.empty())
-                this->m_profile_index = 0;
-            else
-                this->m_profile_index = -1;
-            MARK_DIRTY()
-        }
+        Q_INVOKABLE bool createProfile(const QString& name);
+        Q_INVOKABLE bool renameProfile(const QString& name);
+        Q_INVOKABLE bool deleteProfile();
 
 #undef VALIDATE_AND_GET_PROFILE
 #undef MARK_DIRTY
@@ -1003,7 +959,7 @@ namespace mako::ui {
 
         QStringList m_gpu_list;
 
-        bool savePendingChanges();
+        bool savePendingChanges(bool writeShaderFiles = true);
         std::filesystem::path m_config_path;
         std::filesystem::path m_launch_path;
         std::filesystem::path m_vkbasalt_profile_settings_path;
@@ -1020,11 +976,18 @@ namespace mako::ui {
         bool m_launch_dirty{false};
         bool m_vkbasalt_dirty{false};
         QString m_shader_load_error;
+        QString m_profile_operation_error;
         bool m_profile_metadata_dirty{false};
+
+        bool validateProfileName(const QString& name, bool renaming = false);
+        bool applyProfileChange(const std::function<void()>& change,
+            const std::vector<std::filesystem::path>& additionalPaths = {}, bool rebuildModels = true);
+        void rebuildProfileModels();
 
         void loadVkBasaltProfiles();
         void writeVkBasaltShaderAssets() const;
         void writeVkBasaltProfiles();
+        void writeSelectedVkBasaltConfig() const;
         void writeProfileMetadata() const;
         void renameVkBasaltProfile(
             const std::string& oldName,
@@ -1035,7 +998,7 @@ namespace mako::ui {
             size_t profileIndex
         ) const;
         [[nodiscard]] std::filesystem::path vkBasaltConfigPathForName(
-            const std::string& profileName
+            const std::string& profileName, bool useSteamIdentity = true
         ) const;
     };
 

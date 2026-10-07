@@ -12,6 +12,7 @@ import subprocess
 from typing import Iterator, Sequence, TypedDict
 
 import logging
+from .remote_play_launch import launch_settings, open_regular, selected_profile
 from .managed_files import (
     copy_managed_file_atomically, managed_install_transaction,
     write_managed_text_atomically, sync_managed_directory,
@@ -35,15 +36,12 @@ class RuntimeContextState(TypedDict):
     phase: str
     frame_generation_active: bool
 
-REMOTE_PLAY_PROFILE = "Remote-Play"
-MARKER = b"# MAKO_NATIVE_REMOTE_PLAY_OVERRIDE_V2"
-LEGACY_MARKER = b"# MAKO_NATIVE_REMOTE_PLAY_OVERRIDE_V1"
+MARKER = b"# MAKO_NATIVE_REMOTE_PLAY_OVERRIDE_V3"
 
 
 class RemotePlayOverrideState(TypedDict):
     version: int
     enabled: bool
-    profile: str
     wrapper_sha256: str
     launcher_path: str
     configuration_path: str
@@ -92,7 +90,7 @@ class RemotePlayOverride:
             descriptor = os.open(self.client, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
             with os.fdopen(descriptor, "rb") as stream:
                 header = stream.read(256) if stat.S_ISREG(os.fstat(stream.fileno()).st_mode) else b''
-                return MARKER in header or LEGACY_MARKER in header
+                return MARKER in header
         except OSError:
             return False
 
@@ -120,13 +118,34 @@ class RemotePlayOverride:
             installed = self._installed()
             managed = installed or self.state.exists()
             pids = self.running_pids() if managed else []
+            profile_name = ""
+            if installed:
+                try:
+                    state = self._read_state(update_paths=False)
+                    profile_name = selected_profile(Path(state["configuration_path"]))["name"]
+                except (OSError, ValueError, TypeError, UnicodeError):
+                    pass
+                for pid in pids:
+                    try:
+                        executable = os.readlink(self.proc_root / str(pid) / "exe").removesuffix(" (deleted)")
+                        if executable != str(self.backup.resolve()):
+                            continue
+                        environment = (self.proc_root / str(pid) / "environ").read_bytes().split(b"\0")
+                        launched = next((entry[len(b"MAKO_PROFILE="):].decode() for entry in environment
+                                         if entry.startswith(b"MAKO_PROFILE=")), "")
+                        follows_selection = b"MAKO_FOLLOW_CURRENT_PROFILE=1" in environment
+                        if launched and not (follows_selection and profile_name):
+                            profile_name = launched
+                            break
+                    except (OSError, ValueError, UnicodeError):
+                        continue
             conflict = not installed and (self.backup.exists() or self.checksum.exists())
             return RemotePlayResponse(
                 success=True, error=None,
                 message="Steam client changed or an earlier override backup exists." if conflict else "",
                 installed=installed, managed=managed,
                 available=installed or self._native_client(self.client),
-                running=bool(pids), pids=pids, profile_name=REMOTE_PLAY_PROFILE,
+                running=bool(pids), pids=pids, profile_name=profile_name,
                 frame_generation_active=installed and any(
                     context["pid"] in pids and context["phase"] == "active" and
                     context["frame_generation_active"] for context in contexts
@@ -136,7 +155,7 @@ class RemotePlayOverride:
             return RemotePlayResponse(
                 success=False, error=str(error), message=str(error),
                 installed=False, managed=False, available=False, running=False,
-                pids=[], profile_name=REMOTE_PLAY_PROFILE,
+                pids=[], profile_name="",
                 frame_generation_active=False, conflict=False,
             )
 
@@ -162,24 +181,24 @@ class RemotePlayOverride:
 
     def _read_state(self, *, update_paths: bool = True) -> RemotePlayOverrideState:
         raw = json.loads(self._read_record(self.state))
-        if not isinstance(raw, dict) or type(raw.get("version")) is not int or raw.get("version") not in (1, 2) or raw.get("enabled") is not True or raw.get("profile") != REMOTE_PLAY_PROFILE:
+        if not isinstance(raw, dict) or type(raw.get("version")) is not int or raw.get("version") != 3 or raw.get("enabled") is not True:
             raise ValueError("Invalid Remote Play override state")
         digest = raw.get("wrapper_sha256")
         if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
             raise ValueError("Invalid Remote Play wrapper checksum")
-        stored_runner = raw.get('launcher_path') if raw['version'] == 2 else raw.get('launcher_path', str(self.user_home / '.local/bin/mako-run'))
+        stored_runner = raw.get('launcher_path')
         if not isinstance(stored_runner, str):
             raise ValueError('Invalid Remote Play launcher path')
         runner = Path(stored_runner)
         if not runner.is_absolute() or runner.name not in ('mako-run', 'mako-launch'):
             raise ValueError('Invalid Remote Play launcher path')
-        configuration = raw.get('configuration_path') if raw['version'] == 2 else raw.get('configuration_path', str(self.config_dir / 'conf.toml'))
+        configuration = raw.get('configuration_path')
         if not isinstance(configuration, str) or not Path(configuration).is_absolute():
             raise ValueError('Invalid Remote Play configuration path')
         if update_paths:
             self.config_file_path = Path(configuration)
             self.mako_script_path = runner
-        return RemotePlayOverrideState(version=raw['version'], enabled=True, profile=REMOTE_PLAY_PROFILE,
+        return RemotePlayOverrideState(version=raw['version'], enabled=True,
                                        wrapper_sha256=digest, launcher_path=str(runner), configuration_path=configuration)
 
     @staticmethod
@@ -214,7 +233,7 @@ class RemotePlayOverride:
                 self.mako_script_path = runner
                 expected = hashlib.sha256(self._payload().encode()).hexdigest()
                 if self._digest(self.client) == expected:
-                    return RemotePlayOverrideState(version=2, enabled=True, profile=REMOTE_PLAY_PROFILE,
+                    return RemotePlayOverrideState(version=3, enabled=True,
                                                    wrapper_sha256=expected, launcher_path=str(runner),
                                                    configuration_path=str(self.config_file_path))
             self.mako_script_path = saved_runner
@@ -240,7 +259,8 @@ class RemotePlayOverride:
                 return self._digest(path) in expected
             except (OSError, ValueError):
                 return False
-        paths = [self.client, self.backup, self.checksum, self.state, *extra_paths]
+        paths = [self.client, self.backup, self.checksum, self.state,
+                 self.config_file_path.parent / 'vkbasalt/current-profile.conf', *extra_paths]
         with managed_install_transaction(paths, self.log, rollback_guard=owned):
             yield
 
@@ -322,8 +342,20 @@ class RemotePlayOverride:
                 raise ValueError("Update MAKO Decky before enabling Remote Play, or restore the override and enable it from Qt.")
 
     def _commit_wrapper(self, payload: str, previous_hash: str, permissions: os.stat_result) -> None:
+        profile = selected_profile(self.config_file_path)
+        default_shader = Path(os.environ.get('XDG_CONFIG_HOME') or self.user_home / '.config') / 'vkBasalt/vkBasalt.conf'
+        settings = launch_settings(profile, self.config_file_path, default_shader=default_shader)
+        content = 'effects = none\n'
+        if settings['MAKO_LAUNCH_VKBASALT_CONFIG']:
+            source = Path(settings['MAKO_LAUNCH_VKBASALT_CONFIG'])
+            if source.exists() or source.is_symlink():
+                with open_regular(source) as stream:
+                    content = stream.read().decode('utf-8')
+        write_managed_text_atomically(
+            self.config_file_path.parent / 'vkbasalt/current-profile.conf', content, 0o644,
+            self.log, owner=(permissions.st_uid, permissions.st_gid))
         state = RemotePlayOverrideState(
-            version=2, enabled=True, profile=REMOTE_PLAY_PROFILE,
+            version=3, enabled=True,
             wrapper_sha256=hashlib.sha256(payload.encode()).hexdigest(),
             launcher_path=str(self.mako_script_path),
             configuration_path=str(self.config_file_path),

@@ -6,6 +6,8 @@ This guide defines how a saved profile becomes running Renderer state. [Configur
 
 A setting belongs to the earliest boundary that can safely establish all state it affects.
 
+Native Remote Play follows the ordinary saved `current_profile` selection through the existing configuration watcher when its launcher sets `MAKO_FOLLOW_CURRENT_PROFILE=1`. Saving a clone under a new name changes the runtime profile identity without resetting unchanged live policy. Subsequent edits and power-source changes use the same projection and live-update planner as local games; selecting a new profile does not bypass startup resources, private handoffs, or restart requirements. Ordinary local matching remains unchanged. [Remote Play](../../plugin/docs/REMOTE-PLAY.md) owns selection-following shader cache updates in the editors.
+
 | Boundary | State | Completion |
 | --- | --- | --- |
 | Process start | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, layer membership and order, Gamescope WSI isolation, HDR exposure, Zink, audio compatibility, and the shared FP16 precision choice | Start a new game process |

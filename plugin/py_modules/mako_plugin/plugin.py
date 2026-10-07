@@ -18,7 +18,7 @@ from .installation import InstallationService
 from .dll_detection import DllDetectionService
 from .configuration import ConfigurationService
 from .runtime_state import RuntimeStateService
-from .remote_play import RemotePlayService, REMOTE_PLAY_PROFILE
+from .remote_play import RemotePlayService
 from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
 from .config_schema_generated import ConfigurationPatch
 from .flatpak_service import (
@@ -125,7 +125,7 @@ class Plugin:
             status = self.remote_play_service.get_status()
             if not status["installed"] or not status["running"] or status["conflict"]:
                 return status
-            runtime = self.runtime_state_service.get_status(REMOTE_PLAY_PROFILE)
+            runtime = self.runtime_state_service.get_status(status["profile_name"])
             return self.remote_play_service.get_status(runtime["contexts"])
         return await asyncio.to_thread(read)
 
@@ -140,7 +140,9 @@ class Plugin:
             paths = [configuration.config_file_path, configuration.profile_metadata_path,
                      configuration.wrapper_profile_settings_path, configuration.mako_script_path]
             with remote.transaction(paths):
-                configuration.ensure_remote_play_profile(REMOTE_PLAY_PROFILE)
+                result = configuration.update_mako_script_from_profile_data(configuration._get_profile_data())
+                if not result["success"]:
+                    raise OSError(result.get("error") or "Could not prepare Remote Play launch wrapper")
                 remote.install_locked()
 
     async def install_remote_play_override(self) -> RemotePlayResponse:
@@ -395,8 +397,9 @@ class Plugin:
     async def sync_current_profile(self, app_id: str = "") -> ProfileResponse:
         """Select a live app's saved profile, or restore the default profile."""
         remote = await asyncio.to_thread(self.remote_play_service.get_status)
-        remote_profile = REMOTE_PLAY_PROFILE if remote["installed"] and remote["running"] and not remote["conflict"] else ""
-        return self.configuration_service.sync_current_profile(app_id, remote_profile)
+        remote_enabled = remote["installed"] and not remote["conflict"]
+        remote_running = remote_enabled and remote["running"]
+        return self.configuration_service.sync_current_profile(app_id, remote_running, remote_enabled)
 
     async def update_profile_config(
             self, profile_name: str, config: Dict[str, Any]

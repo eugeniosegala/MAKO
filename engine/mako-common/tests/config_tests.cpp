@@ -97,11 +97,14 @@ namespace {
         game.scaling_enabled = true;
         game.scaling_method = ls::ScalingMethod::Mako;
         fixture.profiles() = {game};
+        fixture.current_profile = game.name;
         fixture.write(path);
         for (const bool installed : {false, true, false}) {
             if (installed) writeText(dll, "synthetic input");
             else std::filesystem::remove(dll);
             ls::ConfigFile parsed(path);
+            expect(parsed.current_profile == game.name,
+                "The editor selection must survive native configuration round trips");
             expect(parsed.global().dll == dll.string() && sameGameConf(parsed.profiles().front(), game),
                 "DLL removal must not invalidate or reset open-scaling profiles");
             parsed.write(path);
@@ -659,6 +662,13 @@ scaling_sharpness = 0.5
             environmentIdentification.override.value() == "captured",
         "MAKO_PROFILE must populate the explicit profile override");
     unsetenv("MAKO_PROFILE");
+    setenv("MAKO_FOLLOW_CURRENT_PROFILE", "1", 1);
+    expect(ls::identify().follow_current_profile,
+        "The streaming launcher must opt in to the saved selection");
+    setenv("MAKO_FOLLOW_CURRENT_PROFILE", "0", 1);
+    expect(!ls::identify().follow_current_profile,
+        "A disabled selection-following flag must preserve normal matching");
+    unsetenv("MAKO_FOLLOW_CURRENT_PROFILE");
 
     ls::Identification identification{
         .fallback = "mako",
@@ -688,6 +698,42 @@ scaling_sharpness = 0.5
             detectedProfile->second.name == "mako",
         "An explicit caller profile must remain a hard override");
 
+    detectionConfig.current_profile = "captured";
+    identification.follow_current_profile = true;
+    detectedProfile = ls::findProfile(detectionConfig, identification);
+    expect(detectedProfile && detectedProfile->second.name == "captured",
+        "Opted-in clients must follow the current selection over their startup override");
+    detectionConfig.current_profile = "missing";
+    detectedProfile = ls::findProfile(detectionConfig, identification);
+    expect(detectedProfile && detectedProfile->second.name == "mako",
+        "An unavailable current selection must retain the startup profile");
+    detectionConfig.current_profile = "captured";
+    identification.follow_current_profile = false;
+    expect(ls::findProfile(detectionConfig, identification)->second.name == "mako",
+        "Ordinary explicit launch profiles must ignore editor selection changes");
+
+    const auto selectionPath = directory / "selection-following.toml";
+    detectionConfig.current_profile = "mako";
+    detectionConfig.write(selectionPath);
+    std::optional<std::string> previousConfiguration;
+    if (const auto* previous = std::getenv("MAKO_CONFIG"))
+        previousConfiguration = previous;
+    setenv("MAKO_CONFIG", selectionPath.c_str(), 1);
+    ls::WatchedConfig selectionWatcher(directory / "unused-power-supplies");
+    auto streamIdentity = identification;
+    streamIdentity.follow_current_profile = true;
+    const auto selectionTimestamp = std::filesystem::last_write_time(selectionPath);
+    detectionConfig.current_profile = "captured";
+    detectionConfig.write(selectionPath);
+    std::filesystem::last_write_time(selectionPath, selectionTimestamp + std::chrono::seconds(1));
+    expect(selectionWatcher.update() &&
+            ls::findProfile(selectionWatcher.get(), streamIdentity)->second.name == "captured",
+        "The existing watcher must follow selection-only edits with unchanged profile settings");
+    if (previousConfiguration)
+        setenv("MAKO_CONFIG", previousConfiguration->c_str(), 1);
+    else
+        unsetenv("MAKO_CONFIG");
+
     // Launchers inherit exactly the same profile environment as their game.
     // Neither that environment nor an older captured launcher alias may make
     // MAKO change the launcher's Vulkan device or presentation resources.
@@ -709,6 +755,7 @@ scaling_sharpness = 0.5
             .executable = "/proton/files/bin/wine64-preloader",
             .wine_executable = std::string("C:\\Launcher\\") + launcher,
             .process_name = "GameThread",
+            .follow_current_profile = true,
         };
         expect(!ls::findProfile(detectionConfig, launcherIdentification),
             "An excluded launcher must stay native despite an inherited override");

@@ -1,6 +1,6 @@
 """Decky adapter for the shared native Remote Play owner."""
 from .base_service import BaseService
-from .remote_play_core import RemotePlayOverride, REMOTE_PLAY_PROFILE, MARKER
+from .remote_play_core import RemotePlayOverride, MARKER
 from .types import RemotePlayResponse, RuntimeContextState
 from typing import Sequence
 

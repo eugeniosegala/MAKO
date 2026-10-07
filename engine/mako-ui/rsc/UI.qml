@@ -9,6 +9,15 @@ import "widgets"
 
 ApplicationWindow {
     property var t: localization.strings
+    property string profileErrorText: {
+        switch (backend.profile_operation_error) {
+            case "invalid_name": return t.profileNameInvalid;
+            case "duplicate_name": return t.profileNameExists;
+            case "default_protected": return t.defaultProfileProtected;
+            case "save_failed": return t.profileSaveFailed;
+            default: return "";
+        }
+    }
 
     title: t.makoRendererConfig
     width: 900
@@ -71,8 +80,16 @@ ApplicationWindow {
 
     CenteredDialog {
         id: create_dialog
+        objectName: "create_profile_dialog"
         name: t.createNewProfile
-        onConfirm: backend.createProfile(create_name.text)
+        acceptOnConfirm: false
+        onConfirm: if (backend.createProfile(create_name.text)) close()
+
+        Label {
+            Layout.fillWidth: true
+            text: t.createProfileDesc
+            wrapMode: Text.WordWrap
+        }
 
         TextField {
             id: create_name
@@ -80,12 +97,19 @@ ApplicationWindow {
             placeholderText: t.chooseProfileName
             focus: true
         }
+        Label {
+            Layout.fillWidth: true
+            text: profileErrorText
+            visible: text.length > 0
+            wrapMode: Text.WordWrap
+        }
     }
 
     CenteredDialog {
         id: rename_dialog
         name: t.renameProfile
-        onConfirm: backend.renameProfile(rename_name.text)
+        acceptOnConfirm: false
+        onConfirm: if (backend.renameProfile(rename_name.text)) close()
 
         TextField {
             id: rename_name
@@ -93,17 +117,30 @@ ApplicationWindow {
             placeholderText: t.chooseProfileName
             focus: true
         }
+        Label {
+            Layout.fillWidth: true
+            text: profileErrorText
+            visible: text.length > 0
+            wrapMode: Text.WordWrap
+        }
     }
 
     CenteredDialog {
         id: delete_dialog
         name: t.confirmDeletion
-        onConfirm: backend.deleteProfile()
+        acceptOnConfirm: false
+        onConfirm: if (backend.deleteProfile()) close()
 
         Label {
             Layout.fillWidth: true
             text: t.confirmDeleteMsg
             horizontalAlignment: Text.AlignHCenter
+        }
+        Label {
+            Layout.fillWidth: true
+            text: profileErrorText
+            visible: text.length > 0
+            wrapMode: Text.WordWrap
         }
     }
 
@@ -175,6 +212,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 text: t.createNewProfile
                 onClicked: {
+                    backend.clearProfileOperationError();
                     create_name.text = "";
                     create_dialog.open();
                 }
@@ -182,7 +220,9 @@ ApplicationWindow {
             Button {
                 Layout.fillWidth: true
                 text: t.renameProfile
+                enabled: backend.can_manage_profile
                 onClicked: {
+                    backend.clearProfileOperationError();
                     var idx = backend.profiles.index(backend.profile_index, 0);
                     rename_name.text = backend.profiles.data(idx);
                     rename_dialog.open();
@@ -191,9 +231,17 @@ ApplicationWindow {
             Button {
                 Layout.fillWidth: true
                 text: t.deleteProfile
+                enabled: backend.can_manage_profile
                 onClicked: {
+                    backend.clearProfileOperationError();
                     delete_dialog.open();
                 }
+            }
+            Label {
+                Layout.fillWidth: true
+                text: profileErrorText
+                visible: text.length > 0 && !create_dialog.visible && !rename_dialog.visible && !delete_dialog.visible
+                wrapMode: Text.WordWrap
             }
         }
 
@@ -1073,13 +1121,6 @@ ApplicationWindow {
                             enabled: !backend.remote_play_busy && !backend.remote_play_running &&
                                      (backend.remote_play_managed || backend.remote_play_available)
                             onClicked: backend.setRemotePlayOverride(!backend.remote_play_managed)
-                        }
-                        ShaderActionButton {
-                            Layout.preferredWidth: 1
-                            text: t.editRemotePlayProfile
-                            Layout.fillHeight: true
-                            enabled: !backend.remote_play_busy
-                            onClicked: backend.editRemotePlayProfile()
                         }
                         ShaderActionButton {
                             Layout.preferredWidth: 1

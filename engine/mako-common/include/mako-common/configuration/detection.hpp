@@ -24,6 +24,8 @@ namespace ls {
         std::optional<std::string> wine_executable;
         /// traditional process name (e.g. GameThread)
         std::string process_name;
+        /// opt in to the editor's saved selection on configuration reload
+        bool follow_current_profile = false;
     };
 
     /// enum describing which identification method was used

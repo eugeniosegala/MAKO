@@ -410,7 +410,7 @@
   "REMOTE_PLAY_WORKING": "Working…",
   "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
   "REMOTE_PLAY_INSTALL": "Override Remote Play",
-  "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+  "REMOTE_PLAY_DESCRIPTION": "Використовує вибраний профіль для нативних трансляцій Steam. Виберіть профіль перед початком трансляції. Замінює клієнт трансляції Steam обгорткою та зберігає оригінал. Закрийте трансляції перед змінами; після оновлення Steam може знадобитися повторне встановлення підміни. Steam Link і трансляції в браузері не підтримуються.",
   "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
   "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
   "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
@@ -418,5 +418,9 @@
   "REMOTE_PLAY_OFF": "Remote Play override not installed",
   "REMOTE_PLAY_STATUS": "Status",
   "REMOTE_PLAY_ATTENTION": "Needs attention",
-  "REMOTE_PLAY_CHECKING": "Checking Remote Play…"
+  "REMOTE_PLAY_CHECKING": "Checking Remote Play…",
+  "PROFILE_CREATE_TITLE": "Створити профіль",
+  "PROFILE_CREATE_DESCRIPTION": "Створити профіль із налаштувань вибраного профілю.",
+  "PROFILE_CREATE_BUTTON": "Створити",
+  "PROFILE_CREATE_FAILED": "Не вдалося створити профіль"
 }

@@ -89,12 +89,11 @@ void testRunningGameCapture() {
     qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launcher.conf").toUtf8());
     qputenv("MAKO_PROFILE", "must-not-leak-into-capture");
     qunsetenv("MAKO_ENV");
+    writeFixture(directory.filePath("conf.toml"), "version=2\n");
     const auto identity = ls::identifyProcess((proc + "/102").toStdString());
     require(!identity.override && !identity.fallback, "capture inherited the UI environment");
     {
         mako::ui::Backend backend(proc.toStdString());
-        while (backend.isValidProfileIndex())
-            backend.deleteProfile();
         refreshGames(backend);
         require(!backend.captureRunningGame(-1, true) && !backend.captureRunningGame(99, true),
             "invalid selection must not create a profile");
@@ -116,7 +115,7 @@ void testRunningGameCapture() {
             "an existing match must be opened instead of creating an ambiguous match");
         backend.createProfile("ActualGame");
         require(backend.captureRunningGame(0, true), "capture with a name collision failed");
-        require(backend.calculateProfileListModel()->stringList().last() == "ActualGame (2)",
+        require(backend.calculateProfileListModel()->stringList().last() == "ActualGame-2",
             "capture did not create a unique profile name");
 
         std::filesystem::remove((proc + "/101/exe").toStdString());
@@ -140,9 +139,8 @@ void testRunningGameCapture() {
     require(matched && matched->second.name == "Native Game",
         "the Renderer cannot activate the profile produced by capture");
     {
+        writeFixture(directory.filePath("conf.toml"), "version=2\n");
         mako::ui::Backend backend(proc.toStdString());
-        while (backend.isValidProfileIndex())
-            backend.deleteProfile();
         backend.createProfile("Manual path match");
         // Match the full registered path, preserving Renderer suffix semantics.
         backend.addActiveIn("UplayWebCore.exe/ActualGame");
