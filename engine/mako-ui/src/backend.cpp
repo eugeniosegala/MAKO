@@ -439,11 +439,29 @@ bool Backend::addCustomShader(const QString& value) {
 
 void Backend::refreshCustomShaders() {
     if (!isValidProfileIndex()) return;
-    this->savePendingChanges();
     try {
+        if (!this->savePendingChanges())
+            throw std::runtime_error("unable to save pending settings; shaders were not reloaded");
+        const auto path = vkBasaltConfigPath(static_cast<size_t>(this->m_profile_index));
+        const auto original = ls::readVkBasaltConfiguration(path);
+        const auto content = ls::reloadVkBasaltConfiguration(original);
         auto& settings = this->m_vkbasalt_profiles.at(static_cast<size_t>(this->m_profile_index));
-        settings.shader = ls::vkBasaltShaderSelection(ls::readVkBasaltConfiguration(
-            vkBasaltConfigPath(static_cast<size_t>(this->m_profile_index))), settings);
+        const auto previous = settings;
+        ls::writeVkBasaltConfiguration(path, content);
+        try {
+            settings.shader = ls::vkBasaltShaderSelection(content, settings);
+            this->m_vkbasalt_dirty = true;
+            if (!this->savePendingChanges())
+                throw std::runtime_error("unable to persist reloaded shader settings");
+        } catch (...) {
+            settings = previous;
+            try {
+                ls::writeVkBasaltConfiguration(path, original);
+            } catch (const std::exception& error) {
+                std::cerr << "MAKO Renderer: unable to restore shader reload: " << error.what() << '\n';
+            }
+            throw;
+        }
         this->m_shader_load_error.clear();
     } catch (const std::exception& error) {
         this->m_shader_load_error = QString::fromUtf8(error.what());

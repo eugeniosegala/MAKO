@@ -397,7 +397,7 @@ export function ShadersConfigurationGroup({
                 <MakoInlineTip tone="info">
                   {t(
                     "CONFIG_VKBASALT_CUSTOM_HELP",
-                    "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Selections apply live when Shaders was enabled at launch.",
+                    "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh discovers entries and reloads edited source, includes, and textures. Changes apply live when Shaders was enabled at launch.",
                   )}
                 </MakoInlineTip>
               </MakoInfo>

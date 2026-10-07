@@ -34,6 +34,7 @@ namespace ls {
     [[nodiscard]] std::string vkBasaltShaderSelection(std::string_view content, const VkBasaltConf& settings);
     [[nodiscard]] std::string readVkBasaltConfiguration(const std::filesystem::path& path);
     [[nodiscard]] VkBasaltCustomShader addVkBasaltCustomShader(const std::filesystem::path& configPath, const std::filesystem::path& shaderPath);
+    [[nodiscard]] std::string reloadVkBasaltConfiguration(std::string_view content);
     [[nodiscard]] std::string removeVkBasaltCustomShaders(std::string_view content, const std::vector<std::string>& shaderIds);
 
     // Atomic replacement for explicit profile edits and their rollback.

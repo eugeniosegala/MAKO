@@ -70,6 +70,36 @@ class GameProfileTests(unittest.TestCase):
         )
         self.service._save_profile_data(self.profile_data)
 
+    def test_refresh_reloads_shader_files_without_changing_profile_or_selection(self):
+        from py_modules.mako_plugin import profile_storage
+        path = self.service._vkbasalt_config_path("mako")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        content = 'effects = Tone:cas\nTone = /tmp/tone.fx\n# includes\nreshadeIncludePath = /tmp/include\n'
+        path.write_text(content)
+        before = self.service.config_file_path.read_bytes()
+        result = self.service.reload_profile_shaders("mako")
+        self.assertTrue(result["success"], result)
+        self.assertIn("makoReloadGeneration = 1\n", path.read_text())
+        self.assertIn("Tone = /tmp/tone.fx\n", path.read_text())
+        self.assertIn("# includes\nreshadeIncludePath = /tmp/include\n", path.read_text())
+        self.assertEqual(result["config"]["vkbasalt_shader"], "custom/Tone")
+        self.assertTrue(self.service.reload_profile_shaders("mako")["success"])
+        self.assertIn("makoReloadGeneration = 2\n", path.read_text())
+        self.assertEqual(self.service.config_file_path.read_bytes(), before)
+        self.assertFalse(self.service.reload_profile_shaders("missing")["success"])
+        for raw, expected in [("4\nmakoReloadGeneration = 9", "10"),
+                              ("18446744073709551615", "0"),
+                              ("18446744073709551616", "1"), ("invalid", "1")]:
+            self.assertEqual(profile_storage.reload_vkbasalt_content(f"makoReloadGeneration = {raw}\n"),
+                             f"makoReloadGeneration = {expected}\n")
+        self.assertEqual(profile_storage.custom_shader_effects('makoReloadGeneration = /tmp/evil.fx\n'), [])
+        with patch.object(configuration_module, "write_managed_text_atomically", side_effect=OSError("write failed")):
+            self.assertFalse(self.service.reload_profile_shaders("mako")["success"])
+        original = path.read_bytes()
+        with patch.object(self.service, "_update_profile_config_fields", return_value={"success": False, "error": "sidecar failed"}):
+            self.assertFalse(self.service.reload_profile_shaders("mako")["success"])
+        self.assertEqual(path.read_bytes(), original)
+
     def test_delete_selected_custom_shaders_preserves_sources_and_other_profiles(self):
         source = Path(self.temp_dir.name) / "tone.fx"
         source.write_text("// user source", encoding="utf-8")

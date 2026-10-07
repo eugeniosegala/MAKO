@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   updateProfileConfigFields: vi.fn(),
   syncCurrentProfile: vi.fn(),
   deleteProfileShaders: vi.fn(),
+  reloadProfileShaders: vi.fn(),
 }));
 function pass({ children }: { children: React.ReactNode }) {
   return <div>{children}</div>;
@@ -39,6 +40,7 @@ vi.mock("../../src/api/makoApi", () => ({
   getMakoConfig: async () => ({ success: true, config: getDefaults() }),
   getProfileConfig: mocks.getProfileConfig,
   deleteProfileShaders: mocks.deleteProfileShaders,
+  reloadProfileShaders: mocks.reloadProfileShaders,
 }));
 vi.mock("../../src/hooks/useMakoHooks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/hooks/useMakoHooks")>()),
@@ -120,10 +122,12 @@ vi.mock("../../src/components/FeatureSettings", () => ({
     config,
     onConfigChange,
     onDeleteShaders,
+    onRefreshShaders,
   }: {
     config: ReturnType<typeof getDefaults>;
     onConfigChange: (field: string, value: number) => void;
     onDeleteShaders: (ids: string[]) => Promise<void>;
+    onRefreshShaders: () => Promise<void>;
   }) => (
     <>
       <input
@@ -133,6 +137,7 @@ vi.mock("../../src/components/FeatureSettings", () => ({
           onConfigChange("vkbasalt_sharpness", Number(event.target.value))
         }
       />
+      <button onClick={() => void onRefreshShaders()}>Refresh shaders</button>
       <span>Native target: {config.target_fps}</span>
       <button onClick={() => void onDeleteShaders(["custom/Tone"])}>
         Delete custom
@@ -164,6 +169,7 @@ beforeEach(() => {
   mocks.powerSource = "handheld";
   mocks.sharpness = 0.5;
   mocks.saveGate = null;
+  mocks.reloadProfileShaders.mockResolvedValue({ success: true });
   mocks.deleteProfileShaders.mockResolvedValue({ success: true });
   mocks.getProfileConfig.mockImplementation(
     async (_name: string, mode?: string) => ({
@@ -197,6 +203,30 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+test("shader refresh drains saves before requesting a rebuild and preserves the editing power set", async () => {
+  render(<Content />);
+  await act(async () => {});
+  let finishSave!: () => void;
+  mocks.saveGate = new Promise<void>((resolve) => {
+    finishSave = resolve;
+  });
+  fireEvent.change(screen.getByLabelText("Shared shader sharpness"), {
+    target: { value: "0.73" },
+  });
+  fireEvent.click(screen.getByText("Refresh shaders"));
+  await act(async () => {});
+  expect(mocks.reloadProfileShaders).not.toHaveBeenCalled();
+  await act(async () => {
+    finishSave();
+  });
+  expect(mocks.reloadProfileShaders).toHaveBeenCalledWith("mako");
+  expect(mocks.getProfileConfig).toHaveBeenLastCalledWith("mako", "handheld");
+  expect(screen.getByLabelText("Shared shader sharpness")).toHaveProperty(
+    "value",
+    "0.73",
+  );
 });
 
 test("custom shader deletion waits for queued settings and reloads the selected power set", async () => {

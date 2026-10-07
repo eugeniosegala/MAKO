@@ -163,6 +163,10 @@ class ConfigurationService(BaseService):
         )
         self._remove_stale_vkbasalt_profile_configs(expected_profile_configs)
 
+    @property
+    def selected_shader_config_path(self) -> Path:
+        return self.vkbasalt_profile_config_dir / "current-profile.conf"
+
     def _write_vkbasalt_profile_configs(
             self,
             profile_settings: profile_storage.WrapperProfileSettings,
@@ -639,6 +643,32 @@ class ConfigurationService(BaseService):
                     if not result["success"]:
                         raise ValueError(result.get("error") or "Unable to delete custom shaders")
                 return self.get_profile_config(profile_name)
+            except (OSError, ValueError, TypeError) as error:
+                return self._error_response(ConfigurationResponse, str(error), config=None)
+
+    def reload_profile_shaders(self, profile_name: str) -> ConfigurationResponse:
+        """Refresh the catalog and explicitly rebuild the active dependency graph."""
+        with self._configuration_write_lock:
+            try:
+                data = self._get_profile_data()
+                if profile_name not in data["profiles"]:
+                    raise ValueError("Profile does not exist")
+                metadata = self._read_profile_metadata(data)
+                path = self._vkbasalt_config_path(profile_name, metadata)
+                content = self._profile_shader_content(profile_name, metadata)
+                paths = [self.config_file_path, self.wrapper_profile_settings_path,
+                         self.mako_script_path, self.selected_shader_config_path, *(
+                             self._vkbasalt_config_path(name, metadata)
+                             for name in data["profiles"]
+                         )]
+                with managed_install_transaction(paths, self.log):
+                    write_managed_text_atomically(path, profile_storage.reload_vkbasalt_content(content), 0o644, self.log)
+                    # Reuse canonical persistence so every launch-time projection
+                    # receives the generation, including selection-following streams.
+                    result = self._update_profile_config_fields(profile_name, {})
+                    if not result["success"]:
+                        raise ValueError(result.get("error") or "Unable to reload shaders")
+                return result
             except (OSError, ValueError, TypeError) as error:
                 return self._error_response(ConfigurationResponse, str(error), config=None)
 

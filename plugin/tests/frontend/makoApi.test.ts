@@ -27,6 +27,7 @@ describe("Decky RPC contract", () => {
       "get_dll_stats",
       "get_mako_config",
       "get_profile_config",
+      "reload_profile_shaders",
       "add_profile_shader",
       "delete_profile_shaders",
       "get_runtime_status",

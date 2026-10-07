@@ -751,6 +751,12 @@ void test_save_lifetime() {
             "Qt custom shader registration must be idempotent");
         backend.vkBasaltShaderUpdated(customId + QStringLiteral(":vibrance"));
         backend.refreshCustomShaders();
+        const auto refreshedContent = ls::readVkBasaltConfiguration(backend.getVkBasaltConfigPath().toStdString());
+        require(refreshedContent.find("makoReloadGeneration = 1") != std::string::npos,
+            "Qt refresh did not request a live source rebuild");
+        backend.refreshCustomShaders();
+        require(ls::readVkBasaltConfiguration(backend.getVkBasaltConfigPath().toStdString()).find("makoReloadGeneration = 2") != std::string::npos,
+            "Qt repeated refresh did not request a new rebuild");
         require(backend.getVkBasaltShader() == customId + QStringLiteral(":vibrance"),
             "refresh discarded a pending custom effect selection");
         backend.vkBasaltShaderUpdated(QStringLiteral("none"));
@@ -803,6 +809,11 @@ void test_save_lifetime() {
         const auto sidecarPath = directory.filePath("profile-wrapper-settings.json");
         require(QFile::rename(sidecarPath, sidecarPath + QStringLiteral(".backup")) &&
                 QDir().mkdir(sidecarPath), "unable to inject sidecar replacement failure");
+        backend.refreshCustomShaders();
+        require(!backend.getShaderLoadError().isEmpty() &&
+                ls::readVkBasaltConfiguration(currentPath) == beforeFailure &&
+                backend.getVkBasaltShader() == customId + QStringLiteral(":vibrance:custom/Missing"),
+            "Qt shader refresh must restore the reload generation and selection after sidecar failure");
         require(!backend.deleteSelectedCustomShaders() && !backend.getShaderLoadError().isEmpty(),
             "Qt shader deletion must report sidecar failure");
         require(ls::readVkBasaltConfiguration(currentPath) == beforeFailure &&
@@ -814,6 +825,9 @@ void test_save_lifetime() {
         QFile configFile(QString::fromStdString(configPath));
         const auto permissions = configFile.permissions();
         require(configFile.setPermissions(QFileDevice::ReadOwner), "unable to inject pending-save failure");
+        backend.refreshCustomShaders();
+        require(!backend.getShaderLoadError().isEmpty() && ls::readVkBasaltConfiguration(currentPath) == beforeFailure,
+            "shader refresh continued after pending settings failed to save");
         require(!backend.deleteSelectedCustomShaders() &&
                 ls::readVkBasaltConfiguration(currentPath) == beforeFailure,
             "shader deletion continued after pending settings failed to save");

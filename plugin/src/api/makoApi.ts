@@ -321,6 +321,9 @@ export const getProfileConfig = callable<[string, string?], ConfigResult>(
   "get_profile_config",
 );
 
+export const reloadProfileShaders = callable<[string], ConfigResult>(
+  "reload_profile_shaders",
+);
 export const addProfileShader = callable<[string, string], ConfigResult>(
   "add_profile_shader",
 );
@@ -343,9 +346,15 @@ export interface RemotePlayResult {
   pids: number[];
   conflict: boolean;
 }
-export const getRemotePlayStatus = callable<[], RemotePlayResult>("get_remote_play_status");
-export const installRemotePlayOverride = callable<[], RemotePlayResult>("install_remote_play_override");
-export const removeRemotePlayOverride = callable<[], RemotePlayResult>("remove_remote_play_override");
+export const getRemotePlayStatus = callable<[], RemotePlayResult>(
+  "get_remote_play_status",
+);
+export const installRemotePlayOverride = callable<[], RemotePlayResult>(
+  "install_remote_play_override",
+);
+export const removeRemotePlayOverride = callable<[], RemotePlayResult>(
+  "remove_remote_play_override",
+);
 export const getConfigSchema = callable<[], ConfigSchemaResult>(
   "get_config_schema",
 );

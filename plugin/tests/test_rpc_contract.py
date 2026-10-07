@@ -118,6 +118,14 @@ class RpcContractTests(unittest.TestCase):
         frontend = (PLUGIN_ROOT / "src/api/makoApi.ts").read_text()
         self.assertIn("checkLosslessScalingDll = callable<[string?], DllDetectionResult>", frontend)
 
+    def test_shader_refresh_uses_the_existing_catalog_response(self):
+        from py_modules.mako_plugin.plugin import Plugin
+        annotations = get_type_hints(Plugin.reload_profile_shaders)
+        self.assertIs(annotations["profile_name"], str)
+        self.assertIs(annotations["return"], ConfigurationResponse)
+        frontend = (PLUGIN_ROOT / "src/api/makoApi.ts").read_text()
+        self.assertIn("reloadProfileShaders = callable<[string], ConfigResult>", frontend)
+
     def test_shader_deletion_uses_typed_ids_and_the_existing_catalog_response(self):
         from py_modules.mako_plugin.plugin import Plugin
         annotations = get_type_hints(Plugin.delete_profile_shaders)

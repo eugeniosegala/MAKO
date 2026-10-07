@@ -184,6 +184,16 @@ int main() {
         "# preserved\r\neffects = \"Tone:makoVibrance:tone:cas:Missing\" # chain\r\n"
         "Tone = /tmp/first.fx\r\nTone = \"/tmp/tone # local.FX\" # last\r\n"
         "tone = /tmp/other.fx\r\nMissing = disabled\r\ncustomOption = keep";
+    const auto reloaded = ls::reloadVkBasaltConfiguration(removalFixture);
+    expect(reloaded == removalFixture + "\nmakoReloadGeneration = 1\n", "refresh changed shader settings");
+    expect(ls::reloadVkBasaltConfiguration(reloaded) == removalFixture + "\nmakoReloadGeneration = 2\n",
+        "repeated refresh did not advance its generation");
+    expect(ls::reloadVkBasaltConfiguration("makoReloadGeneration = 4\nmakoReloadGeneration = 9\n") ==
+        "makoReloadGeneration = 10\n", "refresh did not normalize duplicate generations");
+    expect(ls::reloadVkBasaltConfiguration("makoReloadGeneration = 18446744073709551615\n") ==
+        "makoReloadGeneration = 0\n", "reload generation must wrap without overflow");
+    expect(ls::reloadVkBasaltConfiguration("makoReloadGeneration = invalid\n") ==
+        "makoReloadGeneration = 1\n", "malformed generation must be repaired");
     const auto removed = ls::removeVkBasaltCustomShaders(removalFixture, {"custom/Tone", "custom/Missing"});
     expect(ls::vkBasaltShaderSelection(removalFixture, ls::VkBasaltConf{}) == "custom/Tone:vibrance:custom/tone",
         "legacy custom selection must resolve case-sensitive FX aliases in CRLF files");

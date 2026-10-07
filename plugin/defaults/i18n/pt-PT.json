@@ -405,7 +405,7 @@
   "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
   "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
   "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-  "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Selections apply live when Shaders was enabled at launch.",
+  "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh discovers entries and reloads edited source, includes, and textures. Changes apply live when Shaders was enabled at launch.",
   "REMOTE_PLAY_TITLE": "Remote Play",
   "REMOTE_PLAY_WORKING": "Working…",
   "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",

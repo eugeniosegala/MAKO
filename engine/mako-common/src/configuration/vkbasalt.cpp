@@ -7,6 +7,8 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <charconv>
+#include <cstdint>
 #include <cstdlib>
 #include <fstream>
 #include <iterator>
@@ -188,9 +190,9 @@ std::vector<std::string> selectedEffects(const ls::VkBasaltConf& settings) {
 }
 
 bool customShaderName(const std::string& name) {
-    constexpr std::array<std::string_view, 9> reservedKeys{
+    constexpr std::array<std::string_view, 10> reservedKeys{
         "none", "effects", "reshadeincludepath", "reshadetexturepath",
-        "enableonlaunch", "togglekey", "cassharpness", "dlssharpness", "dlsdenoise"
+        "enableonlaunch", "togglekey", "makoreloadgeneration", "cassharpness", "dlssharpness", "dlsdenoise"
     };
     const auto lowered = lowercase(name);
     if (!customShaderId("custom/" + name) || contains(reservedKeys, lowered) ||
@@ -429,6 +431,30 @@ std::string ls::removeVkBasaltCustomShaders(const std::string_view content,
         result += original;
     }
     return result;
+}
+
+std::string ls::reloadVkBasaltConfiguration(const std::string_view content) {
+    uint64_t generation = 0;
+    static const std::regex assignment(R"(^\s*makoReloadGeneration\s*=\s*(.*)$)", std::regex::icase);
+    std::string result;
+    for (size_t start = 0; start < content.size();) {
+        const auto newline = content.find('\n', start);
+        const auto end = newline == std::string_view::npos ? content.size() : newline + 1;
+        const auto original = content.substr(start, end - start);
+        start = end;
+        std::smatch match;
+        const std::string line = trim(original);
+        if (std::regex_match(line, match, assignment)) {
+            const auto value = trim(match[1].str().substr(0, match[1].str().find('#')));
+            generation = 0;
+            const auto parsed = std::from_chars(value.data(), value.data() + value.size(), generation);
+            if (parsed.ec != std::errc{} || parsed.ptr != value.data() + value.size()) generation = 0;
+        } else {
+            result += original;
+        }
+    }
+    if (!result.empty() && result.back() != '\n') result += '\n';
+    return result + "makoReloadGeneration = " + std::to_string(generation + 1) + "\n";
 }
 
 void ls::writeVkBasaltConfiguration(const std::filesystem::path& path, const std::string_view content) {

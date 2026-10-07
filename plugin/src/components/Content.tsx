@@ -35,7 +35,11 @@ import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
 import { currentRelease } from "virtual:mako-release-info";
 import { MakoButtonTheme, MakoReleaseIdentity } from "./MakoUi";
 import t from "../i18n/i18n";
-import { addProfileShader, deleteProfileShaders } from "../api/makoApi";
+import {
+  addProfileShader,
+  deleteProfileShaders,
+  reloadProfileShaders,
+} from "../api/makoApi";
 
 export function Content() {
   const [profileRevision, setProfileRevision] = useState(0);
@@ -131,6 +135,9 @@ export function Content() {
   const refreshShaders = async () => {
     const profile = editingProfile;
     await flushConfigChanges();
+    const result = await reloadProfileShaders(profile);
+    if (!result.success)
+      throw new Error(result.error || "Unable to reload shaders");
     if (getEditingProfile() === profile) {
       await loadEditorConfig(profile, getEditingPowerMode());
     }

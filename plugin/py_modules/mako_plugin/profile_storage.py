@@ -318,7 +318,7 @@ def _vkbasalt_value(value: str) -> str:
 
 def _is_custom_shader_name(name: str) -> bool:
     return (name.casefold() not in _VKBASALT_CONTROLLED_EFFECTS
-            and name.casefold() not in {"none", "effects", "reshadeincludepath", "reshadetexturepath", "enableonlaunch", "togglekey", "cassharpness", "dlssharpness", "dlsdenoise"}
+            and name.casefold() not in {"none", "effects", "reshadeincludepath", "reshadetexturepath", "enableonlaunch", "togglekey", "makoreloadgeneration", "cassharpness", "dlssharpness", "dlsdenoise"}
             and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,127}", name) is not None)
 
 
@@ -465,6 +465,26 @@ def merge_vkbasalt_config_content(
         if key not in seen:
             merged_lines.append(f"{key} = {value}")
     return "\n".join(merged_lines) + "\n"
+
+def reload_vkbasalt_content(content: str) -> str:
+    """Advance the dependency's explicit reload generation without changing effects."""
+    generation = 0
+    lines: list[str] = []
+    for line in content.splitlines(keepends=True):
+        match = re.match(r"^\s*makoReloadGeneration\s*=\s*(.*)$", line, re.IGNORECASE)
+        if match:
+            value = match.group(1).strip().split("#", 1)[0].strip()
+            generation = int(value) if re.fullmatch(r"[0-9]{1,20}", value) else 0
+        else:
+            lines.append(line)
+    if generation >= (1 << 64):
+        generation = 0
+    generation = (generation + 1) % (1 << 64)
+    result = "".join(lines)
+    if result and not result.endswith("\n"):
+        result += "\n"
+    return result + f"makoReloadGeneration = {generation}\n"
+
 
 def remove_custom_shader_content(content: str, shader_ids: set[str]) -> str:
     """Remove profile references, including duplicates and chain entries."""

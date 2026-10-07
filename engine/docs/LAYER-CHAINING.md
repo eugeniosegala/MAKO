@@ -62,7 +62,7 @@ Change the setting with the game closed, then verify Frame Generation and Scalin
 
 MangoHud and Shaders are mutually exclusive. MangoHud must be installed on the host and continues to read `~/.config/MangoHud/MangoHud.conf`; host MangoHud is not enabled inside Flatpak games.
 
-Shaders use only MAKO's bundled vkBasalt. The compact controls provide sharpening, denoise, medium-quality FXAA or SMAA, and an ordered multi-effect picker. Combining effects increases GPU cost, and **HDR Look (SDR)** remains an SDR effect rather than HDR output. The default profile uses vkBasalt's global file, while saved profiles use isolated files shown in the UI. Advanced edits are preserved; custom chain, path, and option changes apply live while the layer is active. Source/include/texture file edits alone are not watched; reselect the effect to rebuild it.
+Shaders use only MAKO's bundled vkBasalt. The compact controls provide sharpening, denoise, medium-quality FXAA or SMAA, and an ordered multi-effect picker. Combining effects increases GPU cost, and **HDR Look (SDR)** remains an SDR effect rather than HDR output. The default profile uses vkBasalt's global file, while saved profiles use isolated files shown in the UI. Advanced edits are preserved; custom chain, path, and option changes apply live while the layer is active. Source/include/texture file edits alone are not watched; use **Refresh** to reload edited source, includes, and textures.
 
 For Flatpak games, install the matching MAKO extension and prepare the application in **Flatpak Setup**. If an integration does not activate, reinstall MAKO Renderer, update the applicable Flatpak extension, and collect a [MAKO Decky diagnostics report](../../plugin/docs/COLLECT_DIAGNOSTICS.md).
 
