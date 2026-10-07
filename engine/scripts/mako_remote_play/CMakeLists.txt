@@ -37,7 +37,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux" AND CMAKE_SIZEOF_VOID_P EQUAL 8 AND
             ${sdr_test_environment} "MAKO_REMOTE_PLAY_SDR=1"
             "$<TARGET_FILE_DIR:mako-remote-play-sdr-tests>/ordinary-client" native)
         set_tests_properties(remote-play-sdr-child-isolation PROPERTIES LABELS "portable-policy")
-        foreach(phase copy set create actual)
+        foreach(phase lock copy enumerate pointer set create actual)
             add_test(NAME remote-play-sdr-failure-${phase} COMMAND "${CMAKE_COMMAND}" -E env
                 ${sdr_test_environment} "MAKO_REMOTE_PLAY_SDR=1" "MAKO_SDL_FIXTURE_PHASE=${phase}"
                 $<TARGET_FILE:mako-remote-play-sdr-tests> failure)
