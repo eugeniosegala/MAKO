@@ -1121,6 +1121,11 @@ void Instance::closeContext(const Context& context) {
 
 Instance::~Instance() = default;
 
+std::shared_ptr<const vk::DeviceMemoryAccounting>
+Instance::deviceMemoryAccounting() const {
+    return this->m_impl->getVulkan().deviceMemoryAccounting();
+}
+
 // leaking shenanigans
 
 namespace {

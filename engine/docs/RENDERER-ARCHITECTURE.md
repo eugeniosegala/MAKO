@@ -9,6 +9,7 @@ This map identifies code owners and call boundaries. The behavior contracts rema
 | Profile parsing and defaults | `mako-common/src/configuration/` | Converts saved settings into validated Renderer configuration. |
 | Process and Vulkan layer dispatch | `mako-render/src/entrypoint.cpp`, `instance.cpp` | Selects layer roles, devices, profiles, and application-owned Vulkan objects. |
 | Gamescope observations | `mako-render/src/gamescope_hdr_feedback.cpp` and `instance.cpp` | Samples compositor state; a feedback change cannot silently become a profile edit. |
+| Sustained runtime health | `mako-render/src/runtime_health.*`, registered by `instance.cpp` under the existing presentation-diagnostics flag | Samples bounded proc/sysfs fields and canonical atomic memory counters on a worker; no frame requests, Vulkan calls, or recovery transitions. |
 | Fixed and Adaptive decisions | `mako-render/src/adaptive_scheduler.*`, `presentation_policy.hpp`, and `generated_frame_plan.hpp` | Chooses generated work, output timestamps, and pacing ownership before Vulkan submission. |
 | Swapchain state and transitions | `mako-render/src/swapchain/` | Owns the applied profile, private resources, recovery state, and game-owned swapchain boundary. |
 | Spatial reconstruction | `mako-render/src/spatial_scaler.*` and `spatial_scaling_policy.hpp` | Chooses geometry and records private scaling work without changing scheduler evidence. |

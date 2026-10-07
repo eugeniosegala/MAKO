@@ -62,6 +62,9 @@ MAKO Renderer: present diagnostics: operation=application-present-mode context=2
 MAKO Renderer: present diagnostics: operation=application-present-wait waiter=19 pid=4242 device=55 swapchain=1234 api=KHR2 calls=60 successful=59 timeouts=1 errors=0 polls=1 first_present_id=20 last_present_id=79 duration_mean_ms=8.2 duration_max_ms=21.5
 MAKO Renderer: present diagnostics: operation=application-acquire stream=20 pid=4242 device=55 swapchain=1234 api=KHR2 calls=45 entry_interval_samples=45 entry_interval_mean_ms=22.2 entry_interval_max_ms=72.2 duration_mean_ms=1.1 duration_max_ms=50.1 successful=45 timeouts=0 not_ready=0 errors=0 polls=0
 MAKO Renderer: present diagnostics: operation=application-queue-present stream=20 pid=4242 queue=66 swapchain=1234 api=KHR calls=45 entry_interval_samples=45 entry_interval_mean_ms=22.2 entry_interval_max_ms=72.2 duration_mean_ms=8.1 duration_max_ms=10 includes_intentional_pacing=1 configuration_update_samples=45 configuration_update_mean_ms=0.1 configuration_update_max_ms=0.5
+MAKO Renderer: present diagnostics: operation=runtime-health monitor=21 pid=4242 role=frame-generation session_ms=3600000 gpu_render_node=226:128 process_rss_bytes=123456 gpu_busy_percent=95 gpu_temperature_mc=65000 mako_backend_internal_bytes=987654
+MAKO Renderer: present diagnostics: operation=runtime-health-unavailable reason=device-monitor-limit
+MAKO Renderer: present diagnostics: operation=present-phase-summary context=1 pid=4242 tid=4243 sample_end_monotonic_ms=3600000 calls=45 total_mean_ms=2 total_max_ms=4 render_fence_mean_ms=0.2 render_fence_max_ms=1
 MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
 MAKO Renderer: spatial scaling surface bridge: surface=1234; xwayland_server=0; window=5678; transport=wayland; gamescope_wsi=isolated; application_surface=x11; extent_contract=window
 MAKO Renderer: spatial scaling window extent: operation=capability-query; surface=1234; window=5678; previous=1152x720; current=2560x1440; query_generation=3
@@ -107,6 +110,101 @@ unrelated application output
 
 
 class DiagnosticsHelperTests(unittest.TestCase):
+    def test_runtime_health_is_retained_by_every_preset(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = self._fixture_path(Path(temporary_directory))
+            for preset in self._run("--list").stdout.splitlines():
+                with self.subTest(preset=preset):
+                    result = self._run("--log", str(path), preset)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("operation=runtime-health monitor=21", result.stdout)
+                    self.assertIn("session_ms=3600000", result.stdout)
+                    self.assertIn("operation=runtime-health-unavailable", result.stdout)
+                    self.assertIn("operation=present-phase-summary", result.stdout)
+
+    def test_recent_trace_preserves_initial_and_latest_context(self):
+        records = [
+            "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=4.0.0; fingerprint=long-session",
+            "MAKO Renderer: present diagnostics: operation=process-identity pid=42 profile=test",
+            "MAKO Renderer: backend GPU selection: following game device=1002:1435",
+            "MAKO Renderer: present diagnostics: operation=swapchain-context-create context=91 width=1280 height=800",
+            "MAKO Renderer: present diagnostics: operation=runtime-state-applied context=91 effective_frame_generation_enabled=1",
+            "MAKO Renderer: present diagnostics: operation=runtime-health monitor=92 pid=42 session_ms=0 process_rss_bytes=100",
+            "MAKO Renderer: present diagnostics: operation=runtime-state-applied context=91 effective_frame_generation_enabled=0",
+            "MAKO Renderer: present diagnostics: operation=runtime-health monitor=92 pid=42 session_ms=3600000 process_rss_bytes=200",
+        ]
+        trace = [f"MAKO Renderer: present diagnostics: operation=present-phase-summary context=91 frame={index}" for index in range(2000)]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "long.log"
+            path.write_text("\n".join(records + trace + ["unrelated application output"]) + "\n", encoding="utf-8")
+            for preset in self._run("--list").stdout.splitlines():
+                with self.subTest(preset=preset):
+                    result = self._run("--log", str(path), "--lines", "3", preset)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    for record in records:
+                        self.assertEqual(result.stdout.count(record + "\n"), 1)
+                    self.assertEqual(result.stdout.splitlines()[-3:], trace[-3:])
+                    self.assertIn("omitted_trace_lines=", result.stderr)
+                    self.assertIn("earlier_context_records=8", result.stderr)
+                    self.assertNotIn("unrelated application output", result.stdout)
+
+    def test_context_limits_do_not_lose_identity_to_swapchain_or_monitor_churn(self):
+        identity = "mako: render layer active; identity=VK_LAYER_MAKO_render; build=3.3; fingerprint=legacy"
+        records = [identity]
+        for index in range(100):
+            records.append(f"MAKO Renderer: present diagnostics: operation=swapchain-context-create context={index} width=1280")
+        for monitor in range(40):
+            records.extend(f"MAKO Renderer: present diagnostics: operation=runtime-health monitor={monitor} session_ms={stamp}" for stamp in (0, 10000))
+        recent = "MAKO Renderer: present diagnostics: operation=present-phase-summary context=99 frame=9999"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "churn.log"
+            path.write_text("\n".join(records + [recent]) + "\n", encoding="utf-8")
+            result = self._run("--log", str(path), "--lines", "1", "all")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(identity, result.stdout)
+        self.assertIn("monitor=39 session_ms=0", result.stdout)
+        self.assertIn("monitor=39 session_ms=10000", result.stdout)
+        self.assertNotIn("monitor=0 session_ms=", result.stdout)
+        self.assertLessEqual(len(result.stdout.splitlines()), 97)
+        self.assertEqual(result.stdout.splitlines()[-1], recent)
+        self.assertRegex(result.stderr, r"context_keys_evicted=[1-9][0-9]*")
+
+    def test_short_report_does_not_repeat_context_already_in_recent_trace(self):
+        records = [
+            "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=4.0.0",
+            "MAKO Renderer: present diagnostics: operation=runtime-state-applied context=1 effective_frame_generation_enabled=1",
+            "MAKO Renderer: present diagnostics: operation=runtime-health monitor=2 session_ms=0",
+            "MAKO Renderer: present diagnostics: operation=runtime-health monitor=2 session_ms=5000",
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "short.log"
+            path.write_text("\n".join(records) + "\n", encoding="utf-8")
+            result = self._run("--log", str(path), "all")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), records)
+        self.assertIn("earlier_context_records=0", result.stderr)
+
+    def test_context_anchors_isolate_layer_roles_and_processes(self):
+        records = []
+        for role in ("frame-generation", "spatial-scaling"):
+            records.extend(
+                f"MAKO Renderer: present diagnostics: operation=runtime-state-applied context=1 role={role} state_revision={revision}"
+                for revision in (1, 2)
+            )
+            for pid in (41, 42):
+                records.extend(
+                    f"MAKO Renderer: present diagnostics: operation=runtime-health monitor=2 pid={pid} role={role} session_ms={stamp}"
+                    for stamp in (0, 5000)
+                )
+        recent = "MAKO Renderer: present diagnostics: operation=present-phase-summary context=1 frame=100"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "roles.log"
+            path.write_text("\n".join(records + [recent]) + "\n", encoding="utf-8")
+            result = self._run("--log", str(path), "--lines", "1", "all")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), records + [recent])
+        self.assertIn("earlier_context_records=12", result.stderr)
+
     def test_frame_boundaries_are_retained_by_focused_presets(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = self._fixture_path(Path(temporary_directory))

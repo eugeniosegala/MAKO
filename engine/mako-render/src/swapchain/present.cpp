@@ -58,7 +58,11 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->info.incomingPresentMode, nextChain);
         if (this->diagnosticsState.applicationPresentMode != requested) {
             this->diagnosticsState.applicationPresentMode = requested;
-            std::cerr << "MAKO Renderer: present diagnostics: operation=application-present-mode"
+            // Publish a complete record so the background health line cannot
+            // split this startup/live-mode observation between flushed fields.
+            try {
+                std::ostringstream line;
+                line << "MAKO Renderer: present diagnostics: operation=application-present-mode"
                       << " context=" << this->diagnosticsState.contextId
                       << " swapchain=" << swapchain
                       << " requested_present_mode=" << requested.mode
@@ -67,6 +71,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                       << " ordered_transport=" << this->privateOrderedTransport
                       << " bridge=" << static_cast<bool>(this->info.gamescopeScalingSurface)
                       << " action=diagnostic-only\n";
+                std::cerr << line.str();
+            } catch (...) {}
         }
     }
     // Match the immutable create-time choice. Ordered SDR filters Gamescope's

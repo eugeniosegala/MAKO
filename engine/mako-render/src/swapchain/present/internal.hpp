@@ -58,8 +58,6 @@ namespace mako::layer::present_detail {
             ).count();
         };
         const double totalMs = milliseconds(totalDuration);
-        if (totalMs < present_diagnostics::thresholdMilliseconds())
-            return;
 
         const auto attributedDuration =
             phases.renderFence + phases.schedule + phases.sourceCopy +
@@ -68,6 +66,14 @@ namespace mako::layer::present_detail {
         const double unattributedMs = std::max(
             0.0, totalMs - milliseconds(attributedDuration)
         );
+        present_diagnostics::recordPresentPhaseTiming(contextId, frameIndex,
+            sequenceIndex, DiagnosticsClock::now(), {
+                totalMs, milliseconds(phases.renderFence), milliseconds(phases.schedule),
+                milliseconds(phases.sourceCopy), milliseconds(phases.acquire),
+                milliseconds(phases.generatedSubmit), milliseconds(phases.generatedPresent),
+                milliseconds(phases.originalPresent), unattributedMs});
+        if (totalMs < present_diagnostics::thresholdMilliseconds())
+            return;
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=present-breakdown"
                   << " context=" << contextId

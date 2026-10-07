@@ -86,6 +86,8 @@ The layer calls `backend::makeLeaking()` after provisioning Frame Generation to 
 
 ## Reading memory evidence
 
+The diagnostic worker's own collection wall/CPU and previous output wall costs remain visible in each health record. Slow collection/output backs off its polling to 30 seconds without changing game scheduling. CPU-policy and GPU-memory clocks, process storage I/O, and CPU/memory/I/O pressure are observations alongside accounting, not allocation owners. One-second private-present phase windows maintain a small fixed set of statistics on the frame path; they add no GPU queries and complement the existing application-boundary timers. Validate the complete enabled log path with MAKO Gym's paired diagnostics-overhead mode, since background sampling alone does not prove logging is inexpensive.
+
 `DeviceMemoryAccounting` tracks `VkDeviceMemory` allocations made through MAKO's wrappers and image pools. Each `vk::Vulkan` owner has its accounting state; application-device and backend-device records must be read with their device/context scope in mind.
 
 | Counter category | Meaning |
@@ -98,6 +100,8 @@ The layer calls `backend::makeLeaking()` after provisioning Frame Generation to 
 Count each shared payload once when estimating MAKO-owned memory: combine the relevant internal and exported allocations, and report imported mappings separately. Adding imported bytes to the corresponding export double-counts that payload. A pool block counts as one allocation regardless of how many images use it.
 
 These counters do not measure total process RSS, all driver allocations, physical residency, WSI image storage, or exact free GPU memory. Per-field atomic snapshots are observations, not an atomic transaction across every counter; byte and allocation peaks can occur at different times. Context creation deltas are most useful at controlled construction boundaries.
+
+With `MAKO_PRESENT_DIAGNOSTICS=1`, `mako-render/src/runtime_health.*` samples the same shared atomic accounting for the application-facing and private backend devices alongside proc/sysfs health fields every five seconds. `backend::Instance::deviceMemoryAccounting()` exposes only retained read-only accounting, not the backend or Vulkan device. Workers make no Vulkan calls and do not enumerate or lock live contexts. They are registered once per accounting owner after successful swapchain construction, survive swapchain replacement, and are joined before Root's remaining members are destroyed. A retained counter cannot collide with a new device's counter after handle reuse. Registration is capped at four application accounting owners per layer Root; reaching that cap emits one unavailable record. No worker is created with diagnostics disabled. Driver file reads occur off presentation; an outstanding read can delay worker teardown. Every file read is limited to 16 KiB and rejects special files; directory scans and FD enumeration are bounded. Missing measurements are unknown rather than zero, and failed collection/output cannot change frame or recovery policy. Whole-device VRAM/GTT and process RSS remain separate from MAKO-owned allocations; do not add imported mappings, repeated layer records, or shared-memory heap totals together. See the [diagnostics guide](COLLECT_DIAGNOSTICS.md) for units and claim limits.
 
 Existing records include:
 

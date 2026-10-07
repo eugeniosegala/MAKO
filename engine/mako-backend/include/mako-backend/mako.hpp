@@ -13,6 +13,8 @@
 #include <utility>
 #include <vector>
 
+namespace vk { class DeviceMemoryAccounting; }
+
 namespace mako::backend {
 
     /// Encoding of the images exchanged with the frame-generation backend.
@@ -138,6 +140,11 @@ namespace mako::backend {
         /// Return whether the backend device can import and write the packed
         /// RGB10A2 images used by the low-bandwidth HDR10 transport path.
         [[nodiscard]] bool supportsPackedHdr10Transport() const;
+
+        /// Retain read-only atomic memory accounting without retaining or
+        /// calling the private Vulkan device from a diagnostic worker.
+        [[nodiscard]] std::shared_ptr<const vk::DeviceMemoryAccounting>
+        deviceMemoryAccounting() const;
 
         ///
         /// Schedule a new set of generated frames.

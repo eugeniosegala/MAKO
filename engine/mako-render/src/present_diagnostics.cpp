@@ -14,6 +14,30 @@
 #include <unistd.h>
 
 namespace mako::layer::present_diagnostics {
+void recordPresentPhaseTiming(const uint64_t context, const size_t frame,
+        const size_t sequence, const Clock::time_point finished,
+        const std::array<double, 9>& milliseconds) noexcept {
+    try {
+        thread_local PresentPhaseTiming observation;
+        thread_local const auto threadId = gettid();
+        const auto window = observation.observe(context, finished, milliseconds);
+        if (!window) return;
+        constexpr std::array<std::string_view, 9> names{
+            "total", "render_fence", "schedule", "source_copy", "acquire",
+            "generated_submit", "generated_present", "original_present", "unattributed"};
+        std::ostringstream line;
+        line << "MAKO Renderer: present diagnostics: operation=present-phase-summary"
+             << " context=" << context << " pid=" << getpid() << " tid=" << threadId
+             << " sample_end_monotonic_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(finished.time_since_epoch()).count()
+             << " calls=" << window->calls << " frame=" << frame << " sequence=" << sequence;
+        for (size_t index = 0; index < names.size(); ++index)
+            line << ' ' << names[index] << "_mean_ms=" << window->phases[index].mean()
+                 << ' ' << names[index] << "_max_ms=" << window->phases[index].maximum;
+        line << '\n';
+        std::cerr << line.str();
+    } catch (...) {}
+}
+
 void recordApplicationFrameTiming(const ApplicationFrameApi api, const uintptr_t caller,
         const VkSwapchainKHR swapchain, const Clock::time_point started,
         const Clock::time_point finished, const std::optional<VkResult> result,
@@ -21,6 +45,7 @@ void recordApplicationFrameTiming(const ApplicationFrameApi api, const uintptr_t
         const std::optional<Clock::duration> configurationUpdate) {
     thread_local std::array<ApplicationFrameTiming, 3> observations;
     thread_local uint64_t streamId = allocateContextId();
+    thread_local const auto threadId = gettid();
     const auto window = observations.at(static_cast<size_t>(api)).observe(
         caller, swapchain, started, finished, result, timeout, configurationUpdate);
     if (!window)
@@ -30,6 +55,8 @@ void recordApplicationFrameTiming(const ApplicationFrameApi api, const uintptr_t
     line << "MAKO Renderer: present diagnostics: operation="
          << (present ? "application-queue-present" : "application-acquire")
          << " stream=" << streamId << " pid=" << getpid()
+         << " tid=" << threadId
+         << " sample_end_monotonic_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(finished.time_since_epoch()).count()
          << (present ? " queue=" : " device=") << reinterpret_cast<void*>(caller)
          << " swapchain=" << swapchain
          << " api=" << (present ? "KHR" : api == ApplicationFrameApi::AcquireKhr ? "KHR" : "KHR2")
@@ -118,6 +145,7 @@ void recordApplicationPresentWait(const VkDevice device, const VkSwapchainKHR sw
         const Clock::time_point finished) {
     thread_local ApplicationPresentWait observations;
     thread_local uint64_t waiterId = allocateContextId();
+    thread_local const auto threadId = gettid();
     const auto window = observations.observe(device, swapchain, api,
         presentId, timeout, result, started, finished);
     if (!window)
@@ -125,6 +153,8 @@ void recordApplicationPresentWait(const VkDevice device, const VkSwapchainKHR sw
     std::ostringstream line;
     line << "MAKO Renderer: present diagnostics: operation=application-present-wait"
          << " waiter=" << waiterId << " pid=" << getpid()
+         << " tid=" << threadId
+         << " sample_end_monotonic_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(finished.time_since_epoch()).count()
          << " device=" << device << " swapchain=" << swapchain
          << " api=" << (api == PresentWaitApi::Khr ? "KHR" : "KHR2")
          << " calls=" << window->calls << " successful=" << window->successful

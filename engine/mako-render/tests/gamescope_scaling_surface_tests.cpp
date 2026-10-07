@@ -281,6 +281,20 @@ int main() {
     }
     expect(forwardedWaits == 3, "wait diagnostics retried or skipped an application wait");
     using present_diagnostics::ApplicationFrameTiming;
+    present_diagnostics::PresentPhaseTiming phaseTiming;
+    const std::array<double, 9> healthyPhases{2, .2, .3, .4, .1, .2, .3, .4, .1};
+    auto slowerPhases = healthyPhases;
+    slowerPhases[0] = 4;
+    slowerPhases[1] = 1;
+    expect(!phaseTiming.observe(1, start, healthyPhases), "private phase window emitted early");
+    const auto phaseWindow = phaseTiming.observe(1, start + 1s, slowerPhases);
+    expect(phaseWindow && phaseWindow->calls == 2 &&
+        phaseWindow->phases[0].mean() == 3 && phaseWindow->phases[1].maximum == 1,
+        "private phase summary lost sub-threshold healthy work or wait growth");
+    expect(!phaseTiming.observe(2, start + 2s, healthyPhases), "private phase mixed contexts");
+    const auto afterLongGap = phaseTiming.observe(2, start + 2h, healthyPhases);
+    expect(afterLongGap && afterLongGap->calls == 2 && afterLongGap->phases[0].mean() == 2,
+        "private phase window accumulated stale samples across a long session");
     using present_diagnostics::ApplicationFrameApi;
     ApplicationFrameTiming frameCalls;
     expect(!frameCalls.observe(1, {}, start, start + 50ms, VK_TIMEOUT, 0),

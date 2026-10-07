@@ -39,7 +39,8 @@ Options:
   --log PATH       Use PATH as the latest-session log instead of auto-selection
   --session NAME   Select latest, previous, oldest, previous-two, or all
                    (default: latest)
-  --lines N        Return at most the last N matching lines per session (default: 800)
+  --lines N        Return the last N matching trace lines per session (default: 800),
+                   plus up to 96 earlier identity/state/health context records
   --list           List presets
   -h, --help       Show this help
 
@@ -234,6 +235,9 @@ spatial_scaling_record="$renderer_prefix (spatial scaling|live spatial scaling c
 add_pattern "$spatial_scaling_record"
 live_recreation_record="$renderer_prefix present diagnostics: operation=(generated-present-recreation-drain|original-present-recreation-propagate|swapchain-recreation-observed|swapchain-create-observed|replacement-wsi-prime|replacement-backend-stabilization)"
 add_pattern "$live_recreation_record"
+# Periodic health and collection failures are useful for every failure mode,
+# including memory/thermal degradation outside frame-generation presets.
+add_pattern "$renderer_prefix present diagnostics: operation=(runtime-health|present-phase-summary)"
 
 for preset in "${presets[@]}"; do
   case "$preset" in
@@ -305,10 +309,106 @@ for preset in "${presets[@]}"; do
   esac
 done
 
+# Keep report context separate from the recent trace budget. Collection runs
+# after gameplay; this bounded AWK state adds no Renderer sampling or logging.
+# Independent limits stop frequent swapchain replacement from evicting build
+# identity or the first health sample of a still-active monitor.
+collect_context() {
+  awk -v renderer="$renderer_prefix" -v pattern="$pattern" -v recent="$line_count" '
+    function field(name,    index_, value, prefix) {
+      prefix = name "="
+      for (index_ = 1; index_ <= NF; ++index_)
+        if (index($index_, prefix) == 1) {
+          value = substr($index_, length(prefix) + 1)
+          sub(/[;,]$/, "", value)
+        }
+      return value
+    }
+    function remember(group, id, first,    key, candidate, victim) {
+      key = group SUBSEP id
+      if (!(key in records) && counts[group] == limits[group]) {
+        victim = ""
+        for (candidate in records)
+          if (groups[candidate] == group &&
+              (victim == "" || touched[candidate] < touched[victim]))
+            victim = candidate
+        delete records[victim]; delete origins[victim]; delete positions[victim]
+        delete touched[victim]; delete groups[victim]
+        --counts[group]; ++evicted
+      }
+      if (!(key in records)) { ++counts[group]; groups[key] = group }
+      if (!first || !(key in records)) {
+        records[key] = $0
+        origins[key] = NR
+        positions[key] = matches ? matched : 0
+      }
+      touched[key] = ++sequence
+    }
+    BEGIN { limits["identity"] = 32; limits["state"] = 32; limits["health"] = 32 }
+    {
+      matches = ($0 ~ pattern)
+      if (matches) ++matched
+      if ($0 !~ renderer) next
+      if ($0 ~ renderer " (render layer active;|backend GPU selection:)" ||
+          (matches && $0 ~ renderer " swapchain colour pipeline:")) {
+        remember("identity", $0, 1)
+        next
+      }
+      if ($0 !~ renderer " present diagnostics: operation=(process-identity|swapchain-context-create|runtime-state-applied|runtime-health)") next
+      operation = field("operation")
+      if (operation == "process-identity")
+        remember("identity", "process:" field("pid") ":" field("role"), 0)
+      else if (operation == "runtime-health-unavailable")
+        remember("identity", $0, 1)
+      else if (operation == "runtime-health" && field("monitor") != "") {
+        owner = field("pid") ":" field("role") ":" field("monitor")
+        remember("health", "first:" owner, 1)
+        remember("health", "latest:" owner, 0)
+      } else if (operation == "swapchain-context-create" || operation == "runtime-state-applied") {
+        owner = field("context")
+        if (owner == "") owner = $0
+        owner = field("role") ":" owner
+        remember("state", "first:" operation ":" owner, 1)
+        remember("state", "latest:" operation ":" owner, 0)
+      }
+    }
+    END {
+      cutoff = matched - recent
+      if (cutoff < 0) cutoff = 0
+      for (key in records)
+        if (positions[key] > cutoff) in_recent[records[key]] = 1
+      for (key in records)
+        if (records[key] in in_recent) delete records[key]
+      # Collapse first/latest snapshots of an unchanged record, keeping order.
+      for (key in records)
+        for (other in records)
+          if (key != other && records[key] == records[other] &&
+              (origins[key] > origins[other] ||
+               (origins[key] == origins[other] && key > other))) {
+            delete records[key]
+            break
+          }
+      retained = 0
+      for (key in records) ++retained
+      print "collection: matched_trace_lines=" matched + 0 "; omitted_trace_lines=" cutoff "; earlier_context_records=" retained "; context_limit=96; context_keys_evicted=" evicted + 0 > "/dev/stderr"
+      print "MAKO Renderer diagnostics context: earlier source records; recent trace follows" > "/dev/stderr"
+      while (retained-- > 0) {
+        next_key = ""
+        for (key in records)
+          if (next_key == "" || origins[key] < origins[next_key]) next_key = key
+        print records[next_key]
+        delete records[next_key]
+      }
+    }
+  ' "$1"
+}
+
 for index in "${!log_paths[@]}"; do
   selected_log_path="${log_paths[$index]}"
   selected_session="${session_labels[$index]}"
   echo "MAKO Renderer diagnostics source: $selected_log_path" >&2
   echo "session: $selected_session; retained sessions: $retained_session_count; presets: ${presets[*]}; last matching lines: $line_count" >&2
+  collect_context "$selected_log_path"
+  echo "MAKO Renderer diagnostics recent trace:" >&2
   { grep -aE "$pattern" "$selected_log_path" || true; } | tail -n "$line_count"
 done

@@ -9,6 +9,7 @@
 #include "mako-common/vulkan/vulkan.hpp"
 #include "gamescope_hdr_feedback.hpp"
 #include "runtime_transition.hpp"
+#include "runtime_health.hpp"
 #include "spatial_scaling_policy.hpp"
 #include "swapchain/swapchain.hpp"
 
@@ -176,6 +177,7 @@ namespace mako::layer {
         /// @param swapchain swapchain handle
         void removeSwapchainContext(VkSwapchainKHR swapchain);
     private:
+        void startRuntimeHealth(const vk::Vulkan& vk) noexcept;
         void publishSurfaceScalingPolicy() noexcept;
         [[nodiscard]] SpatialScalingPolicySnapshot
         surfaceScalingPolicySnapshot() const noexcept;
@@ -214,6 +216,11 @@ namespace mako::layer {
         std::mutex surfaceScalingPolicyPublishMutex;
         std::atomic<uint64_t> surfaceScalingPolicySequence{0};
         std::atomic<uint64_t> surfaceScalingPolicy{0};
+        bool healthMonitorLimitReported{false};
+        // Destroy workers first. Counter keys stay alive in their worker, so
+        // recreated devices cannot reuse a stale monitor/GPU association.
+        std::unordered_map<const vk::DeviceMemoryAccounting*,
+            std::unique_ptr<present_diagnostics::RuntimeHealthMonitor>> healthMonitors;
     };
 
 }

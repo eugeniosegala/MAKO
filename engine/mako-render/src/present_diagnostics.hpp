@@ -6,6 +6,7 @@
 #include "bridge_present_timing.hpp"
 
 #include <chrono>
+#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -23,6 +24,40 @@ namespace mako::layer::present_diagnostics {
     /// Return the process-start slow-operation threshold in milliseconds.
     [[nodiscard]] double thresholdMilliseconds();
     [[nodiscard]] Clock::time_point start();
+
+    /// Fixed-size private-present CPU windows, including healthy sub-threshold
+    /// work. Index order is total, fence, schedule, copy, acquire, generated
+    /// submit, generated present, original present, unattributed.
+    class PresentPhaseTiming {
+    public:
+        struct Window {
+            size_t calls{};
+            std::array<BridgePresentTiming::Samples, 9> phases;
+        };
+        std::optional<Window> observe(uint64_t context, Clock::time_point finished,
+                const std::array<double, 9>& milliseconds) {
+            if (!started || context != owner) {
+                owner = context;
+                started = finished;
+                window = {};
+            }
+            ++window.calls;
+            for (size_t index = 0; index < milliseconds.size(); ++index)
+                window.phases[index].add(milliseconds[index]);
+            if (finished - *started < std::chrono::seconds(1))
+                return {};
+            const auto completed = window;
+            window = {};
+            started = finished;
+            return completed;
+        }
+    private:
+        uint64_t owner{};
+        std::optional<Clock::time_point> started;
+        Window window;
+    };
+    void recordPresentPhaseTiming(uint64_t context, size_t frame, size_t sequence,
+        Clock::time_point finished, const std::array<double, 9>& milliseconds) noexcept;
 
     void logBridgeTiming(uint64_t bridgeId, VkSwapchainKHR swapchain,
         const BridgePresentTiming::Window& window,

@@ -24,6 +24,7 @@
 #include <filesystem>
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <sstream>
 #include <span>
@@ -1525,6 +1526,61 @@ Root::modifySurfaceCapabilities(
     };
 }
 
+void Root::startRuntimeHealth(const vk::Vulkan& vk) noexcept {
+    if (!present_diagnostics::enabled())
+        return;
+    try {
+        const auto accounting = vk.deviceMemoryAccounting();
+        if (this->healthMonitors.contains(accounting.get()))
+            return;
+        // Bound threads and retained counters even if a game continually
+        // creates devices. Swapchain recreation on one device reuses its monitor.
+        if (this->healthMonitors.size() >= 4) {
+            if (!this->healthMonitorLimitReported) {
+                this->healthMonitorLimitReported = true;
+                std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-health-unavailable"
+                             " reason=device-monitor-limit\n";
+            }
+            return;
+        }
+        present_diagnostics::RuntimeHealthPaths paths;
+        if (vk.fi().GetPhysicalDeviceProperties2 && physicalDeviceSupportsExtension(
+                vk.fi(), vk.physdev(), VK_EXT_PHYSICAL_DEVICE_DRM_EXTENSION_NAME)) {
+            VkPhysicalDeviceDrmPropertiesEXT drm{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRM_PROPERTIES_EXT,
+            };
+            VkPhysicalDeviceProperties2 properties{
+                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+                .pNext = &drm,
+            };
+            vk.fi().GetPhysicalDeviceProperties2(vk.physdev(), &properties);
+            if (drm.hasRender && drm.renderMajor >= 0 && drm.renderMinor >= 0 &&
+                    drm.renderMajor <= std::numeric_limits<uint32_t>::max() &&
+                    drm.renderMinor <= std::numeric_limits<uint32_t>::max()) {
+                paths.gpu = present_diagnostics::DrmRenderNode{
+                    static_cast<uint32_t>(drm.renderMajor), static_cast<uint32_t>(drm.renderMinor)};
+            }
+        }
+        const auto monitor = present_diagnostics::allocateContextId();
+        const auto device = reinterpret_cast<uintptr_t>(vk.dev());
+        const long ticks = sysconf(_SC_CLK_TCK);
+        this->healthMonitors.emplace(accounting.get(),
+            std::make_unique<present_diagnostics::RuntimeHealthMonitor>(paths,
+                accounting, this->backend.has_value()
+                    ? this->backend->deviceMemoryAccounting() : nullptr,
+                [paths, monitor, device, ticks](const auto& sample) {
+                    std::cerr << present_diagnostics::formatRuntimeHealth(
+                        sample, monitor, layerRoleName, paths, ticks, device);
+                }));
+    } catch (...) {
+        // Diagnostics never fail swapchain creation or alter recovery policy.
+        try {
+            std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-health-unavailable"
+                         " reason=monitor-initialization-failed\n";
+        } catch (...) {}
+    }
+}
+
 void Root::createSwapchainContext(const vk::Vulkan& vk,
         VkSwapchainKHR swapchain, const SwapchainInfo& info,
         const bool swapchainMaintenance1Enabled) {
@@ -1669,6 +1725,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
             this->runtimeStateRevision,
             swapchainMaintenance1Enabled)).second;
     const auto memoryAfter = vk.deviceMemorySnapshot();
+    this->startRuntimeHealth(vk);
     const auto contextInternal = memoryDelta(
         memoryAfter.internal, memoryBefore.internal);
     const auto contextExported = memoryDelta(

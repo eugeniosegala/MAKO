@@ -12,6 +12,7 @@
 #include <cstdint>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <string_view>
 #include <utility>
 
@@ -113,12 +114,16 @@ void Swapchain::applyGamescopeFocus(const DiagnosticsClock::time_point now) {
     this->steamMenuSuspended = suspended;
     if (present_diagnostics::enabled() &&
             (!this->focusReported || focused != this->lastReportedGameFocus || returned)) {
-        std::cerr << "MAKO Renderer: present diagnostics: operation=gamescope-focus"
+        try {
+            std::ostringstream line;
+            line << "MAKO Renderer: present diagnostics: operation=gamescope-focus"
                   << " context=" << this->diagnosticsState.contextId
                   << " state=" << (!focused ? "unknown" : *focused ? "game" : "steam-ui")
                   << " return_sequence=" << this->gamescopeFocus.returnSequence
                   << " resumed=" << returned
                   << " generation_suspended=" << suspended << '\n';
+            std::cerr << line.str();
+        } catch (...) {}
         this->focusReported = true;
         this->lastReportedGameFocus = focused;
     }
