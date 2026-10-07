@@ -34,6 +34,8 @@ Every application-owned swapchain creation forces one configuration freshness ch
 
 AC/battery selection resolves the complete `GameConf` before this update flow; it does not maintain a separate list of live settings or apply a second transition policy. New Renderer fields use the normal parser, writer, editor, and lifetime owner and travel with their selected power set. `power-profile-update` exercises matching, saved inactive-mode edits, same-name power changes, mixed live/private/restart requests, pending extents, reversion, and missing startup provisioning through these production owners. Shared shader edits continue through their existing vkBasalt owner rather than becoming power-specific Renderer fields.
 
+Shader files follow the bundled vkBasalt owner rather than the Renderer transition planner. Its existing 250 ms configuration watcher applies bundled and custom effect selections, order, paths, and configuration options after layer activation at launch. It prepares a complete replacement graph while retaining the previous graph, drains its graphics queue before retirement, and releases intermediate images when the chain becomes shorter. A missing shader, include, or texture, or an invalid compilation keeps the previous graph; a later configuration save retries. Source/include/texture file edits alone are not watched; reselect the effect to rebuild it. Layer activation remains process-start state.
+
 ## Requested, applied, and pending state
 
 The transition engine keeps three facts distinct:

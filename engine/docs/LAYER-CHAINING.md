@@ -35,7 +35,7 @@ Advanced users can select any standard vkBasalt configuration:
 ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
 ```
 
-MAKO's controls update only the options they own and preserve other entries in the selected file. Managed sharpening, anti-aliasing, denoise, and effect selections apply live while the layer is active. Enabling the layer or manually changing a custom effect chain requires a game restart.
+MAKO's controls update only the options they own and preserve other entries in the selected file. Managed sharpening, anti-aliasing, denoise, and bundled or custom effect selections apply live while the layer is active. Custom paths and configuration options also reload. Invalid shader compilation retains the previous chain until a later configuration save; rebuilding may cause a brief hitch. Enabling the layer requires a game restart.
 
 `mako-launch` always selects MAKO's bundled vkBasalt rather than a system installation. If the private payload or selected configuration is unavailable, it warns and continues with MAKO Renderer alone. Native Vulkan and Proton games use this launcher; sandboxed applications require the [Flatpak vkBasalt setup](FLATPAK-GUIDE.md#optional-private-vkbasalt-chain).
 
@@ -62,7 +62,7 @@ Change the setting with the game closed, then verify Frame Generation and Scalin
 
 MangoHud and Shaders are mutually exclusive. MangoHud must be installed on the host and continues to read `~/.config/MangoHud/MangoHud.conf`; host MangoHud is not enabled inside Flatpak games.
 
-Shaders use only MAKO's bundled vkBasalt. The compact controls provide sharpening, denoise, medium-quality FXAA or SMAA, and an ordered multi-effect picker. Combining effects increases GPU cost, and **HDR Look (SDR)** remains an SDR effect rather than HDR output. The default profile uses vkBasalt's global file, while saved profiles use isolated files shown in the UI. Advanced edits are preserved, but manual custom-chain changes require a restart.
+Shaders use only MAKO's bundled vkBasalt. The compact controls provide sharpening, denoise, medium-quality FXAA or SMAA, and an ordered multi-effect picker. Combining effects increases GPU cost, and **HDR Look (SDR)** remains an SDR effect rather than HDR output. The default profile uses vkBasalt's global file, while saved profiles use isolated files shown in the UI. Advanced edits are preserved; custom chain, path, and option changes apply live while the layer is active. Source/include/texture file edits alone are not watched; reselect the effect to rebuild it.
 
 For Flatpak games, install the matching MAKO extension and prepare the application in **Flatpak Setup**. If an integration does not activate, reinstall MAKO Renderer, update the applicable Flatpak extension, and collect a [MAKO Decky diagnostics report](../../plugin/docs/COLLECT_DIAGNOSTICS.md).
 

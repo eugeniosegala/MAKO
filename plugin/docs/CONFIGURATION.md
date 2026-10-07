@@ -88,7 +88,7 @@ Turn on **Enable Shaders (Restart)** to use MAKO's private bundled vkBasalt buil
 
 - **Effects** is a multi-selection list. Effects run in the displayed order; unchecking and rechecking an effect moves it to the end. **Clear all** removes the chain.
 - **Sharpening** offers CAS or DLS; **Sharpness** adjusts its strength, and **DLS Denoise** appears only with DLS. **Anti-aliasing** offers lighter, softer FXAA or more selective SMAA.
-- Sharpening, sharpness, DLS denoise, anti-aliasing, and bundled effects apply live after Shaders was enabled at startup. Rebuilding an effect chain may cause a brief hitch. Custom shader changes require a game restart.
+- Sharpening, sharpness, DLS denoise, anti-aliasing, and bundled or custom effect selections apply live after Shaders was enabled at startup. Adding, removing, or reordering selected effects rebuilds the chain and may cause a brief hitch.
 - Combining several effects increases GPU cost.
 - **HDR Look (SDR)** adjusts contrast and colour but remains SDR; it does not enable HDR output or increase display luminance.
 
@@ -98,7 +98,7 @@ The note below the controls shows the active profile configuration file. Advance
 
 Select **Add Custom Shader** to choose a local vkBasalt-compatible ReShade `.fx` file, then enable its **Custom:** entry in **Effects**. Adding a file only registers it for the selected profile; it does not enable it. Custom and bundled effects share the same ordered list. Unchecking a custom effect or using **Clear all** retains its definition and options so it can be selected again.
 
-Select **Delete selected custom shaders** to remove the selected custom definitions from this profile and deselect them. The list updates immediately; bundled effects and unselected custom definitions remain available. The original `.fx` files, includes, textures, and advanced options stay on disk, and other profiles keep their own registrations. The button is disabled when no custom effect is selected. Restart the game to apply custom shader changes. Bundled effects can still change live while custom changes await that restart.
+Select **Delete selected custom shaders** to remove the selected custom definitions from this profile and deselect them. The list updates immediately; bundled effects and unselected custom definitions remain available. The original `.fx` files, includes, textures, and advanced options stay on disk, and other profiles keep their own registrations. The button is disabled when no custom effect is selected. Deletion removes the selected custom effects from the running chain when Shaders was enabled at startup.
 
 MAKO references the original file instead of copying it. Keep its include files and textures available, and configure `reshadeIncludePath`, `reshadeTexturePath`, and shader-specific options in the displayed profile file when required. A shader designed for another ReShade runtime may use unsupported features. Flatpak games must be able to read the shader folder and its dependencies inside their sandbox.
 
@@ -109,7 +109,7 @@ effects = MyTone:makoVibrance
 MyTone = "/home/deck/shaders/MyTone.fx"
 ```
 
-Use aliases beginning with an ASCII letter and containing letters, digits, or underscores, up to 128 characters; aliases are case-sensitive. Bundled aliases such as `makoVibrance`, `cas`, and `fxaa` remain reserved. MAKO preserves existing advanced custom chains until the first explicit **Effects** edit, then manages the discovered custom selections together with bundled effects. Other advanced settings remain intact. A selected shader whose definition was removed is shown as missing and can be unchecked. Restart the game after adding, selecting, removing, or changing a custom shader.
+Use aliases beginning with an ASCII letter and containing letters, digits, or underscores, up to 128 characters; aliases are case-sensitive. Bundled aliases such as `makoVibrance`, `cas`, and `fxaa` remain reserved. MAKO preserves existing advanced custom chains until the first explicit **Effects** edit, then manages the discovered custom selections together with bundled effects. Other advanced settings remain intact. A selected shader whose definition was removed is shown as missing and can be unchecked. Selections, order, deletion, and configuration-file path or option edits apply live while Shaders is active. A missing file or compilation error keeps the previous chain running; correct the problem and save the configuration again to retry. Editing a `.fx` file or its dependencies alone does not trigger reload; uncheck and recheck the effect to rebuild it.
 
 ## Performance settings
 
