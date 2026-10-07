@@ -280,6 +280,58 @@ int main() {
         expect(actual == expected, "wait diagnostics changed the driver's result");
     }
     expect(forwardedWaits == 3, "wait diagnostics retried or skipped an application wait");
+    using present_diagnostics::ApplicationFrameTiming;
+    using present_diagnostics::ApplicationFrameApi;
+    ApplicationFrameTiming frameCalls;
+    expect(!frameCalls.observe(1, {}, start, start + 50ms, VK_TIMEOUT, 0),
+        "frame boundary window emitted early");
+    expect(!frameCalls.observe(1, {}, start + 100ms, start + 102ms, VK_NOT_READY, 0),
+        "frame boundary window grew from one failed call");
+    expect(!frameCalls.observe(1, {}, start + 200ms, start + 201ms, VK_SUBOPTIMAL_KHR, UINT64_MAX),
+        "suboptimal acquisition must remain observable");
+    const auto calls = frameCalls.observe(1, {}, start + 990ms, start + 1010ms,
+        VK_ERROR_DEVICE_LOST, UINT64_MAX, 12ms);
+    expect(calls && calls->calls == 4 && calls->successful == 1 &&
+            calls->timeouts == 1 && calls->notReady == 1 && calls->errors == 1 &&
+            calls->polls == 2 && calls->duration.maximum == 50 &&
+            calls->entryInterval.count == 3 && calls->entryInterval.maximum == 790 &&
+            calls->configurationUpdate.count == 1 && calls->configurationUpdate.mean() == 12,
+        "frame boundaries hid a blocking call, external gap or configuration work");
+    const auto nextWindow = frameCalls.observe(1, {}, start + 2s, start + 2010ms, {}, {});
+    expect(nextWindow && nextWindow->calls == 1 && nextWindow->entryInterval.count == 1 &&
+            nextWindow->entryInterval.maximum == 1010 && nextWindow->duration.maximum == 10 &&
+            nextWindow->configurationUpdate.count == 0 && nextWindow->errors == 0,
+        "frame statistics accumulated after the window was emitted");
+    expect(!frameCalls.observe(2, {}, start + 3s, start + 3001ms, VK_SUCCESS, 1),
+        "a new caller inherited old frame intervals");
+    const auto newCaller = frameCalls.observe(2, {}, start + 4s, start + 4001ms, VK_SUCCESS, 1);
+    expect(newCaller && newCaller->calls == 2 && newCaller->entryInterval.count == 1 &&
+            newCaller->duration.maximum == 1,
+        "caller identity did not reset the bounded frame window");
+    const auto otherSwapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(71));
+    expect(!frameCalls.observe(2, otherSwapchain, start + 5s, start + 5001ms, {}, {}),
+        "a different swapchain inherited old frame intervals");
+    const auto lateCall = frameCalls.observe(2, otherSwapchain, start + 2h, start + 2h + 50ms, {}, {});
+    expect(lateCall && lateCall->calls == 2 && lateCall->duration.maximum == 50 &&
+            lateCall->entryInterval.maximum == 7'195'000,
+        "long elapsed time overflowed or hid frame boundary observations");
+    size_t forwardedAcquires{};
+    for (const auto api : {ApplicationFrameApi::AcquireKhr, ApplicationFrameApi::AcquireKhr2}) {
+        for (const auto expected : {VK_SUCCESS, VK_SUBOPTIMAL_KHR, VK_TIMEOUT,
+                VK_NOT_READY, VK_ERROR_OUT_OF_DATE_KHR, VK_ERROR_DEVICE_LOST}) {
+            uint32_t imageIndex = UINT32_MAX;
+            const auto actual = present_diagnostics::observeApplicationAcquire(
+                {}, {}, api, UINT64_MAX, [&] {
+                    ++forwardedAcquires;
+                    imageIndex = 5;
+                    return expected;
+                });
+            expect(actual == expected && imageIndex == 5,
+                "acquisition diagnostics changed the driver's result or image index");
+        }
+    }
+    expect(forwardedAcquires == 12,
+        "acquisition diagnostics retried or skipped an application call");
     const VkPresentModeKHR requestedMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
     const VkSwapchainPresentModeInfoEXT dynamicMode{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT,

@@ -2639,6 +2639,9 @@ namespace {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-warning-option"
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
+        present_diagnostics::ApplicationPresentScope timingScope(
+            queue, info->swapchainCount == 1 ? info->pSwapchains[0] : VK_NULL_HANDLE
+        );
         VkResult result = VK_SUCCESS;
         bool swapchainOutOfDate = false;
 
@@ -2712,11 +2715,13 @@ namespace {
 
         // ensure layer config is up to date
         ConfigurationUpdateResult configurationUpdate;
+        timingScope.configurationUpdateStarted();
         try {
             configurationUpdate = layer_info->root.update();
         } catch (const std::exception&) {
             configurationUpdate = {}; // retain the last valid configuration
         }
+        timingScope.configurationUpdateFinished();
 
         if (configurationUpdate.reloaded) {
             std::cerr << "MAKO Renderer: updated configuration in place; contexts="
@@ -2949,9 +2954,12 @@ namespace {
         const auto extentResult = bridgeAcquisitionResult(swapchain);
         if (extentResult != VK_SUCCESS)
             return extentResult;
-        return mapping->second.get().df().AcquireNextImageKHR(
-            device, swapchain, timeout, semaphore, fence, imageIndex
-        );
+        return present_diagnostics::observeApplicationAcquire(
+            device, swapchain, present_diagnostics::ApplicationFrameApi::AcquireKhr,
+            timeout, [&] {
+                return mapping->second.get().df().AcquireNextImageKHR(
+                    device, swapchain, timeout, semaphore, fence, imageIndex);
+            });
     }
 
     VkResult myvkAcquireNextImage2KHR(VkDevice device,
@@ -2967,7 +2975,9 @@ namespace {
         const auto extentResult = bridgeAcquisitionResult(info->swapchain);
         if (extentResult != VK_SUCCESS)
             return extentResult;
-        return lower(device, info, imageIndex);
+        return present_diagnostics::observeApplicationAcquire(
+            device, info->swapchain, present_diagnostics::ApplicationFrameApi::AcquireKhr2,
+            info->timeout, [&] { return lower(device, info, imageIndex); });
     }
 
     void myvkDestroySwapchainKHR(

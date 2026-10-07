@@ -265,6 +265,40 @@ void testOrderedPresentationTimeline() {
     }
 }
 
+void testLongSessionDeadlineBounds() {
+    const auto start = RealFramePacer::TimePoint{std::chrono::hours(2400)};
+    for (const double fps : {45., 60., 90., 120.}) {
+        RealFramePacer pacer;
+        OrderedPresentTimeline timeline;
+        const auto period = std::chrono::duration_cast<RealFramePacer::Clock::duration>(
+            std::chrono::duration<double>(1.0 / fps));
+        static_cast<void>(pacer.schedule(start, fps));
+        auto bridgeArrival = start;
+        const size_t frames = static_cast<size_t>(fps * 7200);
+        for (size_t frame = 1; frame <= frames; ++frame) {
+            const auto expected = start + period * static_cast<int64_t>(frame);
+            const auto arrival = expected - 1ms;
+            expect(pacer.schedule(arrival, fps) == expected,
+                "two-hour source cap accumulated extra deadline debt");
+            const auto slot = timeline.schedule(bridgeArrival, fps, fps, 2);
+            expect(slot && slot->presentAt - slot->submitAt <= 3 * period,
+                "two-hour ordered timeline accumulated a growing queue");
+            bridgeArrival = slot->submitAt;
+        }
+        const auto elapsedNs = std::chrono::duration<long double, std::nano>(
+            period * static_cast<int64_t>(frames)).count();
+        const auto idealNs = static_cast<long double>(frames) * 1'000'000'000.L / fps;
+        expect(std::abs(elapsedNs - idealNs) < 1'000'000.L,
+            "two-hour nanosecond rounding became a millisecond-scale pacing error");
+        const auto late = start + 2h + 100ms;
+        expect(pacer.schedule(late, fps) == late,
+            "late source frame after two hours retained old timing debt");
+        const auto slot = timeline.schedule(bridgeArrival + 100ms, fps, fps, 2);
+        expect(slot && slot->submitAt == bridgeArrival + 100ms,
+            "late ordered frame after two hours retained old queue debt");
+    }
+}
+
 void testFractionalUsesExistingSourceDeadline() {
     using Clock = RealFramePacer::Clock;
     const auto start = Clock::time_point{10s};
@@ -363,6 +397,7 @@ void testFractionalUsesExistingSourceDeadline() {
 }
 
 int main() {
+    testLongSessionDeadlineBounds();
     testFractionalUsesExistingSourceDeadline();
     testSmoothCadenceCapFollowsActivePlan();
     testOrderedPresentationTimeline();

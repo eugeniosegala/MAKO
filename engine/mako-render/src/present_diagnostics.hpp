@@ -30,6 +30,108 @@ namespace mako::layer::present_diagnostics {
 
     enum class PresentWaitApi { Khr, Khr2 };
 
+    enum class ApplicationFrameApi { AcquireKhr, AcquireKhr2, Present };
+
+    /// Bounded CPU observations at the application's layer entrypoints. These
+    /// include intentional pacing, unlike the private-work present timer.
+    /// A stream owns one caller/swapchain pair; switching drops its old window.
+    class ApplicationFrameTiming {
+    public:
+        struct Window {
+            size_t calls{};
+            size_t successful{};
+            size_t timeouts{};
+            size_t notReady{};
+            size_t errors{};
+            size_t polls{};
+            BridgePresentTiming::Samples entryInterval;
+            BridgePresentTiming::Samples duration;
+            BridgePresentTiming::Samples configurationUpdate;
+        };
+
+        [[nodiscard]] std::optional<Window> observe(uintptr_t caller,
+                VkSwapchainKHR swapchain, Clock::time_point started,
+                Clock::time_point finished, std::optional<VkResult> result,
+                std::optional<uint64_t> timeout,
+                std::optional<Clock::duration> configurationUpdate = {}) {
+            if (!windowStarted || caller != lastCaller || swapchain != lastSwapchain) {
+                windowStarted = started;
+                previousEntry.reset();
+                lastCaller = caller;
+                lastSwapchain = swapchain;
+                window = {};
+            }
+            if (previousEntry)
+                window.entryInterval.add(milliseconds(started - *previousEntry));
+            previousEntry = started;
+            ++window.calls;
+            if (result) {
+                window.successful += *result == VK_SUCCESS || *result == VK_SUBOPTIMAL_KHR;
+                window.timeouts += *result == VK_TIMEOUT;
+                window.notReady += *result == VK_NOT_READY;
+                window.errors += *result < 0;
+            }
+            window.polls += timeout && *timeout == 0;
+            window.duration.add(milliseconds(finished - started));
+            if (configurationUpdate)
+                window.configurationUpdate.add(milliseconds(*configurationUpdate));
+            if (finished - *windowStarted < std::chrono::seconds(1))
+                return std::nullopt;
+            windowStarted = finished;
+            const auto completed = window;
+            window = {};
+            return completed;
+        }
+    private:
+        static double milliseconds(Clock::duration value) {
+            return std::chrono::duration<double, std::milli>(value).count();
+        }
+        std::optional<Clock::time_point> windowStarted;
+        std::optional<Clock::time_point> previousEntry;
+        uintptr_t lastCaller{};
+        VkSwapchainKHR lastSwapchain{};
+        Window window;
+    };
+
+    void recordApplicationFrameTiming(ApplicationFrameApi api, uintptr_t caller,
+        VkSwapchainKHR swapchain, Clock::time_point started, Clock::time_point finished,
+        std::optional<VkResult> result = {}, std::optional<uint64_t> timeout = {},
+        std::optional<Clock::duration> configurationUpdate = {});
+
+    template<typename Acquire>
+    VkResult observeApplicationAcquire(VkDevice device, VkSwapchainKHR swapchain,
+            ApplicationFrameApi api, uint64_t timeout, Acquire&& acquire) {
+        if (!enabled())
+            return acquire();
+        const auto started = Clock::now();
+        const auto result = acquire();
+        const auto finished = Clock::now();
+        try {
+            recordApplicationFrameTiming(api, reinterpret_cast<uintptr_t>(device),
+                swapchain, started, finished, result, timeout);
+        } catch (...) {
+            // Observing a completed acquire cannot change its returned result.
+        }
+        return result;
+    }
+
+    class ApplicationPresentScope {
+    public:
+        ApplicationPresentScope(VkQueue queue, VkSwapchainKHR swapchain);
+        ~ApplicationPresentScope();
+        ApplicationPresentScope(const ApplicationPresentScope&) = delete;
+        ApplicationPresentScope& operator=(const ApplicationPresentScope&) = delete;
+        void configurationUpdateStarted();
+        void configurationUpdateFinished();
+    private:
+        bool active;
+        uintptr_t caller;
+        VkSwapchainKHR swapchain;
+        Clock::time_point started{};
+        Clock::time_point updateStarted{};
+        std::optional<Clock::duration> updateDuration;
+    };
+
     struct ApplicationPresentMode {
         int64_t mode{-1};
         bool dynamic{};

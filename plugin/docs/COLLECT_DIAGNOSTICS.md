@@ -45,6 +45,8 @@ Open your **Desktop** folder to find `MAKO-diagnostics.txt`. Konsole normally pr
 
 If the command is missing, select **Install MAKO Renderer** in Decky and retry. If no log is found, check the temporary launch settings and repeat the test.
 
+For a long-session slowdown, use `--lines 200000` to retain the healthy period and onset. The `adaptive`, `recovery`, `performance`, and `scaling` presets include one-second `application-acquire` and `application-queue-present` CPU summaries when diagnostics are enabled. Their entry intervals show gaps between application calls; acquire durations include the lower Vulkan acquisition call, and queue-present durations include MAKO's full entrypoint, configuration updates, and intentional pacing. Configuration-update timings identify work before the private present timer. These observations preserve driver results and timeouts and do not trigger recovery. They measure CPU boundaries, not GPU execution or physical scanout; a short call can submit work that causes a later wait elsewhere.
+
 ## 4. Restore your settings
 
 Restore the saved Launch Options and any changed Target, or remove the two diagnostics environment variables from Heroic/Lutris.

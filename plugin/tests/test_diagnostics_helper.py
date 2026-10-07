@@ -60,6 +60,8 @@ MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 st
 MAKO Renderer: present diagnostics: operation=gamescope-bridge-timing bridge=12 pid=4242 timestamp_source=compositor-reported requests=120 feedbacks=118 outstanding=2 unmatched=0 nonconsecutive_ids=0 repeated_timestamps=94 backwards_timestamps=0
 MAKO Renderer: present diagnostics: operation=application-present-mode context=2 swapchain=1234 requested_present_mode=0 dynamic_override=1 effective_present_mode=2 ordered_transport=1 bridge=1 action=diagnostic-only
 MAKO Renderer: present diagnostics: operation=application-present-wait waiter=19 pid=4242 device=55 swapchain=1234 api=KHR2 calls=60 successful=59 timeouts=1 errors=0 polls=1 first_present_id=20 last_present_id=79 duration_mean_ms=8.2 duration_max_ms=21.5
+MAKO Renderer: present diagnostics: operation=application-acquire stream=20 pid=4242 device=55 swapchain=1234 api=KHR2 calls=45 entry_interval_samples=45 entry_interval_mean_ms=22.2 entry_interval_max_ms=72.2 duration_mean_ms=1.1 duration_max_ms=50.1 successful=45 timeouts=0 not_ready=0 errors=0 polls=0
+MAKO Renderer: present diagnostics: operation=application-queue-present stream=20 pid=4242 queue=66 swapchain=1234 api=KHR calls=45 entry_interval_samples=45 entry_interval_mean_ms=22.2 entry_interval_max_ms=72.2 duration_mean_ms=8.1 duration_max_ms=10 includes_intentional_pacing=1 configuration_update_samples=45 configuration_update_mean_ms=0.1 configuration_update_max_ms=0.5
 MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
 MAKO Renderer: spatial scaling surface bridge: surface=1234; xwayland_server=0; window=5678; transport=wayland; gamescope_wsi=isolated; application_surface=x11; extent_contract=window
 MAKO Renderer: spatial scaling window extent: operation=capability-query; surface=1234; window=5678; previous=1152x720; current=2560x1440; query_generation=3
@@ -105,6 +107,16 @@ unrelated application output
 
 
 class DiagnosticsHelperTests(unittest.TestCase):
+    def test_frame_boundaries_are_retained_by_focused_presets(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = self._fixture_path(Path(temporary_directory))
+            for preset in ("adaptive", "recovery", "performance", "scaling"):
+                result = self._run("--log", str(path), preset)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("operation=application-acquire", result.stdout)
+                self.assertIn("operation=application-queue-present", result.stdout)
+                self.assertIn("includes_intentional_pacing=1", result.stdout)
+
     def test_helper_uses_the_wrapper_log_contract(self):
         helper_source = HELPER.read_text(encoding="utf-8")
         self.assertIn(

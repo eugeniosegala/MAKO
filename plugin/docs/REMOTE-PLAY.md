@@ -29,6 +29,8 @@ Selection-following clients launch vkBasalt with the stable `vkbasalt/current-pr
 
 ## Recovery and limits
 
+If Steam updates replace the streaming client, the Remote Play status panel shows **Needs attention** with instructions to close streams, remove the override, and enable it again. In MAKO Decky, select **Remove Remote Play Override**, then **Override Remote Play**. In Qt, select **Restore Steam Client**, then **Override Remote Play**. Removal preserves Steam's updated executable; enabling the override again wraps that current executable.
+
 ### SDR output
 
 Native Remote Play uses SDR output while MAKO's HDR launch path is unsupported. The shared wrapper loads the packaged `libmako-remote-play-sdr.so` only at the final native-client exec, preserving Steam and user preload entries. Both Decky and Qt use this same policy automatically when the override is enabled; no profile field or additional toggle is needed. The helper opts in with `MAKO_REMOTE_PLAY_SDR=1` and verifies the executable name, so inherited preloads do not change ordinary games or child applications.

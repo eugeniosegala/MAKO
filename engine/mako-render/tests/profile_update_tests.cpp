@@ -946,6 +946,60 @@ int main() {
     expect(decision.baseFpsCapChanged,
         "Base FPS cap changes must reset presentation timing");
 
+    for (const auto target : {90U, 120U, 144U}) {
+        for (const bool smooth : {false, true}) {
+            auto fractional = adaptiveProfile();
+            fractional.target_fps = target;
+            fractional.base_fps_cap = target / 2;
+            fractional.adaptive_stable_cadence = smooth;
+            auto steady = fractional;
+            steady.adaptive_auto_base_fps_cap = true;
+            expect(effectiveBaseFpsCap(fractional) == effectiveBaseFpsCap(steady),
+                "Live cadence-style regression must keep the numeric cap unchanged");
+            for (const bool toSteady : {true, false}) {
+                const auto& before = toSteady ? fractional : steady;
+                const auto& after = toSteady ? steady : fractional;
+                const auto plan = planProfileUpdate(before, after, 3, true);
+                expect(plan.decision.action == ProfileUpdateAction::ApplyLive &&
+                        plan.decision.generationPolicyChanged &&
+                        !plan.decision.baseFpsCapChanged &&
+                        !plan.decision.swapchainRecreationDeferred &&
+                        !plan.decision.processRestartDeferred &&
+                        profileUpdateInvalidatesTransientGenerationRecovery(
+                            plan.decision) &&
+                        plan.appliedProfile.adaptive_auto_base_fps_cap == toSteady,
+                    "Equal-cap Fractional/Steady switches must reset live scheduler policy and recovery");
+                expect(planProfileUpdate(plan.appliedProfile, after, 3, true)
+                        .decision.action == ProfileUpdateAction::NoRuntimeChange,
+                    "An applied cadence-style switch must not repeatedly reset policy");
+            }
+            fractional.frame_generation_enabled = false;
+            steady.frame_generation_enabled = false;
+            for (const bool toSteady : {true, false}) {
+                const auto& before = toSteady ? fractional : steady;
+                const auto& after = toSteady ? steady : fractional;
+                const auto dormant = planProfileUpdate(before, after, 3, true);
+                expect(dormant.decision.action == ProfileUpdateAction::NoRuntimeChange &&
+                        dormant.appliedProfile.adaptive_auto_base_fps_cap == toSteady,
+                    "Disabled generation must save the cadence style without resetting policy");
+            }
+            fractional.frame_generation_enabled = true;
+            steady.frame_generation_enabled = true;
+            fractional.frame_generation_refresh_threshold = target;
+            steady.frame_generation_refresh_threshold = target;
+            expect(resolveDisplayTarget(fractional, steady, target)
+                    .decision.action == ProfileUpdateAction::NoRuntimeChange,
+                "Refresh-suspended generation must keep the cadence style dormant");
+            fractional.frame_generation_refresh_threshold = 0;
+            steady.frame_generation_refresh_threshold = 0;
+            fractional.adaptive = false;
+            steady.adaptive = false;
+            expect(planProfileUpdate(fractional, steady, 3, true)
+                    .decision.action == ProfileUpdateAction::NoRuntimeChange,
+                "Fixed must keep the saved Adaptive cadence style dormant");
+        }
+    }
+
     next = current;
     next.adaptive_auto_base_fps_cap = true;
     decision = classifyProfileUpdate(current, next, 3, true);

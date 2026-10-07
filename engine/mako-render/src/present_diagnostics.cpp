@@ -3,6 +3,7 @@
 #include "present_diagnostics.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <cstdlib>
@@ -13,6 +14,74 @@
 #include <unistd.h>
 
 namespace mako::layer::present_diagnostics {
+void recordApplicationFrameTiming(const ApplicationFrameApi api, const uintptr_t caller,
+        const VkSwapchainKHR swapchain, const Clock::time_point started,
+        const Clock::time_point finished, const std::optional<VkResult> result,
+        const std::optional<uint64_t> timeout,
+        const std::optional<Clock::duration> configurationUpdate) {
+    thread_local std::array<ApplicationFrameTiming, 3> observations;
+    thread_local uint64_t streamId = allocateContextId();
+    const auto window = observations.at(static_cast<size_t>(api)).observe(
+        caller, swapchain, started, finished, result, timeout, configurationUpdate);
+    if (!window)
+        return;
+    const bool present = api == ApplicationFrameApi::Present;
+    std::ostringstream line;
+    line << "MAKO Renderer: present diagnostics: operation="
+         << (present ? "application-queue-present" : "application-acquire")
+         << " stream=" << streamId << " pid=" << getpid()
+         << (present ? " queue=" : " device=") << reinterpret_cast<void*>(caller)
+         << " swapchain=" << swapchain
+         << " api=" << (present ? "KHR" : api == ApplicationFrameApi::AcquireKhr ? "KHR" : "KHR2")
+         << " calls=" << window->calls
+         << " entry_interval_samples=" << window->entryInterval.count
+         << " entry_interval_mean_ms=" << window->entryInterval.mean()
+         << " entry_interval_max_ms=" << window->entryInterval.maximum
+         << " duration_mean_ms=" << window->duration.mean()
+         << " duration_max_ms=" << window->duration.maximum;
+    if (present) {
+        line << " includes_intentional_pacing=1"
+             << " configuration_update_samples=" << window->configurationUpdate.count
+             << " configuration_update_mean_ms=" << window->configurationUpdate.mean()
+             << " configuration_update_max_ms=" << window->configurationUpdate.maximum;
+    } else {
+        line << " successful=" << window->successful << " timeouts=" << window->timeouts
+             << " not_ready=" << window->notReady << " errors=" << window->errors
+             << " polls=" << window->polls;
+    }
+    line << '\n';
+    std::cerr << line.str();
+}
+
+ApplicationPresentScope::ApplicationPresentScope(const VkQueue queue,
+        const VkSwapchainKHR swapchain) : active(enabled()),
+        caller(reinterpret_cast<uintptr_t>(queue)), swapchain(swapchain) {
+    if (this->active)
+        this->started = Clock::now();
+}
+
+ApplicationPresentScope::~ApplicationPresentScope() {
+    if (!this->active)
+        return;
+    // Diagnostics must not turn a completed application present into an error
+    // while unwinding a presentation failure or a terminal allocation failure.
+    try {
+        recordApplicationFrameTiming(ApplicationFrameApi::Present, this->caller,
+            this->swapchain, this->started, Clock::now(), {}, {}, this->updateDuration);
+    } catch (...) {
+    }
+}
+
+void ApplicationPresentScope::configurationUpdateStarted() {
+    if (this->active)
+        this->updateStarted = Clock::now();
+}
+
+void ApplicationPresentScope::configurationUpdateFinished() {
+    if (this->active)
+        this->updateDuration = Clock::now() - this->updateStarted;
+}
+
 void logBridgeTiming(const uint64_t bridgeId, const VkSwapchainKHR swapchain,
         const BridgePresentTiming::Window& window,
         const size_t outstanding, const uint64_t refreshCycleNs) {

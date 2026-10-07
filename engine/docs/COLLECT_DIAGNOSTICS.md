@@ -46,6 +46,8 @@ If the command is not found, try `~/.local/bin/mako-diagnostics` instead. For th
 
 The file appears on your Desktop; Konsole normally prints nothing. If no log is found, check the temporary launch settings and repeat the test.
 
+For a long-session slowdown, use `--lines 200000` to retain the healthy period and onset. The `adaptive`, `recovery`, `performance`, and `scaling` presets include one-second `application-acquire` and `application-queue-present` CPU summaries when diagnostics are enabled. Their entry intervals show gaps between application calls; acquire durations include the lower Vulkan acquisition call, and queue-present durations include MAKO's full entrypoint, configuration updates, and intentional pacing. Configuration-update timings identify work before the private present timer. These observations preserve driver results and timeouts and do not trigger recovery. They measure CPU boundaries, not GPU execution or physical scanout; a short call can submit work that causes a later wait elsewhere.
+
 ## 4. Restore your settings
 
 Restore the original launch settings and remove the two temporary diagnostics variables.

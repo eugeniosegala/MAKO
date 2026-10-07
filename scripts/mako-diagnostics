@@ -237,6 +237,11 @@ add_pattern "$live_recreation_record"
 
 for preset in "${presets[@]}"; do
   case "$preset" in
+    adaptive|recovery|performance|scaling)
+      add_pattern "$renderer_prefix present diagnostics: operation=(application-acquire|application-queue-present)"
+      ;;
+  esac
+  case "$preset" in
     hdr)
       add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       add_pattern "$renderer_prefix Gamescope application HDR feedback"

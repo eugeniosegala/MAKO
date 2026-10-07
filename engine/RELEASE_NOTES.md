@@ -1,6 +1,6 @@
 ## What's new in MAKO Renderer v4.1.0
 
-<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/maelstrom.png" alt="Maelstrom release artwork: a colossal mako above a spiraling sea" width="100%">
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/maelstrom.png" alt="Maelstrom release artwork: a colossal mako draws a storm-torn sea into the glowing whirlpool inside its jaws" width="100%">
 
 ### Release codename: Maelstrom
 

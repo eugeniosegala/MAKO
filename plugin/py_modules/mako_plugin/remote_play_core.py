@@ -144,7 +144,8 @@ class RemotePlayOverride:
             conflict = not installed and (self.backup.exists() or self.checksum.exists())
             return RemotePlayResponse(
                 success=True, error=None,
-                message="Steam client changed or an earlier override backup exists." if conflict else "",
+                message=("Steam client changed or an earlier override backup exists. "
+                         "Close any streams, remove the Remote Play override, then enable it again.") if conflict else "",
                 installed=installed, managed=managed,
                 available=installed or self._native_client(self.client),
                 running=bool(pids), pids=pids, profile_name=profile_name,

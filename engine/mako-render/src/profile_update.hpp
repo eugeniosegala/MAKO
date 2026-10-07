@@ -968,6 +968,12 @@ namespace mako::layer {
             current.adaptive_stable_cadence !=
                 applied.adaptive_stable_cadence ||
             (current.adaptive && applied.adaptive && (
+                // Equal numeric caps can still change scheduler and VRR
+                // ownership between Fractional and Steady.
+                (current.adaptive_auto_base_fps_cap !=
+                    applied.adaptive_auto_base_fps_cap &&
+                 (effectiveFrameGenerationEnabled(current, displayRefreshHz) ||
+                  effectiveFrameGenerationEnabled(applied, displayRefreshHz))) ||
                 current.target_fps != applied.target_fps ||
                 current.adaptive_max_multiplier !=
                     applied.adaptive_max_multiplier
