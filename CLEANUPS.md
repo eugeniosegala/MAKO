@@ -50,6 +50,7 @@ The unshipped native Remote Play integration has no dedicated-profile creation o
 
 | Cleanup | Result | Completed |
 | --- | --- | --- |
+| Numbered Flatpak filename imports | Removed unused internal aliases for individual branches; all bundle filenames and extension identities use the generated runtime catalogue. Retiring a branch no longer breaks Decky's constants import, and published filenames remain unchanged. | 2026-10-08 |
 | Scaling-implied Gamescope WSI activation | Wrapper format 59 regenerates from canonical state and loads WSI only for an explicit saved opt-in. Scaling alone uses the existing combined Renderer. Saved true/false values and the Decky 2.2 selector migration remain unchanged; no format-specific transform is needed. | 2026-09-13 |
 | Pre-public Decky compatibility paths | Declared MAKO 2.0.0 as the minimum direct-upgrade baseline. Removed formats 27–31 wrapper-state and DXVK cap imports, differently named predecessor package migration, pre-public unsafe-process repair, the 0.13 experimental DLL placeholder, obsolete-export contamination checks, the unreleased scaling listing alias, and their historical fixtures. Current MAKO wrappers remain disposable cache and still regenerate from canonical state. | 2026-09-02 |
 | Pre-Steady-default Adaptive profile override | Removed the missing-field exception so every profile without an explicit choice adopts the current Steady Base Cap default. Profiles that explicitly saved Fractional remain unchanged. | 2026-08-21 |

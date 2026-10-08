@@ -209,7 +209,7 @@ describe("content status notices", () => {
     expect(screen.getByText("MAKO Renderer")).toBeTruthy();
     expect(screen.getByText(/^64-bit layer:/)).toBeTruthy();
     expect(screen.getByText(/^32-bit layer:/)).toBeTruthy();
-    expect(screen.getByText(/23\.08, 24\.08, 25\.08 deployed/)).toBeTruthy();
+    expect(screen.getByText(/23\.08, 24\.08, 25\.08, 26\.08 deployed/)).toBeTruthy();
   });
 
   test("renders running and update notices with the existing install action", () => {

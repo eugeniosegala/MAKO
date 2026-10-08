@@ -1,0 +1,6 @@
+[
+  { "version": "23.08", "llvm": 18 },
+  { "version": "24.08", "llvm": 20 },
+  { "version": "25.08", "llvm": 21 },
+  { "version": "26.08", "llvm": 22 }
+]

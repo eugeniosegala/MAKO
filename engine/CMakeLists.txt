@@ -154,6 +154,12 @@ if(BUILD_TESTING AND UNIX)
     set_tests_properties(standalone-flatpak-installer PROPERTIES
         LABELS "portable-policy")
 
+    add_test(NAME flatpak-runtime-freshness
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/generate-flatpak-runtimes.py"
+            --check)
+    set_tests_properties(flatpak-runtime-freshness PROPERTIES LABELS "portable-policy")
+
     add_test(NAME flatpak-vulkan-headers-freshness
         COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate-flatpak-vulkan-headers.py"

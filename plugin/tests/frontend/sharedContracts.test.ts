@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import runtimeCatalogue from "../../../engine/dist/flatpak/mako-render/runtime-versions.json";
 import {
   ADAPTIVE_MAX_MULTIPLIER_MAX,
   ADAPTIVE_MAX_MULTIPLIER_MIN,
@@ -60,23 +61,13 @@ describe("generated cross-language contracts", () => {
 
   test("preserves ordered Flatpak versions and public RPC status fields", () => {
     expect(exportedFlatpakRuntimes).toBe(SUPPORTED_FLATPAK_RUNTIMES);
-    expect(SUPPORTED_FLATPAK_RUNTIMES).toEqual([
-      {
-        version: "23.08",
-        statusField: "installed_23_08",
+    expect(SUPPORTED_FLATPAK_RUNTIMES).toEqual(
+      runtimeCatalogue.map(({ version }) => ({
+        version,
+        statusField: `installed_${version.replace(".", "_")}`,
         i18nKey: "FLATPAK_RUNTIME_VERSION",
-      },
-      {
-        version: "24.08",
-        statusField: "installed_24_08",
-        i18nKey: "FLATPAK_RUNTIME_VERSION",
-      },
-      {
-        version: "25.08",
-        statusField: "installed_25_08",
-        i18nKey: "FLATPAK_RUNTIME_VERSION",
-      },
-    ]);
+      })),
+    );
   });
 
   test("shares Flatpak apps that require per-game wrapper setup", () => {

@@ -32,6 +32,7 @@ class DevRendererDeploymentTests(unittest.TestCase):
         for relative in (
             "scripts/deploy-dev.sh", "scripts/dev-renderer-selection.py",
             "scripts/read_flatpak_runtime_contract.py", "shared_config.py",
+            "shared_flatpak_runtimes.py",
             "py_modules/mako_plugin/__init__.py",
             "py_modules/mako_plugin/package_paths.py",
             "py_modules/mako_plugin/constants.py",

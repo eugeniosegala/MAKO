@@ -44,6 +44,16 @@ generate-remote-play:
 check-remote-play:
     python3 engine/scripts/generate-remote-play-bindings.py --check
 
+# Generate Renderer manifests and Decky bindings from the shared Flatpak catalogue.
+generate-flatpak-runtimes:
+    python3 scripts/generate-flatpak-runtimes.py
+    python3 plugin/scripts/generate_ts_schema.py
+
+# Check the generated Renderer and Decky Flatpak runtime contracts without rewriting them.
+check-flatpak-runtimes:
+    python3 scripts/generate-flatpak-runtimes.py --check
+    python3 plugin/scripts/check_generated_config.py
+
 # Generate Flatpak's build-only Vulkan-Headers module from the shared pin.
 generate-flatpak-headers:
     python3 engine/scripts/generate-flatpak-vulkan-headers.py

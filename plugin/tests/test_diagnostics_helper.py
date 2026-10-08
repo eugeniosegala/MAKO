@@ -111,6 +111,62 @@ unrelated application output
 
 
 class DiagnosticsHelperTests(unittest.TestCase):
+    def test_renderer_exception_details_survive_every_preset(self):
+        records = [
+            "unrelated application output",
+            "- unrelated application exception",
+            "MAKO Renderer: swapchain presentation failed:",
+            "- vkQueuePresentKHR() failed (error -4)",
+            "- nested test error",
+            "unrelated output after the error",
+            "- unrelated trailing exception",
+        ]
+        expected = "MAKO Renderer: swapchain presentation failed: - vkQueuePresentKHR() failed (error -4) - nested test error"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "failure.log"
+            path.write_text("\n".join(records) + "\n", encoding="utf-8")
+            for preset in self._run("--list").stdout.splitlines():
+                with self.subTest(preset=preset):
+                    result = self._run("--log", str(path), "--lines", "1", preset)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.strip(), expected)
+                    self.assertIn("matched_trace_lines=1", result.stderr)
+
+    def test_legacy_renderer_exception_details_are_preserved(self):
+        records = [
+            "mako: swapchain creation failed:",
+            "- failed to create test context",
+            "- nested test allocation failure",
+            "MAKO Renderer: layer initialization failed:",
+            "- test initialization error",
+        ]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "legacy-failure.log"
+            path.write_text("\n".join(records) + "\n", encoding="utf-8")
+            result = self._run("--log", str(path), "all")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.splitlines(), [
+            "mako: swapchain creation failed: - failed to create test context - nested test allocation failure",
+            "MAKO Renderer: layer initialization failed: - test initialization error",
+        ])
+
+    def test_renderer_exception_detail_count_is_bounded(self):
+        records = ["MAKO Renderer: device creation failed:"]
+        records.extend(f"- test cause {index}" for index in range(20))
+        records.append("MAKO Renderer: test-following-record")
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "bounded-failure.log"
+            path.write_text("\n".join(records) + "\n", encoding="utf-8")
+            result = self._run("--log", str(path), "all")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lines = result.stdout.splitlines()
+        self.assertEqual(len(lines), 2)
+        for index in range(8):
+            self.assertIn(f"- test cause {index}", lines[0])
+        self.assertNotIn("- test cause 8", lines[0])
+        self.assertEqual(lines[0].count("error_details_truncated=1"), 1)
+        self.assertEqual(lines[1], records[-1])
+
     def test_runtime_health_is_retained_by_every_preset(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = self._fixture_path(Path(temporary_directory))

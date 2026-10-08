@@ -36,7 +36,7 @@ export function PerformanceConfigurationGroup({
           }
           description={t(
             "CONFIG_DISABLE_STEAM_OVERLAY_DESC",
-            "May improve smoothness. Disables Steam's in-game overlay hooks and may affect Steam Input.",
+            "Prevents Steam's overlay from loading into the game, which can improve performance and reduce stutter. In Desktop Mode or Big Picture, disables the in-game overlay, its chat and browser, and Steam's FPS counter. Some Steam Input features may also be affected. SteamOS Gaming Mode's menus and performance overlay remain available. Turn this off and restart the game to restore normal Steam integration.",
           )}
           checked={config.disable_steam_overlay}
           onChange={(value) => onConfigChange(DISABLE_STEAM_OVERLAY, value)}

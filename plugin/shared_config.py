@@ -8,6 +8,7 @@ structure should be made here first.
 
 from typing import Dict, Literal, TypedDict, Union
 from enum import Enum
+from shared_flatpak_runtimes import SUPPORTED_FLATPAK_RUNTIME_VERSIONS
 
 
 # Stable built-in profile identifier shared by the backend and generated
@@ -28,8 +29,6 @@ PROFILE_KIND_VALUES = (
     PROFILE_KIND_PROCESS,
     PROFILE_KIND_MANUAL,
 )
-# Ordered release matrix used by backend bundles and generated frontend status.
-SUPPORTED_FLATPAK_RUNTIME_VERSIONS = ("23.08", "24.08", "25.08")
 # Flatpak frontends whose games start in a child compatibility environment and
 # therefore require MAKO's wrapper to be configured per game rather than on the
 # launcher process itself.

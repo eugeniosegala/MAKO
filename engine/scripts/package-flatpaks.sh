@@ -90,6 +90,7 @@ for command in flatpak flatpak-builder nm python3 strings tar; do
     fi
 done
 
+python3 "$monorepo_root/scripts/generate-flatpak-runtimes.py" --check
 python3 "$repo_root/scripts/generate-flatpak-vulkan-headers.py" --check
 python3 "$repo_root/scripts/manage-vkbasalt-release.py" \
     --check \

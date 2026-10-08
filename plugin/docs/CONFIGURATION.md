@@ -115,7 +115,7 @@ Use aliases beginning with an ASCII letter and containing letters, digits, or un
 
 ## Performance settings
 
-**Performance Settings > Disable Steam Overlay (Restart)** defaults to on for each profile. It removes Steam overlay hooks and layers at launch, which may improve smoothness but can affect Steam Input and overlay features. Turn it off and restart the game to restore normal Steam integration. The value is shared across the profile's power modes and is saved in the launcher sidecar; no diagnostic launch variable is required.
+**Performance Settings > Disable Steam Overlay (Restart)** defaults to on for each profile. It prevents Steam's overlay hooks and layers from loading into the game, which can improve performance and reduce stutter. In Desktop Mode or Big Picture, this disables the in-game overlay, its chat and browser, and Steam's FPS counter, and may affect some Steam Input features. SteamOS Gaming Mode's menus and compositor-owned performance overlay remain available. In Gaming Mode, any performance benefit depends on whether the removed game-process hooks would otherwise be loaded and contribute overhead; their removal alone does not establish a performance improvement. Turn it off and restart the game to restore normal Steam integration. The value is shared across the profile's power modes and is saved in the launcher sidecar; no diagnostic launch variable is required.
 
 - **Ultra Performance (Restart)** selects a lighter preset: 70% Flow Scale, the lighter FG model and LS1 Performance when Scaling is enabled. The global precision toggle remains authoritative.
 - **Flow Scale** trades motion-estimation quality for GPU cost.

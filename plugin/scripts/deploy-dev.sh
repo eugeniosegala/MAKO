@@ -607,6 +607,7 @@ if [[ "$deploy_backend" == true ]]; then
   echo "Deploying Python backend..."
   copy_file "$project_dir/main.py" "$plugin_dir/main.py"
   copy_file "$project_dir/shared_config.py" "$plugin_dir/shared_config.py"
+  copy_file "$project_dir/shared_flatpak_runtimes.py" "$plugin_dir/shared_flatpak_runtimes.py"
   copy_file "$repository_root/scripts/mako-diagnostics" \
     "$plugin_dir/bin/mako-diagnostics"
   cp -a "$project_dir/py_modules/." "$plugin_dir/py_modules/"

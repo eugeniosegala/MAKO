@@ -106,7 +106,7 @@
   "CONFIG_ULTRA_PERFORMANCE_DESC": "Senkt die GPU-Last von MAKO auf Geräten mit begrenztem Leistungsbudget. Verwendet 70 % Flow Scale, das leichtere FG-Modell und LS1 Leistung, wenn Skalierung aktiviert ist. Tauscht Bildqualität gegen Leistung bei den aktiven MAKO-Funktionen. Berücksichtigt die globale FP16-Einstellung.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Das Ein- oder Ausschalten von Ultra Performance erfordert einen Spielneustart. Andere kompatible Profilregler bleiben nach dem Start verfügbar.",
   "CONFIG_DISABLE_STEAM_OVERLAY": "Steam-Overlay deaktivieren (Neustart)",
-  "CONFIG_DISABLE_STEAM_OVERLAY_DESC": "Kann die Darstellung flüssiger machen. Deaktiviert die Steam-Overlay-Hooks im Spiel und kann Steam Input beeinträchtigen.",
+  "CONFIG_DISABLE_STEAM_OVERLAY_DESC": "Verhindert, dass das Steam-Overlay in das Spiel geladen wird. Das kann die Leistung verbessern und Ruckler reduzieren. Im Desktop-Modus oder in Big Picture werden das Overlay im Spiel, dessen Chat und Browser sowie der FPS-Zähler von Steam deaktiviert. Auch einige Steam-Input-Funktionen können beeinträchtigt werden. Die Menüs und das Leistungs-Overlay im Gaming-Modus von SteamOS bleiben verfügbar. Schalte diese Option aus und starte das Spiel neu, um die normale Steam-Integration wiederherzustellen.",
   "CONFIG_PERFORMANCE_MODE": "Leichteres FG-Modell",
   "CONFIG_PERFORMANCE_MODE_DESC": "Das leichtere FG-Modell senkt die GPU-Last, erhöht aber Ghosting; Ultra Performance erzwingt es.",
   "CONFIG_DISABLE_STEAMDECK_MODE": "Steam-Deck-Modus deaktivieren (Neustart)",

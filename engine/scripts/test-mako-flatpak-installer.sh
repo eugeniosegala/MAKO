@@ -49,6 +49,18 @@ printf '1\n' | env -u DISPLAY -u WAYLAND_DISPLAY -u MAKO_FLATPAK_RUNTIME \
     fail "terminal runtime menu polluted the selected bundle path"
 
 rm "$invocation_log"
+touch "$package_root/org.freedesktop.Platform.VulkanLayer.makorender-26.08.flatpak"
+env -u DISPLAY -u WAYLAND_DISPLAY \
+    PATH="$fake_bin:$PATH" \
+    MAKO_TEST_FLATPAK_LOG="$invocation_log" \
+    MAKO_INSTALLER_ASSUME_YES=1 \
+    MAKO_FLATPAK_RUNTIME=26.08 \
+    "$package_root/Install MAKO Flatpak Extensions" >/dev/null
+expected="install --user --noninteractive $package_root_physical/org.freedesktop.Platform.VulkanLayer.makorender-26.08.flatpak"
+[[ "$(<"$invocation_log")" == "$expected" ]] ||
+    fail "installer did not discover the new runtime bundle"
+
+rm "$invocation_log"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "$fake_bin/kdialog"
 chmod 0755 "$fake_bin/kdialog"
 env -u MAKO_FLATPAK_RUNTIME \

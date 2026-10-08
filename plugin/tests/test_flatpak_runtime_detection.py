@@ -1,10 +1,12 @@
 """Tests for Flatpak runtime-to-Vulkan-layer compatibility detection."""
 
 import sys
+import json
 import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -18,9 +20,6 @@ sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 from py_modules.mako_plugin.flatpak_service import FlatpakService  # noqa: E402
 from py_modules.mako_plugin.constants import (  # noqa: E402
     CONFIG_DIR,
-    FLATPAK_23_08_FILENAME,
-    FLATPAK_24_08_FILENAME,
-    FLATPAK_25_08_FILENAME,
     FLATPAK_EXTENSION_NAME,
     FLATPAK_EXTENSION_PREFIX,
     FLATPAK_HOST_ARCHITECTURE,
@@ -79,24 +78,13 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
                     bundle.extension_id,
                 )
 
+        version = SUPPORTED_FLATPAK_RUNTIME_VERSIONS[-1]
+        setattr(self.service, f"extension_id_{version.replace('.', '_')}", "patched-extension-id")
         self.assertEqual(
-            (
-                FLATPAK_23_08_FILENAME,
-                FLATPAK_24_08_FILENAME,
-                FLATPAK_25_08_FILENAME,
-            ),
-            tuple(
-                bundle.filename
-                for bundle in FLATPAK_RUNTIME_BUNDLES.values()
-            ),
-        )
-
-        self.service.extension_id_25_08 = "patched-extension-id"
-        self.assertEqual(
-            self.service._get_extension_id("25.08"),
+            self.service._get_extension_id(version),
             "patched-extension-id",
         )
-        self.assertIsNone(self.service._get_extension_id("26.08"))
+        self.assertIsNone(self.service._get_extension_id("27.08"))
 
     def test_shell_tools_read_the_same_runtime_contract(self):
         helper = (
@@ -120,7 +108,7 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
             read("bundles").splitlines(),
             [bundle.filename for bundle in FLATPAK_RUNTIME_BUNDLES.values()],
         )
-        self.assertEqual(read("summary"), "23.08, 24.08, and 25.08")
+        self.assertEqual(read("summary"), "23.08, 24.08, 25.08, and 26.08")
         self.assertEqual(
             read("renderer-paths").splitlines(),
             [
@@ -165,9 +153,10 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
             SUPPORTED_FLATPAK_RUNTIME_VERSIONS,
         )
         llvm_versions = {
-            "23.08": "18",
-            "24.08": "20",
-            "25.08": "21",
+            entry["version"]: str(entry["llvm"])
+            for entry in json.loads(
+                (renderer_matrix_dir / "runtime-versions.json").read_text()
+            )
         }
         normalized_manifests = []
         for version in renderer_versions:
@@ -216,6 +205,7 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
             _result(
                 f"{FLATPAK_EXTENSION_NAME}\tx86_64\t25.08\n"
                 f"{FLATPAK_EXTENSION_NAME}\tx86_64\t23.08\n"
+                f"{FLATPAK_EXTENSION_NAME}\tx86_64\t26.08\n"
             )
             if args == ["list", "--runtime"]
             else self.fail(f"unexpected Flatpak command: {args}")
@@ -227,12 +217,14 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
                 "success": True,
                 "message": (
                     "23.08 runtime extension installed; "
-                    "25.08 runtime extension installed"
+                    "25.08 runtime extension installed; "
+                    "26.08 runtime extension installed"
                 ),
                 "error": None,
                 "installed_23_08": True,
                 "installed_24_08": False,
                 "installed_25_08": True,
+                "installed_26_08": True,
             },
         )
 
@@ -257,12 +249,12 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
 
     def test_invalid_runtime_error_text_remains_stable(self):
         expected_error = (
-            "Invalid version. Must be '23.08', '24.08', or '25.08'"
+            "Invalid version. Must be '23.08', '24.08', '25.08', or '26.08'"
         )
         self.service._host_architecture_supported = lambda: True
 
-        install = self.service.install_extension("26.08")
-        uninstall = self.service.uninstall_extension("26.08")
+        install = self.service.install_extension("27.08")
+        uninstall = self.service.uninstall_extension("27.08")
 
         self.assertEqual(install["error"], expected_error)
         self.assertEqual(uninstall["error"], expected_error)
@@ -282,29 +274,56 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
         self.assertFalse(refresh["success"])
         self.assertIn("native AArch64/Armada", extension["error"])
 
+    def test_26_08_install_update_and_uninstall_select_matching_payload(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package = Path(temp_dir)
+            bundle = package / "bin" / FLATPAK_RUNTIME_BUNDLES["26.08"].filename
+            bundle.parent.mkdir()
+            bundle.touch()
+            self.service.check_flatpak_available = lambda: True
+            calls = []
+            self.service._run_flatpak_command = lambda args, **_kwargs: (
+                calls.append(args) or _result()
+            )
+            with patch("py_modules.mako_plugin.flatpak_service.PLUGIN_ROOT", package):
+                for installed in (False, True):
+                    with self.subTest(installed=installed):
+                        self.service._is_extension_installed = lambda _version: installed
+                        self.assertTrue(self.service.install_extension("26.08")["success"])
+                        expected = ["install", "--user", "--noninteractive"]
+                        if installed:
+                            expected.append("--reinstall")
+                        self.assertEqual(calls[-1], [*expected, str(bundle)])
+                self.assertTrue(self.service.uninstall_extension("26.08")["success"])
+                self.assertEqual(calls[-1], ["uninstall", "--user", "--noninteractive",
+                                           FLATPAK_RUNTIME_BUNDLES["26.08"].extension_id])
+
     def test_direct_freedesktop_runtime_uses_its_branch(self):
-        def run(args, **_kwargs):
-            self.assertEqual(args, ["info", "--show-runtime", self.app_id])
-            return _result("org.freedesktop.Platform/x86_64/25.08\n")
+        for version in SUPPORTED_FLATPAK_RUNTIME_VERSIONS:
+            with self.subTest(version=version):
+                def run(args, **_kwargs):
+                    self.assertEqual(args, ["info", "--show-runtime", self.app_id])
+                    return _result(f"org.freedesktop.Platform/x86_64/{version}\n")
 
-        self.service._run_flatpak_command = run
+                self.service._run_flatpak_command = run
 
-        self.assertEqual(self.service._get_app_runtime_version(self.app_id), "25.08")
+                self.assertEqual(self.service._get_app_runtime_version(self.app_id), version)
 
     def test_kde_and_lutris_gnome_runtimes_use_inherited_layer_version(self):
         for app_id, runtime in (
             ("org.DolphinEmu.dolphin-emu", "org.kde.Platform/x86_64/6.10"),
-            ("net.lutris.Lutris", "org.gnome.Platform/x86_64/49"),
+            ("net.lutris.Lutris", "org.gnome.Platform/x86_64/50"),
+            ("com.heroicgameslauncher.hgl", "org.kde.Platform/x86_64/6.11"),
         ):
             with self.subTest(app_id=app_id):
                 metadata = f"""[Runtime]
 name={runtime.split("/")[0]}
 
 [Extension org.freedesktop.Platform.GL]
-version=25.08
+version=26.08
 
 [Extension org.freedesktop.Platform.VulkanLayer]
-version=25.08
+version=26.08
 directory=lib/extensions/vulkan
 subdirectories=true
 
@@ -321,12 +340,12 @@ version={runtime.rsplit("/", 1)[1]}
 
                 self.service._run_flatpak_command = run
 
-                self.assertEqual(self.service._get_app_runtime_version(app_id), "25.08")
+                self.assertEqual(self.service._get_app_runtime_version(app_id), "26.08")
 
     def test_inherited_vulkan_layer_version_must_be_supported(self):
         runtime = "org.kde.Platform/x86_64/6.11"
         metadata = """[Extension org.freedesktop.Platform.VulkanLayer]
-version=26.08
+version=27.08
 """
 
         def run(args, **_kwargs):
@@ -342,13 +361,56 @@ version=26.08
 
     def test_metadata_parser_accepts_extension_version_lists(self):
         metadata = """[Extension org.freedesktop.Platform.VulkanLayer]
-versions=26.08;25.08;24.08
+versions=27.08;26.08;25.08;24.08
 """
 
         self.assertEqual(
             self.service._get_inherited_vulkan_layer_version(metadata),
-            "25.08",
+            "26.08",
         )
+
+    def test_preparation_names_missing_extension_without_writing_overrides(self):
+        self.service.check_flatpak_available = lambda: True
+        for version in SUPPORTED_FLATPAK_RUNTIME_VERSIONS:
+            with self.subTest(version=version):
+                calls = []
+
+                def run(args, **_kwargs):
+                    calls.append(args)
+                    if args == ["info", "--show-runtime", self.app_id]:
+                        return _result(f"org.freedesktop.Platform/x86_64/{version}\n")
+                    if args == ["info", "--user", FLATPAK_RUNTIME_BUNDLES[version].extension_id]:
+                        return _result(returncode=1)
+                    self.fail(f"unexpected Flatpak command: {args}")
+
+                self.service._run_flatpak_command = run
+                response = self.service.set_app_override(self.app_id)
+
+                self.assertFalse(response["success"])
+                self.assertEqual(response["app_id"], self.app_id)
+                self.assertEqual(response["error"],
+                                 f"Install the MAKO {version} runtime extension before enabling this application.")
+                self.assertFalse(any(args[0] == "override" for args in calls))
+
+    def test_preparation_rejects_unsupported_runtime_without_writing_overrides(self):
+        self.service.check_flatpak_available = lambda: True
+        runtime = "org.freedesktop.Platform/x86_64/27.08"
+        calls = []
+
+        def run(args, **_kwargs):
+            calls.append(args)
+            if args == ["info", "--show-runtime", self.app_id]:
+                return _result(f"{runtime}\n")
+            if args == ["info", "--show-metadata", runtime]:
+                return _result("[Extension org.freedesktop.Platform.VulkanLayer]\nversion=27.08\n")
+            self.fail(f"unexpected Flatpak command: {args}")
+
+        self.service._run_flatpak_command = run
+        response = self.service.set_app_override(self.app_id)
+
+        self.assertFalse(response["success"])
+        self.assertIn("Could not determine a supported Flatpak runtime", response["error"])
+        self.assertFalse(any(args[0] == "override" for args in calls))
 
     def test_direct_flatpak_preparation_persists_config_and_layer_path(self):
         app_id = "org.DolphinEmu.dolphin-emu"
@@ -890,7 +952,7 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
     def test_refresh_reinstalls_only_existing_runtime_branches(self):
         self.service.check_flatpak_available = lambda: True
         self.service._is_extension_installed = lambda version: version in {
-            "24.08", "25.08"
+            "24.08", "25.08", "26.08"
         }
         refreshed = []
 
@@ -903,8 +965,8 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
         response = self.service.refresh_installed_extensions()
 
         self.assertTrue(response["success"])
-        self.assertEqual(refreshed, ["24.08", "25.08"])
-        self.assertEqual(response["updated_versions"], ["24.08", "25.08"])
+        self.assertEqual(refreshed, ["24.08", "25.08", "26.08"])
+        self.assertEqual(response["updated_versions"], ["24.08", "25.08", "26.08"])
 
     def test_refresh_reports_a_partial_runtime_failure(self):
         self.service.check_flatpak_available = lambda: True
@@ -918,5 +980,5 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
         response = self.service.refresh_installed_extensions()
 
         self.assertFalse(response["success"])
-        self.assertEqual(response["updated_versions"], ["23.08", "25.08"])
+        self.assertEqual(response["updated_versions"], ["23.08", "25.08", "26.08"])
         self.assertIn("24.08: broken bundle", response["error"])

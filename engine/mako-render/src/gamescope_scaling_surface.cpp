@@ -17,6 +17,7 @@
 #include <poll.h>
 #include <sys/socket.h>
 #include <thread>
+#include <unistd.h>
 #include <unordered_map>
 #include <utility>
 #include <X11/Xlib.h>

@@ -4,21 +4,21 @@ id: org.freedesktop.Platform.VulkanLayer.makorender
 default-branch: develop
 
 runtime: org.freedesktop.Platform
-runtime-version: '25.08'
+runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
-branch: '25.08'
+branch: '26.08'
 build-extension: true
 
 sdk-extensions:
-  - org.freedesktop.Sdk.Extension.llvm21
+  - org.freedesktop.Sdk.Extension.llvm22
   - org.freedesktop.Sdk.Compat.i386
   - org.freedesktop.Sdk.Extension.toolchain-i386
 
 build-options:
   cxxflags: -I/usr/lib/extensions/vulkan/makorender/include
   prefix: /usr/lib/extensions/vulkan/makorender
-  append-path: /usr/lib/sdk/llvm21/bin
-  prepend-ld-library-path: /usr/lib/sdk/llvm21/lib
+  append-path: /usr/lib/sdk/llvm22/bin
+  prepend-ld-library-path: /usr/lib/sdk/llvm22/lib
 
 modules:
   - vulkan-headers.json

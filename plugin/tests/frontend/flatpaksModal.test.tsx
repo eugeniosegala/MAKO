@@ -1,10 +1,12 @@
 import React from "react";
 import {
   cleanup,
+  act,
   fireEvent,
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
@@ -20,6 +22,7 @@ const api = vi.hoisted(() => ({
 const navigation = vi.hoisted(() => ({
   NavigateToExternalWeb: vi.fn(),
 }));
+const modalUi = vi.hoisted(() => ({ showModal: vi.fn() }));
 
 vi.mock("@decky/ui", () => ({
   ModalRoot: ({ children }: { children: React.ReactNode }) => (
@@ -62,7 +65,7 @@ vi.mock("@decky/ui", () => ({
     <div>{children}</div>
   ),
   Navigation: navigation,
-  showModal: vi.fn(),
+  showModal: modalUi.showModal,
   ConfirmModal: () => <div />,
 }));
 vi.mock("../../src/api/makoApi", () => api);
@@ -100,6 +103,115 @@ afterEach(() => {
 });
 
 describe("Flatpak application preparation", () => {
+  test.each([
+    "Install the MAKO 26.08 runtime extension before enabling this application.",
+    "Could not determine a supported Flatpak runtime for this application. Install the matching MAKO runtime extension first.",
+  ])(
+    "shows preparation guidance and keeps the app disabled: %s",
+    async (error) => {
+      window.SP_REACT = React;
+      api.checkFlatpakExtensionStatus.mockResolvedValue({
+        success: true,
+        installed_23_08: false,
+        installed_24_08: false,
+        installed_25_08: false,
+        installed_26_08: false,
+      });
+      api.getFlatpakApps.mockResolvedValue({
+        success: true,
+        apps: [
+          {
+            app_id: "org.DolphinEmu.dolphin-emu",
+            app_name: "Dolphin",
+            has_filesystem_override: false,
+            has_wrapper_override: false,
+            has_env_override: false,
+            has_required_env_override: false,
+          },
+        ],
+      });
+      api.getLaunchOption.mockResolvedValue({
+        wrapper_path: "/home/deck/.local/bin/mako-run",
+      });
+      api.setFlatpakAppOverride.mockResolvedValue({ success: false, error });
+
+      render(<FlatpaksModal />);
+      const toggle = await screen.findByRole("button", {
+        name: "Flatpak application toggle",
+      });
+      fireEvent.click(toggle);
+
+      expect(await screen.findByText(error)).toBeTruthy();
+      expect(toggle.textContent).toBe("Disabled");
+      expect(api.setFlatpakAppOverride).toHaveBeenCalledWith(
+        "org.DolphinEmu.dolphin-emu",
+      );
+      expect(api.getFlatpakApps).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test("installs, updates, and removes 26.08 while retaining older runtime rows", async () => {
+    window.SP_REACT = React;
+    let installed = false;
+    api.checkFlatpakExtensionStatus.mockImplementation(async () => ({
+      success: true,
+      installed_23_08: false,
+      installed_24_08: false,
+      installed_25_08: false,
+      installed_26_08: installed,
+    }));
+    api.getFlatpakApps.mockResolvedValue({ success: true, apps: [] });
+    api.getLaunchOption.mockResolvedValue({
+      wrapper_path: "/home/deck/.local/bin/mako-run",
+    });
+    api.installFlatpakExtension.mockImplementation(async () => {
+      installed = true;
+      return { success: true };
+    });
+    api.uninstallFlatpakExtension.mockImplementation(async () => {
+      installed = false;
+      return { success: true };
+    });
+
+    render(<FlatpaksModal />);
+    await screen.findByText("Runtime 26.08");
+    for (const version of ["23.08", "24.08", "25.08", "26.08"]) {
+      expect(screen.getByText(`Runtime ${version}`)).toBeTruthy();
+    }
+    const row = () =>
+      within(
+        screen.getByText("Runtime 26.08").parentElement!.parentElement!
+          .parentElement!,
+      );
+    fireEvent.click(row().getByRole("button", { name: "Install" }));
+    await waitFor(() =>
+      expect(row().getByRole("button", { name: "Update" })).toBeTruthy(),
+    );
+    expect(api.installFlatpakExtension).toHaveBeenCalledWith("26.08");
+    expect(row().getByText("Installed")).toBeTruthy();
+
+    fireEvent.click(row().getByRole("button", { name: "Update" }));
+    await waitFor(() =>
+      expect(api.installFlatpakExtension).toHaveBeenCalledTimes(2),
+    );
+    await waitFor(() =>
+      expect(row().getByRole("button", { name: "Update" })).toBeTruthy(),
+    );
+
+    fireEvent.click(row().getByRole("button", { name: "Uninstall" }));
+    expect(api.uninstallFlatpakExtension).not.toHaveBeenCalled();
+    const confirmation = modalUi.showModal.mock
+      .calls[0][0] as React.ReactElement<{
+      onOK: () => void;
+    }>;
+    await act(async () => confirmation.props.onOK());
+    await waitFor(() =>
+      expect(row().getByRole("button", { name: "Install" })).toBeTruthy(),
+    );
+    expect(api.uninstallFlatpakExtension).toHaveBeenCalledWith("26.08");
+    expect(row().getByText("Not installed")).toBeTruthy();
+  });
+
   test("retains toggle focus while an application update is loading", async () => {
     window.SP_REACT = React;
     let resolveUpdate: (value: {
@@ -122,6 +234,7 @@ describe("Flatpak application preparation", () => {
       installed_23_08: false,
       installed_24_08: false,
       installed_25_08: false,
+      installed_26_08: false,
     });
     api.getFlatpakApps.mockResolvedValue({
       success: true,

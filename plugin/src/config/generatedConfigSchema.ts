@@ -23,6 +23,7 @@ export const SUPPORTED_FLATPAK_RUNTIMES = [
   { version: "23.08", statusField: "installed_23_08", i18nKey: "FLATPAK_RUNTIME_VERSION" },
   { version: "24.08", statusField: "installed_24_08", i18nKey: "FLATPAK_RUNTIME_VERSION" },
   { version: "25.08", statusField: "installed_25_08", i18nKey: "FLATPAK_RUNTIME_VERSION" },
+  { version: "26.08", statusField: "installed_26_08", i18nKey: "FLATPAK_RUNTIME_VERSION" },
 ] as const;
 export type FlatpakRuntimeVersion =
   (typeof SUPPORTED_FLATPAK_RUNTIMES)[number]["version"];

@@ -9,11 +9,16 @@ import sys
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
-from generate_python_boilerplate import generate_complete_schema_file  # noqa: E402
-from generate_ts_schema import generate_typescript_schema  # noqa: E402
-
 
 def main() -> None:
+    subprocess.run(
+        [sys.executable, str(PLUGIN_ROOT.parent / "scripts/generate-flatpak-runtimes.py"),
+         "--check"],
+        check=True,
+    )
+    from generate_python_boilerplate import generate_complete_schema_file
+    from generate_ts_schema import generate_typescript_schema
+
     subprocess.run(
         [sys.executable, str(PLUGIN_ROOT.parent / "scripts/generate-launcher-exclusions.py"),
          "--check"],

@@ -1,24 +1,22 @@
-# Generated from engine/dist/flatpak/mako-render/runtime-versions.json and engine/dist/flatpak/mako-render/org.freedesktop.Platform.VulkanLayer.makorender.yml.in; do not edit.
-# Regenerate: just generate-flatpak-runtimes
 id: org.freedesktop.Platform.VulkanLayer.makorender
 default-branch: develop
 
 runtime: org.freedesktop.Platform
-runtime-version: '25.08'
+runtime-version: '@RUNTIME_VERSION@'
 sdk: org.freedesktop.Sdk
-branch: '25.08'
+branch: '@RUNTIME_VERSION@'
 build-extension: true
 
 sdk-extensions:
-  - org.freedesktop.Sdk.Extension.llvm21
+  - org.freedesktop.Sdk.Extension.llvm@LLVM_VERSION@
   - org.freedesktop.Sdk.Compat.i386
   - org.freedesktop.Sdk.Extension.toolchain-i386
 
 build-options:
   cxxflags: -I/usr/lib/extensions/vulkan/makorender/include
   prefix: /usr/lib/extensions/vulkan/makorender
-  append-path: /usr/lib/sdk/llvm21/bin
-  prepend-ld-library-path: /usr/lib/sdk/llvm21/lib
+  append-path: /usr/lib/sdk/llvm@LLVM_VERSION@/bin
+  prepend-ld-library-path: /usr/lib/sdk/llvm@LLVM_VERSION@/lib
 
 modules:
   - vulkan-headers.json

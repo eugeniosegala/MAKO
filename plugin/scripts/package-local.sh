@@ -591,6 +591,7 @@ for dependency_license in "${dependency_license_sources[@]}"; do
 done
 cp "$project_dir/README.md" "$project_dir/main.py" \
   "$project_dir/package.json" "$project_dir/plugin.json" "$project_dir/shared_config.py" \
+  "$project_dir/shared_flatpak_runtimes.py" \
   "$package_dir/"
 if [[ "$local_engine_mode" == true ]]; then
   node -e '

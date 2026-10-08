@@ -79,6 +79,7 @@ const nullableResponseFixtures = {
     installed_23_08: false,
     installed_24_08: false,
     installed_25_08: false,
+    installed_26_08: false,
   } satisfies FlatpakExtensionStatus,
   flatpakApps: {
     success: false,

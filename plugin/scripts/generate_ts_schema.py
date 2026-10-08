@@ -7,6 +7,7 @@ the corresponding TypeScript files, ensuring single source of truth.
 """
 
 import sys
+import subprocess
 from pathlib import Path
 
 # Add project root to path to import shared_config
@@ -400,6 +401,11 @@ def generate_typescript_schema():
 def main():
     """Main function to generate TypeScript schema and Python boilerplate"""
     try:
+        subprocess.run(
+            [sys.executable, str(project_root.parent / "scripts/generate-flatpak-runtimes.py"),
+             "--check"],
+            check=True,
+        )
         # Generate the TypeScript content
         ts_content = generate_typescript_schema()
 
@@ -413,7 +419,6 @@ def main():
         # Also generate Python boilerplate
         print("\n🔄 Generating Python boilerplate...")
         from pathlib import Path
-        import subprocess
 
         boilerplate_script = project_root / "scripts" / "generate_python_boilerplate.py"
         result = subprocess.run(

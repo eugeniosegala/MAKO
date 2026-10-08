@@ -33,7 +33,7 @@ appid=org.DolphinEmu.dolphin-emu
 flatpak info --show-runtime "$appid"
 ```
 
-MAKO ships x86_64 extensions for Freedesktop **23.08, 24.08, and 25.08**, each including layers for 64-bit and 32-bit x86 game processes. If the reported runtime is `org.freedesktop.Platform/x86_64/24.08`, choose MAKO's **24.08** branch.
+MAKO ships x86_64 extensions for Freedesktop **23.08, 24.08, 25.08, and 26.08**, each including layers for 64-bit and 32-bit x86 game processes. If the reported runtime is `org.freedesktop.Platform/x86_64/24.08`, choose MAKO's **24.08** branch.
 
 For a KDE or GNOME runtime, its own version is not necessarily the extension branch. Inspect its installed metadata:
 
@@ -194,7 +194,16 @@ cd engine
 
 The script builds and verifies both Renderer roles for 64-bit and 32-bit processes on every supported runtime. The resulting archive is written under `engine/out/`.
 
-`dist/flatpak/mako-render/runtime-versions.txt` owns the ordered Renderer build matrix. Each listed version must have a matching standalone manifest in that directory; MAKO Decky's shared runtime contract is regression-tested against the same ordered versions.
+[`dist/flatpak/mako-render/runtime-versions.json`](../dist/flatpak/mako-render/runtime-versions.json) owns the supported Freedesktop branches and each branch's LLVM SDK extension, ordered oldest first. The adjacent `org.freedesktop.Platform.VulkanLayer.makorender.yml.in` owns the common manifest. To add or retire a runtime, edit the catalogue, then run these commands from the monorepo root:
+
+```bash
+just generate-flatpak-runtimes
+just check-flatpak-runtimes
+```
+
+Without `just`, run `python3 scripts/generate-flatpak-runtimes.py` followed by `python3 plugin/scripts/generate_ts_schema.py`; check with `python3 plugin/scripts/check_generated_config.py`. Generation updates the Renderer shell matrix and standalone manifests, removes generated manifests for retired branches, and updates Decky's self-contained Python list and TypeScript runtime descriptors. Renderer packaging, Renderer CTest, and Decky's generated-contract gate reject stale catalogue outputs without rewriting them. Never edit those generated files independently.
+
+The same generated list drives Renderer release bundles, Decky ZIP payload validation, installed-extension refresh, RPC status fields, and every runtime row in **Flatpak Setup**. Build a complete current-source Renderer Flatpak archive and Decky ZIP when the matrix changes; an older published archive may lack newly required branches. Runtime lists are shared only at build time, so installed Decky does not need a Renderer source checkout.
 
 All runtime builds use the Vulkan-Headers ref in [`vulkan-headers-revision.txt`](../vulkan-headers-revision.txt). The SDK still supplies its own compiler and runtime libraries. `scripts/generate-flatpak-vulkan-headers.py` generates the shared `dist/flatpak/mako-render/vulkan-headers.json` module; run it after updating the pin. `scripts/package-flatpaks.sh` and Renderer CTest run its read-only `--check` gate, which rejects a stale module instead of silently using different headers. Each standalone manifest includes the shared dependency and enables `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON` for both 64-bit and 32-bit builds. The headers are build-only and removed from the finished extension.
 

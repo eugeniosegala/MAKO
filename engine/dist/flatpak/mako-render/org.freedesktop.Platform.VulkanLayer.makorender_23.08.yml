@@ -1,3 +1,5 @@
+# Generated from engine/dist/flatpak/mako-render/runtime-versions.json and engine/dist/flatpak/mako-render/org.freedesktop.Platform.VulkanLayer.makorender.yml.in; do not edit.
+# Regenerate: just generate-flatpak-runtimes
 id: org.freedesktop.Platform.VulkanLayer.makorender
 default-branch: develop
 
