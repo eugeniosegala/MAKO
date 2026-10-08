@@ -181,6 +181,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libvulkan-dev libx11-dev libxcb1-dev
 
+      - name: Fetch the shared Vulkan headers
+        run: |
+          revision="$(cat engine/vulkan-headers-revision.txt)"
+          git clone --depth=1 --branch "$revision" \
+            https://github.com/KhronosGroup/Vulkan-Headers "$RUNNER_TEMP/mako-vulkan-headers"
+          echo "CXXFLAGS=-I$RUNNER_TEMP/mako-vulkan-headers/include" >> "$GITHUB_ENV"
+
       - name: Run sanitized portable policy tests
         working-directory: engine
         run: ./scripts/test-adaptive-scheduler.sh
