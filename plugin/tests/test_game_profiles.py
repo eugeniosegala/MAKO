@@ -848,6 +848,69 @@ class GameProfileTests(unittest.TestCase):
         self.assertTrue(all(result["success"] for result in results))
         self.assertEqual(maximum_active_calls, 1)
 
+    def test_capture_waits_for_witcher_instead_of_heroic_helpers(self):
+        proc_root = Path(self.temp_dir.name) / "proc"
+        proc_root.mkdir()
+
+        def add_process(pid, executable, app_id="12345"):
+            process = proc_root / str(pid)
+            process.mkdir()
+            (process / "environ").write_bytes(f"SteamAppId={app_id}\0".encode())
+            windows = executable.lower().endswith(".exe")
+            (process / "exe").symlink_to(
+                "/proton/wine64-preloader" if windows else f"/usr/bin/{executable}"
+            )
+            (process / "comm").write_text(executable[:15] + "\n")
+            (process / "cmdline").write_bytes((executable + "\0").encode())
+            (process / "maps").write_text(f"/games/{executable}\n" if windows else "")
+
+        for pid, executable in enumerate((
+                "comet", "gamemoderun", "heroic-run", "xdg-dbus-proxy",
+                "REDprelauncher.exe", "REDlauncher.exe",
+        ), 101):
+            add_process(pid, executable)
+        add_process(201, "OtherGame.exe", "67890")
+
+        with patch.object(configuration_module, "detect_processes_for_steam_app",
+                          side_effect=lambda app_id: detect_processes_for_steam_app(app_id, proc_root)):
+            before = self.service.config_file_path.read_bytes()
+            early = self.service.capture_game_profile("12345", "The Witcher 3")
+            self.assertFalse(early["success"])
+            self.assertIn("Wait until gameplay has loaded", early["error"])
+            self.assertEqual(self.service.config_file_path.read_bytes(), before)
+            self.assertFalse(self.service.mako_script_path.exists())
+
+            add_process(202, "witcher3.exe")
+            captured = self.service.capture_game_profile("12345", "The Witcher 3")
+
+        self.assertTrue(captured["success"], captured)
+        self.assertEqual(captured["profile"]["processes"], ["witcher3.exe"])
+        self.assertEqual(captured["profile"]["steam_app_id"], "12345")
+        launched = self._run_wrapper("12345")
+        self.assertEqual(launched["PROFILE"], captured["profile_name"])
+
+    def test_recapture_replaces_old_launcher_only_aliases(self):
+        profile_name = self.service.create_profile("The Witcher 3")["profile_name"]
+        helpers = ["comet", "gamemoderun", "heroic-run", "REDprelauncher.exe", "xdg-dbus-proxy"]
+        data = self.service._get_profile_data()
+        data["profiles"][profile_name]["active_in"] = ", ".join(helpers + ["ManualAlias.exe"])
+        self.service._save_profile_data(data)
+        self.service._write_profile_metadata({
+            profile_name: {
+                "display_name": "The Witcher 3", "kind": "game",
+                "steam_app_id": "12345", "captured_processes": helpers,
+            },
+        })
+        with patch.object(configuration_module, "detect_processes_for_steam_app",
+                          return_value=helpers + ["REDlauncher.exe", "witcher3.exe"]):
+            captured = self.service.capture_game_profile("12345", "The Witcher 3")
+
+        self.assertTrue(captured["success"], captured)
+        self.assertEqual(captured["profile_name"], profile_name)
+        self.assertEqual(captured["profile"]["processes"], ["ManualAlias.exe", "witcher3.exe"])
+        metadata = self.service._read_profile_metadata(self.service._get_profile_data())
+        self.assertEqual(metadata[profile_name]["captured_processes"], ["witcher3.exe"])
+
     def test_capture_creates_then_updates_one_profile_for_the_same_app(self):
         previous = configuration_module.detect_processes_for_steam_app
         detected_processes = ["CoolGame.exe"]
@@ -1094,13 +1157,36 @@ class GameProfileTests(unittest.TestCase):
         self.assertEqual(result["profile_name"], profile_name)
         self.assertTrue(result["changed"])
 
-    def _run_wrapper(self, app_id: str, extra_environment=None):
+    def test_wrapper_ignores_old_launcher_aliases_without_hiding_game_matches(self):
+        legacy = self.service.create_profile("Legacy launcher profile")["profile_name"]
+        game = self.service.create_profile("Witcher profile")["profile_name"]
+        data = self.service._get_profile_data()
+        excluded = ["comet", "gamemoderun", "heroic-run", "xdg-dbus-proxy",
+                    "CrBrowserMain", "CrGpuMain", "CrRendererMain", "audio.CrUtility",
+                    "network.CrUtili", "storage.CrUtili", "video_capture.C",
+                    *sorted(EXCLUDED_WINDOWS_LAUNCHERS)]
+        data["profiles"][legacy]["active_in"] = ", ".join(excluded)
+        data["profiles"][game]["active_in"] = "REDlauncher.exe, witcher3.exe"
+        data["current_profile"] = "mako"
+        self.service._save_profile_data(data)
+        self.assertTrue(self.service.update_mako_script_from_profile_data(data)["success"])
+
+        for executable in excluded:
+            with self.subTest(executable=executable):
+                launched = self._run_wrapper("", command_arguments=[executable])
+                self.assertEqual(launched["PROFILE"], "")
+                self.assertEqual(launched["FALLBACK"], "mako")
+        launched = self._run_wrapper("", command_arguments=["heroic-run", "witcher3.exe"])
+        self.assertEqual(launched["PROFILE"], game)
+
+    def _run_wrapper(self, app_id: str, extra_environment=None, command_arguments=()):
         result = subprocess.run(
             [
                 str(self.service.mako_script_path),
                 "/bin/bash",
                 "-c",
                 'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nVKBASALT_RELOAD=%s\\nIMPLICIT=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VKBASALT_CONFIG_RELOAD:-}" "${VK_IMPLICIT_LAYER_PATH:-}"',
+                *command_arguments,
             ],
             check=True,
             capture_output=True,
@@ -1731,6 +1817,56 @@ class GameProfileTests(unittest.TestCase):
 
 
 class ProcessDetectionTests(unittest.TestCase):
+    def test_launcher_identity_excludes_browser_threads_and_game_arguments(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proc_root = Path(temp_dir)
+            processes = [
+                ("SocialClubHelper.exe", "CrBrowserMain"),
+                ("RockstarService.exe", "RockstarService"),
+                ("RockstarErrorHandler.exe", "UnrelatedThread"),
+                ("EADesktop.exe", "LauncherThread"),
+                ("EALauncher.exe", "EALauncher.exe"),
+                ("EABackgroundService.exe", "EABackgroundSer"),
+            ]
+            for pid, (executable, thread_name) in enumerate(processes, 101):
+                process = proc_root / str(pid)
+                process.mkdir()
+                (process / "environ").write_bytes(b"SteamAppId=12345\0")
+                (process / "exe").symlink_to("/proton/wine64-preloader")
+                (process / "comm").write_text(thread_name + "\n")
+                # A launcher can name the future game in its arguments. Only
+                # the actual game process should contribute that identity.
+                (process / "cmdline").write_bytes(
+                    (executable + "\0MaxPayne3.exe\0").encode()
+                )
+                (process / "maps").write_text(f"/games/{executable}\n")
+            self.assertEqual(detect_processes_for_steam_app("12345", proc_root), [])
+            game = proc_root / "202"
+            game.mkdir()
+            (game / "environ").write_bytes(b"SteamAppId=12345\0")
+            (game / "exe").symlink_to("/proton/wine64-preloader")
+            (game / "comm").write_text("CrRendererMain\n")
+            (game / "cmdline").write_bytes(b"MaxPayne3.exe\0")
+            (game / "maps").write_text("/games/MaxPayne3.exe\n/Rockstar/SocialClubHelper.exe\n")
+            # Merely mapping a launcher file in a native process is not proof
+            # that the native executable itself is an excluded launcher.
+            native = proc_root / "201"
+            native.mkdir()
+            (native / "environ").write_bytes(b"SteamAppId=12345\0")
+            (native / "exe").symlink_to("/games/NativeGame")
+            (native / "comm").write_text("NativeGame\n")
+            (native / "maps").write_text("/Rockstar/SocialClubHelper.exe\n")
+
+            detected = detect_processes_for_steam_app("12345", proc_root)
+
+        self.assertEqual(detected, ["MaxPayne3.exe", "NativeGame"])
+
+    def test_generic_launchers_and_rockstar_game_executables_remain_matchable(self):
+        for executable in ("Launcher.exe", "MaxPayne3.exe", "PlayMaxPayne3.exe",
+                           "GTA5.exe", "RDR2.exe", "MyRockstarService.exe"):
+            with self.subTest(executable=executable):
+                self.assertTrue(is_matchable_process_name(executable))
+
     def test_all_registered_launchers_are_excluded_from_profile_aliases(self):
         for name in EXCLUDED_WINDOWS_LAUNCHERS:
             for candidate in (name, name.upper(), name[:15], name[:15].upper(),

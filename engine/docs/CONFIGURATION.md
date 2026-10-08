@@ -72,7 +72,9 @@ Frame Generation, Scaling, GPU selection, and Renderer performance controls can 
 
 ### Launcher exclusions
 
-MAKO keeps known launcher and web-helper processes inactive while allowing their child games to match normally. The shared [launcher exclusion registry](../mako-common/launcher_exclusions.json) is the source for both MAKO Renderer and MAKO Decky. Contributors changing it must update [the compatibility ledger](../../CLEANUPS.md), run `just generate-launcher-exclusions`, and verify with `just check-launcher-exclusions`.
+MAKO keeps known launcher and web-helper processes inactive while allowing their child games to match normally. This includes Ubisoft Connect, CD Projekt RED's `REDprelauncher.exe` and `REDlauncher.exe`, Rockstar's `SocialClubHelper.exe`, `RockstarService.exe`, and `RockstarErrorHandler.exe`, and the EA app's `EADesktop.exe`, `EALauncher.exe`, and `EABackgroundService.exe`, even when they inherit an explicit game profile or an older profile matches them. The shared [launcher exclusion registry](../mako-common/launcher_exclusions.json) is the source for both MAKO Renderer and MAKO Decky. Contributors changing it must update [the compatibility ledger](../../CLEANUPS.md), run `just generate-launcher-exclusions`, and verify with `just check-launcher-exclusions`.
+
+Rockstar documents its main launcher at [`Rockstar Games/Launcher/Launcher.exe`](https://support.rockstargames.com/articles/6lMu3vkdWoK5VzkOBjAnPw/repeatedly-being-prompted-by-user-account-control-when-attempting-to-launch-rockstar-games-launcher). Its generic `Launcher.exe` basename is not globally excluded, and actual game entry points such as `PlayMaxPayne3.exe`, `MaxPayne3.exe`, `GTA5.exe`, and `RDR2.exe` remain eligible for matching. The [EA app executable names](https://help.ea.com/en/articles/platforms/ea-app-how-to-close-background-apps/) distinguish the app from its games. Decky also omits generic browser thread aliases and rejects every alias from a process whose primary mapped Windows executable is an excluded launcher.
 
 ## Global settings
 

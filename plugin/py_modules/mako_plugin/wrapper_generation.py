@@ -65,9 +65,10 @@ from .profile_storage import (
     processes_for_config,
     vkbasalt_config_path,
 )
+from .process_detection import is_matchable_process_name
 
 
-WRAPPER_FORMAT_VERSION = 75
+WRAPPER_FORMAT_VERSION = 76
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -803,12 +804,18 @@ def wrapper_profile_configuration_lines(
         for profile_name, entry in metadata.items()
         if re.fullmatch(r"\d+", str(entry.get("steam_app_id") or ""))
     ]
-    process_profiles = [
-        (profile_name, processes_for_config(config))
-        for profile_name, config in profile_data["profiles"].items()
-        if profile_name != DEFAULT_PROFILE_NAME
-        and processes_for_config(config)
-    ]
+    process_profiles: list[tuple[str, list[str]]] = []
+    for profile_name, config in profile_data["profiles"].items():
+        if profile_name == DEFAULT_PROFILE_NAME:
+            continue
+        # Older captures can contain shared launcher/helper aliases. Apply
+        # the capture policy before promoting an argument match to an override.
+        processes = [
+            name for name in processes_for_config(config)
+            if is_matchable_process_name(name)
+        ]
+        if processes:
+            process_profiles.append((profile_name, processes))
 
     lines = [
         f'mako_wrapper_profile="${{{MAKO_PROFILE_ENV}:-}}"',

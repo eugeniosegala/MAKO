@@ -7,5 +7,31 @@
       "upc.exe",
       "UplayWebCore.exe"
     ]
+  },
+  {
+    "launcher": "CD Projekt RED",
+    "reason": "The pre-launcher and launcher inherit the game's MAKO profile environment. Keep their own windows on native presentation and exclude them from Decky profile capture while preserving activation for the child game, including when older profiles explicitly name the launcher.",
+    "executables": [
+      "REDprelauncher.exe",
+      "REDlauncher.exe"
+    ]
+  },
+  {
+    "launcher": "Rockstar Games helpers",
+    "reason": "Social Club, service, and error-handler processes inherit the game's MAKO profile environment. Keep these helpers on native presentation and exclude them from Decky profile capture while preserving the actual game executable. The generic Launcher.exe basename is not excluded.",
+    "executables": [
+      "SocialClubHelper.exe",
+      "RockstarService.exe",
+      "RockstarErrorHandler.exe"
+    ]
+  },
+  {
+    "launcher": "EA app",
+    "reason": "The EA app UI, launcher, and background service inherit the game's MAKO profile environment. Keep them on native presentation and exclude them from Decky profile capture while preserving activation for the child game.",
+    "executables": [
+      "EADesktop.exe",
+      "EALauncher.exe",
+      "EABackgroundService.exe"
+    ]
   }
 ]

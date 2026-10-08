@@ -9,14 +9,22 @@ from .constants import SCRIPT_NAME, STEAM_APP_ID_ENV_KEYS
 from .launcher_exclusions_generated import EXCLUDED_WINDOWS_LAUNCHERS
 
 _HELPER_PROCESS_NAMES = {
+    "audio.crutility",
     "bash",
     "bwrap",
+    "comet",
     "conhost.exe",
+    "crbrowsermain",
+    "crgpumain",
+    "crrenderermain",
     "explorer.exe",
     "flatpak",
+    "gamemoderun",
     "gameoverlayui",
     "gamescope",
+    "heroic-run",
     Path(SCRIPT_NAME).name,
+    "network.crutili",
     "ntoskrnl.exe",
     "plugplay.exe",
     "pressure-vessel-wrap",
@@ -32,8 +40,10 @@ _HELPER_PROCESS_NAMES = {
     "steam.exe",
     "steam-runtime-launch-client",
     "steamwebhelper",
+    "storage.crutili",
     "svchost.exe",
     "tabtip.exe",
+    "video_capture.c",
     "winedevice.exe",
     "wine",
     "wine64",
@@ -43,6 +53,7 @@ _HELPER_PROCESS_NAMES = {
     "wine64-preloader",
     "wineserver",
     "xalia.exe",
+    "xdg-dbus-proxy",
 } | EXCLUDED_WINDOWS_LAUNCHERS | {
     name[:15] for name in EXCLUDED_WINDOWS_LAUNCHERS
 }
@@ -86,11 +97,33 @@ def is_matchable_process_name(value: str) -> bool:
 def _candidate_names(process_dir: Path) -> Iterable[str]:
     try:
         executable = os.readlink(process_dir / "exe")
-        candidate = _clean_candidate(executable)
-        if candidate:
-            yield candidate
     except OSError:
-        pass
+        executable = ""
+
+    try:
+        mapped_content = (process_dir / "maps").read_text(
+            encoding="utf-8", errors="ignore"
+        )
+    except OSError:
+        mapped_content = ""
+
+    identity = executable
+    if "wine" in executable or "proton" in executable:
+        for line in mapped_content.splitlines():
+            if not line.lower().endswith(".exe"):
+                continue
+            mapped_executable = _WINDOWS_EXECUTABLE.search(line)
+            if mapped_executable:
+                identity = mapped_executable.group(1)
+                break
+    # Match the Renderer's executable authority before considering mutable
+    # thread names or a future game's executable in launcher arguments.
+    if identity.replace("\\", "/").rsplit("/", 1)[-1].lower() in EXCLUDED_WINDOWS_LAUNCHERS:
+        return
+
+    candidate = _clean_candidate(executable)
+    if candidate:
+        yield candidate
 
     try:
         candidate = _clean_candidate(
@@ -104,18 +137,13 @@ def _candidate_names(process_dir: Path) -> Iterable[str]:
     # Proton's Linux process is normally a Wine loader. Its mapped Windows
     # executable and command line contain the identity used by the renderer's
     # own active_in matcher.
-    for filename, binary in (("cmdline", True), ("maps", False)):
-        try:
-            if binary:
-                content = (process_dir / filename).read_bytes().decode(
-                    "utf-8", errors="ignore"
-                ).replace("\0", " ")
-            else:
-                content = (process_dir / filename).read_text(
-                    encoding="utf-8", errors="ignore"
-                )
-        except OSError:
-            continue
+    try:
+        command_line = (process_dir / "cmdline").read_bytes().decode(
+            "utf-8", errors="ignore"
+        ).replace("\0", " ")
+    except OSError:
+        command_line = ""
+    for content in (command_line, mapped_content):
         for match in _WINDOWS_EXECUTABLE.finditer(content):
             candidate = _clean_candidate(match.group(1))
             if candidate:

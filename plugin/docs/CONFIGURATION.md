@@ -22,6 +22,8 @@ The **Default** profile applies when no saved game or process profile matches. S
 
 The profile dropdown chooses which profile you are editing; it does not force that profile onto the running game. Use **Matched Processes** only when a launcher, emulator, or unusual game executable needs an additional match.
 
+Registered Ubisoft Connect and CD Projekt RED launchers, Rockstar's Social Club/service/error helpers, the EA app, Heroic launch helpers, sandbox helpers, and generic browser thread names are excluded from game capture. If only these processes are running, **Save profile for &lt;game&gt;** asks you to wait until gameplay has loaded. For an older profile containing only launcher or helper matches, save it again during gameplay to capture the rendering executable; this refresh replaces previously captured aliases while preserving manually added matches. A matching profile can take over live when MAKO Renderer was initialized at launch; options marked **Restart** still require restarting the game. Generic game entry points such as `Launcher.exe` and `PlayMaxPayne3.exe` remain eligible for matching.
+
 ### AC and battery settings
 
 Enable **Separate power settings** for the selected profile, then use **Editing settings for** to configure **Handheld (Battery)** and **Docked (AC Power)** independently. Both start as copies of the existing Renderer settings. **Base settings** remain editable and are used when power detection is unavailable at startup; turning separate settings off restores that set.

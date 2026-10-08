@@ -797,6 +797,11 @@ scaling_sharpness = 0.5
             "/Ubisoft/UbisoftConnect.exe/TheCrewMotorfest.exe",
             "/games/MyUbisoftConnect.exe", "/games/upc.exe.backup",
             "/games/UplayWebCoreGame.exe", "/games/UnknownGame",
+            "/CDPR/REDlauncher.exe/witcher3.exe", "/games/witcher3.exe",
+            "/games/MyREDlauncher.exe", "/games/REDprelauncher.exe.backup",
+            "/Rockstar Games/Launcher/MaxPayne3.exe", "/games/PlayMaxPayne3.exe",
+            "/games/GTA5.exe", "/games/RDR2.exe", "/games/Launcher.exe",
+            "/games/MyRockstarService.exe", "/games/EADesktop.exe.backup",
         }) {
         auto game = gameIdentification;
         game.executable = "/proton/files/bin/wine64-preloader";
