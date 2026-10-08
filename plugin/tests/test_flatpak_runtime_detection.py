@@ -392,6 +392,41 @@ versions=27.08;26.08;25.08;24.08
                                  f"Install the MAKO {version} runtime extension before enabling this application.")
                 self.assertFalse(any(args[0] == "override" for args in calls))
 
+    def test_app_inventory_reports_current_direct_or_inherited_runtime(self):
+        self.service.check_flatpak_available = lambda: True
+        self.service._check_app_override_status = lambda _app: {
+            "filesystem": True, "wrapper": True, "legacy_env": False,
+            "mako_env": False, "required_env": True,
+        }
+        for runtime, inherited_version, expected in (
+            ("org.freedesktop.Platform/x86_64/25.08", None, "25.08"),
+            ("org.freedesktop.Platform/x86_64/26.08", None, "26.08"),
+            ("org.kde.Platform/x86_64/6.11", "26.08", "26.08"),
+            ("org.kde.Platform/x86_64/6.12", "27.08", None),
+            (None, None, None),
+        ):
+            with self.subTest(runtime=runtime):
+                def run(args, **_kwargs):
+                    if args == ["list", "--app"]:
+                        return _result(f"Example\t{self.app_id}\n")
+                    if args == ["info", "--show-runtime", self.app_id]:
+                        return _result(f"{runtime}\n") if runtime else _result(returncode=1)
+                    if args == ["info", "--show-metadata", runtime]:
+                        return _result(
+                            "[Extension org.freedesktop.Platform.VulkanLayer]\n"
+                            f"version={inherited_version}\n"
+                        )
+                    self.fail(f"unexpected Flatpak command: {args}")
+
+                self.service._run_flatpak_command = run
+                response = self.service.get_flatpak_apps()
+                self.assertTrue(response["success"], response)
+                app = response["apps"][0]
+                self.assertEqual(app["runtime_version"], expected)
+                self.assertTrue(app["has_filesystem_override"])
+                self.assertTrue(app["has_wrapper_override"])
+                self.assertTrue(app["has_required_env_override"])
+
     def test_preparation_rejects_unsupported_runtime_without_writing_overrides(self):
         self.service.check_flatpak_available = lambda: True
         runtime = "org.freedesktop.Platform/x86_64/27.08"

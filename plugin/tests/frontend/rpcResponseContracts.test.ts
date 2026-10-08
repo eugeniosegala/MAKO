@@ -85,8 +85,19 @@ const nullableResponseFixtures = {
     success: false,
     message: "",
     error: null,
-    apps: [],
-    total_apps: 0,
+    apps: [
+      {
+        app_id: "org.example.Application",
+        app_name: "Example",
+        wrapper_path: "/tmp/mako-run",
+        runtime_version: null,
+        has_filesystem_override: false,
+        has_wrapper_override: false,
+        has_env_override: false,
+        has_required_env_override: false,
+      },
+    ],
+    total_apps: 1,
   } satisfies FlatpakAppInfo,
   flatpakOperation: {
     success: true,

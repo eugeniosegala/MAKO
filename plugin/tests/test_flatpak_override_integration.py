@@ -46,7 +46,8 @@ class FlatpakOverrideIntegrationTests(unittest.TestCase):
                 # Supply only application/runtime inventory. Preparation,
                 # removal, serialization, parsing, and RPC payloads stay real.
                 service._host_architecture_supported = lambda: True
-                service._get_app_runtime_version = lambda _app: "25.08"
+                runtime_version = "25.08"
+                service._get_app_runtime_version = lambda _app: runtime_version
                 service._is_extension_installed = lambda _version: True
                 run_flatpak = service._run_flatpak_command
 
@@ -70,6 +71,7 @@ class FlatpakOverrideIntegrationTests(unittest.TestCase):
                     app = read_app()
                     self.assertEqual(app["has_filesystem_override"], expected)
                     self.assertEqual(app["has_wrapper_override"], expected)
+                    self.assertEqual(app["runtime_version"], runtime_version)
                     if expected:
                         self.assertTrue(app["has_required_env_override"])
                     else:
@@ -89,11 +91,17 @@ class FlatpakOverrideIntegrationTests(unittest.TestCase):
                     assert_prepared(True)
                     assert_prepared(True)
 
+                override_path = flatpak_directory / "overrides" / app_id
+                prepared_override = override_path.read_bytes()
+                runtime_version = "26.08"
+                assert_prepared(True)
+                self.assertEqual(override_path.read_bytes(), prepared_override)
+
                 response = service.remove_app_override(app_id)
                 self.assertTrue(response["success"], response)
                 assert_prepared(False)
 
-                override = (flatpak_directory / "overrides" / app_id).read_text()
+                override = override_path.read_text()
                 self.assertIn("MANGOHUD=1", override)
                 self.assertIn(f"{root}/unrelated:ro;", override)
 

@@ -81,4 +81,6 @@ Launch, configure the game profile, and restart after enabling features. For Ope
 
 After updating MAKO, use **Flatpak Setup > Update** for each prepared app's matching runtime extension, then restart the app. Flatpak Heroic/Lutris use per-game wrappers; emulator preparation is app-wide.
 
+If an app update changes its runtime, reopen **Flatpak Setup**. Prepared apps show whether their current matching MAKO extension is installed. When it is missing, select **Install <version> extension** beside the app, then restart the app and its games. Preparation, profiles, and per-game wrappers remain valid when the app ID and overrides stay the same; do not toggle preparation off and on just to change runtimes. An unsupported or unavailable runtime, or an unavailable extension-status check, shows a warning without guessing an install branch. New runtime branches are installed only when selected; **Install MAKO Renderer** refreshes branches already installed.
+
 MAKO Scaler and Shaders work without Lossless Scaling; Frame Generation and LS1 require it. For problems, [collect diagnostics](COLLECT_DIAGNOSTICS.md).

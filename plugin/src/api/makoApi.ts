@@ -123,6 +123,7 @@ export interface FlatpakApp {
   app_id: string;
   app_name: string;
   wrapper_path: string;
+  runtime_version: Nullable<FlatpakRuntimeVersion>;
   has_filesystem_override: boolean;
   has_wrapper_override: boolean;
   has_env_override: boolean;

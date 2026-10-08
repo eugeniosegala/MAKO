@@ -142,6 +142,7 @@ class FlatpakApp(TypedDict):
     app_id: str
     app_name: str
     wrapper_path: str
+    runtime_version: Optional[str]
     has_filesystem_override: bool
     has_wrapper_override: bool
     has_env_override: bool
@@ -600,6 +601,7 @@ class FlatpakService(BaseService):
                         "app_id": app_id,
                         "app_name": app_name,
                         "wrapper_path": str(self.mako_script_path),
+                        "runtime_version": self._get_app_runtime_version(app_id),
                         "has_filesystem_override": override_status["filesystem"],
                         "has_wrapper_override": override_status["wrapper"],
                         "has_env_override": override_status["legacy_env"],

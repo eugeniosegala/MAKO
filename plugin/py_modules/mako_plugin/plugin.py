@@ -571,7 +571,7 @@ class Plugin:
         Returns:
             FlatpakAppInfo dict with apps list and override status
         """
-        return self.flatpak_service.get_flatpak_apps()
+        return await asyncio.to_thread(self.flatpak_service.get_flatpak_apps)
 
     async def set_flatpak_app_override(
             self, app_id: str

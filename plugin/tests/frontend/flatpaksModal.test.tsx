@@ -23,6 +23,10 @@ const navigation = vi.hoisted(() => ({
   NavigateToExternalWeb: vi.fn(),
 }));
 const modalUi = vi.hoisted(() => ({ showModal: vi.fn() }));
+const toast = vi.hoisted(() => ({
+  showErrorToast: vi.fn(),
+  showSuccessToast: vi.fn(),
+}));
 
 vi.mock("@decky/ui", () => ({
   ModalRoot: ({ children }: { children: React.ReactNode }) => (
@@ -40,10 +44,16 @@ vi.mock("@decky/ui", () => ({
   ButtonItem: ({
     children,
     onClick,
+    disabled,
   }: {
     children: React.ReactNode;
     onClick?: () => void;
-  }) => <button onClick={onClick}>{children}</button>,
+    disabled?: boolean;
+  }) => (
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  ),
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -79,10 +89,7 @@ vi.mock("../../src/components/MakoUi", () => ({
   makoPanelSectionHeaderStyle: {},
   makoPanelStyle: {},
 }));
-vi.mock("../../src/utils/toastUtils", () => ({
-  showErrorToast: vi.fn(),
-  showSuccessToast: vi.fn(),
-}));
+vi.mock("../../src/utils/toastUtils", () => toast);
 vi.mock("../../src/i18n/i18n", () => ({
   default: (
     _key: string,
@@ -96,6 +103,19 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { FlatpaksModal } from "../../src/components/FlatpaksModal";
+import type { FlatpakApp } from "../../src/api/makoApi";
+
+const preparedApp = (overrides: Partial<FlatpakApp> = {}): FlatpakApp => ({
+  app_id: "com.heroicgameslauncher.hgl",
+  app_name: "Heroic",
+  wrapper_path: "/home/deck/.local/bin/mako-run",
+  runtime_version: "26.08",
+  has_filesystem_override: true,
+  has_wrapper_override: true,
+  has_env_override: false,
+  has_required_env_override: true,
+  ...overrides,
+});
 
 afterEach(() => {
   cleanup();
@@ -103,6 +123,161 @@ afterEach(() => {
 });
 
 describe("Flatpak application preparation", () => {
+  test("repairs a runtime upgrade for all matching apps without re-preparing them", async () => {
+    window.SP_REACT = React;
+    let runtimeVersion: "25.08" | "26.08" = "25.08";
+    let installed = false;
+    let finishInstall: (value: { success: boolean }) => void;
+    api.getLaunchOption.mockResolvedValue({});
+    api.getFlatpakApps.mockImplementation(async () => ({
+      success: true,
+      apps: [
+        preparedApp({ runtime_version: runtimeVersion }),
+        preparedApp({
+          app_id: "org.DolphinEmu.dolphin-emu",
+          app_name: "Dolphin",
+          runtime_version: runtimeVersion,
+          has_env_override: true,
+        }),
+      ],
+    }));
+    api.checkFlatpakExtensionStatus.mockImplementation(async () => ({
+      success: true,
+      installed_23_08: false,
+      installed_24_08: false,
+      installed_25_08: true,
+      installed_26_08: installed,
+    }));
+    api.installFlatpakExtension.mockImplementation(
+      () =>
+        new Promise<{ success: boolean }>((resolve) => {
+          finishInstall = resolve;
+        }),
+    );
+    api.uninstallFlatpakExtension.mockImplementation(async () => {
+      installed = false;
+      return { success: true };
+    });
+
+    const modal = render(<FlatpaksModal />);
+    await screen.findAllByText(/Prepared — MAKO 25.08 extension installed/);
+    modal.unmount();
+    runtimeVersion = "26.08";
+    render(<FlatpaksModal />);
+    expect(
+      await screen.findAllByText(/Prepared — MAKO 26.08 extension missing/),
+    ).toHaveLength(2);
+    const buttons = screen.getAllByRole("button", {
+      name: "Install 26.08 extension",
+    });
+    fireEvent.click(buttons[0]);
+    await screen.findAllByText("Installing...");
+    expect((buttons[1] as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Flatpak application toggle" })[0],
+    );
+    expect(api.removeFlatpakAppOverride).not.toHaveBeenCalled();
+    expect(api.installFlatpakExtension).toHaveBeenCalledExactlyOnceWith(
+      "26.08",
+    );
+
+    installed = true;
+    await act(async () => finishInstall!({ success: true }));
+    expect(
+      await screen.findAllByText(/Prepared — MAKO 26.08 extension installed/),
+    ).toHaveLength(2);
+    expect(
+      screen.queryByRole("button", { name: "Install 26.08 extension" }),
+    ).toBeNull();
+    expect(api.getFlatpakApps).toHaveBeenCalledTimes(3);
+    const row = within(
+      screen.getByText("Runtime 26.08").parentElement!.parentElement!
+        .parentElement!,
+    );
+    fireEvent.click(row.getByRole("button", { name: "Uninstall" }));
+    const confirmation = modalUi.showModal.mock
+      .calls[0][0] as React.ReactElement<{ onOK: () => void }>;
+    await act(async () => confirmation.props.onOK());
+    expect(
+      await screen.findAllByText(/Prepared — MAKO 26.08 extension missing/),
+    ).toHaveLength(2);
+    for (const toggle of screen.getAllByRole("button", {
+      name: "Flatpak application toggle",
+    })) {
+      expect(toggle.textContent).toBe("Enabled");
+    }
+    expect(api.setFlatpakAppOverride).not.toHaveBeenCalled();
+    expect(api.removeFlatpakAppOverride).not.toHaveBeenCalled();
+  });
+
+  test("retains the missing-extension warning and preparation after an install failure", async () => {
+    window.SP_REACT = React;
+    api.getLaunchOption.mockResolvedValue({});
+    api.getFlatpakApps.mockResolvedValue({
+      success: true,
+      apps: [preparedApp()],
+    });
+    api.checkFlatpakExtensionStatus.mockResolvedValue({
+      success: true,
+      installed_26_08: false,
+    });
+    api.installFlatpakExtension.mockResolvedValue({
+      success: false,
+      error: "Permission denied",
+    });
+    render(<FlatpaksModal />);
+    fireEvent.click(
+      await screen.findByRole("button", { name: "Install 26.08 extension" }),
+    );
+    await waitFor(() =>
+      expect(toast.showErrorToast).toHaveBeenCalledWith(
+        "Flatpak extension failed",
+        "Permission denied",
+      ),
+    );
+    expect(
+      screen.getByText(/Prepared — MAKO 26.08 extension missing/),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Flatpak application toggle" })
+        .textContent,
+    ).toBe("Enabled");
+    expect(api.getFlatpakApps).toHaveBeenCalledTimes(1);
+    expect(api.setFlatpakAppOverride).not.toHaveBeenCalled();
+    expect(api.removeFlatpakAppOverride).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [null, true, "runtime unsupported or unavailable"],
+    ["26.08", false, "extension status unavailable"],
+  ] as const)(
+    "shows unavailable runtime or extension checks without guessing an install branch",
+    async (version, statusSuccess, warning) => {
+      window.SP_REACT = React;
+      api.getLaunchOption.mockResolvedValue({});
+      api.getFlatpakApps.mockResolvedValue({
+        success: true,
+        apps: [preparedApp({ runtime_version: version })],
+      });
+      api.checkFlatpakExtensionStatus.mockResolvedValue({
+        success: statusSuccess,
+        installed_26_08: false,
+      });
+      render(<FlatpaksModal />);
+      expect(
+        await screen.findByText(new RegExp(`Prepared — ${warning}`)),
+      ).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Flatpak application toggle" })
+          .textContent,
+      ).toBe("Enabled");
+      expect(
+        screen.queryByRole("button", { name: /^Install .* extension$/ }),
+      ).toBeNull();
+      expect(api.installFlatpakExtension).not.toHaveBeenCalled();
+    },
+  );
+
   test.each([
     "Install the MAKO 26.08 runtime extension before enabling this application.",
     "Could not determine a supported Flatpak runtime for this application. Install the matching MAKO runtime extension first.",
@@ -123,6 +298,7 @@ describe("Flatpak application preparation", () => {
           {
             app_id: "org.DolphinEmu.dolphin-emu",
             app_name: "Dolphin",
+            runtime_version: "25.08",
             has_filesystem_override: false,
             has_wrapper_override: false,
             has_env_override: false,
@@ -244,6 +420,7 @@ describe("Flatpak application preparation", () => {
         {
           app_id: "com.heroicgameslauncher.hgl",
           app_name: "Heroic",
+          runtime_version: "25.08",
           wrapper_path: "/home/deck/.local/bin/mako-run",
           has_filesystem_override: false,
           has_wrapper_override: false,
@@ -295,6 +472,7 @@ describe("Flatpak application preparation", () => {
       const partialApp = {
         app_id: appId,
         app_name: appName,
+        runtime_version: "25.08",
         wrapper_path: wrapperPath,
         has_filesystem_override: true,
         has_wrapper_override: true,
@@ -373,6 +551,7 @@ describe("Flatpak application preparation", () => {
           {
             app_id: appId,
             app_name: appName,
+            runtime_version: "25.08",
             wrapper_path: wrapperPath,
             has_filesystem_override: true,
             has_wrapper_override: true,
@@ -424,6 +603,7 @@ describe("Flatpak application preparation", () => {
         {
           app_id: "org.DolphinEmu.dolphin-emu",
           app_name: "Dolphin Emulator",
+          runtime_version: "25.08",
           wrapper_path: "/var/home/test/.local/bin/mako-run",
           has_filesystem_override: true,
           has_wrapper_override: true,
@@ -454,9 +634,7 @@ describe("Flatpak application preparation", () => {
       screen.getByText(/Preparation applies to this entire Flatpak app/),
     ).toBeTruthy();
     expect(
-      screen.getByText(
-        /Heroic, Lutris, and EmuDeck use the launcher guide/,
-      ),
+      screen.getByText(/Heroic, Lutris, and EmuDeck use the launcher guide/),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByText("Open launcher setup guide"));

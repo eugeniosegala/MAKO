@@ -196,6 +196,11 @@ class RpcContractTests(unittest.TestCase):
                 for field_name, annotation in backend_hints.items():
                     if annotation is bool:
                         self.assertEqual(frontend_contract[field_name]["type"], "boolean")
+                    if field_name == "runtime_version":
+                        self.assertEqual(
+                            frontend_contract[field_name]["type"],
+                            "Nullable<FlatpakRuntimeVersion>",
+                        )
                 self.assertEqual(
                     {
                         field_name

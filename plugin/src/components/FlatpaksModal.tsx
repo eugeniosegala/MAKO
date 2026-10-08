@@ -103,8 +103,12 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
 
       if (result.success) {
         // Reload status after operation
-        const newStatus = await checkFlatpakExtensionStatus();
+        const [newStatus, newApps] = await Promise.all([
+          checkFlatpakExtensionStatus(),
+          getFlatpakApps(),
+        ]);
         setExtensionStatus(newStatus);
+        setFlatpakApps(newApps);
         showSuccessToast(
           t("FLATPAK_EXTENSION_UPDATED", "Flatpak extension updated"),
           result.message ||
@@ -293,7 +297,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                   operationInProgress === `install-${runtime.version}`;
                 const uninstallBusy =
                   operationInProgress === `uninstall-${runtime.version}`;
-                const isBusy = installBusy || uninstallBusy;
+                const isBusy = operationInProgress !== null;
                 const installed = extensionStatus[runtime.statusField];
 
                 return (
@@ -487,6 +491,18 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                     app.has_wrapper_override ||
                     app.has_env_override;
                   const appBusy = operationInProgress === `app-${app.app_id}`;
+                  const runtime = SUPPORTED_FLATPAK_RUNTIMES.find(
+                    (entry) => entry.version === app.runtime_version,
+                  );
+                  const extensionInstalled =
+                    runtime && extensionStatus?.success
+                      ? extensionStatus[runtime.statusField]
+                      : null;
+                  const needsExtension =
+                    hasOverrides && runtime && extensionInstalled === false;
+                  const installBusy =
+                    runtime &&
+                    operationInProgress === `install-${runtime.version}`;
 
                   let statusColor = "#c89558";
                   let statusText = t(
@@ -495,8 +511,30 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                   );
 
                   if (hasOverrides) {
-                    statusColor = "#65b9c9";
-                    statusText = t("FLATPAK_STATUS_CONFIGURED", "Prepared");
+                    if (!runtime) {
+                      statusText = t(
+                        "FLATPAK_STATUS_RUNTIME_UNAVAILABLE",
+                        "Prepared — runtime unsupported or unavailable",
+                      );
+                    } else if (extensionInstalled === null) {
+                      statusText = t(
+                        "FLATPAK_STATUS_EXTENSION_UNAVAILABLE",
+                        "Prepared — extension status unavailable",
+                      );
+                    } else if (extensionInstalled) {
+                      statusColor = "#65b9c9";
+                      statusText = t(
+                        "FLATPAK_STATUS_EXTENSION_READY",
+                        "Prepared — MAKO {version} extension installed",
+                        { version: runtime.version },
+                      );
+                    } else {
+                      statusText = t(
+                        "FLATPAK_STATUS_EXTENSION_MISSING",
+                        "Prepared — MAKO {version} extension missing",
+                        { version: runtime.version },
+                      );
+                    }
                   } else if (partialOverrides) {
                     statusColor = "#d58a39";
                     statusText = t("FLATPAK_STATUS_PARTIAL", "Partial");
@@ -574,6 +612,36 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                             {appError}
                           </div>
                         )}
+                        {needsExtension && (
+                          <div
+                            className="Mako_BrandButton"
+                            style={{ marginTop: "10px" }}
+                          >
+                            <ButtonItem
+                              layout="below"
+                              disabled={operationInProgress !== null}
+                              onClick={() =>
+                                handleExtensionOperation(
+                                  "install",
+                                  runtime.version,
+                                )
+                              }
+                            >
+                              {installBusy ? (
+                                <>
+                                  <MakoCompactSpinner />{" "}
+                                  {t("FLATPAK_INSTALLING_BTN", "Installing...")}
+                                </>
+                              ) : (
+                                t(
+                                  "FLATPAK_INSTALL_MATCHING_EXTENSION_BTN",
+                                  "Install {version} extension",
+                                  { version: runtime.version },
+                                )
+                              )}
+                            </ButtonItem>
+                          </div>
+                        )}
                       </div>
                       <div
                         aria-busy={appBusy}
@@ -588,7 +656,8 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                         <Toggle
                           value={hasOverrides}
                           onChange={() => {
-                            if (!appBusy) void handleAppOverrideToggle(app);
+                            if (operationInProgress === null)
+                              void handleAppOverrideToggle(app);
                           }}
                         />
                         {appBusy && (
