@@ -355,6 +355,15 @@ void AdaptiveScheduler::consumeHistoryWarmupFrame(const TimePoint frameStarted) 
 
 void AdaptiveScheduler::reportGeneratedFrameDelivery(
         const GeneratedFrameDelivery delivery) {
+    auto& rescue = this->state.rescue;
+    if (rescue.verificationUntil && rescue.pendingGeneratedFrames > 0) {
+        rescue.deliveryHealthy = rescue.deliveryHealthy &&
+            delivery.requested == rescue.pendingGeneratedFrames &&
+            delivery.acceptedForPresentation == rescue.pendingGeneratedFrames;
+        rescue.deliveredGeneratedFrames += std::min(
+            delivery.acceptedForPresentation, rescue.pendingGeneratedFrames);
+        rescue.pendingGeneratedFrames = 0;
+    }
     auto& pacedLoad = this->state.ramp.pacedLoad;
     if (pacedLoad.until) {
         pacedLoad.deliveryObserved = delivery.requested > 0 &&
@@ -470,7 +479,6 @@ void AdaptiveScheduler::startRescueMeasurement(
     rescue.previousLimit = generationLimit;
     rescue.baselineBaseFps = baselineBaseFps;
     rescue.collapsedBaseFps = currentBaseFps;
-    rescue.previousCapSuppressed = this->state.automaticBaseCap.suppressed;
     if (this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
             this->config.automaticBaseFpsCap) {
         this->suppressAutomaticBaseCap(generationLimit, baselineBaseFps,
@@ -484,15 +492,24 @@ void AdaptiveScheduler::startRescueMeasurement(
         currentBaseFps, currentBaseFps * static_cast<double>(generationLimit + 1));
 }
 
-void AdaptiveScheduler::cancelRescueMeasurement(const std::string_view reason) {
+void AdaptiveScheduler::restoreRescueAutomaticBaseCap(const std::string_view reason) {
     auto& rescue = this->state.rescue;
-    if ((rescue.until || rescue.verificationUntil) &&
-            !rescue.previousCapSuppressed &&
-            this->state.automaticBaseCap.suppressed) {
+    if (this->state.automaticBaseCap.suppressed) {
         this->state.automaticBaseCap.suppressed = false;
         this->diagnostics->automaticBaseCapRestored(rescue.previousLimit,
             rescue.baselineBaseFps, rescue.measuredBaseFps(), reason);
         this->state.outputPlanner.resetTargetClock();
+    }
+}
+
+void AdaptiveScheduler::cancelRescueMeasurement(const std::string_view reason) {
+    auto& rescue = this->state.rescue;
+    this->restoreRescueAutomaticBaseCap(reason);
+    if (rescue.verificationUntil) {
+        this->diagnostics->rescueComplete(rescue.previousLimit,
+            this->state.outputPlanner.generationLimit,
+            rescue.previousLimit, this->configuredGenerationLimit(),
+            rescue.baselineBaseFps, rescue.measuredBaseFps(), reason);
     }
     rescue.resetAttempt();
 }
@@ -868,26 +885,28 @@ AdaptiveScheduler::advanceRescueMeasurement(
         }
     }
     if (rescue.verificationUntil) {
+        if (rescue.pendingGeneratedFrames > 0) {
+            rescue.deliveryHealthy = false;
+            rescue.pendingGeneratedFrames = 0;
+        }
         rescue.observe(rawIntervalSeconds);
         if (now >= *rescue.verificationUntil) {
+            // Both the cap and generated workload have already returned.
+            // Judge recovery under the user's policy, never use improved
+            // source cadence to authorize an indefinite cap override.
             const bool improvementSurvived = rescue.sampleFrames >= 8 &&
+                rescue.deliveryHealthy && rescue.deliveredGeneratedFrames > 0 &&
                 rescue.measuredBaseFps() >= rescue.baselineBaseFps *
                     adaptiveRescueRecoveredBaseRatio &&
                 rescue.measuredBaseFps() >= rescue.collapsedBaseFps *
-                    adaptiveNativeCadenceMinimumRiseRatio &&
-                rescue.measuredBaseFps() >= std::max(adaptiveMinimumBaseFps,
-                    static_cast<double>(this->config.targetFps) / 2.0) *
-                        adaptiveNativeCadenceMinimumRiseRatio;
-            if (!improvementSurvived)
-                this->cancelRescueMeasurement("generated-load-not-recovered");
-            else {
-                this->diagnostics->rescueComplete(rescue.previousLimit,
-                    this->state.outputPlanner.generationLimit,
-                    rescue.previousLimit, this->configuredGenerationLimit(),
-                    rescue.baselineBaseFps, rescue.measuredBaseFps(),
-                    "cap-release-verified");
-                rescue.resetAttempt();
-            }
+                    adaptiveNativeCadenceMinimumRiseRatio;
+            this->diagnostics->rescueComplete(rescue.previousLimit,
+                this->state.outputPlanner.generationLimit,
+                rescue.previousLimit, this->configuredGenerationLimit(),
+                rescue.baselineBaseFps, rescue.measuredBaseFps(),
+                improvementSurvived ? "restored-policy-recovered"
+                    : "restored-policy-not-recovered");
+            rescue.resetAttempt();
         }
     }
     if (this->state.rescue.until) {
@@ -930,15 +949,6 @@ AdaptiveScheduler::advanceRescueMeasurement(
             rescueBaselineBaseFps > 0.0 &&
             measuredBaseFps >= rescueBaselineBaseFps *
                 adaptiveRescueRecoveredBaseRatio;
-        // Recovering to a rate that the configured cap already permits is
-        // not evidence that removing that cap helps. Measure actual source
-        // intervals, then check the benefit again with generation restored.
-        const bool capReleaseUseful = baseRecovered &&
-            measuredBaseFps >= rescue.collapsedBaseFps *
-                adaptiveNativeCadenceMinimumRiseRatio &&
-            measuredBaseFps >= std::max(adaptiveMinimumBaseFps,
-                static_cast<double>(this->config.targetFps) / 2.0) *
-                    adaptiveNativeCadenceMinimumRiseRatio;
         std::string_view decision = "resume-strict";
         this->state.outputPlanner.generationLimit = previousLimit;
         this->state.ramp.evaluationAt.reset();
@@ -953,19 +963,14 @@ AdaptiveScheduler::advanceRescueMeasurement(
         } else if (requiredLimit > configuredLimit) {
             decision = "ceiling-limited";
         }
-        if (!rescue.previousCapSuppressed &&
-                this->state.automaticBaseCap.suppressed) {
-            if (capReleaseUseful) {
-                rescue.verificationUntil = now + adaptiveRescueMeasurementDuration;
-                // Verification cannot share a higher-load experiment. Failed
-                // rescue still resumes ordinary Adaptive scene adaptation.
-                this->state.ramp.nextAt = rescue.verificationUntil;
-                rescue.resetSamples();
-                decision = "verify-cap-release";
-            } else {
-                this->cancelRescueMeasurement("native-sample-no-cap-benefit");
-                decision = "cap-restored-no-benefit";
-            }
+        if (this->state.automaticBaseCap.suppressed) {
+            this->restoreRescueAutomaticBaseCap("rescue-measurement-complete");
+            rescue.verificationUntil = now + adaptiveRescueMeasurementDuration;
+            // Verify the previous workload with its configured cap before
+            // ordinary Adaptive scene adaptation may try another workload.
+            this->state.ramp.nextAt = rescue.verificationUntil;
+            rescue.resetSamples();
+            decision = "verify-restored-policy";
         } else {
             rescue.resetAttempt();
         }
@@ -2111,6 +2116,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
         this->state.pacingWindow.resetWindow();
     }
 
+    if (this->state.rescue.verificationUntil)
+        this->state.rescue.pendingGeneratedFrames = generatedFrameCount;
     return AdaptiveFramePlan::evenlySpaced(generatedFrameCount);
 }
 

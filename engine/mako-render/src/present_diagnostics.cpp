@@ -431,7 +431,7 @@ namespace {
                   << " baseline_base_fps=" << baselineBaseFps
                   << " current_base_fps=" << currentBaseFps
                   << " reason=" << reason
-                  << " action=release-half-target-pacer-for-fractional-recovery"
+                  << " action=release-half-target-pacer-for-bounded-rescue"
                   << '\n';
     }
 

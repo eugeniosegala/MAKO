@@ -307,6 +307,7 @@ namespace mako::layer {
             TimePoint now, double baseFps, double rawIntervalSeconds);
         void startRescueMeasurement(TimePoint now, size_t generationLimit,
             double baselineBaseFps, double currentBaseFps);
+        void restoreRescueAutomaticBaseCap(std::string_view reason);
         void cancelRescueMeasurement(std::string_view reason);
         [[nodiscard]] inline PlanningStageResult advanceStableCadence(
             TimePoint now, double baseFps,
@@ -754,7 +755,9 @@ namespace mako::layer {
                 size_t previousLimit{0};
                 double baselineBaseFps{0.0};
                 double collapsedBaseFps{0.0};
-                bool previousCapSuppressed{false};
+                size_t pendingGeneratedFrames{0};
+                size_t deliveredGeneratedFrames{0};
+                bool deliveryHealthy{true};
                 double sampleSeconds{0.0};
                 size_t sampleFrames{0};
                 bool skipNextSample{true};
@@ -788,7 +791,9 @@ namespace mako::layer {
                     this->previousLimit = 0;
                     this->baselineBaseFps = 0.0;
                     this->collapsedBaseFps = 0.0;
-                    this->previousCapSuppressed = false;
+                    this->pendingGeneratedFrames = 0;
+                    this->deliveredGeneratedFrames = 0;
+                    this->deliveryHealthy = true;
                     this->resetSamples();
                 }
             } rescue;

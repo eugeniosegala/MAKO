@@ -271,6 +271,8 @@ for preset in "${presets[@]}"; do
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)"
       ;;
     recovery)
+      # Rescue decisions evolve; retain bounded cap restoration and historical
+      # cap-release experiments through their shared operation families.
       add_pattern "$renderer_prefix present diagnostics: operation=(adaptive-rescue-|adaptive-auto-base-cap-|adaptive-paced-load-)"
       add_pattern "$renderer_prefix present diagnostics: operation=adaptive-load-shed .*reason=paced-unpaid-real-frame-cost"
       # Include focus/watchdog records, including older recovery operation names.

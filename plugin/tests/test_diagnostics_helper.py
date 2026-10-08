@@ -245,6 +245,13 @@ class DiagnosticsHelperTests(unittest.TestCase):
     def test_bounded_rescue_decisions_survive_focused_collection(self):
         records = [
             "MAKO Renderer: present diagnostics: operation=adaptive-rescue-start context=1 reason=stable-cadence-collapse measurement_ms=1000",
+            "MAKO Renderer: present diagnostics: operation=adaptive-auto-base-cap-suppressed context=1 reason=stable-cadence-collapse action=release-half-target-pacer-for-bounded-rescue",
+            "MAKO Renderer: present diagnostics: operation=adaptive-auto-base-cap-restored context=1 measured_base_fps=60 reason=rescue-measurement-complete action=restore-half-target-pacer",
+            "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete context=1 measured_base_fps=60 decision=verify-restored-policy",
+            "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete context=1 measured_base_fps=45 decision=restored-policy-recovered",
+            "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete context=1 measured_base_fps=35 decision=restored-policy-not-recovered",
+            "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete context=1 measured_base_fps=35 decision=timing-reset",
+            # Historical decisions remain readable through the same operation filters.
             "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete context=1 measured_base_fps=60 decision=verify-cap-release",
             "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete context=1 measured_base_fps=60 decision=cap-release-verified",
             "MAKO Renderer: present diagnostics: operation=adaptive-auto-base-cap-suppressed context=1 reason=stable-cadence-collapse",

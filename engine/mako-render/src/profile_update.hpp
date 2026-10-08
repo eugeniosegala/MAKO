@@ -464,8 +464,8 @@ namespace mako::layer {
 
     /// A proven Ordered-SDR collapse may ask the presentation pacer to release
     /// only Adaptive's automatic half-target cap. Manual and Fixed caps remain
-    /// authoritative. Rescue verifies source improvement before retaining the
-    /// release; a failed or interrupted attempt restores the previous policy.
+    /// authoritative. The release lasts only for the bounded rescue sample;
+    /// verification runs after the configured cap has been restored.
     [[nodiscard]] inline double effectiveBaseFpsCap(
             const ls::GameConf& profile,
             const AdaptiveSchedulerSnapshot& scheduler,

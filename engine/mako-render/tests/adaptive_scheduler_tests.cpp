@@ -3,6 +3,7 @@
 #include "adaptive_scheduler.hpp"
 #include "generated_frame_delivery.hpp"
 #include "presentation_policy.hpp"
+#include "profile_update.hpp"
 
 #include <algorithm>
 #include <array>
@@ -4736,73 +4737,65 @@ namespace {
             "Smooth Cadence rescue generated during real-only measurement");
     }
 
-    void testOrderedSdrSmoothCollapseReleasesAutomaticCap() {
-        Harness harness(
-            90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
-            false, 2s, 90, true, true
-        );
+    void testOrderedSdrSmoothCollapseRestoresAutomaticCap() {
+        Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 90, true, true);
         harness.start();
-        harness.runAtFps(47.0, 12s);
-        require(harness.scheduler.snapshot().phase ==
-                AdaptiveSchedulerPhase::StableCadence,
-            "precondition failed: Ordered-SDR Smooth Cadence did not settle");
-
-        for (size_t frame = 0;
-                frame < 120 && !harness.scheduler.snapshot().
-                    automaticBaseCapSuppressed;
-                ++frame) {
+        harness.runAtFps(45.0, 12s);
+        for (size_t frame = 0; frame < 120 &&
+                !harness.diagnostics.contains("rescue-start"); ++frame)
             harness.frameAtFps(30.0);
-        }
-        const auto collapsed = harness.scheduler.snapshot();
-        require(collapsed.phase == AdaptiveSchedulerPhase::RescueMeasurement &&
-                collapsed.automaticBaseCapSuppressed,
-            "Ordered-SDR cadence collapse did not release the automatic cap during rescue");
-        const auto* capSuppressed = harness.diagnostics.last(
-            "automatic-base-cap-suppressed"
-        );
-        require(capSuppressed && capSuppressed->reason ==
-                "stable-cadence-collapse",
-            "Ordered-SDR Smooth collapse did not diagnose automatic-cap release");
-
-        harness.runAtFps(60.0, 2s);
-        require(harness.scheduler.snapshot().automaticBaseCapSuppressed,
-            "automatic-cap release did not survive successful rescue measurement");
-
-        size_t nativePlans = 0;
-        size_t generatedPlans = 0;
-        for (size_t frame = 0; frame < 120; ++frame) {
-            const auto plan = harness.frameAtFps(60.0);
-            require(plan.size() <= 1,
-                "post-collapse Fractional recovery exceeded the 2x ceiling");
-            if (plan.empty())
-                nativePlans++;
-            else
-                generatedPlans++;
-        }
-        require(nativePlans > 0 && generatedPlans > 0,
-            "post-collapse recovery returned to a constant 2x cadence instead of Fractional output");
+        require(harness.scheduler.snapshot().phase ==
+                    AdaptiveSchedulerPhase::RescueMeasurement &&
+                harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "collapse did not temporarily release the automatic cap");
+        const auto started = harness.now;
+        while (harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::RescueMeasurement &&
+                harness.now - started < 2s)
+            harness.frameAtFps(60.0);
+        const auto* restored = harness.diagnostics.last("automatic-base-cap-restored");
+        const auto* measured = harness.diagnostics.last("rescue-complete");
+        require(!harness.scheduler.snapshot().automaticBaseCapSuppressed &&
+                harness.now - started <= AdaptiveScheduler::rescueMeasurementDuration() + 17ms &&
+                restored && restored->reason == "rescue-measurement-complete" &&
+                measured && measured->reason == "verify-restored-policy",
+            "native measurement did not restore the cap before verification");
+        harness.runAtFps(45.0, 2s);
+        const auto* verified = harness.diagnostics.last("rescue-complete");
+        require(verified && verified->reason == "restored-policy-recovered" &&
+                !harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "healthy capped output did not complete bounded recovery");
     }
 
-    void testSmoothRescueRestoresCapWithoutNativeHeadroom() {
-        for (const double measuredFps : {30.0, 45.0}) {
+    void testSmoothRescueRestoresCapRegardlessOfNativeHeadroom() {
+        for (const double measuredFps : {30.0, 45.0, 90.0}) {
             Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
                 false, 2s, 90, true, true);
             harness.start();
-            harness.runAtFps(47.0, 12s);
+            harness.runAtFps(45.0, 12s);
             for (size_t frame = 0; frame < 120 &&
                     !harness.diagnostics.contains("rescue-start"); ++frame)
                 harness.frameAtFps(30.0);
             require(harness.diagnostics.contains("rescue-start"),
                 "precondition failed: collapse did not start rescue");
-            harness.runAtFps(measuredFps, 2s);
+            for (size_t frame = 0; frame < 180 &&
+                    harness.scheduler.snapshot().phase ==
+                        AdaptiveSchedulerPhase::RescueMeasurement; ++frame)
+                harness.frameAtFps(measuredFps);
             require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
-                "native sample without cap headroom left the automatic cap released");
-            const auto* restored = harness.diagnostics.last("automatic-base-cap-restored");
-            require(restored && restored->reason == "native-sample-no-cap-benefit",
-                "unsuccessful native sample did not diagnose cap restoration");
+                "native measurement left the automatic cap released");
+            harness.runAtFps(30.0, 2s);
+            const auto* result = harness.diagnostics.last("rescue-complete");
+            require(result && (result->reason == "restored-policy-not-recovered" ||
+                    result->reason == "timing-reset"),
+                "persistent slowdown verification decision: " +
+                    std::string(result ? result->reason : "missing") +
+                    " native_fps=" + std::to_string(measuredFps));
             harness.runAtFps(30.0, 35s);
-            require(harness.diagnostics.count("rescue-start") == 1,
-                "an unchanged heavy scene repeatedly started real-only rescue");
+            require(harness.diagnostics.count("rescue-start") == 1 &&
+                    !harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                "an unchanged heavy scene repeatedly started rescue or released its cap");
         }
     }
 
@@ -4810,7 +4803,7 @@ namespace {
         Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
             false, 2s, 90, true, true);
         harness.start();
-        harness.runAtFps(47.0, 12s);
+        harness.runAtFps(45.0, 12s);
         for (size_t frame = 0; frame < 120 &&
                 !harness.diagnostics.contains("rescue-start"); ++frame)
             harness.frameAtFps(30.0);
@@ -4820,14 +4813,172 @@ namespace {
                 harness.scheduler.snapshot().phase ==
                     AdaptiveSchedulerPhase::RescueMeasurement; ++frame)
             harness.frameAtFps(60.0);
-        require(harness.scheduler.snapshot().automaticBaseCapSuppressed,
-            "useful native sample did not arm cap verification");
-        harness.runAtFps(35.0, 2s);
         require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
-            "native-only improvement persisted after generated load lost that improvement");
-        const auto* restored = harness.diagnostics.last("automatic-base-cap-restored");
-        require(restored && restored->reason == "generated-load-not-recovered",
-            "lost generated-load recovery did not diagnose rollback");
+            "verification started without restoring the configured cap");
+        harness.runAtFps(35.0, 2s);
+        const auto* result = harness.diagnostics.last("rescue-complete");
+        require(!harness.scheduler.snapshot().automaticBaseCapSuppressed &&
+                result && result->reason == "restored-policy-not-recovered",
+            "native-only improvement was accepted after generated load lost the benefit");
+    }
+
+    void testSmoothRescueRecoversAtTargetWithConfiguredCap() {
+        for (const uint32_t targetFps : {90U, 120U}) {
+            for (const bool nativeHeadroom : {false, true}) {
+                Harness harness(targetFps, 2, true,
+                    AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                    targetFps, true, true);
+                const double healthyBaseFps = targetFps / 2.0;
+                harness.start();
+                harness.runAtFps(healthyBaseFps, 12s);
+                for (size_t frame = 0; frame < 120 &&
+                        !harness.diagnostics.contains("rescue-start"); ++frame)
+                    harness.frameAtFps(healthyBaseFps * 2.0 / 3.0);
+                require(harness.diagnostics.contains("rescue-start"),
+                    "precondition failed: collapse did not start rescue");
+                for (size_t frame = 0; frame < 240 &&
+                        harness.scheduler.snapshot().phase ==
+                            AdaptiveSchedulerPhase::RescueMeasurement; ++frame)
+                    harness.frameAtFps(nativeHeadroom ? targetFps : healthyBaseFps);
+                const auto* nativeResult = harness.diagnostics.last("rescue-complete");
+                require(nativeResult && nativeResult->reason == "verify-restored-policy" &&
+                        !harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                    "measurement did not restore the cap before checking recovery");
+                harness.runAtFps(healthyBaseFps, 2s);
+                const auto* verified = harness.diagnostics.last("rescue-complete");
+                require(!harness.scheduler.snapshot().automaticBaseCapSuppressed &&
+                        verified && verified->reason == "restored-policy-recovered" &&
+                        harness.scheduler.snapshot().generationLimit == 1,
+                    "full-target capped output was rejected or left a cap override");
+            }
+        }
+    }
+
+    void testSmoothRescueCannotLeaveCapDisabledAfterSceneRecovery() {
+        enum class Cause { SceneChange, ResettableCollapse, NeedsContinuousUncapping };
+        for (const uint32_t targetFps : {90U, 120U}) {
+            for (const auto cause : {Cause::SceneChange, Cause::ResettableCollapse,
+                    Cause::NeedsContinuousUncapping}) {
+                Harness harness(targetFps, 2, true,
+                    AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                    targetFps, true, true);
+                ls::GameConf profile;
+                profile.adaptive = true;
+                profile.target_fps = targetFps;
+                profile.adaptive_auto_base_fps_cap = true;
+                profile.frame_generation_enabled = true;
+                profile.frame_generation_provisioned = true;
+                const double healthyFps = targetFps / 2.0;
+                const double collapsedFps = targetFps / 3.0;
+                // Apply the real presentation cap owner to the model's source
+                // demand instead of merely checking the suppression flag.
+                const auto step = [&](const double potentialFps) {
+                    const double cap = effectiveBaseFpsCap(
+                        profile, harness.scheduler.snapshot(), targetFps);
+                    harness.frameAtFps(cap > 0.0
+                        ? std::min(cap, potentialFps) : potentialFps);
+                    const auto snapshot = harness.scheduler.snapshot();
+                    if (snapshot.phase != AdaptiveSchedulerPhase::RescueMeasurement)
+                        require(effectiveBaseFpsCap(profile, snapshot, targetFps) == healthyFps,
+                            "recovery overrode the configured cap outside its native sample");
+                };
+                harness.start();
+                harness.runAtFps(healthyFps, 12s);
+                for (size_t frame = 0; frame < 180 &&
+                        !harness.diagnostics.contains("rescue-start"); ++frame)
+                    step(collapsedFps);
+                require(harness.diagnostics.contains("rescue-start"),
+                    "precondition failed: modeled collapse did not start rescue");
+                const auto rescueStarted = harness.now;
+                bool recovered = false;
+                while (harness.now - rescueStarted < 5min) {
+                    const bool nativeSample = harness.scheduler.snapshot().phase ==
+                        AdaptiveSchedulerPhase::RescueMeasurement;
+                    if (cause == Cause::SceneChange && harness.now - rescueStarted >= 250ms)
+                        recovered = true; // Improvement is independent of cap policy.
+                    if (cause == Cause::ResettableCollapse && nativeSample)
+                        recovered = true; // A short break clears the modeled feedback loop.
+                    const double potentialFps = nativeSample &&
+                            (recovered || cause == Cause::NeedsContinuousUncapping)
+                        ? targetFps : recovered ? healthyFps : collapsedFps;
+                    step(potentialFps);
+                }
+                const auto* result = harness.diagnostics.last("rescue-complete");
+                const bool expectedRecovery = cause != Cause::NeedsContinuousUncapping;
+                const bool expectedDecision = result && (expectedRecovery
+                    ? result->reason == "restored-policy-recovered"
+                    : (result->reason == "restored-policy-not-recovered" ||
+                        result->reason == "timing-reset"));
+                require(expectedDecision &&
+                        harness.diagnostics.count("rescue-start") == 1 &&
+                        !harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                    "modeled recovery decision: " +
+                        std::string(result ? result->reason : "missing") +
+                        " expected_recovery=" + std::to_string(expectedRecovery) + " attempts=" +
+                        std::to_string(harness.diagnostics.count("rescue-start")));
+                require(profile.adaptive_auto_base_fps_cap && profile.target_fps == targetFps,
+                    "recovery altered the saved cap policy");
+            }
+        }
+    }
+
+    void testSmoothRescueRequiresGeneratedDeliveryForVerification() {
+        enum class Delivery { Complete, Missing, Partial, OneMissing };
+        for (const auto delivery : {Delivery::Complete, Delivery::Missing,
+                Delivery::Partial, Delivery::OneMissing}) {
+            Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+                false, 2s, 90, true, true);
+            harness.start();
+            harness.runAtFps(45.0, 12s);
+            for (size_t frame = 0; frame < 120 &&
+                    !harness.diagnostics.contains("rescue-start"); ++frame)
+                harness.frameAtFps(30.0);
+            require(harness.diagnostics.contains("rescue-start"),
+                "precondition failed: collapse did not start rescue");
+            for (size_t frame = 0; frame < 120 &&
+                    harness.scheduler.snapshot().phase ==
+                        AdaptiveSchedulerPhase::RescueMeasurement; ++frame)
+                harness.frameAtFps(60.0);
+            size_t generatedPlans = 0;
+            for (size_t frame = 0; frame < 90; ++frame) {
+                const auto plan = harness.frameAtFps(45.0, false, false);
+                if (!plan.empty())
+                    ++generatedPlans;
+                if (delivery == Delivery::Missing ||
+                        (delivery == Delivery::OneMissing && generatedPlans == 5))
+                    continue;
+                harness.scheduler.reportGeneratedFrameDelivery({
+                    plan.size(), delivery == Delivery::Partial ? 0 : plan.size()});
+            }
+            const auto* result = harness.diagnostics.last("rescue-complete");
+            require(generatedPlans >= 5 && result &&
+                    result->reason == (delivery == Delivery::Complete
+                        ? "restored-policy-recovered" : "restored-policy-not-recovered") &&
+                    !harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                "restored-policy verification ignored incomplete generated delivery");
+        }
+    }
+
+    void testSmoothRescueRestoresCapAcrossRepeatedCollapses() {
+        Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 90, true, true);
+        harness.start();
+        for (size_t episode = 1; episode <= 3; ++episode) {
+            harness.runAtFps(45.0, 20s);
+            for (size_t frame = 0; frame < 120 &&
+                    harness.diagnostics.count("rescue-start") < episode; ++frame)
+                harness.frameAtFps(30.0);
+            require(harness.diagnostics.count("rescue-start") == episode,
+                "newly qualified healthy cadence did not permit another bounded rescue");
+            for (size_t frame = 0; frame < 120 &&
+                    harness.scheduler.snapshot().phase ==
+                        AdaptiveSchedulerPhase::RescueMeasurement; ++frame)
+                harness.frameAtFps(60.0);
+            harness.runAtFps(45.0, 2s);
+            require(!harness.scheduler.snapshot().automaticBaseCapSuppressed &&
+                    harness.diagnostics.count("automatic-base-cap-restored") == episode,
+                "a later recovery inherited or retained an earlier cap override");
+        }
     }
 
     void testSmoothRescueHandlesCollapseAfterStableExit() {
@@ -4857,24 +5008,87 @@ namespace {
     }
 
     void testSmoothRescueRollsBackInterruptedMeasurement() {
-        for (const size_t interruption : {0U, 1U, 2U}) {
+        enum class Interruption { TimingReset, FastBurst, AcquireBackoff, Stabilization };
+        for (const bool duringVerification : {false, true}) {
+            for (const auto interruption : {Interruption::TimingReset,
+                    Interruption::FastBurst, Interruption::AcquireBackoff,
+                    Interruption::Stabilization}) {
+                Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+                    false, 2s, 90, true, true);
+                harness.start();
+                harness.runAtFps(47.0, 12s);
+                for (size_t frame = 0; frame < 120 &&
+                        !harness.diagnostics.contains("rescue-start"); ++frame)
+                    harness.frameAtFps(30.0);
+                require(harness.diagnostics.contains("rescue-start"),
+                    "precondition failed: collapse did not start rescue");
+                if (duringVerification) {
+                    for (size_t frame = 0; frame < 120 &&
+                            harness.scheduler.snapshot().phase ==
+                                AdaptiveSchedulerPhase::RescueMeasurement; ++frame)
+                        harness.frameAtFps(60.0);
+                    const auto* nativeResult = harness.diagnostics.last("rescue-complete");
+                    require(nativeResult && nativeResult->reason == "verify-restored-policy" &&
+                            !harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                        "precondition failed: native sample did not start verification");
+                }
+                if (interruption == Interruption::FastBurst)
+                    harness.frame(1ms);
+                else if (interruption == Interruption::AcquireBackoff)
+                    harness.frameAtFps(30.0, true);
+                else if (interruption == Interruption::Stabilization)
+                    harness.scheduler.beginStabilization(harness.now, "policy-change");
+                else
+                    harness.scheduler.resetTiming(harness.now);
+                require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                    "interrupted rescue retained temporary automatic-cap suppression");
+                harness.runAtFps(30.0, 2s);
+                const auto* completed = harness.diagnostics.last("rescue-complete");
+                require(!harness.scheduler.snapshot().automaticBaseCapSuppressed &&
+                        (!completed || completed->reason != "restored-policy-recovered"),
+                    "cancelled rescue later committed stale verification evidence");
+            }
+        }
+    }
+
+    void testSmoothRescueRejectsBriefNativeHeadroom() {
+        for (const auto [peakFps, remainingFps] :
+                {std::pair{90.0, 30.0}, std::pair{60.0, 40.0}}) {
             Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
                 false, 2s, 90, true, true);
             harness.start();
-            harness.runAtFps(47.0, 12s);
+            harness.runAtFps(45.0, 12s);
             for (size_t frame = 0; frame < 120 &&
                     !harness.diagnostics.contains("rescue-start"); ++frame)
                 harness.frameAtFps(30.0);
             require(harness.diagnostics.contains("rescue-start"),
                 "precondition failed: collapse did not start rescue");
-            if (interruption == 1)
-                harness.frame(1ms);
-            else if (interruption == 2)
-                harness.frameAtFps(30.0, true);
-            else
-                harness.scheduler.resetTiming(harness.now);
-            require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
-                "interrupted rescue retained temporary automatic-cap suppression");
+            // A short lighter interval must not outweigh the rest of a heavy
+            // scene merely because it contains more frames per unit time.
+            harness.runAtFps(peakFps, 100ms);
+            harness.runAtFps(remainingFps, 2s);
+            const auto* restored = harness.diagnostics.last("automatic-base-cap-restored");
+            const auto* completed = harness.diagnostics.last("rescue-complete");
+            require(!harness.scheduler.snapshot().automaticBaseCapSuppressed &&
+                    restored && (!completed || completed->reason != "restored-policy-recovered"),
+                "brief native headroom was mistaken for sustained cap benefit");
+        }
+    }
+
+    void testSmoothRescueIgnoresBriefSceneDips() {
+        for (const uint32_t targetFps : {60U, 90U, 120U}) {
+            Harness harness(targetFps, 2, true,
+                AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                targetFps, true, true);
+            harness.start();
+            harness.runAtFps(targetFps / 2.0, 12s);
+            for (size_t dip = 0; dip < 5; ++dip) {
+                harness.runAtFps(targetFps / 3.0, 100ms);
+                harness.runAtFps(targetFps / 2.0, 3s);
+            }
+            require(!harness.diagnostics.contains("rescue-start") &&
+                    !harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                "brief ordinary scene dips unnecessarily started recovery");
         }
     }
 
@@ -4897,12 +5111,16 @@ namespace {
         harness.runAtFps(30.0, 15s);
         require(harness.scheduler.snapshot().stableCadenceLimit == 2,
             "precondition failed: 3x cadence was not accepted");
-        harness.runAtFps(20.0, 5s);
+        // The restored-policy check reserves one second before ordinary
+        // adjacent-workload adaptation can resume its existing probe.
+        harness.runAtFps(20.0, 6s);
         require(harness.diagnostics.contains("rescue-start") &&
                 !harness.scheduler.snapshot().automaticBaseCapSuppressed &&
                 harness.scheduler.snapshot().validatedGenerationLimit == 3 &&
                 !harness.scheduler.snapshot().rampEvaluationActive,
-            "failed rescue blocked a useful ordinary Adaptive workload trial");
+            "failed rescue blocked ordinary Adaptive workload trial: limit=" +
+                std::to_string(harness.scheduler.snapshot().validatedGenerationLimit) +
+                " evaluating=" + std::to_string(harness.scheduler.snapshot().rampEvaluationActive));
     }
 
     void testGeneratedImageRecoveryFallsBackToProvenLoad() {
@@ -5381,11 +5599,17 @@ int main() {
         {"common workload rule covers 2x through 5x", testCommonWorkloadRuleCoversTwoXThroughFiveX},
         {"failed higher load cannot ratchet to degraded baseline", testFailedHigherLoadCannotRatchetToDegradedBaseline},
         {"Smooth Cadence collapse measures real-only", testSmoothCadenceCollapseUsesRealOnlyMeasurement},
-        {"Ordered SDR Smooth collapse releases automatic cap", testOrderedSdrSmoothCollapseReleasesAutomaticCap},
-        {"Smooth rescue restores cap without headroom", testSmoothRescueRestoresCapWithoutNativeHeadroom},
+        {"Ordered SDR rescue bounds automatic-cap release", testOrderedSdrSmoothCollapseRestoresAutomaticCap},
+        {"Smooth rescue restores cap regardless of headroom", testSmoothRescueRestoresCapRegardlessOfNativeHeadroom},
         {"Smooth rescue verifies generated load", testSmoothRescueVerifiesRestoredGeneratedLoad},
+        {"Smooth rescue verifies full-target capped recovery", testSmoothRescueRecoversAtTargetWithConfiguredCap},
+        {"Smooth rescue bounds overrides across scene outcomes", testSmoothRescueCannotLeaveCapDisabledAfterSceneRecovery},
+        {"Smooth rescue verifies generated delivery", testSmoothRescueRequiresGeneratedDeliveryForVerification},
+        {"Smooth rescue restores cap across repeated collapses", testSmoothRescueRestoresCapAcrossRepeatedCollapses},
         {"Smooth rescue catches post-exit collapse", testSmoothRescueHandlesCollapseAfterStableExit},
         {"Smooth rescue rolls back interruption", testSmoothRescueRollsBackInterruptedMeasurement},
+        {"Smooth rescue rejects brief native headroom", testSmoothRescueRejectsBriefNativeHeadroom},
+        {"Smooth rescue ignores brief scene dips", testSmoothRescueIgnoresBriefSceneDips},
         {"Smooth rescue watch expires", testSmoothRescueWatchExpiresWithoutCollapse},
         {"Smooth rescue preserves scene adaptation", testSmoothRescueFailurePreservesSceneAdaptation},
         {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
