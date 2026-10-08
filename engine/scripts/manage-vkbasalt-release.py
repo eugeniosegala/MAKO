@@ -16,6 +16,8 @@ from typing import Any
 from urllib.request import urlopen
 
 
+ENGINE_ROOT = Path(__file__).resolve().parent.parent
+
 REPOSITORY = "eugeniosegala/vkBasalt"
 TAG_PATTERN = re.compile(r"mako-v\d+\.\d+\.\d+\.\d+-\d+")
 SHA256_PATTERN = re.compile(r"[0-9a-f]{64}")
@@ -62,6 +64,10 @@ def _read_pin(path: Path) -> dict[str, Any]:
         pin = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as error:
         raise ValueError(f"could not read vkBasalt pin {path}: {error}") from error
+    return _validate_pin(pin)
+
+
+def _validate_pin(pin: Any) -> dict[str, Any]:
     if not isinstance(pin, dict) or pin.get("schema_version") != 1:
         raise ValueError("vkBasalt pin must use schema_version 1")
     tag = pin.get("tag")
@@ -85,6 +91,18 @@ def _read_pin(path: Path) -> dict[str, Any]:
     checksum = pin.get("sha256")
     if not isinstance(checksum, str) or SHA256_PATTERN.fullmatch(checksum) is None:
         raise ValueError("vkBasalt sha256 must be a lowercase SHA-256 value")
+    revision = pin.get("vulkan_headers_revision")
+    expected_revision = (ENGINE_ROOT / "vulkan-headers-revision.txt").read_text().strip()
+    if revision != expected_revision:
+        raise ValueError("vkBasalt Vulkan header pin must match MAKO Renderer: " + expected_revision)
+    header_commit = pin.get("vulkan_headers_commit")
+    if not isinstance(header_commit, str) or COMMIT_PATTERN.fullmatch(header_commit) is None:
+        raise ValueError("vkBasalt Vulkan headers must record their resolved commit")
+    api_version = pin.get("vulkan_api_version")
+    for name in ("VkLayer_MAKO_render.json.in", "VkLayer_MAKO_spatial_scaling.json.in"):
+        renderer_api = json.loads((ENGINE_ROOT / "mako-render" / name).read_text())["layer"]["api_version"]
+        if api_version != renderer_api:
+            raise ValueError("vkBasalt API declaration must match the reviewed MAKO Renderer API: " + renderer_api)
     return pin
 
 
@@ -186,6 +204,7 @@ def _validate_archive(pin: dict[str, Any], archive_path: Path) -> dict[str, byte
         if (
             layer.get("name") != LAYER_NAME
             or layer.get("type") != "GLOBAL"
+            or layer.get("api_version") != pin["vulkan_api_version"]
             or layer.get("library_arch") != architecture
             or layer.get("enable_environment") != ENABLE_ENVIRONMENT
             or layer.get("disable_environment") != DISABLE_ENVIRONMENT
@@ -203,7 +222,32 @@ def _validate_archive(pin: dict[str, Any], archive_path: Path) -> dict[str, byte
         or source_lines.get("upstream_commit") != pin["upstream_commit"]
     ):
         raise ValueError("vkBasalt archive source provenance does not match its pin")
+    for field in ("vulkan_headers_revision", "vulkan_headers_commit", "vulkan_api_version"):
+        if source_lines.get(field) != pin[field]:
+            raise ValueError("vkBasalt archive Vulkan provenance does not match its pin: " + field)
     return members
+
+
+def _pin_from_archive(archive: Path) -> dict[str, Any]:
+    members = _archive_members(archive)
+    source = dict(line.split("=", 1) for line in members[SOURCE_PATHS["source"]].decode("utf-8").splitlines() if "=" in line)
+    tag = source.get("tag")
+    asset = f"vkBasalt-{tag}-linux-x86.tar.xz"
+    pin = _validate_pin({
+        "schema_version": 1,
+        "repository": REPOSITORY,
+        "tag": tag,
+        "source_commit": source.get("commit"),
+        "upstream_commit": source.get("upstream_commit"),
+        "asset": asset,
+        "url": f"https://github.com/{REPOSITORY}/releases/download/{tag}/{asset}",
+        "sha256": _sha256(archive),
+        "vulkan_headers_revision": source.get("vulkan_headers_revision"),
+        "vulkan_headers_commit": source.get("vulkan_headers_commit"),
+        "vulkan_api_version": source.get("vulkan_api_version"),
+    })
+    _validate_archive(pin, archive)
+    return pin
 
 
 def _manifest(source: bytes, architecture: str, library_path: str) -> bytes:
@@ -279,6 +323,29 @@ def _stage_native(
         _write(path, content, mode)
 
 
+def _flatpak_manifest(pin: dict[str, Any], architecture: str) -> str:
+    library = "lib64" if architecture == "64" else "lib/i386-linux-gnu"
+    manifest = {
+        "file_format_version": "1.0.0",
+        "layer": {
+            "name": LAYER_NAME,
+            "type": "GLOBAL",
+            "library_path": f"/usr/lib/extensions/vulkan/makorender/{library}/vkbasalt/libvkbasalt.so",
+            "library_arch": architecture,
+            "api_version": pin["vulkan_api_version"],
+            "implementation_version": "1",
+            "description": "vkBasalt post processing layer (MAKO build)",
+            "functions": {
+                "vkGetInstanceProcAddr": "vkBasalt_GetInstanceProcAddr",
+                "vkGetDeviceProcAddr": "vkBasalt_GetDeviceProcAddr",
+            },
+            "enable_environment": ENABLE_ENVIRONMENT,
+            "disable_environment": DISABLE_ENVIRONMENT,
+        },
+    }
+    return json.dumps(manifest, indent=2) + "\n"
+
+
 def _flatpak_module(pin: dict[str, Any]) -> str:
     module = {
         "name": "vkbasalt-mako-bundle",
@@ -311,6 +378,7 @@ def main() -> int:
         default=Path(__file__).resolve().parent.parent / "vkbasalt-release.json",
     )
     parser.add_argument("--check", action="store_true")
+    parser.add_argument("--update-from-archive", type=Path, help="Validate a downloaded public archive, then replace the dependency pin")
     parser.add_argument("--stage-native", type=Path)
     parser.add_argument("--archive", type=Path)
     parser.add_argument("--cache-dir", type=Path)
@@ -319,13 +387,20 @@ def main() -> int:
     parser.add_argument("--check-flatpak-module", type=Path)
     args = parser.parse_args()
 
-    pin = _read_pin(args.pin)
+    if args.update_from_archive:
+        pin = _pin_from_archive(args.update_from_archive)
+        _write(args.pin, (json.dumps(pin, indent=2) + "\n").encode("utf-8"), 0o644)
+    else:
+        pin = _read_pin(args.pin)
     if args.generate_flatpak_module:
         _write(
             args.generate_flatpak_module,
             _flatpak_module(pin).encode("utf-8"),
             0o644,
         )
+        for name, architecture in (("vkBasalt.flatpak.json", "64"), ("vkBasalt.flatpak.x86.json", "32")):
+            _write(args.generate_flatpak_module.parent / name,
+                   _flatpak_manifest(pin, architecture).encode("utf-8"), 0o644)
     if args.check_flatpak_module:
         expected = _flatpak_module(pin)
         actual = args.check_flatpak_module.read_text(encoding="utf-8")
@@ -333,6 +408,10 @@ def main() -> int:
             raise ValueError(
                 f"generated Flatpak vkBasalt module is stale: {args.check_flatpak_module}"
             )
+        for name, architecture in (("vkBasalt.flatpak.json", "64"), ("vkBasalt.flatpak.x86.json", "32")):
+            manifest = args.check_flatpak_module.parent / name
+            if manifest.read_text(encoding="utf-8") != _flatpak_manifest(pin, architecture):
+                raise ValueError(f"generated Flatpak vkBasalt manifest is stale: {manifest}")
     if args.stage_native:
         cache_dir = args.cache_dir or args.pin.parent / "build/cache/vkbasalt"
         archive = args.archive or _obtain_archive(pin, cache_dir)
@@ -345,6 +424,7 @@ def main() -> int:
         )
     if not any((
         args.check,
+        args.update_from_archive,
         args.stage_native,
         args.generate_flatpak_module,
         args.check_flatpak_module,

@@ -1,8 +1,8 @@
 # Arch Linux packaging
 
-This directory contains the Arch Linux packaging for MAKO Renderer. `PKGBUILD` repackages the official prebuilt Linux host archive (`MAKO-Renderer-vX.Y.Z-linux.tar.xz`) from the upstream GitHub release into a system-wide `mako-renderer-bin` package, and starting with MAKO Renderer 4.0 the verified `.pkg.tar.zst` is published alongside that archive. No MAKO source is built. Every included payload file is installed with the same content hash, so the installed layers, CLI, configuration UI, and release-owned private integrations stay auditable against the archive's `MAKO-Renderer-install-manifest.txt`.
+`PKGBUILD` repackages the official `MAKO-Renderer-vX.Y.Z-linux.tar.xz` into the system-wide `mako-renderer-bin` package without compiling MAKO source. Since Renderer 4.0, the verified `.pkg.tar.zst` is published alongside the archive. Installed payload hashes match `MAKO-Renderer-install-manifest.txt`.
 
-The `-bin` suffix follows the convention for a package that repackages prebuilt deliverables instead of building them from source. A future source-built package would be named `mako-renderer`; this package provides and conflicts with that common package identity so pacman treats the two implementations as alternatives.
+`mako-renderer-bin` provides and conflicts with `mako-renderer`, the identity reserved for a future source-built alternative.
 
 ## Contents
 
@@ -80,6 +80,8 @@ This package is not currently published through an official pacman repository or
 
 ## Remove
 
+If native Remote Play is enabled, [restore Steam Client](../../../plugin/docs/REMOTE-PLAY.md#restore-steam) before removing the package.
+
 ```bash
 pacman -R mako-renderer-bin
 ```
@@ -92,7 +94,7 @@ Do not run the upstream installer or extract the archive with `MAKO_INSTALL_PREF
 
 MAKO Decky manages its user-local Renderer under `~/.local/share/mako-render`, including `lib`, `lib32`, private manifests, and `~/.local/bin/mako-run`. The standalone archive installs its prefix under `~/.local`, including `lib`, `lib32`, private manifests, and `~/.local/bin/mako-launch`. Both record ownership in `~/.local/share/mako-render/active-renderer.json`; the Decky plugin itself lives at `~/homebrew/plugins/Mako`. Neither user-local delivery path nor this package manages the other's files. This package never touches `~/.local`, and the user-local installers never touch `/usr`. The install hooks recognize both layouts, report any user-local copy they detect, and delete nothing.
 
-Managed launches are safe to mix. `mako-launch` sets `VK_IMPLICIT_LAYER_PATH` to its own private manifest directory (`/usr/share/mako-render/vulkan/implicit_layer.d` when installed system-wide), and Decky's generated wrapper does the same for the user-local directory. The loader uses that variable instead of the standard implicit-layer search paths (`$XDG_CONFIG_HOME`, `$XDG_CONFIG_DIRS`, `/etc`, `$XDG_DATA_HOME`, and `$XDG_DATA_DIRS`, each with the `vulkan/implicit_layer.d` suffix), and ignores `VK_ADD_IMPLICIT_LAYER_PATH` while it is set; both launchers also unset that variable. A managed launch therefore discovers implicit-layer manifests only in the active launcher's directory, and the loader drops duplicate layer names by keeping the first manifest in search order, so one process never loads both layer copies. MAKO ships no explicit-layer manifests, and explicit-layer paths such as `VK_LAYER_PATH` are unaffected. An enabled override layer that declares `override_paths` bypasses these variables as well, but MAKO does not use one.
+Each managed launcher selects its private directory through `VK_IMPLICIT_LAYER_PATH` and unsets `VK_ADD_IMPLICIT_LAYER_PATH`. This replaces standard implicit discovery, and the loader keeps the first manifest for duplicate layer names, so a managed process loads one copy. Explicit discovery through `VK_LAYER_PATH` is unaffected; MAKO ships no explicit manifests. An enabled override layer with `override_paths` can bypass this isolation, but MAKO uses none. See [WSI isolation](../../docs/WSI-ISOLATION.md#default-managed-launch).
 
 Residual caveats:
 
@@ -100,8 +102,6 @@ Residual caveats:
 - `~/.local/bin` is not part of the default Arch `PATH`; `/etc/profile` appends only `/usr/local/sbin`, `/usr/local/bin`, and `/usr/bin`. If you prepend `~/.local/bin` yourself, a user-local `mako-launch`, `mako-ui`, `mako-cli`, or `mako-diagnostics` shadows the packaged one. Use `/usr/bin/...` explicitly when you want this package's copy.
 - MAKO Decky's Flatpak integration owns `/usr/lib/extensions/vulkan/makorender` inside a prepared Flatpak runtime. This package never writes there. If a host exposes that path from another source, Decky's wrapper may select those extension manifests for a Decky-managed launch; remove or refresh the owning Flatpak extension rather than making this pacman package claim its files.
 - Both delivery paths share one configuration directory. See the next section.
-
-Pick one owner per user: either keep this system package and stop using the user-local install, or remove this package and keep the user-local install.
 
 ## Profiles and configuration data
 
@@ -111,9 +111,9 @@ Because both delivery paths share that directory, do not run two different MAKO 
 
 ## Updating for a new release
 
-The MAKO Renderer publisher first builds and verifies the host archive from the release commit, then records that exact artifact's version, URL, and checksum in `plugin/package.json`, runs `sync-release-pin.py`, resets `pkgrel` to 1 for a new upstream version, and verifies the pin with `check-release-pin.sh`. `verify-release-package.sh` builds the synchronized recipe against that exact local archive, validates its contents, and retains that exact `.pkg.tar.zst` for checksum recording and GitHub release publication. The archive's own install manifest remains the package payload source of truth, so the recipe neither selects files from an older archive nor maintains a second release payload list.
+The publisher pins the verified host archive in `plugin/package.json`, runs `sync-release-pin.py` (resetting `pkgrel` to 1 for a new version), and checks it with `check-release-pin.sh`. `verify-release-package.sh` packages that exact local archive and retains the verified `.pkg.tar.zst` for publication and checksum recording. The archive manifest owns payload membership; do not maintain a second list.
 
-The verifier also reads every packaged ELF's `DT_NEEDED` entries and checks its architecture and corresponding `depends` entry in `.PKGINFO`. When a future Renderer or bundled vkBasalt build links a new shared library, the Arch package build fails until its package dependency is reviewed and the verifier's soname mapping is updated. This check covers direct ELF dependencies; libraries opened dynamically still require launch testing on Arch hardware.
+The verifier checks every ELF's architecture and direct `DT_NEEDED` dependencies against `.PKGINFO`; a new shared-library dependency requires a reviewed package dependency and soname mapping. Dynamically opened libraries still need Arch launch testing.
 
 For a packaging-only fix, leave `pkgver` and `sha256sums` unchanged and increment `pkgrel`. Run `just check-arch-package` from the repository root before committing. `check-release-pin.sh` also runs in portable Renderer CTest and fails when `pkgver`, the source URL, or `sha256sums` drifts from `plugin/package.json`.
 

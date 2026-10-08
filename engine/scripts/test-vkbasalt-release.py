@@ -9,6 +9,8 @@ import io
 import json
 from pathlib import Path
 import tarfile
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -25,6 +27,9 @@ class VkBasaltReleaseTests(unittest.TestCase):
     def setUp(self) -> None:
         self.pin = {
             "schema_version": 1,
+            "vulkan_headers_revision": "v1.4.365",
+            "vulkan_headers_commit": "3" * 40,
+            "vulkan_api_version": "1.4.365",
             "repository": "eugeniosegala/vkBasalt",
             "tag": "mako-v0.3.2.10-1",
             "source_commit": "1" * 40,
@@ -38,13 +43,14 @@ class VkBasaltReleaseTests(unittest.TestCase):
             "sha256": "0" * 64,
         }
 
-    def _archive(self, root: Path) -> Path:
+    def _archive(self, root: Path, *, manifest_api: str | None = None, source_revision: str | None = None) -> Path:
         live_reload_markers = b" ".join(MODULE.LIVE_RELOAD_MARKERS)
         manifest = lambda architecture: (json.dumps({
             "file_format_version": "1.2.1",
             "layer": {
                 "name": MODULE.LAYER_NAME,
                 "type": "GLOBAL",
+                "api_version": manifest_api or self.pin["vulkan_api_version"],
                 "library_path": "libvkbasalt.so",
                 "library_arch": architecture,
                 "enable_environment": MODULE.ENABLE_ENVIRONMENT,
@@ -70,6 +76,9 @@ class VkBasaltReleaseTests(unittest.TestCase):
                 f"commit={self.pin['source_commit']}\n"
                 "upstream_repository=https://github.com/DadSchoorse/vkBasalt\n"
                 f"upstream_commit={self.pin['upstream_commit']}\n"
+                f"vulkan_headers_revision={source_revision or self.pin['vulkan_headers_revision']}\n"
+                f"vulkan_headers_commit={self.pin['vulkan_headers_commit']}\n"
+                f"vulkan_api_version={self.pin['vulkan_api_version']}\n"
             ).encode("utf-8"),
         }
         members[MODULE.SOURCE_PATHS["checksums"]] = "".join(
@@ -111,6 +120,65 @@ class VkBasaltReleaseTests(unittest.TestCase):
                 manifest["layer"]["library_path"],
                 "../../../../lib/vkbasalt/libvkbasalt.so",
             )
+
+    def test_derives_pin_from_verified_archive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive = self._archive(Path(directory))
+            self.assertEqual(MODULE._pin_from_archive(archive), self.pin)
+
+    def test_stale_flatpak_manifest_is_detected_without_rewriting(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            pin = root / "pin.json"
+            pin.write_text(json.dumps(self.pin))
+            module = root / "vkbasalt-module.json"
+            command = [sys.executable, str(SCRIPT), "--pin", str(pin)]
+            subprocess.run(command + ["--generate-flatpak-module", str(module)], check=True, capture_output=True)
+            manifest = root / "vkBasalt.flatpak.x86.json"
+            stale = manifest.read_text().replace('1.4.365', '1.3.223')
+            manifest.write_text(stale)
+            result = subprocess.run(command + ["--check-flatpak-module", str(module)], capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn(b"manifest is stale", result.stderr)
+            self.assertEqual(manifest.read_text(), stale)
+
+    def test_invalid_archive_does_not_replace_existing_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = self._archive(root, manifest_api="1.3.223")
+            pin = root / "pin.json"
+            pin.write_text("preserve existing pin\n")
+            result = subprocess.run([sys.executable, str(SCRIPT), "--pin", str(pin),
+                                     "--update-from-archive", str(archive)], capture_output=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(pin.read_text(), "preserve existing pin\n")
+
+    def test_rejects_divergent_header_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pin.json"
+            self.pin["vulkan_headers_revision"] = "v1.3.223"
+            path.write_text(json.dumps(self.pin))
+            with self.assertRaisesRegex(ValueError, "header pin must match"):
+                MODULE._read_pin(path)
+
+    def test_rejects_stale_api_declaration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive = self._archive(Path(directory), manifest_api="1.3.223")
+            with self.assertRaisesRegex(ValueError, "manifest contract"):
+                MODULE._validate_archive(self.pin, archive)
+
+    def test_rejects_archive_built_with_different_headers(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive = self._archive(Path(directory), source_revision="v1.3.223")
+            with self.assertRaisesRegex(ValueError, "Vulkan provenance"):
+                MODULE._validate_archive(self.pin, archive)
+
+    def test_generated_flatpak_manifests_match_both_architectures(self) -> None:
+        for architecture, library in (("64", "lib64"), ("32", "lib/i386-linux-gnu")):
+            layer = json.loads(MODULE._flatpak_manifest(self.pin, architecture))["layer"]
+            self.assertEqual(layer["api_version"], self.pin["vulkan_api_version"])
+            self.assertEqual(layer["library_arch"], architecture)
+            self.assertIn(f"/{library}/vkbasalt/", layer["library_path"])
 
     def test_rejects_tampered_archive(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

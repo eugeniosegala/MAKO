@@ -7,7 +7,7 @@
     "library_path": "@MAKO_SCALING_LAYER_LIBRARY_PATH@",
     "library_arch": "@MAKO_LAYER_LIBRARY_ARCH@",
     "type": "GLOBAL",
-    "api_version": "1.4.328",
+    "api_version": "1.4.365",
     "enable_environment": {
       "ENABLE_MAKO_SPATIAL_SCALING": "1"
     },

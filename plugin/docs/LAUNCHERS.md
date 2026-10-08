@@ -1,6 +1,6 @@
 # Third-party launcher setup
 
-Install MAKO Renderer through MAKO Decky first, then follow the guide for your launcher. MAKO Scaler and Shaders work without Lossless Scaling; only Frame Generation and LS1 require it. **Flatpak Setup** shows the exact **Wrapper path for this device**; the examples below use the standard SteamOS path `/home/deck/.local/bin/mako-run`.
+Install MAKO Renderer through MAKO Decky first. The examples use `/home/deck/.local/bin/mako-run`; use **Flatpak Setup > Wrapper path for this device** if yours differs. MAKO needs Vulkan, including DXVK/VKD3D for compatible Windows games.
 
 - [Heroic](#heroic)
 - [Lutris](#lutris)
@@ -8,108 +8,77 @@ Install MAKO Renderer through MAKO Decky first, then follow the guide for your l
 - [Manually added Flatpak shortcuts](#manually-added-flatpak-shortcuts)
 - [Other non-Steam games](#other-non-steam-games)
 
-Flatpak Heroic and Lutris run MAKO from the selected game's wrapper inside their sandbox. Flatpak emulators instead need app-wide preparation. After updating MAKO Decky, use **Flatpak Setup > Update** for every prepared application's matching runtime extension, then restart that application.
-
-**Using MAKO Renderer without Decky:** native Heroic and Lutris can use the installed `mako-launch` path, usually `/home/deck/.local/bin/mako-launch`, in the same per-game field described below. Configure MAKO through `mako-ui` or its configuration file. For Flatpak installations, follow the [standalone Flatpak guide](../../engine/docs/FLATPAK-GUIDE.md); the host `mako-launch` path is not a sandbox wrapper.
+For standalone MAKO Renderer, native launchers use `mako-launch`; Flatpak apps follow the [standalone guide](../../engine/docs/FLATPAK-GUIDE.md).
 
 ## Heroic
 
-Configure Flatpak Heroic through **Flatpak Setup**. Native Heroic skips the first step.
-
-1. In MAKO Decky's **Flatpak Setup**, prepare **Heroic** and install the matching runtime extension when prompted.
-2. In each game you want to use with MAKO, open **Settings > Advanced** and set the first **Wrapper** field to the path shown by MAKO. On standard SteamOS it is:
+1. For Flatpak Heroic, prepare **Heroic** in **Flatpak Setup** and install the matching extension. Native Heroic skips this step.
+2. Open the game's **Settings > Advanced** and set the first **Wrapper** field to:
 
     ```text
     /home/deck/.local/bin/mako-run
     ```
 
-    Leave **Arguments** empty and do not use `%command%`.
+    Leave **Arguments** empty; do not add `%command%`.
 
-3. Start the game normally from Heroic or its Steam shortcut.
+3. Launch from Heroic or its Steam shortcut.
 
-Preparing Heroic makes MAKO available inside its sandbox; the per-game Wrapper decides which games use it. Remove the game's Wrapper to stop using MAKO for that game.
-
-<!-- prettier-ignore -->
-> [!IMPORTANT]
-> After installing a newer MAKO ZIP, return to **Flatpak Setup** and select **Update** for Heroic's matching runtime extension, then restart Heroic. Updating MAKO Decky or the shared native Renderer does not update Flatpak extensions.
+Remove the game's Wrapper to disable MAKO for that game.
 
 ## Lutris
 
-For **Flatpak Lutris**, first prepare **Lutris** (`net.lutris.Lutris`) in MAKO Decky's **Flatpak Setup**. Install the matching runtime extension when prompted. Native Lutris skips Flatpak Setup.
-
-1. Right-click the chosen game in Lutris and open **Configure > System options**. Enable **Advanced** options if **Command prefix** is hidden.
-2. Set **Command prefix** to your MAKO wrapper path:
+1. For Flatpak Lutris, prepare **Lutris** in **Flatpak Setup** and install the matching extension.
+2. Right-click the game and open **Configure > System options**. Enable **Advanced** if needed, then set **Command prefix** to:
 
     ```text
     /home/deck/.local/bin/mako-run
     ```
 
-    Use the path displayed by MAKO for your device. If it contains spaces, enclose the whole path in double quotes. Lutris supplies the executable and arguments; do not add `%command%` or put the wrapper in **Pre-launch script**. Apply this to the selected game's configuration; a global prefix would affect every game.
+    Quote paths containing spaces. Set this per game, not globally; do not add `%command%` or use **Pre-launch script**.
 
-3. Save and start the game from Lutris or its existing Lutris-generated Steam shortcut. Keep the shortcut's original fields intact.
-4. Use Vulkan for native games or emulators, or DXVK/VKD3D for compatible Direct3D games running through Wine/Proton. MAKO does not process OpenGL output.
+3. Save and launch from Lutris or its existing Steam shortcut.
 
-Remove MAKO from that game's Command prefix to disable it. Games delegated to an already-running Steam client need the [normal Steam launch option](../../README.md#install-and-use) in Steam itself.
-
-Lutris's [system option definition](https://github.com/lutris/lutris/blob/master/lutris/sysoptions.py) and [launch command builder](https://github.com/lutris/lutris/blob/master/lutris/runner_interpreter.py) own the Command prefix behavior. Individual games and runner versions still need compatibility testing.
+Remove the prefix to disable MAKO. Games launched through an already-running Steam client need the [Steam launch option](../../README.md#install-and-use).
 
 ## EmuDeck
 
-For any EmuDeck emulator installed as a Flatpak:
+1. Prepare each Flatpak emulator in **Flatpak Setup** and install its matching extension.
+2. Select **Vulkan** in the emulator's graphics settings.
+3. In Desktop Mode, edit each game's Steam **Properties > Shortcut**:
 
-1. In MAKO Decky, select **Flatpak Setup** and prepare the emulator you use. Install its matching runtime extension when prompted. Preparation applies to the entire emulator Flatpak rather than one ROM because Flatpak must receive MAKO's layer and configuration inside its sandbox.
-2. Select **Vulkan** as that emulator's graphics backend when it offers one.
-3. In Desktop Mode, open the Steam shortcut for each EmuDeck game you want to configure, then set these fields under **Properties > Shortcut**:
+    | Field | Value |
+    | --- | --- |
+    | **Target** | `/home/deck/.local/bin/mako-run` (or your displayed wrapper path) |
+    | **Start In** | `/usr/bin` |
+    | **Launch Options** | Keep the EmuDeck-generated value, including the ROM path and flags. |
 
-    - **Target**
-
-        ```text
-        /home/deck/.local/bin/mako-run
-        ```
-
-        This is the standard SteamOS path. If MAKO shows a different **Wrapper path for this device** under **Flatpak Setup**, use the displayed path.
-
-    - **Start In**
-
-        ```text
-        /usr/bin
-        ```
-
-    - **Launch Options:** leave the EmuDeck-generated value unchanged. It already contains the correct emulator ID, ROM path, and flags for that shortcut.
-
-Steam shortcuts choose the game profile, but Flatpak preparation is app-wide. Disable it in **Flatpak Setup** to keep MAKO unavailable to an emulator.
-
-If EmuDeck installed an emulator as a native application or AppImage instead, it is not a Flatpak workflow: use the normal Steam launch option `/home/deck/.local/bin/mako-run %command%` for that shortcut.
-
-<!-- prettier-ignore -->
-> [!IMPORTANT]
-> After updating MAKO, return to **Flatpak Setup** and select **Update** for every prepared emulator's matching runtime extension.
+Disable the emulator in **Flatpak Setup** to remove app-wide preparation. Native/AppImage emulators use `/home/deck/.local/bin/mako-run %command%` in Launch Options instead.
 
 ## Manually added Flatpak shortcuts
 
-Use this workflow only when a non-Steam shortcut's original **Target** is `/usr/bin/flatpak`. For Heroic, Lutris, and EmuDeck, use their dedicated instructions above.
+For shortcuts whose original **Target** is `/usr/bin/flatpak`:
 
-1. In **Flatpak Setup**, install the matching runtime extension and prepare the Flatpak application.
-2. In the shortcut's **Properties > Shortcut**, replace **Target** with:
+1. Prepare the app and install its extension in **Flatpak Setup**.
+2. Replace **Target** with the following, using your displayed wrapper path:
 
     ```text
     "/home/deck/.local/bin/mako-run" "/usr/bin/flatpak"
     ```
 
-    Use MAKO's displayed **Wrapper path for this device** when it differs from `/home/deck/.local/bin/mako-run`.
-
-3. Leave **Start In** and **Launch Options** unchanged so the original Flatpak application ID, command, and flags are preserved.
-
-The reference shown in **Flatpak Setup** does not modify Steam automatically; it only builds the correct Target from this device's installed wrapper path.
-
-For diagnostic logging, follow [Collect MAKO Decky Diagnostics](COLLECT_DIAGNOSTICS.md).
+3. Keep **Start In** and **Launch Options** unchanged. Steam shortcut fields must be edited manually.
 
 ## Other non-Steam games
 
-For a shortcut that directly launches a native Linux game or a Windows game through Proton, keep **Target** and **Start In** unchanged and set **Launch Options** to:
+For native Linux or Proton shortcuts, keep **Target** and **Start In** and set **Launch Options** to:
 
 ```text
 /home/deck/.local/bin/mako-run %command%
 ```
 
-Launch the game, configure its profile in MAKO Decky, then restart after enabling features. MAKO requires Vulkan: use DXVK/VKD3D-Proton for Direct3D games, or try **Zink** for OpenGL.
+Launch, configure the game profile, and restart after enabling features. For OpenGL games, try **Zink**.
+
+## Updates and help
+
+After updating MAKO, use **Flatpak Setup > Update** for each prepared app's matching runtime extension, then restart the app. Flatpak Heroic/Lutris use per-game wrappers; emulator preparation is app-wide.
+
+MAKO Scaler and Shaders work without Lossless Scaling; Frame Generation and LS1 require it. For problems, [collect diagnostics](COLLECT_DIAGNOSTICS.md).

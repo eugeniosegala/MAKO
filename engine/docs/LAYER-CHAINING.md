@@ -1,6 +1,6 @@
 # Optional graphics integrations
 
-MAKO uses a private Vulkan-layer boundary so system-wide overlays and competing Frame Generation layers do not join a game accidentally. Use the managed options below rather than adding Vulkan layer paths manually. [WSI isolation](WSI-ISOLATION.md) documents the implementation contract.
+Use MAKO's managed integration controls. Restart the game after changing layer activation.
 
 ## Default MAKO Decky launch
 
@@ -10,36 +10,30 @@ Keep the normal Steam launch option:
 /home/deck/.local/bin/mako-run %command%
 ```
 
-MAKO Decky adds only the layers selected for the active profile. **Performance Settings > Disable Steam Overlay (Restart)** is on by default and removes Steam overlay hooks and layers before launch; it may improve smoothness but can affect Steam Input and overlay features. Turn it off and restart to preserve Steam hooks and, in Desktop Mode, the requested Vulkan FPS overlay when available. The standalone Qt UI exposes the same option under Performance Settings, globally for `mako-launch`. See [diagnostics](COLLECT_DIAGNOSTICS.md) to check the resulting process.
+**Disable Steam Overlay (Restart)** is on by default and may affect Steam Input. Turn it off to restore Steam's in-game overlay and FPS counter. The standalone Qt UI has the same option globally for `mako-launch`.
 
 ## Standalone MAKO Renderer with vkBasalt
 
-The standalone Renderer package already includes MAKO's pinned 64-bit and 32-bit vkBasalt build and curated effects. No separate vkBasalt installation is needed.
+vkBasalt is bundled; no separate installation is needed.
 
-The recommended setup is:
-
-1. Open **MAKO Renderer Configuration**.
-2. Select or create the game's profile and enable **Shaders**.
-3. Copy the complete launch option shown by the UI into the game's Steam launch options.
+1. Open **MAKO Renderer Configuration** and select the game's profile.
+2. Enable **Shaders**.
+3. Copy the complete launch option shown by the UI into Steam.
 4. Restart the game.
 
-The UI-generated command selects the profile and its isolated shader configuration. For a manual native Steam or Proton launch, the equivalent activation is:
+For manual native or Proton activation:
 
 ```text
 ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%
 ```
 
-Advanced users can select any standard vkBasalt configuration:
+To choose an advanced vkBasalt configuration:
 
 ```text
 ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
 ```
 
-MAKO's controls update only the options they own and preserve other entries in the selected file. Managed sharpening, anti-aliasing, denoise, and bundled or custom effect selections apply live while the layer is active. Custom paths and configuration options also reload. Invalid shader compilation retains the previous chain until a later configuration save; rebuilding may cause a brief hitch. Enabling the layer requires a game restart.
-
-`mako-launch` always selects MAKO's bundled vkBasalt rather than a system installation. If the private payload or selected configuration is unavailable, it warns and continues with MAKO Renderer alone. Native Vulkan and Proton games use this launcher; sandboxed applications require the [Flatpak vkBasalt setup](FLATPAK-GUIDE.md#optional-private-vkbasalt-chain).
-
-To disable shaders for a standalone game, turn them off in the UI and use the launch option it displays. The basic Renderer-only option is:
+Flatpak apps require [Flatpak shader setup](FLATPAK-GUIDE.md#optional-private-vkbasalt-chain). To disable Shaders, turn them off in the UI and use its updated launch option:
 
 ```text
 ~/.local/bin/mako-launch %command%
@@ -49,50 +43,43 @@ To disable shaders for a standalone game, turn them off in the UI and use the la
 
 ### Gamescope WSI compatibility
 
-**Gamescope WSI (Restart)** is an optional compatibility setting for supported 64-bit native, Proton, and prepared Flatpak launches. It can be tested when Frame Generation or Scaling has artifacts or presentation problems; Scaling otherwise uses the combined Renderer with Gamescope WSI isolated.
+Try **Gamescope WSI (Restart)** for motion artifacts or presentation problems in supported 64-bit Gamescope games. Close the game before changing it, then check **Live Status** after relaunching.
 
-Change the setting with the game closed, then verify Frame Generation and Scaling through **Live Status**. It is not supported for Desktop Mode, 32-bit WSI presentation, unprepared Flatpaks, mismatched nested Wayland sessions, or HDR. See [WSI isolation](WSI-ISOLATION.md) for architecture and presentation details.
+Unsupported: Desktop Mode, 32-bit WSI presentation, unprepared Flatpaks, mismatched nested Wayland sessions, and HDR.
 
 ### MangoHud and Shaders
 
-1. Keep `/home/deck/.local/bin/mako-run %command%` as the launch option.
-2. Select the default profile or save a profile for the game.
-3. Enable **Shaders** under **Image Processing**, or **MangoHud** under **External Tools**.
-4. Restart the game.
+Save or select the game's profile, enable **Shaders** under **Image Processing** or **MangoHud** under **External Tools**, then restart.
 
-MangoHud and Shaders are mutually exclusive. MangoHud must be installed on the host and continues to read `~/.config/MangoHud/MangoHud.conf`; host MangoHud is not enabled inside Flatpak games.
+MangoHud and Shaders cannot run together. MangoHud requires a host installation and is unavailable inside Flatpak games. Shaders use bundled vkBasalt; prepare Flatpak apps in **Flatpak Setup** first.
 
-Shaders use only MAKO's bundled vkBasalt. The compact controls provide sharpening, denoise, medium-quality FXAA or SMAA, and an ordered multi-effect picker. Combining effects increases GPU cost, and **HDR Look (SDR)** remains an SDR effect rather than HDR output. The default profile uses vkBasalt's global file, while saved profiles use isolated files shown in the UI. Advanced edits are preserved; custom chain, path, and option changes apply live while the layer is active. Source/include/texture file edits alone are not watched; use **Refresh** to reload edited source, includes, and textures.
-
-For Flatpak games, install the matching MAKO extension and prepare the application in **Flatpak Setup**. If an integration does not activate, reinstall MAKO Renderer, update the applicable Flatpak extension, and collect a [MAKO Decky diagnostics report](../../plugin/docs/COLLECT_DIAGNOSTICS.md).
+Shader selections apply live after activation. More effects cost more GPU time; **HDR Look (SDR)** does not enable HDR. Use **Refresh** after editing shader files. See [configuration](CONFIGURATION.md#qt-shaders-and-compatibility-controls) for controls and custom shaders.
 
 ## Support boundaries
 
-| Integration | Status |
+| Integration | Support |
 | --- | --- |
-| Steam Vulkan FPS overlay | Preserved automatically for native and Proton Steam launches in Desktop Mode |
-| MangoHud | Managed per profile on the host; unavailable for Flatpak games |
-| vkBasalt | Bundled and managed for Decky, standalone native/Proton, and prepared Flatpak applications |
-| XR Gaming / Breezy | Not yet validated with MAKO; see the notes below |
-| ReShade or OptiScaler through Proton | Title-specific; disable every other Frame Generation implementation |
-| RenderDoc | Developer diagnostic only |
-| OBS Vulkan Capture and other Vulkan layers | Unsupported until a specific guarded path is validated |
+| Steam Vulkan FPS overlay | Desktop Mode native/Proton launches with **Disable Steam Overlay** off |
+| MangoHud | Host games; cannot run with MAKO Shaders |
+| vkBasalt | Bundled for native/Proton and prepared Flatpak apps |
+| XR Gaming / Breezy | Compatibility unvalidated |
+| ReShade / OptiScaler through Proton | Game-specific; disable their Frame Generation |
+| RenderDoc | Developer diagnostics only |
+| OBS Vulkan Capture / other Vulkan layers | Unsupported |
 | Other Frame Generation layers | Do not combine with MAKO |
-
-Installing a Vulkan layer does not make it compatible with MAKO. Architecture, ordering, synchronization, and sandbox behavior must be validated for each integration.
 
 ## XR Gaming / Breezy
 
-XR Gaming has two different paths. Its Gamescope integration runs a ReShade effect in the compositor, outside the game's Vulkan chain. Its Vulkan-only mode uses Breezy's vkBasalt fork, which MAKO's normal isolation does not admit. MAKO's **Gamescope WSI** setting does not select between these paths, and MAKO's bundled vkBasalt is not a replacement for Breezy's transforms or head-tracking integration.
+Gamescope effects and Vulkan-only mode use different paths; MAKO's WSI toggle does not select between them. Compatibility with glasses is unvalidated.
 
-Neither path currently has validated MAKO compatibility on glasses. To investigate Anchor or Follow lag, compare MAKO alone, XR alone, and both with the same game scene, resolution, and refresh rate. For one short diagnostic run, begin with the XR effect off, enable it after 30 seconds, disable it after another 30 seconds, and note both times. Submit the resulting Breezy runtime archive with the applicable [Decky](../../plugin/docs/COLLECT_DIAGNOSTICS.md) or [standalone](COLLECT_DIAGNOSTICS.md) MAKO report.
+For Anchor/Follow lag, compare MAKO alone, XR alone, and both. Record the XR effect off for 30 seconds, on for 30 seconds, then off again, keeping the scene and settings unchanged. Send the actual Breezy runtime archive with [MAKO diagnostics](../../COLLECT_DIAGNOSTICS.md).
 
 ## Game-local Proton integrations
 
-Windows ReShade and OptiScaler installations normally use proxy DLLs and Proton DLL overrides rather than host Vulkan-layer discovery, so MAKO does not remove them. Compatibility remains title-specific: preserve the integration's documented DLL override, use the normal MAKO launch command, and disable its Frame Generation while MAKO owns generation.
+For Windows ReShade or OptiScaler, keep the integration's documented DLL overrides and use your normal MAKO launch command. Disable its Frame Generation while MAKO handles generation. Compatibility varies by game.
 
 ## Troubleshooting and rollback
 
-Layer membership is fixed when Vulkan starts. Restart the game after changing Shaders, MangoHud, Gamescope WSI, or another integration.
+Disable the optional integration and restart if startup, effects, or pacing worsen. If the problem remains, follow [Decky troubleshooting](../../plugin/docs/TROUBLESHOOTING.md) or [standalone troubleshooting](TROUBLESHOOTING.md).
 
-If a game fails to start, an effect is missing, or pacing regresses, disable the optional integration and reproduce the normal MAKO baseline. Follow [MAKO Decky troubleshooting](../../plugin/docs/TROUBLESHOOTING.md) or [standalone troubleshooting](TROUBLESHOOTING.md), then collect the matching diagnostics report if the problem remains.
+For implementation details, see [WSI isolation](WSI-ISOLATION.md).

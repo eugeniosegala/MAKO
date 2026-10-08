@@ -1,83 +1,71 @@
 # Flatpak guide
 
-**A Flatpak application needs its own MAKO extension and sandbox preparation before it can use MAKO Renderer.** Installing the native Renderer, creating a profile, or putting the host `mako-launch` command before `flatpak run` does not complete that setup. After preparation, launch the app normally; the saved application overrides activate MAKO inside its sandbox.
+**MAKO Decky users:** prepare apps through **Flatpak Setup**, then follow the [launcher guide](../../plugin/docs/LAUNCHERS.md).
 
-The standalone **MAKO Renderer Configuration** window edits profiles but does not prepare Flatpak programs. The archive's **Install MAKO Flatpak Extensions** helper installs extensions only. If MAKO Decky manages your installation, use **Flatpak Setup** and the [Decky launcher guide](../../plugin/docs/LAUNCHERS.md) instead of the manual overrides below.
-
-For standalone use, complete these steps for each Flatpak application:
-
-1. [Prepare a Renderer profile](#prepare-a-renderer-profile) for the game or emulator.
-2. [Identify the application and runtime](#identify-the-application-and-runtime).
-3. [Install the matching extension](#packaged-extensions).
-4. [Prepare the application's access and environment](#manual-application-override).
-5. [Restart, launch, and verify](#launch-and-verify).
+**Standalone users:** complete the steps below for each app. Installing the native Renderer or creating a profile alone does not prepare a Flatpak.
 
 ## Prepare a Renderer profile
 
-Use the host `~/.local/bin/mako-ui` or edit `~/.config/mako-render/conf.toml`, following [Renderer usage](../README.md#usage). Under **Profile Matching > Matched Processes**, add the rendering process, such as `Game.exe` or `dolphin-emu`. A Flatpak application ID such as `org.DolphinEmu.dolphin-emu` identifies the sandbox for setup commands; it is not the executable name used for profile matching.
+In **MAKO Renderer Configuration**, match the game's executable, such as `Game.exe` or `dolphin-emu`, and enable the features you want. Match the executable, not the Flatpak application ID.
 
-For Frame Generation or LS1, install the **default public version** of Lossless Scaling through Steam, then select the absolute path to its licensed `Lossless.dll` under **Lossless.dll Path (Restart)**. MAKO can use beta branches, but they are not validated; the default public branch is recommended. An explicit path avoids relying on Steam discovery inside the sandbox. You will grant access to its containing directory below, including when it is on an SD card, another Steam library, or inside a Flatpak Steam installation. MAKO Scaler and Shaders work without Lossless Scaling; turn **Frame Generation** off and select **MAKO Scaler** and/or **Shaders**. Enable scaling before starting the application.
+Frame Generation and LS1 require Lossless Scaling's default Steam version: set its absolute **Lossless.dll Path**. Without it, turn Frame Generation off and choose MAKO Scaler and/or Shaders.
 
 ## Identify the application and runtime
 
-Run these commands in a host terminal. First list the installed apps:
+List apps:
 
 ```bash
 flatpak list --app --columns=application,name,runtime
 ```
 
-Copy the target's application ID into `appid` below. The example selects Dolphin; substitute your installed game, launcher, or emulator. Keep the same terminal open for the remaining commands so `appid` stays set:
+Replace Dolphin's ID below with your app's ID. Keep this terminal open for the remaining commands:
 
 ```bash
 appid=org.DolphinEmu.dolphin-emu
 flatpak info --show-runtime "$appid"
 ```
 
-MAKO ships x86_64 extensions for Freedesktop **23.08, 24.08, 25.08, and 26.08**, each including layers for 64-bit and 32-bit x86 game processes. If the reported runtime is `org.freedesktop.Platform/x86_64/24.08`, choose MAKO's **24.08** branch.
+Use the reported Freedesktop branch. Supported x86_64 branches are **23.08, 24.08, 25.08, and 26.08**, with 64-bit and 32-bit game layers.
 
-For a KDE or GNOME runtime, its own version is not necessarily the extension branch. Inspect its installed metadata:
+For KDE/GNOME runtimes, inspect the metadata:
 
 ```bash
 mako_app_runtime=$(flatpak info --show-runtime "$appid")
 flatpak info --show-metadata "$mako_app_runtime"
 ```
 
-Find the `[Extension org.freedesktop.Platform.VulkanLayer]` section and use its `version=` value or a supported entry in `versions=`. For example, `version=25.08` requires MAKO's **25.08** bundle regardless of the KDE/GNOME version in the runtime name. This follows [Flatpak's extension branch rules](https://docs.flatpak.org/en/latest/extension.html#finding-base-runtime-version). If that section is absent, no listed branch matches MAKO's supported versions, or the app uses another architecture, these packaged extensions do not cover that application; do not guess a branch.
+Find `[Extension org.freedesktop.Platform.VulkanLayer]` and use a supported `version=` or `versions=` entry. If no supported branch appears, stop; do not guess.
 
 ## Packaged extensions
 
-Download `MAKO-Renderer-v<version>-flatpaks.tar.xz` from [Renderer downloads](../README.md#downloads), using the same release as your native installation, and extract it into a folder. It is a separate archive from `MAKO-Renderer-v<version>-linux.tar.xz`. In the same terminal, change to the extracted folder and install the branch identified above. This example selects **24.08**; change it to your matching branch:
+Download and extract `MAKO-Renderer-v<version>-flatpaks.tar.xz` from [Renderer downloads](../README.md#downloads), matching your native release. In the extracted folder, install your runtime branch; replace `24.08` as needed:
 
 ```bash
 mako_runtime=24.08
 flatpak install --user "./org.freedesktop.Platform.VulkanLayer.makorender-$mako_runtime.flatpak"
 ```
 
-The extension ID is `org.freedesktop.Platform.VulkanLayer.makorender`. Install each branch needed by your apps once; multiple branches can coexist. Every app still needs its own preparation below.
-
 ### Graphical extension installation
 
-Alternatively, double-click **Install MAKO Flatpak Extensions** in the extracted folder and choose the Freedesktop branch identified above. Choose **Execute** if your file manager asks. The installer performs the same user-scoped Flatpak installation; run it again to install a different supported runtime.
-
-Installing the extension does not prepare an application to use MAKO. Configure the target application's filesystem access and MAKO environment as described below, or use MAKO Decky's **Flatpak Setup** when Decky owns the installation.
+Alternatively, open **Install MAKO Flatpak Extensions** and select the matching branch. Install each required branch once, then prepare each app below.
 
 ## Manual application override
 
-Fully quit the app and any games it started before preparing it. With `appid` still set to the selected application ID, grant access to the host configuration directory and select the same configuration file used by the Renderer UI:
+Fully close the app and its games. Grant configuration access:
 
 ```bash
 flatpak override --user --filesystem="$HOME/.config/mako-render:rw" "$appid"
 flatpak override --user --env=MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" "$appid"
 ```
 
-If using Frame Generation or LS1, replace the example directory below with the directory containing the `Lossless.dll` selected in your profile's global settings. Keep the quotes for paths containing spaces. Skip this grant when using only the open scaler without a configured DLL:
+For Frame Generation or LS1, replace the example with the folder containing your configured `Lossless.dll`. Otherwise, skip this block:
 
 ```bash
 mako_dll_directory="/absolute/path/to/steamapps/common/Lossless Scaling"
 flatpak override --user --filesystem="$mako_dll_directory:ro" "$appid"
 ```
 
-Finally, save the MAKO activation and loader environment for this application:
+Apply the activation settings:
 
 ```bash
 flatpak override --user --env=ENABLE_MAKO=1 "$appid"
@@ -93,15 +81,14 @@ flatpak override --user --env=VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/
 flatpak override --user --unset-env=VK_ADD_IMPLICIT_LAYER_PATH "$appid"
 ```
 
-These overrides persist for the selected application and apply to processes it starts inside the same sandbox. Repeat preparation with a different `appid` for each additional app. The environment exposes only MAKO's implicit manifests and selects the standalone SDR presentation policy; Gamescope and Game Mode remain active outside the application's layer chain. See [WSI isolation](WSI-ISOLATION.md) for the layer boundary and [Flatpak's command reference](https://docs.flatpak.org/en/latest/flatpak-command-reference.html#flatpak-override) for override options.
+These settings persist for this app. Repeat with another `appid` for each additional app.
 
-For standalone Flatpak Heroic or Lutris, prepare the launcher app and create profiles matching each game's executable. These manual overrides are app-wide; automatic process matching chooses the game profile. Avoid setting one app-wide `MAKO_PROFILE` for a launcher that runs several games. This workflow needs no host `mako-launch` path in a game's wrapper field. MAKO Decky's per-game sandbox wrapper is a separate managed workflow.
-
-For EmuDeck, prepare each emulator installed as a Flatpak and select **Vulkan** in its graphics settings. Keep the existing Steam shortcut target, ROM path, and launch arguments. Matching an emulator process applies that profile to games running in that process; it does not distinguish ROMs. Native or AppImage emulators use the [native Renderer launch instructions](../README.md#usage).
+- **Heroic/Lutris:** prepare the launcher and match each game's executable. Avoid an app-wide `MAKO_PROFILE`; no host wrapper is needed.
+- **EmuDeck:** prepare each Flatpak emulator, select Vulkan, and keep its Steam shortcut and ROM arguments. Native/AppImage emulators use [native launch setup](../README.md#usage).
 
 ## Optional private vkBasalt chain
 
-The MAKO Flatpak extension includes the same pinned 64-bit and 32-bit private vkBasalt payload as the native archive. After completing the normal application override above, replace implicit MAKO activation with the exact explicit `MAKO Renderer -> vkBasalt` chain:
+To add bundled Shaders after the setup above:
 
 ```bash
 flatpak override --user --unset-env=ENABLE_MAKO "$appid"
@@ -111,16 +98,14 @@ flatpak override --user --unset-env=DISABLE_VKBASALT "$appid"
 flatpak override --user --env=VK_INSTANCE_LAYERS=VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing "$appid"
 ```
 
-This uses only the two manifests in MAKO's runtime extension. A system or host vkBasalt installation is not exposed to the sandbox. The host `mako-launch` option does not configure a Flatpak application.
-
-For the full vkBasalt option suite, create a standard config inside the configuration directory already granted to the sandbox, then save its absolute path:
+Create a vkBasalt configuration at the path below, then enable live reload:
 
 ```bash
 flatpak override --user --env=VKBASALT_CONFIG_FILE="$HOME/.config/mako-render/vkBasalt.conf" "$appid"
 flatpak override --user --env=VKBASALT_CONFIG_RELOAD=1 "$appid"
 ```
 
-Omit those overrides to use vkBasalt's normal configuration search without live reload. With an explicit watched file, FXAA, SMAA, CAS, DLS, sharpening strength, DLS denoise, and bundled or custom selections, order, paths, and configuration options apply live. Custom files and dependencies must be accessible inside the sandbox. Restart after changing layer activation. To return this app to the normal MAKO-only setup without removing unrelated overrides, run:
+Shader files, includes, and textures must be accessible inside the sandbox. Restart after changing activation. To return to MAKO without Shaders:
 
 ```bash
 flatpak override --user --unset-env=VK_INSTANCE_LAYERS "$appid"
@@ -134,21 +119,19 @@ flatpak override --user --env=ENABLE_MAKO=1 "$appid"
 
 ## Launch and verify
 
-After preparing the app, start it from its usual application entry or existing Steam shortcut, or run:
+Restart the app and launch normally, or run:
 
 ```bash
 flatpak run "$appid"
 ```
 
-Do not add `%command%` in a terminal. The prepared app receives its saved environment at startup, so an already-running launcher or emulator must be fully restarted. The host Renderer UI does not need to remain open. The application's rendering backend must use Vulkan, including DXVK/VKD3D for compatible Windows games.
+Use Vulkan, including DXVK/VKD3D for compatible Windows games. The host configuration window can be closed.
 
-To inspect the saved per-user overrides:
+If MAKO does not activate, inspect the overrides and sandbox access:
 
 ```bash
 flatpak override --user --show "$appid"
 ```
-
-Check for the configuration path and either baseline `ENABLE_MAKO=1` activation or the optional `VK_INSTANCE_LAYERS=VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing` chain, then check that the extension manifests and configuration file are actually available inside the sandbox:
 
 ```bash
 flatpak run --command=sh "$appid" -c '
@@ -157,56 +140,42 @@ flatpak run --command=sh "$appid" -c '
 '
 ```
 
-A missing manifest directory points to extension installation or runtime matching. An unreadable configuration points to its path or filesystem grant. If the layer loads but the feature stays inactive, check **Matched Processes**, the selected feature, and access to the configured DLL. The checks above confirm sandbox setup, not successful rendering; use [standalone diagnostics](COLLECT_DIAGNOSTICS.md) for an actual game session.
+Missing manifests usually mean the extension or runtime branch is wrong. An unreadable configuration needs its path or access grant corrected. Also check executable matching, enabled features, and DLL access. For a game report, [collect diagnostics](COLLECT_DIAGNOSTICS.md).
 
 ## Updates and disabling MAKO
 
-Updating the native Renderer does not update Flatpak extensions. Download the newer Flatpak archive, close the affected apps, and rerun its installer for each branch you use. If an app update changes its runtime, recheck the required branch and install the matching extension before relaunching it. Existing app overrides and profiles remain in place.
+Native Renderer updates do not update Flatpak extensions. Close apps and rerun the newer Flatpak archive's installer for each branch you use. Recheck the branch if an app changes runtime.
 
-To bypass MAKO for one launch of a fully closed, prepared app:
+Bypass MAKO for one launch of a closed app:
 
 ```bash
 flatpak run --env=DISABLE_MAKO=1 "$appid"
 ```
 
-To keep MAKO disabled for that app until you choose to re-enable it:
+Keep MAKO disabled:
 
 ```bash
 flatpak override --user --env=DISABLE_MAKO=1 "$appid"
 ```
 
-To re-enable it, remove that disable variable and restart the app:
+Re-enable and restart:
 
 ```bash
 flatpak override --user --unset-env=DISABLE_MAKO "$appid"
 ```
 
-Bypassing MAKO keeps the extension, filesystem grants, and loader overrides in place. It does not restore the app's previous layer setup. Avoid `flatpak override --reset` as a routine MAKO toggle: it also removes unrelated overrides for the application.
-
-## Building extensions
-
-From the MAKO monorepo:
-
-```bash
-cd engine
-./scripts/package-flatpaks.sh
-```
-
-The script builds and verifies both Renderer roles for 64-bit and 32-bit processes on every supported runtime. The resulting archive is written under `engine/out/`.
-
-[`dist/flatpak/mako-render/runtime-versions.json`](../dist/flatpak/mako-render/runtime-versions.json) owns the supported Freedesktop branches and each branch's LLVM SDK extension, ordered oldest first. The adjacent `org.freedesktop.Platform.VulkanLayer.makorender.yml.in` owns the common manifest. To add or retire a runtime, edit the catalogue, then run these commands from the monorepo root:
-
-```bash
-just generate-flatpak-runtimes
-just check-flatpak-runtimes
-```
-
-Without `just`, run `python3 scripts/generate-flatpak-runtimes.py` followed by `python3 plugin/scripts/generate_ts_schema.py`; check with `python3 plugin/scripts/check_generated_config.py`. Generation updates the Renderer shell matrix and standalone manifests, removes generated manifests for retired branches, and updates Decky's self-contained Python list and TypeScript runtime descriptors. Renderer packaging, Renderer CTest, and Decky's generated-contract gate reject stale catalogue outputs without rewriting them. Never edit those generated files independently.
-
-The same generated list drives Renderer release bundles, Decky ZIP payload validation, installed-extension refresh, RPC status fields, and every runtime row in **Flatpak Setup**. Build a complete current-source Renderer Flatpak archive and Decky ZIP when the matrix changes; an older published archive may lack newly required branches. Runtime lists are shared only at build time, so installed Decky does not need a Renderer source checkout.
-
-All runtime builds use the Vulkan-Headers ref in [`vulkan-headers-revision.txt`](../vulkan-headers-revision.txt). The SDK still supplies its own compiler and runtime libraries. `scripts/generate-flatpak-vulkan-headers.py` generates the shared `dist/flatpak/mako-render/vulkan-headers.json` module; run it after updating the pin. `scripts/package-flatpaks.sh` and Renderer CTest run its read-only `--check` gate, which rejects a stale module instead of silently using different headers. Each standalone manifest includes the shared dependency and enables `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON` for both 64-bit and 32-bit builds. The headers are build-only and removed from the finished extension.
+Avoid `flatpak override --reset`: it also removes unrelated app settings.
 
 ## Gamescope VRR overrides
 
-On and Off require host access to Gamescope control tools. Current MAKO Decky starts host discovery automatically through the matching installed Renderer helper. For a standalone installation, run `~/.local/bin/mako-vrr-lease --watch-flatpak` on the host as the game’s user while playing. The monitor discovers an enabled Renderer context requesting On or Off; Follow Steam starts no additional lease. The same detached per-game lease handles verified writes, yielding to Steam changes, and restoration after exit. Do not expose host tools or grant arbitrary host execution to a sandbox to enable this option. See [WSI isolation](WSI-ISOLATION.md#vrr-and-tearing-feedback) for validation and journal records.
+MAKO Decky handles host discovery automatically. For standalone On/Off VRR requests, run this on the host as the game's user while playing:
+
+```bash
+~/.local/bin/mako-vrr-lease --watch-flatpak
+```
+
+Requires Gamescope and a VRR-capable display. **Follow Steam** needs no helper. Do not grant extra host-execution permissions to the sandbox.
+
+## Building extensions
+
+See [Flatpak extension builds](BUILDING-FROM-SOURCE.md#flatpak-extension-builds) for source builds and runtime catalogue maintenance.

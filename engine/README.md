@@ -78,7 +78,7 @@ When shaders are enabled, use the complete launch option shown by the UI; it inc
 
 ### Other launch types
 
-For native Steam Remote Play on the receiving x86_64 Linux device, close streams and select **Override Remote Play** under **Remote Play** in the configuration app. It starts disabled. Each stream starts with the saved ordinary profile, including normal Shaders, Scaling, Frame Generation, and optional AC/battery settings. MAKO Decky can also create and select a named copy during a stream for later reuse; normal live/restart rules apply. **Restore Steam Client** removes the override and retains all profiles. The archive uninstaller restores it before removing Renderer dependencies; restore it in the UI before removing a system package or manually deleting files. Requires system Python 3.11 or newer. See [Remote Play](../plugin/docs/REMOTE-PLAY.md) for recovery and experimental hardware limits.
+For native Steam Remote Play, close streams and select **Override Remote Play** in the configuration app on the receiving x86_64 Linux device. Streams use the saved ordinary profile and normal live/restart rules. **Restore Steam Client** removes the override while retaining profiles; restore before removing a system package or manually deleting Renderer files. Requires system Python 3.11 or newer. See [Remote Play](../plugin/docs/REMOTE-PLAY.md) for setup and recovery.
 
 | Game or application | How to start it |
 | --- | --- |
@@ -89,7 +89,7 @@ For native Steam Remote Play on the receiving x86_64 Linux device, close streams
 
 `%command%` is a Steam placeholder and must not be typed into a terminal. MAKO operates on Vulkan; Proton games work through DXVK or VKD3D-Proton, while OpenGL applications require the optional Zink setting.
 
-For manual profile editing and the full setting reference, see [Configuration](docs/CONFIGURATION.md). To validate a configuration or collect a focused report, run:
+For manual profile editing and the full setting reference, see [Advanced configuration](docs/CONFIGURATION-REFERENCE.md). To validate a configuration or collect a focused report, run:
 
 ```bash
 ~/.local/bin/mako-cli validate
@@ -138,7 +138,8 @@ Artifacts are written under `engine/out/`. These commands build locally; they do
 ## More documentation
 
 - [Renderer code map](docs/RENDERER-ARCHITECTURE.md): component owners and presentation file boundaries.
-- [Configuration](docs/CONFIGURATION.md): profiles, settings, environment variables, and manual configuration.
+- [Configuration](docs/CONFIGURATION.md): Qt controls, profiles, and game launch setup.
+- [Advanced configuration](docs/CONFIGURATION-REFERENCE.md): TOML fields, defaults, and environment variables.
 - [Runtime transitions](docs/RUNTIME-TRANSITIONS.md): live, deferred, and restart-required changes.
 - [Scaling](docs/SCALING.md): spatial scaling setup, behavior, and limitations.
 - [Adaptive validation](docs/ADAPTIVE-VALIDATION.md): Adaptive scheduling and validation.

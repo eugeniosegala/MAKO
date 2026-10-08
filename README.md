@@ -48,10 +48,10 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 - **Display-aware pacing:** Adapts frame delivery to the presentation plan and Gamescope VRR state.
 - **HDR groundwork:** HDR10/PQ and linear-scRGB foundations in MAKO Renderer; disabled in MAKO Decky pending validation.
 - **64-bit and 32-bit x86 support:** Matching Vulkan layers for native and Flatpak games.
-- **Gamescope recovery:** Keeps native presentation running and resumes generation once game cadence stabilizes.
+- **Gamescope recovery:** Preserves real frames during presentation pressure and Steam-menu transitions.
 - **Automatic profiles:** Saves per-game renderer and compatibility settings, matched by Steam app ID or process.
 - **Launcher integration:** Per-game setup for Heroic, Lutris, and EmuDeck, including Steam shortcuts.
-- **Native Steam Remote Play (experimental):** Opt-in frame generation, scaling, and shaders on the receiving device, controlled from MAKO Decky or the Qt UI. See [setup and recovery](plugin/docs/REMOTE-PLAY.md).
+- **Native Steam Remote Play:** Opt-in frame generation, scaling, and shaders on the receiving device, controlled from MAKO Decky or the Qt UI.
 
 ## What MAKO is
 
@@ -146,7 +146,7 @@ Run the installer again to update. See the <a href="engine/README.md#direct-linu
 ## Documentation
 
 - <a href="plugin/docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">MAKO Decky configuration</a>: panel controls, profiles, runtime boundaries, and compatibility.
-- <a href="engine/docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">MAKO Renderer configuration</a>: Qt controls, profile settings, and advanced configuration.
+- <a href="engine/docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">MAKO Renderer configuration</a>: Qt controls, profiles, and game launch setup.
 - <a href="engine/README.md" target="_blank" rel="noopener noreferrer">MAKO Renderer</a>: direct installation, usage, builds, and architecture guides.
 - <a href="plugin/docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">Troubleshooting</a> and <a href="COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">diagnostics</a>: activation, presentation problems, and private reports.
 - <a href="TESTING.md" target="_blank" rel="noopener noreferrer">Testing</a> and <a href="HOW_TO_RELEASE.md" target="_blank" rel="noopener noreferrer">releases</a>: contributor validation and publication.

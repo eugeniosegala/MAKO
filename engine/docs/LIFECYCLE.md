@@ -1,6 +1,6 @@
 # MAKO Renderer lifecycle
 
-This guide explains how MAKO Renderer discovers its environment, creates and replaces resources, applies settings, paces frames, recovers from pressure, and shuts down. It is a conceptual inventory of lifecycle-affecting probes and policies rather than a source-file map. The exact setting contract remains in [Configuration](CONFIGURATION.md), [Runtime configuration transitions](RUNTIME-TRANSITIONS.md), [Spatial scaling architecture](SCALING.md), [Adaptive validation](ADAPTIVE-VALIDATION.md), [HDR pipeline](HDR-PIPELINE.md), and [WSI isolation](WSI-ISOLATION.md). [Memory management](MEMORY-MANAGEMENT.md) covers allocation, pooling, accounting, and cleanup ownership.
+This guide explains how MAKO Renderer discovers its environment, creates and replaces resources, applies settings, paces frames, recovers from pressure, and shuts down. It is a conceptual inventory of lifecycle-affecting probes and policies rather than a source-file map. The exact setting contract remains in the [configuration reference](CONFIGURATION-REFERENCE.md), [Runtime configuration transitions](RUNTIME-TRANSITIONS.md), [Spatial scaling architecture](SCALING.md), [Adaptive validation](ADAPTIVE-VALIDATION.md), [HDR pipeline](HDR-PIPELINE.md), and [WSI isolation](WSI-ISOLATION.md). [Memory management](MEMORY-MANAGEMENT.md) covers allocation, pooling, accounting, and cleanup ownership.
 
 ## Safety model
 
@@ -55,10 +55,11 @@ Costs are qualitative: **negligible** is cached state, arithmetic, or a nonblock
 | Cached display-feedback consumption | At most once every 250 ms on the presentation path | Lock and copy of cached state, **negligible** | Refresh and output geometry can update policy. HDR active state requires separate stability evidence |
 | HDR stability | Evaluated from feedback changes; 750 ms of uninterrupted agreement | Clock comparisons only, **negligible** | Prevents color-pipeline rebuilds from transient HDR evidence. Unknown evidence cancels the candidate and retains the last confirmed state |
 | Runtime status publication | Only when requested/applied/pending state changes | Atomic small-file replacement, **low but not steady-state work** | Status is observational and cannot block rendering on cleanup errors. The first publisher performs one bounded cleanup of unlocked MAKO-owned stale entries |
+| Diagnostic runtime health | Every five seconds only with presentation diagnostics enabled; slow collection/output backs off to 30 seconds | Bounded proc/sysfs reads and atomic memory snapshots on a worker, **low to moderate** | No Vulkan calls or policy changes; unavailable fields remain unknown. An outstanding driver read may delay teardown. [Memory evidence](MEMORY-MANAGEMENT.md#reading-memory-evidence) owns the details |
 
 **Match Display Refresh Rate** uses the refresh value already read by the shared Gamescope monitor. Its toggle changes Adaptive target selection, not the monitor cadence; HDR, focus, VRR, and presentation policy still consume the compositor feedback when matching is off. Enabling matching adds no X11 read, worker, or polling loop.
 
-There is no general 10-second, 15-second, or 60-second health sweep. Longer intervals in MAKO are scheduler or recovery backoffs reached only after a specific failure or experiment; they are not background polling.
+Diagnostic health sampling is opt-in and observational; it cannot change scheduling or recovery. Scheduler and recovery backoffs are separate from background probes.
 
 ### Event-driven capability and allocation probes
 
@@ -76,7 +77,7 @@ There is no general 10-second, 15-second, or 60-second health sweep. Longer inte
 
 | Probe | Trigger or cadence | Rough work and cost | Effect and safety behavior |
 | --- | --- | --- | --- |
-| Cadence observation | Every application present | Steady-clock samples and allocation-free arithmetic, **negligible** | Drives Fixed refresh budgeting, Adaptive planning, caps, and recovery. It observes application delivery, not physical scanout |
+| Cadence observation | Every application present | Steady-clock samples and allocation-free arithmetic, **negligible** | Drives Fixed refresh budgeting, Adaptive planning, and caps. It observes application delivery, not physical scanout, and cannot authorize transport recovery |
 | Optional AC/battery selection | Configuration checks at most every 250 ms; background reading requested at most every two seconds | Atomic cached source and a nonblocking request, **negligible in presentation** | One sampler per watcher with power sets performs driver reads away from presentation, retains confirmed state on stalled/failed reads, and accumulates no requests. Startup allows 50 ms before Base fallback; normal transition boundaries remain authoritative |
 | Policy-plan admission | Every present that requests generated outputs | Arithmetic and state checks, **negligible** | May shorten or remove the synthetic plan before any backend work while preserving the real frame |
 | Tight-headroom image admission | Once for each planned generated output in HDR or other headroom-tight ordered paths | Zero-time image acquisition, **low per attempted output** | A miss drops synthetic work before the backend starts. Partial Adaptive admission is re-spaced rather than bunched |
@@ -120,18 +121,9 @@ This table centralizes lifecycle timers. Frame-count gates are included because 
 
 ## Configuration lifecycle
 
-Settings are classified by the earliest boundary at which they can be applied safely:
+Process-static settings wait for restart; swapchain geometry and transport wait for application recreation; private-resource edits prepare and atomically replace MAKO-owned contexts; live policy applies on the next successful present. Inactive values remain dormant.
 
-| Class | Examples | Behavior after a live edit |
-| --- | --- | --- |
-| Process-static | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, layer chain, Gamescope WSI isolation, HDR exposure, GPU selection, and Ultra Performance | The requested value is reported as pending and becomes effective on the next process start |
-| Swapchain-static | Source/presentation geometry, scaling placement, present transport, color format, WSI image pool, and generated-output headroom | Unrelated live settings apply immediately. The static change waits for application recreation or, on supported presentation boundaries, one safe recreation request |
-| Private-resource | Scaling method/sharpness, Flow Scale, lighter model, and capacity within WSI headroom | MAKO coalesces the request, constructs a complete candidate beside the old context, drains only MAKO-owned work, then switches atomically |
-| Live policy | Frame Generation `0x`/active execution state, refresh threshold, Fixed multiplier within capacity, Adaptive target/limit, base cap, Smooth Cadence, and recovery controls | Applied on the next successful present without rebuilding the swapchain |
-| Feedback-derived | Confirmed refresh, output target, HDR state, and presentation role | Consumed from the monitor cache; changes may update policy, start a color transition, or make a future geometry recreation necessary |
-| Dormant | Values for an inactive mode or absent resource | Saved and reported, but consume no resource until that mode becomes active |
-
-Requested, applied, pending, and effective state are deliberately distinct. A UI save therefore does not imply immediate resource mutation. Last-value-wins cancellation prevents an older candidate from overtaking a newer edit, and reverting to the applied value cancels pending work.
+Requested, applied, pending, and effective state remain distinct. Independent live edits continue while other changes wait, the latest request wins, and reverting to the applied value cancels pending work. [Runtime transitions](RUNTIME-TRANSITIONS.md#transition-matrix) owns the field-by-field matrix, mixed-write behavior, and reset rules.
 
 ## Swapchain lifecycle
 
@@ -187,27 +179,19 @@ Device destruction waits up to 250 ms across deferred retirements and then force
 
 ### Fixed
 
-Fixed 2x–5x requests one to four evenly spaced generated frames between real frames. With confirmed refresh feedback, the refresh budget suppresses outputs the display cannot consume; without refresh evidence, Fixed keeps the requested multiplier. The refresh threshold pauses generation when confirmed refresh is at or below the configured value, and missing refresh evidence fails open.
-
-Fixed has no automatic cadence-collapse guard. Ordinary gameplay timing cannot change its selected multiplier; only display-budget limits, explicit profile/menu transitions, and direct synchronization or acquire outcomes can temporarily suppress generated delivery.
+Fixed 2x–5x requests one to four generated frames between real frames. Confirmed refresh limits outputs the display cannot consume; absent feedback preserves the requested multiplier. The refresh threshold fails open when feedback is missing. Gameplay cadence cannot change the selected multiplier or authorize recovery.
 
 ### Adaptive
 
-Adaptive observes real-frame cadence and chooses a deterministic per-present plan under the target FPS and configured 2x–5x ceiling. It starts with three history frames, uses three seconds of startup stabilization and one second after normal discontinuities, raises load one generated level at a time, and rolls back levels that reduce base throughput without enough output gain.
+Adaptive selects a deterministic per-present plan under the target and 2x–5x ceiling. It warms history, stabilizes cadence, tests adjacent workload levels, and rejects added work whose output gain does not pay for its real-frame cost. Fractional output credit and partial-admission spacing remain scheduler-owned.
 
-The scheduler uses bounded evidence windows and backoffs for promotion, user-selected Smooth Cadence, near-target native preference, and efficiency probes. Fractional demand is accumulated as output credit and re-spaced after partial admission. A cadence drop requires three consecutive intervals at least twice the smoothed baseline; a transient burst above the larger of three times baseline or twice target is treated as native activity and does not advance policy clocks. These measurements shape the selected Adaptive pacing feature only: they cannot authorize transport recovery or recreation, and no separate gameplay-health watchdog consumes them.
-
-[Adaptive validation](ADAPTIVE-VALIDATION.md) owns the complete threshold matrix and required game/hardware evidence. The lifecycle rule is that every higher-load experiment has a measured baseline, a short evaluation, a rollback path, and a longer retry delay after failure.
+[Adaptive validation](ADAPTIVE-VALIDATION.md#adaptive-mode) owns qualification thresholds, pacing handoffs, retry rules, and hardware evidence. These performance decisions cannot prove Vulkan capability, completion, or transport failure.
 
 ### Base cap, Smooth Cadence, and Dynamic Cadence Recovery
 
-The real-frame cap uses an absolute per-present deadline. A late frame rebases the deadline instead of causing a catch-up burst. The intentional sleep can be as long as the selected cap interval.
+The real-frame cap uses an absolute deadline and rebases after late frames; its intentional sleep can span the selected cap interval. Smooth Cadence can retain a qualified integer multiplier and hand pacing to FIFO under the documented refresh/VRR guards. Manual caps remain authoritative.
 
-Smooth Cadence is an opt-in Adaptive policy that looks for a constant integer multiplier which can satisfy demand without excessive overshoot. It requires stable evidence before entry, evaluates load for one second, and exits after sustained loss of eligibility. Steady's ordered 2x handoff is allowed when the target matches confirmed refresh within the tighter of one hertz or two percent, including under VRR. Requested or active VRR may also hand a validated Steady 3x–5x rung to FIFO as a full-batch pacing experiment when its projected output is within 98–125% of target. Fractional Adaptive may hand an already accepted constant integer cadence to FIFO under VRR when uncapped; its variable plans, unvalidated work, and Steady operation outside these handoffs retain MAKO's target clock.
-
-When a 3x–5x multiplier is already delivery-validated and the source cadence lies between integer target rungs, the automatic base cap may select exact target divided by multiplier after one second of evidence at 95% or more of that cadence. Retention allows dips to 90% and requires 250 ms of cadence loss before release, avoiding repeated pacer resets near the entry threshold. Transport and scheduler safety exits remain immediate. It cannot activate an unvalidated multiplier. A user-selected manual cap remains authoritative, while user-enabled Smooth Cadence retains its existing bounded rescue measurement for the automatic half-target cap.
-
-Dynamic Cadence Recovery is an opt-in native-only probe with a configurable 0.1–3 second interval, defaulting to two seconds. It is restricted to ordered SDR with usable target/refresh capacity. A probe starts with one native frame and requires three samples at least 25% faster before changing policy. Enabling it disables manual and automatic base caps so the probe measures an uncapped source.
+Dynamic Cadence Recovery is an opt-in ordered-SDR native-only probe with usable target/refresh capacity, with a 0.1–3 second interval (default two seconds). It disables base caps and requires three samples at least 25% faster before changing policy. The [pacing matrix](ADAPTIVE-VALIDATION.md#vrr-and-fixed-refresh-pacing-paths) and [recovery contract](ADAPTIVE-VALIDATION.md#dynamic-cadence-recovery) define mode-specific behavior.
 
 ## Pressure and recovery policies
 
@@ -223,24 +207,24 @@ Normal ordered generated-image acquisition is unbounded when no compatibility ti
 
 ## Heuristic audit
 
-| Heuristic or inference | Why it exists | Guardrails and failure mode | Assessment |
-| --- | --- | --- | --- |
-| 2,304,000-pixel scaling placement threshold | Balance reconstruction cost against Frame Generation resolution | Immutable per swapchain; both paths retain full capability and synchronization checks | **Reasonable but tuneable.** Performance can be suboptimal near the boundary, but correctness does not depend on it |
-| Conservative memory admission | Avoid committing source, presentation, and model resources into already pressured heaps | Uses live budget when available, reserves non-MAKO headroom, reduces scale or fails closed | **Reasonable and safety-biased.** It can produce false negatives because budget is an estimate, not a reservation |
-| 750 ms HDR stability | Prevent transient compositor properties from rebuilding color resources | Unknown cancels the candidate; old confirmed pipeline remains active; construction is atomic | **Reasonable.** Transition latency is preferable to color-pipeline thrash |
-| Exact same-device/surface null-old replacement inference | Recover lifecycle continuity from applications that omit explicit old-swapchain linkage | Requires a unique exact match and never reuses an unrelated context | **Reasonable and constrained.** Ambiguity falls back to cold creation |
-| 50 ms retirement grace | Cover compositor observation beyond the application's destroy call | Grace is not the proof: image retirement fences and terminal waits remain authoritative | **Reasonable only because fences remain decisive.** Time alone would be unsafe |
-| Dynamic Cadence native-only probes | Implement the user's optional request to discover a hidden native-rate change under ordered FIFO | Disabled by default, bounded, verified, and able only to remove synthetic work | **Intentional opt-in pacing policy.** It does not authorize transport recovery or swapchain recreation |
-| Adaptive workload promotion | Find a useful multiplier without a GPU-utilization API | One device-independent adjacent-load rule requires target-capped displayed gain to pay for measured real-FPS cost; failure preserves the best lower baseline | **Measured feature policy, not recovery authority.** Later gameplay changes cannot retroactively demote an accepted workload |
-| Near-target native preference | Avoid fractional generation when native cadence is already smooth enough | One second of confirming evidence and asymmetric decay | **Reasonable quality preference.** A misclassification changes pacing, not resource safety |
-| Gamescope VRR pacing ownership | Keep explicit requested or active VRR out of the higher-multiplier fixed-refresh cap ladder while allowing validated integer FIFO handoffs | Verified server-zero properties; eligible Fixed, proven Steady 2x, validated Steady 3x–5x, and accepted constant Fractional plans can use FIFO under their own guards; live changes reset only affected pacing helpers | **Explicit compositor contract, not a performance heuristic.** It cannot select a multiplier, start recovery, or request recreation |
-| Unbounded normal ordered acquisition | Avoid rejecting healthy but variably delayed compositor acquisition | Reserved headroom; without an explicit cumulative timeout, elapsed acquire duration has no policy authority | **Review-worthy.** It preserves compatibility but cannot protect the current call from a driver stall |
+| Heuristic or inference | Why it exists | Guardrails and failure mode |
+| --- | --- | --- |
+| 2,304,000-pixel scaling placement threshold | Balance reconstruction cost against Frame Generation resolution | Immutable per swapchain; both paths retain full capability and synchronization checks |
+| Conservative memory admission | Avoid committing source, presentation, and model resources into already pressured heaps | Uses live budget when available, reserves non-MAKO headroom, reduces scale or fails closed |
+| 750 ms HDR stability | Prevent transient compositor properties from rebuilding color resources | Unknown cancels the candidate; old confirmed pipeline remains active; construction is atomic |
+| Exact same-device/surface null-old replacement inference | Recover lifecycle continuity from applications that omit explicit old-swapchain linkage | Requires a unique exact match and never reuses an unrelated context |
+| 50 ms retirement grace | Cover compositor observation beyond the application's destroy call | Grace is not the proof: image retirement fences and terminal waits remain authoritative |
+| Dynamic Cadence native-only probes | Implement the user's optional request to discover a hidden native-rate change under ordered FIFO | Disabled by default, bounded, verified, and able only to remove synthetic work |
+| Adaptive workload promotion | Find a useful multiplier without a GPU-utilization API | One device-independent adjacent-load rule requires target-capped displayed gain to pay for measured real-FPS cost; failure preserves the best lower baseline |
+| Near-target native preference | Avoid fractional generation when native cadence is already smooth enough | One second of confirming evidence and asymmetric decay |
+| Gamescope VRR pacing ownership | Keep explicit requested or active VRR out of the higher-multiplier fixed-refresh cap ladder while allowing validated integer FIFO handoffs | Verified server-zero properties; eligible Fixed, proven Steady 2x, validated Steady 3x–5x, and accepted constant Fractional plans can use FIFO under their own guards; live changes reset only affected pacing helpers |
+| Unbounded normal ordered acquisition | Avoid rejecting healthy but variably delayed compositor acquisition | Reserved headroom; without an explicit cumulative timeout, elapsed acquire duration has no policy authority |
 
 The first five rows affect placement, admission, state confirmation, or lifecycle association. Dynamic Cadence and Adaptive promotion affect their explicitly selected pacing behavior. None is allowed to assert Vulkan capability, completion, image ownership, transport failure, or recreation authority.
 
 ## What MAKO does not probe
 
-- MAKO does not poll GPU utilization, temperature, power, or driver-wide memory pressure on a background timer. Memory budget is sampled for resource admission, and cadence is the runtime performance signal.
+- With diagnostics disabled, MAKO creates no health worker. Opt-in health sampling observes proc/sysfs and accounting without driving policy; Vulkan memory budget is queried only for resource admission.
 - MAKO does not observe physical scanout timestamps. It consumes Gamescope's explicit VRR preference, capability, and active-state properties for pacing ownership, but present/acquire duration and application cadence remain proxies and cannot prove scanout.
 - MAKO does not continuously rescan Vulkan capabilities. Device and surface facts are cached for their owning lifetime and current swapchain limits are rechecked at creation.
 - MAKO does not infer safety from average frame rate. Capability, return-code, queue, fence, and ownership checks remain separate from performance decisions.
