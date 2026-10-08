@@ -91,13 +91,15 @@ VkResult Swapchain::queuePresentWithRetirementFence(
     // outputs unannotated and allow the compositor to replace them.
     if (this->info.gamescopeScalingSurface) {
         for (uint32_t i = 0; i < presentInfo.swapchainCount; ++i) {
-            if (!this->info.gamescopeScalingSurface->preparePresent(
+            const auto prepared = this->info.gamescopeScalingSurface->preparePresent(
                     this->info.surface, presentInfo.pSwapchains[i],
                     gamescopeBridgeOutputFps(this->profile,
                         this->gamescopeRefreshHz.value_or(0)),
                     this->gamescopeRefreshHz.value_or(0),
-                    this->bridgeOutputBatchSize, generationEnabled))
-                return VK_ERROR_SURFACE_LOST_KHR;
+                    this->bridgeOutputBatchSize, generationEnabled);
+            if (prepared != VK_SUCCESS)
+                return completeRejectedPresent(vk.df().QueueSubmit,
+                    queue, presentInfo, prepared);
         }
     }
     if (this->presentRetirementFences.empty() ||

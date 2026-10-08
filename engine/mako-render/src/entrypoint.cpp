@@ -2682,12 +2682,16 @@ namespace {
             for (uint32_t i = 0; i < info->swapchainCount; ++i) {
                 const auto metadata = instance_info->swapchainInfos.find(info->pSwapchains[i]);
                 if (instance_info->nativeSwapchains.contains(info->pSwapchains[i]) &&
-                        metadata != instance_info->swapchainInfos.end() &&
-                        !instance_info->scalingSurfaces->preparePresent(
-                            metadata->second.surface, info->pSwapchains[i])) {
-                    if (info->pResults)
-                        std::fill_n(info->pResults, info->swapchainCount, VK_ERROR_SURFACE_LOST_KHR);
-                    return VK_ERROR_SURFACE_LOST_KHR;
+                        metadata != instance_info->swapchainInfos.end()) {
+                    const auto prepared = instance_info->scalingSurfaces->preparePresent(
+                        metadata->second.surface, info->pSwapchains[i]);
+                    if (prepared != VK_SUCCESS) {
+                        const auto mapping = instance_info->swapchains.find(info->pSwapchains[i]);
+                        if (mapping == instance_info->swapchains.end())
+                            return VK_ERROR_INITIALIZATION_FAILED;
+                        return completeRejectedPresent(mapping->second.get().df().QueueSubmit,
+                            queue, *info, prepared);
+                    }
                 }
             }
         }

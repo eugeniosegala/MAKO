@@ -115,8 +115,8 @@ struct GamescopeScalingSurface::Impl {
 
     // Minimal wire subset of Gamescope's MIT-licensed swapchain protocol at
     // 2d217a16c7e5b56c7417257279bf102320cff024. Association plus create-time
-    // swapchain feedback are used. Ordered combined delivery keeps FIFO in
-    // the lower Wayland WSI; timing, limiter and HDR control remain inactive.
+    // swapchain feedback are used. Ordered combined delivery annotates every
+    // commit with FIFO and its own timestamp; limiter and HDR control remain inactive.
     // All v1 events are declared so unsolicited feedback is consumed without
     // retaining history.
     // See THIRD_PARTY_NOTICES.md.
@@ -147,6 +147,7 @@ struct GamescopeScalingSurface::Impl {
         Impl* owner{};
         wl_proxy* proxy{};
         bool retired{};
+        bool failureLogged{};
         std::optional<VkExtent2D> applicationExtent;
         VkResult acquisitionResult{VK_SUCCESS};
         uint32_t refreshHz{};
@@ -170,6 +171,7 @@ struct GamescopeScalingSurface::Impl {
         uint32_t server{};
         uint32_t window{};
         bool formatPolicyLogged{};
+        bool failureLogged{};
         std::optional<VkExtent2D> queriedExtent;
         uint64_t extentQueryGeneration{};
         xcb_connection_t* connection{};
@@ -180,6 +182,37 @@ struct GamescopeScalingSurface::Impl {
         }
     };
     std::unordered_map<VkSurfaceKHR, std::unique_ptr<Surface>> surfaces;
+
+    VkResult failure(Surface& state, Content* content, VkSurfaceKHR surface,
+            VkSwapchainKHR swapchain, VkResult result, const char* reason,
+            const char* boundary, int systemError = 0) const {
+        auto& logged = content ? content->failureLogged : state.failureLogged;
+        if (!logged && present_diagnostics::enabled()) {
+            logged = true;
+            std::cerr << "MAKO Renderer: spatial scaling surface bridge: "
+                      << "operation=bridge-failure; pid=" << getpid()
+                      << "; bridge=" << (content ? content->diagnosticId : 0)
+                      << "; surface=" << surface << "; swapchain=" << swapchain
+                      << "; xwayland_server=" << state.server << "; window=" << state.window
+                      << "; boundary=" << boundary << "; reason=" << reason
+                      << "; result=" << result << "; errno=" << systemError
+                      << "; display_error=" << displayGetError(display) << '\n';
+        }
+        return result;
+    }
+
+    VkResult dispatch(Surface& state, Content* content, VkSurfaceKHR surface,
+            VkSwapchainKHR swapchain, const char* boundary) {
+        const auto dispatched = dispatchPending(display, queue);
+        const auto systemError = dispatched < 0 ? errno : 0;
+        if (dispatched < 0 || displayGetError(display) != 0)
+            return failure(state, content, surface, swapchain, VK_ERROR_SURFACE_LOST_KHR,
+                "connection-lost", boundary, systemError);
+        if (content && content->retired)
+            return failure(state, content, surface, swapchain, VK_ERROR_OUT_OF_DATE_KHR,
+                "association-retired", boundary);
+        return VK_SUCCESS;
+    }
 
     std::optional<VkExtent2D> windowExtent(const Surface& state) const {
         Reply<xcb_get_geometry_reply_t> geometry(geometryReply(state.connection,
@@ -515,8 +548,12 @@ bool GamescopeScalingSurface::connect() {
     ucred peer{};
     socklen_t peerSize = sizeof(peer);
     if (getsockopt(impl->displayGetFd(impl->display), SOL_SOCKET, SO_PEERCRED,
-            &peer, &peerSize) == 0 && peerSize == sizeof(peer))
-        impl->peerPid = peer.pid;
+            &peer, &peerSize) != 0 || peerSize != sizeof(peer) || peer.pid < 0)
+        return false;
+    // A compositor outside Flatpak's PID namespace legitimately has PID zero.
+    // Keep the existing Gamescope protocol/root-property admission in that
+    // case; a failed credential lookup is not evidence of namespace isolation.
+    impl->peerPid = peer.pid;
     impl->queue = impl->createQueue(impl->display);
     impl->ready = impl->queue && impl->discover();
     return impl->ready;
@@ -690,8 +727,11 @@ VkResult GamescopeScalingSurface::acquisitionResult(
     if (found == impl->surfaces.end())
         return VK_SUCCESS;
     const auto content = found->second->contents.find(swapchain);
-    return content == found->second->contents.end()
-        ? VK_SUCCESS : content->second->acquisitionResult;
+    if (content == found->second->contents.end())
+        return VK_SUCCESS;
+    const auto result = impl->dispatch(*found->second, content->second.get(),
+        surface, swapchain, "acquire");
+    return result == VK_SUCCESS ? content->second->acquisitionResult : result;
 }
 
 std::optional<VkResult> GamescopeScalingSurface::applicationCapabilities(
@@ -842,24 +882,26 @@ GamescopeScalingSurface::applicationFormats(
     return exposed.empty() ? waylandFormats : std::optional{std::move(exposed)};
 }
 
-bool GamescopeScalingSurface::preparePresent(
+VkResult GamescopeScalingSurface::preparePresent(
         const VkSurfaceKHR surface, const VkSwapchainKHR swapchain,
         const double outputFps, const uint32_t refreshHz,
         const size_t outputBatchSize, const bool generationEnabled) {
     std::unique_lock lock(impl->mutex);
     auto found = impl->surfaces.find(surface);
     if (found == impl->surfaces.end())
-        return true;
+        return VK_SUCCESS;
     // Mesa's WSI dispatches the shared socket for its own event queue. Drain
     // only already-read association events here: no socket poll, roundtrip,
     // allocation or additional worker on the present path. Opt-in diagnostics
     // aggregate timing feedback in bounded storage allocated at creation.
-    if (impl->dispatchPending(impl->display, impl->queue) < 0 ||
-            impl->displayGetError(impl->display) != 0)
-        return false;
     auto content = found->second->contents.find(swapchain);
-    if (content == found->second->contents.end() || content->second->retired)
-        return false;
+    if (content == found->second->contents.end())
+        return impl->failure(*found->second, nullptr, surface, swapchain,
+            VK_ERROR_SURFACE_LOST_KHR, "missing-swapchain", "present");
+    const auto dispatched = impl->dispatch(*found->second, content->second.get(),
+        surface, swapchain, "present");
+    if (dispatched != VK_SUCCESS)
+        return dispatched;
     std::optional<OrderedPresentTimeline::Slot> slot;
     if (content->second->compositorPresentMode == VK_PRESENT_MODE_FIFO_KHR &&
             OrderedPresentTimeline::validRate(content->second->refreshHz)) {
@@ -871,17 +913,23 @@ bool GamescopeScalingSurface::preparePresent(
                 ? outputFps : content->second->refreshHz,
             content->second->refreshHz, outputBatchSize, generationEnabled);
         if (!slot)
-            return false;
+            return impl->failure(*found->second, content->second.get(), surface, swapchain,
+                VK_ERROR_SURFACE_LOST_KHR, "invalid-timeline", "present");
         // No GPU-idle wait and no adapter lock held during backpressure.
         lock.unlock();
         std::this_thread::sleep_until(slot->submitAt);
         lock.lock();
         found = impl->surfaces.find(surface);
         if (found == impl->surfaces.end())
-            return false;
+            return VK_ERROR_SURFACE_LOST_KHR;
         content = found->second->contents.find(swapchain);
-        if (content == found->second->contents.end() || content->second->retired)
-            return false;
+        if (content == found->second->contents.end())
+            return impl->failure(*found->second, nullptr, surface, swapchain,
+                VK_ERROR_SURFACE_LOST_KHR, "missing-swapchain", "present-after-wait");
+        const auto afterWait = impl->dispatch(*found->second, content->second.get(),
+            surface, swapchain, "present-after-wait");
+        if (afterWait != VK_SUCCESS)
+            return afterWait;
     }
     wl_argument args[2]{{.u = found->second->server}, {.u = found->second->window}};
     impl->marshal(content->second->proxy, 1, nullptr, 1, 0, args);
@@ -917,6 +965,7 @@ bool GamescopeScalingSurface::preparePresent(
         }
     }
     if (impl->displayFlush(impl->display) < 0 && errno != EAGAIN)
-        return false;
-    return true;
+        return impl->failure(*found->second, content->second.get(), surface, swapchain,
+            VK_ERROR_SURFACE_LOST_KHR, "flush-failed", "present", errno);
+    return VK_SUCCESS;
 }

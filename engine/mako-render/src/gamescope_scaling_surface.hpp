@@ -117,8 +117,9 @@ namespace mako::layer {
             uint32_t refreshHz = 0);
         void destroySwapchain(VkSurfaceKHR surface, VkSwapchainKHR swapchain);
 
-        /// Return a cached X11 extent change before acquiring an application
-        /// image. No X11 query, image acquisition or semaphore signal occurs.
+        /// Drain already-read protocol events and return retirement or a cached
+        /// X11 extent change before acquiring an application image. No socket
+        /// read, X11 query, image acquisition or semaphore signal occurs.
         /// The private variable Wayland surface cannot report this mismatch.
         [[nodiscard]] VkResult acquisitionResult(
             VkSurfaceKHR surface, VkSwapchainKHR swapchain) const;
@@ -126,7 +127,9 @@ namespace mako::layer {
         /// Bind the matching protocol object before every lower presentation,
         /// including each generated output. Association recovers Xwayland and
         /// Steam UI mapping changes; the protocol mode covers one commit only.
-        [[nodiscard]] bool preparePresent(
+        /// Retirement requests swapchain recreation, not surface destruction.
+        /// Callers must complete rejected-present queue operations on failure.
+        [[nodiscard]] VkResult preparePresent(
             VkSurfaceKHR surface, VkSwapchainKHR swapchain,
             double outputFps = 0.0, uint32_t refreshHz = 0,
             size_t outputBatchSize = 1, bool generationEnabled = false);

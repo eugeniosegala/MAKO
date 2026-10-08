@@ -67,6 +67,7 @@ MAKO Renderer: present diagnostics: operation=runtime-health monitor=21 pid=4242
 MAKO Renderer: present diagnostics: operation=runtime-health-unavailable reason=device-monitor-limit
 MAKO Renderer: present diagnostics: operation=present-phase-summary context=1 pid=4242 tid=4243 sample_end_monotonic_ms=3600000 calls=45 total_mean_ms=2 total_max_ms=4 render_fence_mean_ms=0.2 render_fence_max_ms=1
 MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
+MAKO Renderer: spatial scaling surface bridge: operation=bridge-failure; pid=4242; bridge=12; surface=1234; swapchain=5678; xwayland_server=0; window=5678; boundary=acquire; reason=association-retired; result=-1000001004; errno=0; display_error=0
 MAKO Renderer: spatial scaling surface bridge: surface=1234; xwayland_server=0; window=5678; transport=wayland; gamescope_wsi=isolated; application_surface=x11; extent_contract=window
 MAKO Renderer: spatial scaling window extent: operation=capability-query; surface=1234; window=5678; previous=1152x720; current=2560x1440; query_generation=3
 MAKO Renderer: spatial scaling window extent: operation=swapchain-create; surface=1234; swapchain=9999; window=5678; queried=1152x720; query_generation=2; application=1152x720; current=2560x1440; presentation=2304x1440; exact_window_extent=1; extent_contract=window
@@ -393,6 +394,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("operation=application-present-mode", result.stdout)
         self.assertIn("operation=application-present-wait", result.stdout)
         self.assertIn("spatial scaling surface bridge", result.stdout)
+        self.assertIn("operation=bridge-failure", result.stdout)
+        self.assertIn("reason=association-retired; result=-1000001004", result.stdout)
         self.assertIn("application_surface=x11; extent_contract=window", result.stdout)
         self.assertIn("transport=wayland; gamescope_wsi=isolated", result.stdout)
         self.assertIn("selected_source=854x532", result.stdout)

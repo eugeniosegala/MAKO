@@ -11,6 +11,8 @@
 #include <cstdint>
 #include <cstring>
 #include <mutex>
+#include <new>
+#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -288,6 +290,60 @@ namespace mako::layer {
             node = header.pNext;
         }
         return nullptr;
+    }
+
+    /// WSI surface loss and out-of-date still enqueue the present's waits and
+    /// maintenance1 fences. A bridge rejection occurs before lower WSI, so
+    /// complete those queue operations exactly once without presenting to a
+    /// retired association. Storage is allocated only on this failure path.
+    [[nodiscard]] inline VkResult completeRejectedPresent(
+            PFN_vkQueueSubmit submit, VkQueue queue,
+            const VkPresentInfoKHR& info, VkResult rejection) {
+        std::vector<VkPipelineStageFlags> stages;
+        try {
+            stages.assign(info.waitSemaphoreCount, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT);
+        } catch (const std::bad_alloc&) {
+            if (info.pResults)
+                std::fill_n(info.pResults, info.swapchainCount, VK_ERROR_OUT_OF_HOST_MEMORY);
+            return VK_ERROR_OUT_OF_HOST_MEMORY;
+        }
+        VkSubmitInfo submission{
+            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+            .waitSemaphoreCount = info.waitSemaphoreCount,
+            .pWaitSemaphores = info.pWaitSemaphores,
+            .pWaitDstStageMask = stages.data(),
+        };
+        VkResult result = VK_SUCCESS;
+        const auto* fences = findSwapchainPresentFenceInfo(info.pNext);
+        bool submitted = false;
+        if (fences && fences->pFences) {
+            for (uint32_t i = 0; i < fences->swapchainCount; ++i) {
+                if (fences->pFences[i] == VK_NULL_HANDLE)
+                    continue;
+                result = submit(queue, 1, &submission, fences->pFences[i]);
+                if (result != VK_SUCCESS) {
+                    // Earlier submissions already changed synchronization.
+                    // An allocation failure may promise no side effects only
+                    // when the first submission itself failed.
+                    if (submitted && (result == VK_ERROR_OUT_OF_HOST_MEMORY ||
+                            result == VK_ERROR_OUT_OF_DEVICE_MEMORY))
+                        result = VK_ERROR_DEVICE_LOST;
+                    submitted = true;
+                    break;
+                }
+                submitted = true;
+                submission.waitSemaphoreCount = 0;
+                submission.pWaitSemaphores = nullptr;
+                submission.pWaitDstStageMask = nullptr;
+            }
+        }
+        if (!submitted && info.waitSemaphoreCount)
+            result = submit(queue, 1, &submission, VK_NULL_HANDLE);
+        if (result == VK_SUCCESS)
+            result = rejection;
+        if (info.pResults)
+            std::fill_n(info.pResults, info.swapchainCount, result);
+        return result;
     }
 
     /// A non-null upstream fence for this swapchain is the caller's Vulkan

@@ -18,6 +18,10 @@
 
 extern "C" {
     void mako_test_surface_mode(int);
+    void mako_test_surface_ownership(bool);
+    void mako_test_surface_delay_events(bool);
+    int mako_test_surface_overrides();
+    void mako_test_surface_competing_override(uint32_t, uint32_t);
     int mako_test_surface_objects();
     int mako_test_surface_associations();
     int mako_test_surface_feedbacks();
@@ -436,7 +440,7 @@ int main() {
     expect(!canAttemptGamescopeScalingSurface(VK_ERROR_INITIALIZATION_FAILED, false),
         "unrelated enumeration failures must reject the bridge");
 
-    for (int mode : {1, 2, 3}) {
+    for (int mode : {1, 2, 3, 16, 17}) {
         const auto start = std::chrono::steady_clock::now();
         {
             mako_test_surface_mode(mode);
@@ -451,6 +455,16 @@ int main() {
         .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
         .connection = reinterpret_cast<xcb_connection_t*>(1), .window = 71,
     };
+    {
+        mako_test_surface_mode(18);
+        GamescopeScalingSurface bridge;
+        VkSurfaceKHR surface{};
+        expect(bridge.connect() &&
+            bridge.create(VK_NULL_HANDLE, next, info, nullptr, &surface) == VK_SUCCESS,
+            "namespace-hidden peer PID must retain the existing sandbox admission");
+        bridge.destroy(surface);
+        mako_test_surface_mode(0);
+    }
     {
         GamescopeScalingSurface bridge;
         expect(bridge.connect(), "valid Gamescope connection");
@@ -662,7 +676,7 @@ int main() {
         uint64_t previousTime = 0;
         for (uint32_t output = 1; output <= 130; ++output) {
             const auto before = std::chrono::steady_clock::now();
-            expect(bridge.preparePresent(surface, timedSwapchain, 120, 120, 1, true),
+            expect(bridge.preparePresent(surface, timedSwapchain, 120, 120, 1, true) == VK_SUCCESS,
                 "timed generated/real bridge output");
             const auto ns = mako_test_surface_present_time();
             const auto nowNs = std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -691,7 +705,7 @@ int main() {
                 "MAKO Renderer", VK_PRESENT_MODE_FIFO_KHR, 120),
             "retained generation-off bridge creation");
         const auto nativeBefore = std::chrono::steady_clock::now();
-        expect(bridge.preparePresent(surface, timedSwapchain, 120, 120, 1, false),
+        expect(bridge.preparePresent(surface, timedSwapchain, 120, 120, 1, false) == VK_SUCCESS,
             "retained generation-off bridge output");
         const auto nativeAfter = std::chrono::steady_clock::now();
         const auto nativeNs = mako_test_surface_present_time();
@@ -708,7 +722,7 @@ int main() {
         const int reads = mako_test_surface_reads();
         const int presentGeometryQueries = mako_test_surface_geometry_queries();
         for (int frame = 0; frame < 100; ++frame)
-            expect(bridge.preparePresent(surface, firstSwapchain), "healthy presentation association");
+            expect(bridge.preparePresent(surface, firstSwapchain) == VK_SUCCESS, "healthy presentation association");
         expect(mako_test_surface_associations() == associations + 100,
             "presentation must reassert the Gamescope window association");
         expect(mako_test_surface_present_modes() == presentModes + 100 &&
@@ -726,14 +740,14 @@ int main() {
             "create replacement swapchain protocol object");
         expect(mako_test_surface_associations() == associations + 100,
             "creating a replacement must not steal the live image");
-        expect(bridge.preparePresent(surface, sameSurfaceReplacement),
+        expect(bridge.preparePresent(surface, sameSurfaceReplacement) == VK_SUCCESS,
             "replacement swapchain first present");
         expect(mako_test_surface_associations() == associations + 101,
             "replacement must establish a fresh compositor association");
         mako_test_surface_retire();
-        expect(!bridge.preparePresent(surface, firstSwapchain),
+        expect(bridge.preparePresent(surface, firstSwapchain) == VK_ERROR_OUT_OF_DATE_KHR,
             "retired swapchain protocol object must stop presentation");
-        expect(bridge.preparePresent(surface, sameSurfaceReplacement),
+        expect(bridge.preparePresent(surface, sameSurfaceReplacement) == VK_SUCCESS,
             "retiring the predecessor affected the replacement");
         bridge.destroySwapchain(surface, firstSwapchain);
 
@@ -759,18 +773,160 @@ int main() {
         checkApplicationExtent(bridge, replacement, {2560, 1440}, 1.5F);
         expect(mako_test_surface_associations() == associations + 102,
             "replacement preparation stole live surface");
-        expect(bridge.preparePresent(replacement, replacementSwapchain), "replacement first present");
+        expect(bridge.preparePresent(replacement, replacementSwapchain) == VK_SUCCESS, "replacement first present");
         bridge.destroy(surface);
         expect(!bridge.owns(surface) && bridge.owns(replacement), "surface destruction removed wrong owner");
         expect(!bridge.applicationCapabilities(surface, caps),
             "destroyed surface must not retain an application extent override");
         mako_test_surface_mode(5);
-        expect(!bridge.preparePresent(replacement, replacementSwapchain), "lost connection must stop presentation");
+        expect(bridge.preparePresent(replacement, replacementSwapchain) == VK_ERROR_SURFACE_LOST_KHR,
+            "lost connection must stop presentation");
         mako_test_surface_mode(0);
         bridge.destroy(replacement);
         expect(mako_test_surface_objects() == connectionObjects, "surface destruction leaked protocol objects");
     }
     expect(mako_test_surface_objects() == 0, "instance destruction leaked connection objects");
+
+    // Exercise window ownership, not just request counts. The model follows
+    // Gamescope's handle_override_window_content / destroy_content_override:
+    // replacing an owner queues retirement; repeating the same owner does not.
+    // It intentionally permits delayed callbacks and old-resource destruction.
+    mako_test_surface_ownership(true);
+    {
+        GamescopeScalingSurface bridge;
+        expect(bridge.connect(), "ownership stress connection");
+        const int connectionObjects = mako_test_surface_objects();
+        VkSurfaceKHR surface{};
+        expect(bridge.create(VK_NULL_HANDLE, next, info, nullptr, &surface) == VK_SUCCESS,
+            "ownership stress surface");
+        const auto feedback = swapchainInfo(surface);
+        const auto first = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(8001));
+        const auto second = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(8002));
+        const auto create = [&](VkSwapchainKHR handle) {
+            return bridge.createSwapchain(surface, handle, feedback,
+                {1920, 1080}, 5, "vkd3d", std::nullopt);
+        };
+        expect(create(first), "ownership stress first swapchain");
+        const int liveObjects = mako_test_surface_objects();
+        const int reads = mako_test_surface_reads();
+        const int geometry = mako_test_surface_geometry_queries();
+        for (int frame = 0; frame < 10000; ++frame)
+            expect(bridge.preparePresent(surface, first) == VK_SUCCESS,
+                "repeated association without feedback must not retire itself");
+        expect(mako_test_surface_objects() == liveObjects &&
+            mako_test_surface_reads() == reads &&
+            mako_test_surface_geometry_queries() == geometry &&
+            mako_test_surface_overrides() == 1,
+            "missing feedback must not grow protocol state, poll, or query X11");
+
+        auto otherWindow = info;
+        otherWindow.window = 72;
+        VkSurfaceKHR silentSurface{};
+        expect(bridge.create(VK_NULL_HANDLE, next, otherWindow, nullptr, &silentSurface) == VK_SUCCESS,
+            "independent silent-feedback surface");
+        expect(bridge.createSwapchain(silentSurface, first, swapchainInfo(silentSurface),
+            {1920, 1080}, 5, "vkd3d", VK_PRESENT_MODE_FIFO_KHR, 1000),
+            "silent timing context");
+        std::ostringstream silentLog;
+        auto* previousSilentLog = std::cerr.rdbuf(silentLog.rdbuf());
+        const int silentObjects = mako_test_surface_objects();
+        const int silentReads = mako_test_surface_reads();
+        for (int output = 0; output < 1100; ++output)
+            expect(bridge.preparePresent(silentSurface, first, 1000, 1000, 1, true) == VK_SUCCESS,
+                "missing timing feedback must never become a presentation failure");
+        mako_test_surface_timing(); // A late current response must still be accepted.
+        std::cerr.rdbuf(previousSilentLog);
+        if (present_diagnostics::enabled())
+            expect(silentLog.str().find("feedbacks=0 outstanding=128") != std::string::npos,
+                "missing feedback must saturate bounded diagnostic storage");
+        else
+            expect(silentLog.str().empty(), "silent feedback must retain diagnostics-off behavior");
+        expect(mako_test_surface_objects() == silentObjects && mako_test_surface_reads() == silentReads,
+            "missing timing feedback grew protocol state or polled the socket");
+        bridge.destroy(silentSurface);
+        expect(mako_test_surface_objects() == liveObjects &&
+            bridge.preparePresent(surface, first) == VK_SUCCESS,
+            "destroying another window must not retire this window's swapchain");
+
+        // Wrong window/server events must not poison a live game's association.
+        mako_test_surface_competing_override(8, 71);
+        mako_test_surface_competing_override(9, 72);
+        expect(bridge.preparePresent(surface, first) == VK_SUCCESS, "unrelated window ownership");
+        for (int failure : {12, 13, 14, 5}) {
+            mako_test_surface_mode(failure);
+            expect((bridge.preparePresent(surface, first) == VK_SUCCESS) == (failure == 12),
+                "temporary backpressure must survive; broken transport must stop");
+            mako_test_surface_mode(0);
+        }
+        expect(bridge.preparePresent(surface, second) == VK_ERROR_SURFACE_LOST_KHR,
+            "an unknown swapchain must not inherit another content's association");
+        for (int failure : {7, 8, 13}) {
+            mako_test_surface_mode(failure);
+            expect(!create(second), "failed replacement must fail creation");
+            mako_test_surface_mode(0);
+            expect(mako_test_surface_objects() == liveObjects &&
+                bridge.preparePresent(surface, first) == VK_SUCCESS,
+                "failed replacement must leave its predecessor usable and leak-free");
+        }
+
+        // Repeat both destruction orders with reused Vulkan handles. Delayed
+        // retirement must neither reach freed listener data nor retire a new
+        // protocol object that reuses an old Vulkan handle.
+        auto current = first;
+        for (int cycle = 0; cycle < 1000; ++cycle) {
+            const auto replacement = current == first ? second : first;
+            mako_test_surface_delay_events(true);
+            expect(create(replacement) && bridge.preparePresent(surface, current) == VK_SUCCESS,
+                "creating replacement must not steal existing ownership");
+            expect(bridge.preparePresent(surface, replacement) == VK_SUCCESS, "replacement ownership");
+            if (cycle % 2 == 0) {
+                mako_test_surface_delay_events(false);
+                expect(bridge.preparePresent(surface, current) == VK_ERROR_OUT_OF_DATE_KHR,
+                    "displaced predecessor must stop when retirement arrives");
+            }
+            bridge.destroySwapchain(surface, current);
+            mako_test_surface_delay_events(false);
+            expect(bridge.preparePresent(surface, replacement) == VK_SUCCESS &&
+                mako_test_surface_overrides() == 1 &&
+                mako_test_surface_objects() == liveObjects,
+                "old-resource destruction must allow the replacement to reassert ownership");
+            current = replacement;
+        }
+
+        // Reproduce the reported late presentation-failure shape by displacing
+        // the active mapping after 222 successful presents, with no feedback.
+        for (int frame = 0; frame < 222; ++frame)
+            expect(bridge.preparePresent(surface, current) == VK_SUCCESS, "pre-takeover frame");
+        mako_test_surface_competing_override(9, 71);
+        std::ostringstream failureLog;
+        auto* previousFailureLog = std::cerr.rdbuf(failureLog.rdbuf());
+        expect(bridge.acquisitionResult(surface, current) == VK_ERROR_OUT_OF_DATE_KHR,
+            "queued retirement must request recreation before acquiring or signaling");
+        expect(bridge.preparePresent(surface, current) == VK_ERROR_OUT_OF_DATE_KHR,
+            "a retired association must request recreation instead of losing the surface");
+        for (int retry = 0; retry < 100; ++retry)
+            expect(bridge.preparePresent(surface, current) == VK_ERROR_OUT_OF_DATE_KHR,
+                "retired associations must remain retired until replacement");
+        std::cerr.rdbuf(previousFailureLog);
+        if (present_diagnostics::enabled()) {
+            const auto log = failureLog.str();
+            expect(log.find("reason=association-retired") != std::string::npos &&
+                log.find("boundary=acquire") != std::string::npos &&
+                log.find("result=-1000001004") != std::string::npos &&
+                std::count(log.begin(), log.end(), '\n') == 1,
+                "retirement needs one attributable diagnostic without retry spam");
+        } else {
+            expect(failureLog.str().empty(), "bridge failure diagnostics must remain opt-in");
+        }
+        bridge.destroySwapchain(surface, current);
+        expect(create(current) && bridge.preparePresent(surface, current) == VK_SUCCESS,
+            "application-owned recreation must restore the displaced association");
+        bridge.destroy(surface);
+        expect(mako_test_surface_objects() == connectionObjects &&
+            mako_test_surface_overrides() == 0, "ownership stress teardown");
+    }
+    mako_test_surface_ownership(false);
+    expect(mako_test_surface_objects() == 0, "ownership stress connection teardown");
 
     // RE4/Proton selects the window's exact 1920x1080 rendering size. A real
     // variable Wayland surface permits a separate 3840x2160 output; never

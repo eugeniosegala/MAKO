@@ -23,6 +23,102 @@ namespace {
     uint32_t pendingTimings = 0;
     uint32_t timingCalls = 0;
     bool timingQueryFails = false;
+    uint32_t submitCalls{};
+    uint32_t consumedWaits{};
+    uint32_t failSubmit{};
+    VkResult submitFailure{VK_ERROR_DEVICE_LOST};
+    std::vector<VkFence> signaledFences;
+    VkResult VKAPI_CALL rejectSubmit(VkQueue, uint32_t count,
+            const VkSubmitInfo* info, VkFence fence) {
+        ++submitCalls;
+        expect(count == 1 && info->sType == VK_STRUCTURE_TYPE_SUBMIT_INFO &&
+            info->commandBufferCount == 0 && info->signalSemaphoreCount == 0,
+            "rejected present must only consume waits and signal retirement fences");
+        if (submitCalls == failSubmit)
+            return submitFailure;
+        for (uint32_t i = 0; i < info->waitSemaphoreCount; ++i) {
+            expect(info->pWaitSemaphores[i] != VK_NULL_HANDLE &&
+                info->pWaitDstStageMask[i] == VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                "rejected present lost a binary wait or used the wrong stage");
+        }
+        consumedWaits += info->waitSemaphoreCount;
+        if (fence != VK_NULL_HANDLE)
+            signaledFences.push_back(fence);
+        return VK_SUCCESS;
+    }
+
+    void rejectedPresentTests() {
+        const std::array waits{std::bit_cast<VkSemaphore>(uint64_t{11}),
+            std::bit_cast<VkSemaphore>(uint64_t{12})};
+        const std::array fences{std::bit_cast<VkFence>(uint64_t{21}),
+            VkFence{VK_NULL_HANDLE}, std::bit_cast<VkFence>(uint64_t{23})};
+        VkSwapchainPresentFenceInfoEXT fenceInfo{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT,
+            .swapchainCount = 3, .pFences = fences.data(),
+        };
+        std::array<VkResult, 3> results{};
+        VkPresentInfoKHR present{
+            .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+            .pNext = &fenceInfo,
+            .waitSemaphoreCount = 2, .pWaitSemaphores = waits.data(),
+            .swapchainCount = 3, .pResults = results.data(),
+        };
+        const auto reset = [&] {
+            submitCalls = consumedWaits = failSubmit = 0;
+            submitFailure = VK_ERROR_DEVICE_LOST;
+            signaledFences.clear();
+            results.fill(VK_SUCCESS);
+        };
+        for (auto rejection : {VK_ERROR_OUT_OF_DATE_KHR, VK_ERROR_SURFACE_LOST_KHR}) {
+            reset();
+            expect(completeRejectedPresent(rejectSubmit, VK_NULL_HANDLE, present, rejection) == rejection &&
+                submitCalls == 2 && consumedWaits == 2 &&
+                signaledFences == std::vector<VkFence>{fences[0], fences[2]} &&
+                std::all_of(results.begin(), results.end(), [&](auto r) { return r == rejection; }),
+                "rejected batch must consume shared waits once, signal every non-null fence, and fill results");
+        }
+        for (uint32_t failAt : {1u, 2u}) {
+            reset();
+            failSubmit = failAt;
+            expect(completeRejectedPresent(rejectSubmit, VK_NULL_HANDLE, present,
+                VK_ERROR_OUT_OF_DATE_KHR) == VK_ERROR_DEVICE_LOST &&
+                submitCalls == failAt && signaledFences.size() == failAt - 1 &&
+                std::all_of(results.begin(), results.end(), [](auto r) { return r == VK_ERROR_DEVICE_LOST; }),
+                "queue failure must override recreation and stop later fence submissions");
+        }
+        for (auto failure : {VK_ERROR_OUT_OF_HOST_MEMORY, VK_ERROR_OUT_OF_DEVICE_MEMORY}) {
+            for (uint32_t failAt : {1u, 2u}) {
+                reset();
+                failSubmit = failAt;
+                submitFailure = failure;
+                const auto expected = failAt == 1 ? failure : VK_ERROR_DEVICE_LOST;
+                expect(completeRejectedPresent(rejectSubmit, VK_NULL_HANDLE, present,
+                    VK_ERROR_OUT_OF_DATE_KHR) == expected && submitCalls == failAt &&
+                    signaledFences.size() == failAt - 1,
+                    "partial queue progress cannot report a side-effect-free allocation failure");
+            }
+        }
+        reset();
+        present.pNext = nullptr;
+        expect(completeRejectedPresent(rejectSubmit, VK_NULL_HANDLE, present,
+            VK_ERROR_OUT_OF_DATE_KHR) == VK_ERROR_OUT_OF_DATE_KHR &&
+            submitCalls == 1 && consumedWaits == 2 && signaledFences.empty(),
+            "fenceless rejected present must still consume waits");
+        reset();
+        present.waitSemaphoreCount = 0;
+        present.pWaitSemaphores = nullptr;
+        present.pNext = &fenceInfo;
+        expect(completeRejectedPresent(rejectSubmit, VK_NULL_HANDLE, present,
+            VK_ERROR_OUT_OF_DATE_KHR) == VK_ERROR_OUT_OF_DATE_KHR &&
+            submitCalls == 2 && consumedWaits == 0 && signaledFences.size() == 2,
+            "waitless rejected present must still signal fences");
+        reset();
+        present.pNext = nullptr;
+        present.pResults = nullptr;
+        expect(completeRejectedPresent(rejectSubmit, VK_NULL_HANDLE, present,
+            VK_ERROR_OUT_OF_DATE_KHR) == VK_ERROR_OUT_OF_DATE_KHR && submitCalls == 0,
+            "empty rejected present must not enqueue unnecessary work");
+    }
     VkResult VKAPI_CALL queryTiming(VkDevice, VkSwapchainKHR, uint32_t* count,
             VkPastPresentationTimingGOOGLE* output) {
         ++timingCalls;
@@ -41,6 +137,7 @@ namespace {
 }
 
 int main() {
+    rejectedPresentTests();
     expect(std::string_view(
             selectSwapchainMaintenance1Extension(true, true, true)
         ) == khrSwapchainMaintenance1ExtensionName,

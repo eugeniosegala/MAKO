@@ -4,11 +4,13 @@
 // runtime symbols through its real dlopen path, with no test branch in MAKO.
 #include <algorithm>
 #include <array>
+#include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <string_view>
 #include <vector>
+#include <unordered_map>
 #include <sys/socket.h>
 #include <unistd.h>
 #include <X11/Xlib.h>
@@ -31,6 +33,7 @@ struct wl_proxy {
     void (**listener)(void){};
     void* data{};
     bool pending{};
+    wl_proxy* surface{};
 };
 
 namespace {
@@ -54,6 +57,23 @@ namespace {
     int sockets[2]{-1, -1};
     uint32_t associatedServer{};
     uint32_t associatedWindow{};
+    struct Override { wl_proxy* surface{}; wl_proxy* content{}; };
+    std::unordered_map<uint64_t, Override> overrides;
+    bool ownershipModel{};
+    bool delayedEvents{};
+
+    uint64_t windowKey(uint32_t server, uint32_t window) {
+        return (uint64_t{server} << 32) | window;
+    }
+
+    void associate(wl_proxy* proxy, uint32_t server, uint32_t window) {
+        auto& current = overrides[windowKey(server, window)];
+        if (current.content == proxy)
+            return;
+        if (current.content)
+            current.content->pending = true;
+        current = {proxy->surface, proxy};
+    }
 
     wl_proxy* make(std::string_view kind) {
         auto* proxy = new wl_proxy{kind};
@@ -61,6 +81,13 @@ namespace {
         return proxy;
     }
     void drop(wl_proxy* proxy) {
+        // Gamescope clears the override attached to the resource's wl_surface,
+        // including when an older protocol resource shares a replacement's
+        // surface. A later present must reassert the surviving association.
+        std::erase_if(overrides, [proxy](const auto& entry) {
+            return entry.second.surface == proxy ||
+                (proxy->surface && entry.second.surface == proxy->surface);
+        });
         if (lastTimedProxy == proxy)
             lastTimedProxy = nullptr;
         std::erase(objects, proxy);
@@ -71,11 +98,11 @@ namespace {
 extern "C" {
     // Keep peer identity deterministic in PID-isolated test sandboxes too.
     int getsockopt(int, int level, int option, void* value, socklen_t* size) noexcept {
-        if (level != SOL_SOCKET || option != SO_PEERCRED || *size < sizeof(ucred))
+        if (mode == 16 || level != SOL_SOCKET || option != SO_PEERCRED || *size < sizeof(ucred))
             return -1;
-        const ucred peer{getpid(), getuid(), getgid()};
+        const ucred peer{mode == 18 ? 0 : getpid(), getuid(), getgid()};
         std::memcpy(value, &peer, sizeof(peer));
-        *size = sizeof(peer);
+        *size = mode == 17 ? sizeof(peer) - 1 : sizeof(peer);
         return 0;
     }
     extern const wl_interface wl_registry_interface{"wl_registry", 1, 0, nullptr, 0, nullptr};
@@ -84,6 +111,17 @@ extern "C" {
     extern const wl_interface wl_callback_interface{"wl_callback", 1, 0, nullptr, 0, nullptr};
 
     void mako_test_surface_mode(int value) { mode = value; }
+    void mako_test_surface_ownership(bool value) { ownershipModel = value; }
+    void mako_test_surface_delay_events(bool value) { delayedEvents = value; }
+    int mako_test_surface_overrides() { return static_cast<int>(overrides.size()); }
+    void mako_test_surface_competing_override(uint32_t server, uint32_t window) {
+        const auto found = overrides.find(windowKey(server, window));
+        if (found != overrides.end()) {
+            if (found->second.content)
+                found->second.content->pending = true;
+            overrides.erase(found);
+        }
+    }
     int mako_test_surface_objects() { return static_cast<int>(objects.size()) + queues; }
     int mako_test_surface_associations() { return associations; }
     int mako_test_surface_feedbacks() { return feedbacks; }
@@ -139,7 +177,13 @@ extern "C" {
     // Match the public opaque pointer signatures even though the fixture uses
     // proxies/counters as storage. dlopen callers retain the real API types.
     int wl_display_get_fd(wl_display*) { return sockets[0]; }
-    int wl_display_flush(wl_display*) { return 0; }
+    int wl_display_flush(wl_display*) {
+        if (mode == 12 || mode == 13) {
+            errno = mode == 12 ? EAGAIN : EPIPE;
+            return -1;
+        }
+        return 0;
+    }
     int wl_display_get_error(wl_display*) { return mode == 5 ? 32 : 0; }
     wl_event_queue* wl_display_create_queue(wl_display*) {
         ++queues;
@@ -169,6 +213,8 @@ extern "C" {
                 ++associations;
                 associatedServer = args[0].u;
                 associatedWindow = args[1].u;
+                if (ownershipModel)
+                    associate(proxy, args[0].u, args[1].u);
             } else if (opcode == 2) {
                 ++feedbacks;
                 feedbackImageCount = args[0].u;
@@ -191,16 +237,24 @@ extern "C" {
         if (mode == 7 && std::string_view(interface->name) == "gamescope_swapchain")
             return nullptr;
         auto* created = make(interface->name);
+        if (created->kind == "gamescope_swapchain")
+            created->surface = static_cast<wl_proxy*>(args[0].o);
         if (created->kind == "wl_registry" || created->kind == "wl_callback")
             created->pending = true;
         return created;
     }
     int wl_display_dispatch_queue_pending(wl_display*, wl_event_queue*) {
+        if (mode == 14) {
+            errno = EPROTO;
+            return -1;
+        }
         if (mode == 3)
             return 0; // A silent peer must hit the bounded discovery deadline.
         const auto pending = objects;
         for (auto* proxy : pending) {
             if (!proxy->pending || !proxy->listener)
+                continue;
+            if (delayedEvents && proxy->kind == "gamescope_swapchain")
                 continue;
             proxy->pending = false;
             if (proxy->kind == "wl_registry") {
