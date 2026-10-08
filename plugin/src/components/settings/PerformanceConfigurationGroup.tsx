@@ -2,6 +2,7 @@ import { PanelSectionRow, SliderField, ToggleField } from "@decky/ui";
 import { MdBolt } from "react-icons/md";
 import {
   ALLOW_FP16,
+  DISABLE_STEAM_OVERLAY,
   FLOW_SCALE_MAX,
   FLOW_SCALE_MIN,
   FLOW_SCALE,
@@ -22,6 +23,25 @@ export function PerformanceConfigurationGroup({
       <MakoSectionHeader>
         {t("CONTENT_PERFORMANCE_SETTINGS", "Performance Settings")}
       </MakoSectionHeader>
+
+      <PanelSectionRow>
+        <ToggleField
+          label={
+            <MakoRestartLabel
+              label={t(
+                "CONFIG_DISABLE_STEAM_OVERLAY",
+                "Disable Steam Overlay (Restart)",
+              )}
+            />
+          }
+          description={t(
+            "CONFIG_DISABLE_STEAM_OVERLAY_DESC",
+            "May improve smoothness. Disables Steam's in-game overlay hooks and may affect Steam Input.",
+          )}
+          checked={config.disable_steam_overlay}
+          onChange={(value) => onConfigChange(DISABLE_STEAM_OVERLAY, value)}
+        />
+      </PanelSectionRow>
 
       <PanelSectionRow>
         <ToggleField

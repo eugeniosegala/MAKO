@@ -78,7 +78,7 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Generated-output capacity | Private FG replacement when the current WSI pool fits; otherwise recreation | Keeps the old active policy until enough resources and WSI headroom exist. Managed Gamescope waits for natural recreation; a compatible non-Gamescope maintenance1 context may request one. |
 | Pacing | Natural recreation | Does not change a live swapchain or its transport. |
 | DLL, FP16, GPU, and Ultra Performance | Restart | Existing contexts retain the actual backend baseline. |
-| WSI compatibility, external layer, HDR exposure, Zink, and ALSA | Restart | These affect discovery or application initialization. |
+| Steam overlay removal, WSI compatibility, external layer, HDR exposure, Zink, and ALSA | Restart | These affect discovery or application initialization. |
 | Stable HDR application feedback | Private colour transition | May rebuild MAKO-owned colour and backend resources, never the game-owned transport. |
 | Active profile match | Live for compatible fields | Losing the match disables generation immediately; static differences remain pending. |
 
@@ -117,9 +117,10 @@ Reset only state whose assumptions changed:
 
 - enable/disable clears affected pacing, admission, acquire recovery, and history state;
 - mode, target, ceiling, Smooth Cadence, or recovery-policy changes rebuild scheduler policy and affected real-frame pacing, coalesced into one final reset on return when confirmed Steam UI focus owns the transition;
-- effective cap changes reset the real-frame pacer and scheduler observations;
+- configured cap changes reset the real-frame pacer and scheduler observations; a bounded scheduler rescue changes only its effective automatic cap and output clock, with rollback owned by the same rescue;
 - probe-interval-only changes update only the timer;
 - an explicit Gamescope VRR pacing-owner change resets the fixed-refresh budget and real-frame pacing helpers, but not scheduler history, validated multiplier, acquire recovery, or recreation authority;
+- applied 3x–5x integer pacing may verify its real-frame cost against a recent trial baseline or obtain a fresh adjacent lower-load sample through the existing efficiency probe after a delayed handoff; a measured rejection restores the adjacent lower workload and output clock without history warm-up, resource replacement, or transport recovery, while interrupted evidence is discarded;
 - private-resource, mode, multiplier, refresh, or transport-recovery changes clear transient transport evidence when its assumptions are no longer valid; and
 - dormant or deferred values reset nothing until they apply.
 

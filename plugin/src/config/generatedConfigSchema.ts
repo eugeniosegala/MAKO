@@ -184,6 +184,7 @@ export const VKBASALT_ANTIALIASING = "vkbasalt_antialiasing" as const;
 export const VKBASALT_SHADER = "vkbasalt_shader" as const;
 export const VKBASALT_MANAGE_CUSTOM_SHADERS = "vkbasalt_manage_custom_shaders" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
+export const DISABLE_STEAM_OVERLAY = "disable_steam_overlay" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
 export const FORCE_ALSA_AUDIO = "force_alsa_audio" as const;
 
@@ -437,6 +438,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: false,
     description: "disable Steam Deck mode (unlocks hidden settings in some games)"
   },
+  disable_steam_overlay: {
+    name: "disable_steam_overlay",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: true,
+    description: "disable Steam overlay hooks at launch to improve smoothness; may affect Steam Input and overlay features; restart required"
+  },
   enable_zink: {
     name: "enable_zink",
     fieldType: ConfigFieldType.BOOLEAN,
@@ -493,6 +500,7 @@ export interface ConfigurationData {
   vkbasalt_shader: string;
   vkbasalt_manage_custom_shaders: boolean;
   disable_steamdeck_mode: boolean;
+  disable_steam_overlay: boolean;
   enable_zink: boolean;
   force_alsa_audio: boolean;
 }
@@ -547,6 +555,7 @@ export function getDefaults(): ConfigurationData {
     vkbasalt_shader: "none",
     vkbasalt_manage_custom_shaders: false,
     disable_steamdeck_mode: false,
+    disable_steam_overlay: true,
     enable_zink: false,
     force_alsa_audio: false,
   };
@@ -594,6 +603,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     vkbasalt_shader: ConfigFieldType.STRING,
     vkbasalt_manage_custom_shaders: ConfigFieldType.BOOLEAN,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
+    disable_steam_overlay: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,
     force_alsa_audio: ConfigFieldType.BOOLEAN,
   };

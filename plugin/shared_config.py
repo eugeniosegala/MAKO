@@ -490,6 +490,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "script"
     },
 
+    "disable_steam_overlay": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": True,
+        "description": "disable Steam overlay hooks at launch to improve smoothness; may affect Steam Input and overlay features; restart required",
+        "location": "script"
+    },
+
     "enable_zink": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,

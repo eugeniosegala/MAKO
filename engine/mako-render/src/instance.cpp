@@ -517,6 +517,7 @@ Root::Root() :
     const auto identification = ls::identify();
     const auto& profile = findProfile(this->config.get(), identification);
     if (present_diagnostics::enabled()) {
+        const auto overlayLibraries = present_diagnostics::steamOverlayLibraries();
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=process-identity"
                   << " pid=" << ::getpid()
@@ -537,6 +538,8 @@ Root::Root() :
                         ? identificationToken(profile->first) : "none")
                   << " build=" << MAKO_BUILD_VERSION
                   << " fingerprint=" << MAKO_BUILD_FINGERPRINT
+                  << " steam_overlay_hook_loaded=" << overlayLibraries.hookLoaded
+                  << " steam_overlay_vulkan_loaded=" << overlayLibraries.vulkanLoaded
                   << '\n';
     }
     if (!profile.has_value()) {

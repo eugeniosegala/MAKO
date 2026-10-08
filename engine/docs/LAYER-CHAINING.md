@@ -10,7 +10,7 @@ Keep the normal Steam launch option:
 /home/deck/.local/bin/mako-run %command%
 ```
 
-MAKO Decky adds only the layers selected for the active profile. In Steam Desktop Mode it also preserves Steam's requested Vulkan FPS overlay when available; Gaming Mode and Flatpak presentation remain unchanged.
+MAKO Decky adds only the layers selected for the active profile. **Performance Settings > Disable Steam Overlay (Restart)** is on by default and removes Steam overlay hooks and layers before launch; it may improve smoothness but can affect Steam Input and overlay features. Turn it off and restart to preserve Steam hooks and, in Desktop Mode, the requested Vulkan FPS overlay when available. The standalone Qt UI exposes the same option under Performance Settings, globally for `mako-launch`. See [diagnostics](COLLECT_DIAGNOSTICS.md) to check the resulting process.
 
 ## Standalone MAKO Renderer with vkBasalt
 

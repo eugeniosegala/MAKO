@@ -965,6 +965,18 @@ ApplicationWindow {
                     enabled: backend.available
 
                     GroupEntry {
+                        title: t.disableSteamOverlay
+                        description: t.disableSteamOverlayDesc
+                        compactRestartMarker: true
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+                            checked: backend.disable_steam_overlay
+                            onToggled: backend.disable_steam_overlay = checked
+                        }
+                    }
+
+                    GroupEntry {
                         title: t.ultraPerformance
                         description: t.ultraPerformanceDesc
                         compactRestartMarker: true

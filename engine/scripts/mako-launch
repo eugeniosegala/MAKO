@@ -70,6 +70,8 @@ fi
 unset MAKO_LAUNCH_CONFIG
 
 mako_launch_version_seen=0
+mako_disable_steam_overlay=1
+mako_disable_steam_overlay_seen=0
 mako_launch_enable_zink=0
 mako_launch_force_alsa_audio=0
 mako_launch_enable_zink_seen=0
@@ -104,6 +106,15 @@ if [[ -f "$mako_launch_config_path" ]]; then
                 fi
                 mako_launch_version_seen=1
                 ;;
+            disable_steam_overlay)
+                if [[ "$mako_disable_steam_overlay_seen" != 0 ||
+                        "$mako_launch_value" != 0 && "$mako_launch_value" != 1 ]]; then
+                    mako_launch_config_valid=0
+                    break
+                fi
+                mako_disable_steam_overlay="$mako_launch_value"
+                mako_disable_steam_overlay_seen=1
+                ;;
             enable_zink)
                 if [[ "$mako_launch_enable_zink_seen" != 0 ||
                         "$mako_launch_value" != 0 && "$mako_launch_value" != 1 ]]; then
@@ -136,11 +147,13 @@ if [[ -f "$mako_launch_config_path" ]]; then
         echo "mako-launch: ignoring invalid launcher configuration: $mako_launch_config_path" >&2
         mako_launch_enable_zink=0
         mako_launch_force_alsa_audio=0
+        mako_disable_steam_overlay=1
     fi
 fi
 unset mako_launch_config_path mako_launch_line mako_launch_key mako_launch_value
 unset mako_launch_version_seen mako_launch_config_valid
 unset mako_launch_enable_zink_seen mako_launch_force_alsa_audio_seen
+unset mako_disable_steam_overlay_seen
 
 if [[ "$mako_launch_enable_zink" == 1 ]]; then
     export __GLX_VENDOR_LIBRARY_NAME=mesa
@@ -213,9 +226,9 @@ elif [[ ! -d "$mako_implicit_layer_path" ]]; then
     mako_implicit_layer_path="$mako_install_prefix/share/vulkan/implicit_layer.d"
 fi
 
-# Steam's Desktop Mode FPS counter is part of its Vulkan overlay. Preserve
-# only that named layer when Steam requested it and its per-user manifests are
-# available. The directory is exposed solely for explicit-layer discovery, so
+# When overlay removal is off, preserve Steam's named Desktop Mode FPS overlay
+# when Steam requested it and its per-user manifests are available.
+# The directory is exposed solely for explicit-layer discovery, so
 # Steam Fossilize and unrelated implicit layers remain outside MAKO's boundary.
 # Gaming Mode keeps its compositor-owned performance display unchanged.
 mako_steam_overlay_layers=""
@@ -230,7 +243,8 @@ if [[ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" &&
           "${WAYLAND_DISPLAY}" == "${GAMESCOPE_WAYLAND_DISPLAY}" ) ]]; then
     mako_gamescope_session=1
 fi
-if [[ "${ENABLE_VK_LAYER_VALVE_steam_overlay_1:-0}" == 1 &&
+if [[ "$mako_disable_steam_overlay" != 1 &&
+        "${ENABLE_VK_LAYER_VALVE_steam_overlay_1:-0}" == 1 &&
         "$mako_gamescope_session" != 1 && "$mako_flatpak_launch" != 1 ]]; then
     if [[ -r "$mako_steam_overlay_layer_dir/steamoverlay_x86_64.json" ]]; then
         mako_steam_overlay_layers=VK_LAYER_VALVE_steam_overlay_64
@@ -324,6 +338,54 @@ elif [[ "$mako_vkbasalt_enabled" != 1 ]]; then
 fi
 export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"
 unset VK_ADD_IMPLICIT_LAYER_PATH
+# Apply the saved process-start Performance setting before application exec.
+# BEGIN MAKO_STEAM_OVERLAY_PRELOAD_POLICY
+mako_steam_overlay_preload_removed=0
+mako_steam_overlay_preload_filter_requested="${mako_disable_steam_overlay:-1}"
+if [[ "$mako_steam_overlay_preload_filter_requested" == 1 ]]; then
+    export DISABLE_VK_LAYER_VALVE_steam_overlay_1=1
+    unset ENABLE_VK_LAYER_VALVE_steam_overlay_1
+    mako_overlay_instance_layers=":${VK_INSTANCE_LAYERS:-}:"
+    for mako_overlay_layer in VK_LAYER_VALVE_steam_overlay_64 VK_LAYER_VALVE_steam_overlay_32; do
+        while [[ "$mako_overlay_instance_layers" == *":$mako_overlay_layer:"* ]]; do
+            mako_overlay_instance_layers="${mako_overlay_instance_layers/:$mako_overlay_layer:/:}"
+        done
+    done
+    mako_overlay_instance_layers="${mako_overlay_instance_layers#:}"
+    mako_overlay_instance_layers="${mako_overlay_instance_layers%:}"
+    if [[ -n "$mako_overlay_instance_layers" ]]; then
+        export VK_INSTANCE_LAYERS="$mako_overlay_instance_layers"
+    else
+        unset VK_INSTANCE_LAYERS
+    fi
+    mako_preload_list="${LD_PRELOAD:-}"
+    mako_preload_list="${mako_preload_list//[$' \t\n\r\v\f:']/ }"
+    IFS=' ' read -r -a mako_preload_entries <<< "$mako_preload_list"
+    mako_retained_preloads=""
+    for mako_preload_entry in "${mako_preload_entries[@]}"; do
+        if [[ "${mako_preload_entry##*/}" == gameoverlayrenderer.so ]]; then
+            mako_steam_overlay_preload_removed=$((mako_steam_overlay_preload_removed + 1))
+        else
+            mako_retained_preloads="${mako_retained_preloads:+$mako_retained_preloads:}$mako_preload_entry"
+        fi
+    done
+    if ((mako_steam_overlay_preload_removed > 0)); then
+        if [[ -n "$mako_retained_preloads" ]]; then
+            export LD_PRELOAD="$mako_retained_preloads"
+        else
+            unset LD_PRELOAD
+        fi
+    fi
+    unset mako_overlay_instance_layers mako_overlay_layer
+    unset mako_preload_list mako_preload_entries mako_preload_entry mako_retained_preloads
+fi
+# END MAKO_STEAM_OVERLAY_PRELOAD_POLICY
+if [[ "${MAKO_PRESENT_DIAGNOSTICS:-0}" != 0 ]]; then
+    printf 'MAKO Renderer: present diagnostics: operation=launch-environment pid=%s steam_overlay_preload_filter_requested=%s steam_overlay_preload_removed=%s\n' \
+        "$$" "$mako_steam_overlay_preload_filter_requested" "$mako_steam_overlay_preload_removed" >&2
+fi
+unset mako_steam_overlay_preload_removed
+unset mako_steam_overlay_preload_filter_requested mako_disable_steam_overlay
 unset mako_launcher_dir mako_install_prefix mako_data_home mako_implicit_layer_path
 unset mako_existing_instance_layers mako_vkbasalt_layer_path
 unset mako_vkbasalt_library64 mako_vkbasalt_library32

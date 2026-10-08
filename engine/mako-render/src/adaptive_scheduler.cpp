@@ -33,6 +33,11 @@ namespace {
     constexpr double adaptiveSdrCadenceResumeBaseFps = 12.0;
     constexpr size_t adaptiveSdrCadenceResumeFrameCount = 3;
     constexpr double adaptiveIntervalSmoothing = 0.25;
+    constexpr auto adaptivePacedLoadWatchDuration = std::chrono::seconds{8};
+    constexpr auto adaptivePacedLoadSettlingDuration =
+        std::chrono::milliseconds{250};
+    constexpr double adaptivePacedLoadSampleSeconds = 1.0;
+    constexpr double adaptivePacedLoadWindowSeconds = 0.25;
     constexpr double adaptiveCadenceDropRatio = 2.0;
     constexpr size_t adaptiveCadenceDropFrameCount = 3;
     constexpr double adaptiveTransientFastBurstCadenceRatio = 3.0;
@@ -156,6 +161,7 @@ namespace {
     constexpr double adaptiveRescueOutputCollapseRatio = 0.80;
     constexpr double adaptiveRescueRecoveredBaseRatio = 0.90;
     constexpr auto adaptiveRescueMeasurementDuration = std::chrono::seconds(1);
+    constexpr auto adaptiveRescueCollapseWatchDuration = std::chrono::seconds(2);
     constexpr auto adaptiveRescueCooldown = std::chrono::seconds(15);
     constexpr double adaptiveDiscontinuityRecoveredBaseRatio = 0.90;
     constexpr auto adaptiveDiscontinuityStableDuration = std::chrono::seconds(1);
@@ -349,6 +355,12 @@ void AdaptiveScheduler::consumeHistoryWarmupFrame(const TimePoint frameStarted) 
 
 void AdaptiveScheduler::reportGeneratedFrameDelivery(
         const GeneratedFrameDelivery delivery) {
+    auto& pacedLoad = this->state.ramp.pacedLoad;
+    if (pacedLoad.until) {
+        pacedLoad.deliveryObserved = delivery.requested > 0 &&
+            delivery.acceptedForPresentation == delivery.requested;
+        pacedLoad.deliveredOutputs = delivery.acceptedForPresentation + 1;
+    }
     auto& lowerLoad = this->state.ramp.lowerLoadSample;
     if (lowerLoad.since) {
         if (delivery.requested > 0 &&
@@ -408,6 +420,10 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
             ? 1.0 / this->state.cadence.smoothedIntervalSeconds
             : 0.0,
         .rampEvaluationActive = this->state.ramp.evaluationAt.has_value(),
+        .pacedLoadValidationPending =
+            this->state.ramp.pacedLoad.until.has_value(),
+        .pacedLoadRollbackGenerationLimit =
+            this->state.ramp.pacedLoadRollbackLimit,
         .efficiencyProbeGenerationLimit =
             this->state.efficiencyProbe.evaluationAt
                 ? std::optional<size_t>{
@@ -445,6 +461,42 @@ void AdaptiveScheduler::suppressAutomaticBaseCap(
     );
 }
 
+void AdaptiveScheduler::startRescueMeasurement(
+        const TimePoint now, const size_t generationLimit,
+        const double baselineBaseFps, const double currentBaseFps) {
+    this->cancelPacedLoadValidation("native-rescue-started");
+    auto& rescue = this->state.rescue;
+    rescue.resetAttempt();
+    rescue.previousLimit = generationLimit;
+    rescue.baselineBaseFps = baselineBaseFps;
+    rescue.collapsedBaseFps = currentBaseFps;
+    rescue.previousCapSuppressed = this->state.automaticBaseCap.suppressed;
+    if (this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
+            this->config.automaticBaseFpsCap) {
+        this->suppressAutomaticBaseCap(generationLimit, baselineBaseFps,
+            currentBaseFps, "stable-cadence-collapse");
+    }
+    rescue.until = now + adaptiveRescueMeasurementDuration;
+    rescue.cooldownUntil = now + adaptiveRescueCooldown;
+    this->state.ramp.targetDeficitSince.reset();
+    this->state.outputPlanner.resetTargetClock();
+    this->diagnostics->rescueStart(generationLimit, baselineBaseFps,
+        currentBaseFps, currentBaseFps * static_cast<double>(generationLimit + 1));
+}
+
+void AdaptiveScheduler::cancelRescueMeasurement(const std::string_view reason) {
+    auto& rescue = this->state.rescue;
+    if ((rescue.until || rescue.verificationUntil) &&
+            !rescue.previousCapSuppressed &&
+            this->state.automaticBaseCap.suppressed) {
+        this->state.automaticBaseCap.suppressed = false;
+        this->diagnostics->automaticBaseCapRestored(rescue.previousLimit,
+            rescue.baselineBaseFps, rescue.measuredBaseFps(), reason);
+        this->state.outputPlanner.resetTargetClock();
+    }
+    rescue.resetAttempt();
+}
+
 size_t AdaptiveScheduler::configuredGenerationLimit() const {
     if (this->config.maximumMultiplier <
             ls::GameConfLimits::minimumAdaptiveMaxMultiplier) {
@@ -461,6 +513,8 @@ AdaptiveScheduler::observeCadence(
         const std::chrono::steady_clock::time_point now,
         const bool generatedImageAcquireBackoff) {
     if (generatedImageAcquireBackoff) {
+        this->cancelPacedLoadValidation("generated-acquire-backoff");
+        this->cancelRescueMeasurement("generated-acquire-backoff");
         // Keep probing for one generated-image slot without advancing ramp,
         // stable-cadence, or load-shed policy while the generated workload is
         // deliberately bypassed. Evaluating a multiplier during this phase
@@ -536,6 +590,7 @@ AdaptiveScheduler::observeCadence(
             adaptiveTransientFastBurstTargetRatio
     );
     if (instantaneousBaseFps > fastBurstThresholdFps) {
+        this->cancelPacedLoadValidation("fast-cadence-burst");
         // Do not manufacture generated work for a transient that is already
         // faster than the requested output. Preserve the proven gameplay
         // baseline and pause evaluation windows which require real generated
@@ -555,7 +610,7 @@ AdaptiveScheduler::observeCadence(
         pauseEvaluation(this->state.stableCadence.evaluationAt);
         pauseEvaluation(this->state.efficiencyProbe.eligibleSince);
         pauseEvaluation(this->state.efficiencyProbe.evaluationAt);
-        pauseEvaluation(this->state.rescue.until);
+        this->cancelRescueMeasurement("fast-cadence-burst");
 
         this->state.outputPlanner.resetTargetClock();
         this->state.cadence.dropFrames = 0;
@@ -784,8 +839,59 @@ AdaptiveScheduler::advanceDiscontinuityRecovery(
 
 MAKO_ADAPTIVE_STAGE_INLINE AdaptiveScheduler::PlanningStageResult
 AdaptiveScheduler::advanceRescueMeasurement(
-        const TimePoint now, const double baseFps) {
+        const TimePoint now, const double baseFps,
+        const double rawIntervalSeconds) {
+    auto& rescue = this->state.rescue;
+    if (rescue.watchUntil) {
+        if (this->state.stableCadence.limit ||
+                this->state.ramp.evaluationAt ||
+                this->state.efficiencyProbe.evaluationAt ||
+                this->state.nativeCadenceProbe.active ||
+                this->state.rearm.required ||
+                this->state.outputPlanner.generationLimit !=
+                    rescue.previousLimit) {
+            rescue.resetAttempt();
+        } else {
+            rescue.observe(rawIntervalSeconds);
+            const double measuredFps = rescue.measuredBaseFps();
+            if (rescue.sampleSeconds >= 1.0 &&
+                    measuredFps <= rescue.baselineBaseFps *
+                        adaptiveRescueBaseCollapseRatio &&
+                    measuredFps * static_cast<double>(rescue.previousLimit + 1)
+                        <= static_cast<double>(this->config.targetFps) *
+                            adaptiveRescueOutputCollapseRatio) {
+                this->startRescueMeasurement(now, rescue.previousLimit,
+                    rescue.baselineBaseFps, measuredFps);
+            } else if (now >= *rescue.watchUntil) {
+                rescue.resetAttempt();
+            }
+        }
+    }
+    if (rescue.verificationUntil) {
+        rescue.observe(rawIntervalSeconds);
+        if (now >= *rescue.verificationUntil) {
+            const bool improvementSurvived = rescue.sampleFrames >= 8 &&
+                rescue.measuredBaseFps() >= rescue.baselineBaseFps *
+                    adaptiveRescueRecoveredBaseRatio &&
+                rescue.measuredBaseFps() >= rescue.collapsedBaseFps *
+                    adaptiveNativeCadenceMinimumRiseRatio &&
+                rescue.measuredBaseFps() >= std::max(adaptiveMinimumBaseFps,
+                    static_cast<double>(this->config.targetFps) / 2.0) *
+                        adaptiveNativeCadenceMinimumRiseRatio;
+            if (!improvementSurvived)
+                this->cancelRescueMeasurement("generated-load-not-recovered");
+            else {
+                this->diagnostics->rescueComplete(rescue.previousLimit,
+                    this->state.outputPlanner.generationLimit,
+                    rescue.previousLimit, this->configuredGenerationLimit(),
+                    rescue.baselineBaseFps, rescue.measuredBaseFps(),
+                    "cap-release-verified");
+                rescue.resetAttempt();
+            }
+        }
+    }
     if (this->state.rescue.until) {
+        rescue.observe(rawIntervalSeconds);
         if (now < *this->state.rescue.until) {
             this->state.outputPlanner.resetTargetClock();
             if (this->diagnosticsActive &&
@@ -819,8 +925,20 @@ AdaptiveScheduler::advanceRescueMeasurement(
         );
         const size_t requiredLimit = requiredOutputs - 1;
         const size_t requestedLimit = std::min(requiredLimit, configuredLimit);
-        const bool baseRecovered = rescueBaselineBaseFps > 0.0 &&
-            baseFps >= rescueBaselineBaseFps * adaptiveRescueRecoveredBaseRatio;
+        const double measuredBaseFps = rescue.measuredBaseFps();
+        const bool baseRecovered = rescue.sampleFrames >= 8 &&
+            rescueBaselineBaseFps > 0.0 &&
+            measuredBaseFps >= rescueBaselineBaseFps *
+                adaptiveRescueRecoveredBaseRatio;
+        // Recovering to a rate that the configured cap already permits is
+        // not evidence that removing that cap helps. Measure actual source
+        // intervals, then check the benefit again with generation restored.
+        const bool capReleaseUseful = baseRecovered &&
+            measuredBaseFps >= rescue.collapsedBaseFps *
+                adaptiveNativeCadenceMinimumRiseRatio &&
+            measuredBaseFps >= std::max(adaptiveMinimumBaseFps,
+                static_cast<double>(this->config.targetFps) / 2.0) *
+                    adaptiveNativeCadenceMinimumRiseRatio;
         std::string_view decision = "resume-strict";
         this->state.outputPlanner.generationLimit = previousLimit;
         this->state.ramp.evaluationAt.reset();
@@ -835,10 +953,23 @@ AdaptiveScheduler::advanceRescueMeasurement(
         } else if (requiredLimit > configuredLimit) {
             decision = "ceiling-limited";
         }
-
-        this->state.rescue.until.reset();
-        this->state.rescue.previousLimit = 0;
-        this->state.rescue.baselineBaseFps = 0.0;
+        if (!rescue.previousCapSuppressed &&
+                this->state.automaticBaseCap.suppressed) {
+            if (capReleaseUseful) {
+                rescue.verificationUntil = now + adaptiveRescueMeasurementDuration;
+                // Verification cannot share a higher-load experiment. Failed
+                // rescue still resumes ordinary Adaptive scene adaptation.
+                this->state.ramp.nextAt = rescue.verificationUntil;
+                rescue.resetSamples();
+                decision = "verify-cap-release";
+            } else {
+                this->cancelRescueMeasurement("native-sample-no-cap-benefit");
+                decision = "cap-restored-no-benefit";
+            }
+        } else {
+            rescue.resetAttempt();
+        }
+        rescue.until.reset();
         this->state.ramp.targetDeficitSince.reset();
         this->state.outputPlanner.resetTargetClock();
         if (this->state.rescue.cooldownUntil)
@@ -849,7 +980,7 @@ AdaptiveScheduler::advanceRescueMeasurement(
             requestedLimit,
             configuredLimit,
             rescueBaselineBaseFps,
-            baseFps,
+            measuredBaseFps,
             decision
         );
     }
@@ -864,9 +995,12 @@ AdaptiveScheduler::advanceStableCadence(
         const size_t maximumGeneratedFrameCount) {
     // A downward efficiency probe deliberately runs one cheaper constant
     // cadence while retaining the previously qualified policy for immediate
-    // rollback. Do not let normal retention interpret that temporary workload
-    // change as a reason to disable or requalify Smooth Cadence.
-    if (this->state.efficiencyProbe.evaluationAt)
+    // rollback. The fresh applied-pacing comparison also owns both delivery
+    // samples; a new cadence trial would prevent its planned FIFO release.
+    // Do not disable or requalify Smooth Cadence during either comparison.
+    if (this->state.efficiencyProbe.evaluationAt ||
+            (this->state.ramp.pacedLoad.until &&
+             this->state.ramp.pacedLoad.refreshBaseline))
         return {.planningReady = true};
 
     struct StableCadenceCandidate {
@@ -997,31 +1131,24 @@ AdaptiveScheduler::advanceStableCadence(
                         ? adaptiveStableCadenceConvergenceRetryDelay
                         : adaptiveStableCadenceRetryDelay);
                 if (severeCollapse) {
-                    if (this->config.recoveryPolicy ==
-                            AdaptiveRecoveryPolicy::OrderedSdr &&
-                            this->config.automaticBaseFpsCap) {
-                        this->suppressAutomaticBaseCap(
-                            generatedLimit,
-                            rescueBaselineBaseFps,
-                            baseFps,
-                            "stable-cadence-collapse"
-                        );
-                    }
-                    this->state.rescue.previousLimit = generatedLimit;
-                    this->state.rescue.baselineBaseFps = rescueBaselineBaseFps;
-                    this->state.rescue.until =
-                        now + adaptiveRescueMeasurementDuration;
-                    this->state.rescue.cooldownUntil =
-                        now + adaptiveRescueCooldown;
-                    this->state.ramp.targetDeficitSince.reset();
-                    this->state.outputPlanner.resetTargetClock();
-                    this->diagnostics->rescueStart(
-                        generatedLimit,
-                        rescueBaselineBaseFps,
-                        baseFps,
-                        projectedOutputFps
-                    );
+                    this->startRescueMeasurement(now, generatedLimit,
+                        rescueBaselineBaseFps, baseFps);
                     return {};
+                }
+                if (rescueCooldownElapsed &&
+                        this->config.recoveryPolicy ==
+                            AdaptiveRecoveryPolicy::OrderedSdr &&
+                        !this->state.ramp.evaluationAt &&
+                        rescueBaselineBaseFps > 0.0) {
+                    // The exit sample need not coincide with the deepest part
+                    // of a bursty or gradual collapse. Keep this accepted
+                    // baseline for one bounded mean-cadence qualification.
+                    auto& rescue = this->state.rescue;
+                    rescue.resetAttempt();
+                    rescue.previousLimit = generatedLimit;
+                    rescue.baselineBaseFps = rescueBaselineBaseFps;
+                    rescue.watchUntil = now + adaptiveRescueCollapseWatchDuration;
+                    rescue.resetSamples(false);
                 }
             }
         } else {
@@ -1160,6 +1287,11 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
     auto& probe = this->state.efficiencyProbe;
     const double targetFps = static_cast<double>(this->config.targetFps);
 
+    // The applied-pacing comparison owns the same lower-load probe while it
+    // collects a continuous delivered sample rather than an EWMA endpoint.
+    if (this->state.ramp.pacedLoad.lowerLoadProbe)
+        return;
+
     if (probe.evaluationAt) {
         if (now < *probe.evaluationAt)
             return;
@@ -1255,11 +1387,14 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
         probe.baselineBaseFps = 0.0;
         probe.settlingGraceUsed = false;
         this->state.outputPlanner.resetTargetClock();
+        this->state.ramp.pacingResumeUntil =
+            now + adaptivePacedLoadSettlingDuration;
         return;
     }
 
     const bool eligible =
         this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
+        !this->state.ramp.pacedLoad.until &&
         this->state.stableCadence.limit &&
         *this->state.stableCadence.limit > 1 &&
         !this->state.stableCadence.evaluationAt &&
@@ -1267,6 +1402,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
         !this->state.ramp.evaluationAt &&
         !this->state.rearm.required &&
         !this->state.rescue.until &&
+        !this->state.rescue.verificationUntil &&
         !this->state.discontinuityRecovery.deadline &&
         !this->state.stabilization.until &&
         !this->state.nativeCadenceProbe.active;
@@ -1502,6 +1638,7 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         !this->state.ramp.evaluationAt &&
         !this->state.rearm.required &&
         !this->state.rescue.until &&
+        !this->state.rescue.verificationUntil &&
         !this->state.discontinuityRecovery.deadline &&
         !this->state.stableCadence.evaluationAt &&
         !this->state.efficiencyProbe.evaluationAt;
@@ -1618,7 +1755,8 @@ AdaptiveScheduler::advanceNearTargetNativePreference(
     // existing ownership. Near-target preference is only an Active Fractional
     // policy and never changes a transition already being measured.
     if (this->state.discontinuityRecovery.deadline ||
-            this->state.rescue.until || this->state.rearm.required ||
+            this->state.rescue.until || this->state.rescue.verificationUntil ||
+            this->state.rearm.required ||
             this->state.ramp.evaluationAt ||
             this->state.stableCadence.limit ||
             this->state.stableCadence.evaluationAt ||
@@ -1754,7 +1892,9 @@ __attribute__((flatten))
 AdaptiveFramePlan AdaptiveScheduler::planFrame(
         const std::chrono::steady_clock::time_point now,
         const bool generatedImageAcquireBackoff,
-        const std::optional<size_t> orderedFifoGenerationLimit) {
+        const std::optional<size_t> orderedFifoGenerationLimit,
+        const std::optional<size_t> integerBaseCapGenerationLimit) {
+    this->state.ramp.pacedLoadRollbackLimit.reset();
     // Wall time alone cannot qualify a lower workload. An intentional native
     // probe pauses the delivered-work clock; any other missing observation
     // breaks continuity. Short probe intervals must not starve qualification.
@@ -1786,7 +1926,9 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
     if (!discontinuity.planningReady)
         return discontinuity.terminalPlan;
 
-    const auto rescue = this->advanceRescueMeasurement(now, baseFps);
+    const auto rescue = this->advanceRescueMeasurement(
+        now, baseFps, cadence.rawIntervalSeconds
+    );
     if (!rescue.planningReady)
         return rescue.terminalPlan;
     if (this->state.stabilization.until &&
@@ -1806,6 +1948,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
         return {};
     }
     this->state.stabilization.until.reset();
+    this->advancePacedLoadValidation(now, cadence.rawIntervalSeconds,
+        orderedFifoGenerationLimit, integerBaseCapGenerationLimit);
     this->updateGenerationLimit(now, baseFps);
 
     const double desiredOutputsPerRealFrame =
@@ -1918,6 +2062,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
                 nearTargetQuality.fractionalIntervalRmsMilliseconds(),
             .phase = this->state.rearm.required
                 ? "rearm-cooldown"
+                : this->state.ramp.pacedLoad.settlingUntil
+                    ? "paced-load-validation"
                 : this->state.nearTargetNativePreference.active
                     ? "near-target-native"
                     : "",
@@ -1987,6 +2133,10 @@ AdaptiveScheduler::Clock::duration AdaptiveScheduler::stableRearmDuration() {
 
 void AdaptiveScheduler::resetTiming(
         const std::chrono::steady_clock::time_point now) {
+    this->cancelPacedLoadValidation("timing-reset");
+    this->state.ramp.observedPacingLimit.reset();
+    this->state.ramp.pacingResumeUntil.reset();
+    this->cancelRescueMeasurement("timing-reset");
     this->state.ramp.lowerLoadSample.reset();
     this->state.cadence.lastRealFrame = now;
     this->state.cadence.smoothedIntervalSeconds = 0.0;
@@ -2033,6 +2183,9 @@ void AdaptiveScheduler::restoreGenerationLimit(
         const std::optional<size_t> monitoredFallbackLimit,
         const double monitoredBaselineBaseFps,
         const bool preserveRampBackoff) {
+    this->cancelPacedLoadValidation("generation-limit-restored");
+    this->state.ramp.observedPacingLimit.reset();
+    this->state.ramp.pacingResumeUntil.reset();
     const size_t configuredLimit = std::min(
         this->config.generatedFrameCapacity,
         this->config.maximumMultiplier - 1
@@ -2310,9 +2463,7 @@ void AdaptiveScheduler::beginStabilization(
     this->state.stableCadence.retryAt.reset();
     this->state.stableCadence.baselineBaseFps = 0.0;
     this->state.stableCadence.candidate.reset();
-    this->state.rescue.until.reset();
-    this->state.rescue.previousLimit = 0;
-    this->state.rescue.baselineBaseFps = 0.0;
+    this->cancelRescueMeasurement("stabilization-interrupted");
     this->state.acceptedLoadBaseline = {};
     this->state.cadence.dropFrames = 0;
     this->state.cadence.sdrStallBypass = false;
@@ -2456,6 +2607,230 @@ bool AdaptiveScheduler::rejectActiveRampForTransportMiss(
     return true;
 }
 
+void AdaptiveScheduler::cancelPacedLoadValidation(
+        const std::string_view reason) {
+    auto& paced = this->state.ramp.pacedLoad;
+    if (!paced.until)
+        return;
+    this->diagnostics->stableCadence("adaptive-paced-load-cancelled",
+        paced.testedLimit, paced.baselineBaseFps,
+        paced.sampleSeconds > 0.0
+            ? static_cast<double>(paced.sampleFrames) / paced.sampleSeconds
+            : 0.0,
+        reason);
+    if (paced.lowerLoadProbe) {
+        this->state.efficiencyProbe.resetEvaluation();
+        this->state.outputPlanner.resetTargetClock();
+        this->state.ramp.pacingResumeUntil =
+            this->state.cadence.lastRealFrame.value_or(TimePoint{}) +
+                adaptivePacedLoadSettlingDuration;
+    }
+    paced.reset();
+}
+
+MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advancePacedLoadValidation(
+        const TimePoint now, const double rawIntervalSeconds,
+        const std::optional<size_t> orderedFifoGenerationLimit,
+        const std::optional<size_t> integerBaseCapGenerationLimit) {
+    auto& ramp = this->state.ramp;
+    auto& paced = ramp.pacedLoad;
+    const auto pacingLimit = orderedFifoGenerationLimit
+        ? orderedFifoGenerationLimit : integerBaseCapGenerationLimit;
+    const bool fifo = orderedFifoGenerationLimit.has_value();
+    // Expiration can coincide with the first applied handoff. Discard its old
+    // baseline before observing that owner so the same frame can start fresh.
+    if (paced.until && (now >= *paced.until ||
+            this->state.outputPlanner.generationLimit != paced.testedLimit)) {
+        this->cancelPacedLoadValidation(paced.refreshBaseline
+            ? "applied-pacing-validation-expired-or-replaced"
+            : "recent-trial-expired-or-replaced");
+    }
+    // Intentional probe pauses and their short return are one pacing lifetime,
+    // not new handoffs that can recursively launch another comparison.
+    const bool probePause = paced.lowerLoadProbe ||
+        this->state.efficiencyProbe.evaluationAt.has_value();
+    const bool resuming = ramp.pacingResumeUntil &&
+        now < *ramp.pacingResumeUntil;
+    if (!probePause && !resuming) {
+        if (!pacingLimit) {
+            ramp.observedPacingLimit.reset();
+        } else if (ramp.observedPacingLimit != pacingLimit ||
+                ramp.observedPacingFifo != fifo) {
+            if (!paced.until && *pacingLimit > 1 &&
+                    this->config.validateIntegerPacing &&
+                    this->config.stableCadence &&
+                    !this->config.dynamicCadenceRecovery &&
+                    this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
+                    this->state.outputPlanner.generationLimit == *pacingLimit &&
+                    this->validatedGenerationLimit() >= *pacingLimit &&
+                    !ramp.evaluationAt &&
+                    !this->state.stableCadence.evaluationAt &&
+                    !this->state.nativeCadenceProbe.active &&
+                    !this->state.rearm.required &&
+                    !this->state.rescue.until &&
+                    !this->state.rescue.verificationUntil) {
+                // The old promotion baseline may belong to another scene.
+                // Measure the paced workload first, then the adjacent lower
+                // load through the existing efficiency-probe owner.
+                paced = {
+                    .until = now + adaptivePacedLoadWatchDuration,
+                    .testedLimit = *pacingLimit,
+                    .previousLimit = *pacingLimit - 1,
+                    .previousFailures = ramp.lastFailedLimit == *pacingLimit
+                        ? ramp.consecutiveFailures : 0,
+                    .fifo = fifo,
+                    .refreshBaseline = true,
+                };
+            }
+            // Keep a not-yet-qualified owner observable until its scheduler
+            // evaluation ends; merely seeing its cap cannot validate it.
+            if (paced.until) {
+                ramp.observedPacingLimit = pacingLimit;
+                ramp.observedPacingFifo = fifo;
+            }
+        }
+    }
+    if (ramp.pacingResumeUntil &&
+            (now >= *ramp.pacingResumeUntil ||
+             (pacingLimit == ramp.observedPacingLimit &&
+              fifo == ramp.observedPacingFifo)))
+        ramp.pacingResumeUntil.reset();
+    if (!paced.until)
+        return;
+    if (paced.lowerLoadProbe) {
+        // FIFO is deliberately released for the lower probe. An automatic
+        // cap instead follows its lower multiplier. Allow the first owner's
+        // turnover, but never measure a lower load through the old high cap.
+        const bool ownerChanged = paced.fifo
+            ? integerBaseCapGenerationLimit.has_value()
+            : orderedFifoGenerationLimit.has_value();
+        const bool lowerOwnerReady = paced.fifo
+            ? !orderedFifoGenerationLimit
+            : integerBaseCapGenerationLimit == paced.previousLimit;
+        if (ownerChanged || (now > *paced.settlingUntil && !lowerOwnerReady)) {
+            this->cancelPacedLoadValidation("pacing-policy-changed");
+            return;
+        }
+    } else if (pacingLimit != paced.testedLimit ||
+            (paced.settlingUntil &&
+             paced.fifo != orderedFifoGenerationLimit.has_value())) {
+        if (paced.settlingUntil)
+            this->cancelPacedLoadValidation("pacing-policy-changed");
+        return;
+    }
+    const bool deliveryObserved = paced.deliveryObserved;
+    paced.deliveryObserved = false;
+    if (!paced.settlingUntil) {
+        // The first interval still belongs to the previous pacing owner.
+        // Permit its bounded turnover, then measure actual source intervals
+        // and fully delivered output counts rather than an EWMA endpoint.
+        paced.fifo = orderedFifoGenerationLimit.has_value();
+        paced.settlingUntil = now + adaptivePacedLoadSettlingDuration;
+        this->diagnostics->stableCadence("adaptive-paced-load-start",
+            paced.testedLimit, paced.baselineBaseFps,
+            this->state.cadence.smoothedIntervalSeconds > 0.0
+                ? 1.0 / this->state.cadence.smoothedIntervalSeconds : 0.0,
+            paced.fifo ? "ordered-fifo" : "automatic-integer-cap");
+        return;
+    }
+    if (now <= *paced.settlingUntil)
+        return;
+    if (!deliveryObserved || rawIntervalSeconds <= 0.0) {
+        this->cancelPacedLoadValidation("incomplete-delivery-evidence");
+        return;
+    }
+    paced.sampleSeconds += rawIntervalSeconds;
+    paced.sampleFrames++;
+    paced.sampleOutputs += paced.deliveredOutputs;
+    paced.windowSeconds += rawIntervalSeconds;
+    paced.windowFrames++;
+    if (paced.windowSeconds < adaptivePacedLoadWindowSeconds)
+        return;
+    const double windowFps = static_cast<double>(paced.windowFrames) /
+        paced.windowSeconds;
+    paced.minimumWindowFps = paced.minimumWindowFps > 0.0
+        ? std::min(paced.minimumWindowFps, windowFps) : windowFps;
+    paced.maximumWindowFps = std::max(paced.maximumWindowFps, windowFps);
+    paced.windowSeconds = 0.0;
+    paced.windowFrames = 0;
+    if (paced.maximumWindowFps > paced.minimumWindowFps *
+            adaptiveStableCadenceMaximumCandidateSpreadRatio) {
+        // A moving scene cannot turn a recent pacing experiment into an
+        // enduring authority to demote an otherwise accepted workload.
+        this->cancelPacedLoadValidation("source-cadence-changing");
+        return;
+    }
+    if (paced.sampleSeconds < adaptivePacedLoadSampleSeconds)
+        return;
+    const AdaptiveLoadOutcome measured{
+        .baseFps = static_cast<double>(paced.sampleFrames) / paced.sampleSeconds,
+        .outputFps = std::min(static_cast<double>(this->config.targetFps),
+            static_cast<double>(paced.sampleOutputs) / paced.sampleSeconds),
+    };
+    if (paced.refreshBaseline && !paced.lowerLoadProbe) {
+        paced.pacedBaseFps = measured.baseFps;
+        paced.pacedOutputFps = measured.outputFps;
+        paced.lowerLoadProbe = true;
+        paced.until = now + adaptivePacedLoadWatchDuration;
+        paced.settlingUntil = now + adaptivePacedLoadSettlingDuration;
+        paced.resetSamples();
+        auto& probe = this->state.efficiencyProbe;
+        probe.resetEvaluation();
+        probe.testedLimit = paced.previousLimit;
+        probe.baselineBaseFps = measured.baseFps;
+        probe.evaluationAt = paced.until;
+        this->state.outputPlanner.resetTargetClock();
+        this->diagnostics->stableCadence("adaptive-paced-load-baseline-probe",
+            paced.previousLimit, measured.baseFps, measured.baseFps,
+            "fresh-adjacent-lower-load");
+        return;
+    }
+    const auto previous = paced.lowerLoadProbe ? measured
+        : adaptiveLoadOutcome(this->config.targetFps,
+            paced.previousLimit, paced.baselineBaseFps);
+    const auto current = paced.lowerLoadProbe
+        ? AdaptiveLoadOutcome{paced.pacedBaseFps, paced.pacedOutputFps}
+        : measured;
+    if (paced.lowerLoadProbe) {
+        paced.baselineBaseFps = previous.baseFps;
+        this->state.efficiencyProbe.resetEvaluation();
+        this->state.outputPlanner.resetTargetClock();
+        ramp.pacingResumeUntil = now + adaptivePacedLoadSettlingDuration;
+    }
+    if (adaptiveHigherLoadEarnsItsRealFrameCost(this->config.targetFps,
+            paced.testedLimit, previous, current)) {
+        this->diagnostics->stableCadence("adaptive-paced-load-accepted",
+            paced.testedLimit, paced.baselineBaseFps, current.baseFps,
+            "settled-real-frame-cost-paid");
+        paced.reset();
+        return;
+    }
+    this->diagnostics->rampResult(false, paced.previousLimit, paced.testedLimit,
+        previous.baseFps, current.baseFps, previous.outputFps,
+        current.outputFps, "paced-unpaid-real-frame-cost");
+    // Reuse the ordinary adjacent-rung retry ladder and lower-load proof.
+    // A planned scheduler rollback does not classify transport pressure or
+    // gain permission to recreate resources.
+    ramp.lastFailedLimit = paced.testedLimit;
+    ramp.consecutiveFailures = paced.previousFailures + 1;
+    ramp.failedBaselineBaseFps = paced.baselineBaseFps;
+    const auto retry = adaptiveRampRetryDelayForFailures(ramp.consecutiveFailures);
+    ramp.nextAt = now + retry;
+    ramp.pacedLoadRollbackLimit = paced.testedLimit;
+    this->state.outputPlanner.generationLimit = paced.previousLimit;
+    ramp.previousLimit = paced.previousLimit;
+    ramp.baselineBaseFps = paced.baselineBaseFps;
+    ramp.targetDeficitSince.reset();
+    ramp.lowerLoadSample.reset();
+    this->state.stableCadence = {};
+    this->state.efficiencyProbe.resetEvaluation();
+    this->state.acceptedLoadBaseline = {};
+    this->state.outputPlanner.resetTargetClock();
+    this->diagnostics->rampBackoff(ramp.lastFailedLimit,
+        ramp.consecutiveFailures, ramp.failedBaselineBaseFps, retry);
+    paced.reset();
+}
+
 MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         const std::chrono::steady_clock::time_point now,
         const double baseFps) {
@@ -2466,6 +2841,20 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
     this->state.outputPlanner.generationLimit = std::min(
         this->state.outputPlanner.generationLimit, configuredLimit
     );
+
+    if (this->state.ramp.pacedLoad.until) {
+        const auto& paced = this->state.ramp.pacedLoad;
+        if (!paced.settlingUntil &&
+                baseFps * static_cast<double>(paced.testedLimit + 1) <
+                    static_cast<double>(this->config.targetFps) *
+                        adaptiveStableCadenceMinimumRetentionTargetRatio) {
+            // Integer pacing cannot serve this deficit. Do not hold a useful
+            // 4x/5x trial behind an experiment which cannot take effect.
+            this->cancelPacedLoadValidation("integer-pacing-target-deficit");
+        } else {
+            return;
+        }
+    }
 
     if (this->state.rearm.required) {
         this->state.ramp.lowerLoadSample.reset();
@@ -2636,6 +3025,23 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             this->state.ramp.previousLimit;
         this->state.acceptedLoadBaseline.baseFps =
             comparisonBaselineBaseFps;
+        if (testedLimit > 1 && this->config.validateIntegerPacing &&
+                this->config.stableCadence &&
+                currentOutcome.outputFps >=
+                    static_cast<double>(this->config.targetFps) *
+                        adaptiveStableCadenceMinimumRetentionTargetRatio &&
+                !this->config.dynamicCadenceRecovery &&
+                this->config.recoveryPolicy ==
+                    AdaptiveRecoveryPolicy::OrderedSdr) {
+            this->state.ramp.pacedLoad = {
+                .until = now + adaptivePacedLoadWatchDuration,
+                .testedLimit = testedLimit,
+                .previousLimit = this->state.ramp.previousLimit,
+                .baselineBaseFps = comparisonBaselineBaseFps,
+                .previousFailures = this->state.ramp.lastFailedLimit == testedLimit
+                    ? this->state.ramp.consecutiveFailures : 0,
+            };
+        }
         this->state.ramp.lastFailedLimit = 0;
         this->state.ramp.consecutiveFailures = 0;
         this->state.ramp.failedBaselineBaseFps = 0.0;

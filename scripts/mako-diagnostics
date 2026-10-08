@@ -216,7 +216,7 @@ add_pattern "$renderer_prefix render layer active; identity=VK_LAYER_MAKO_render
 # Interleaved Vulkan processes are common on SteamOS. Keep their identity and
 # swapchain metadata in every focused report so policy and slow-operation
 # records can be attributed without expanding the report to unrelated output.
-add_pattern "$renderer_prefix present diagnostics: operation=(process-identity|swapchain-context-create)"
+add_pattern "$renderer_prefix present diagnostics: operation=(launch-environment|process-identity|swapchain-context-create)"
 # Gamescope's explicit presentation properties are low-frequency environment
 # metadata. Keep the initial snapshot and any live pacing-owner transition in
 # every report without collecting unrelated compositor output.
@@ -268,11 +268,15 @@ for preset in "${presets[@]}"; do
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)"
       ;;
     recovery)
+      add_pattern "$renderer_prefix present diagnostics: operation=(adaptive-rescue-|adaptive-auto-base-cap-|adaptive-paced-load-)"
+      add_pattern "$renderer_prefix present diagnostics: operation=adaptive-load-shed .*reason=paced-unpaid-real-frame-cost"
       # Include focus/watchdog records, including older recovery operation names.
       add_pattern "$renderer_prefix present diagnostics: operation=(gamescope-focus|lower-present-stall-|adaptive-recovery-(recreation-|in-place-))"
       add_pattern "$renderer_prefix present diagnostics: operation=(adaptive-wsi-headroom-limit|skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|fixed-cadence-collapse-(probe-start|probe-rejected|probe-recovered|recovery-unstable|recovery-verified)|ordered-acquire-policy|ordered-acquire-classification-split|ordered-acquire-budget-exhausted|ordered-acquire-guard|ordered-acquire-guard-bypass|ordered-acquire-native-saturation|ordered-acquire-quarantine|ordered-acquire-retry|ordered-acquire-recovered|ordered-acquire-stabilized|pipeline-busy-bypass|pipeline-busy-recovered|render-fence-budget-missed|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied)"
       ;;
     performance)
+      add_pattern "$renderer_prefix present diagnostics: operation=(adaptive-rescue-|adaptive-auto-base-cap-|adaptive-paced-load-)"
+      add_pattern "$renderer_prefix present diagnostics: operation=adaptive-load-shed .*reason=paced-unpaid-real-frame-cost"
       add_pattern "$renderer_prefix present diagnostics: operation=(gamescope-bridge-timing|application-present-mode|application-present-wait)"
       add_pattern "$renderer_prefix present diagnostics: operation=(gamescope-focus|lower-present-stall-|adaptive-recovery-(recreation-|in-place-))"
       add_pattern "$renderer_prefix (backend-memory|renderer-memory) operation="
@@ -354,9 +358,11 @@ collect_context() {
         remember("identity", $0, 1)
         next
       }
-      if ($0 !~ renderer " present diagnostics: operation=(process-identity|swapchain-context-create|runtime-state-applied|runtime-health)") next
+      if ($0 !~ renderer " present diagnostics: operation=(launch-environment|process-identity|swapchain-context-create|runtime-state-applied|runtime-health)") next
       operation = field("operation")
-      if (operation == "process-identity")
+      if (operation == "launch-environment")
+        remember("identity", "launch:" field("pid"), 0)
+      else if (operation == "process-identity")
         remember("identity", "process:" field("pid") ":" field("role"), 0)
       else if (operation == "runtime-health-unavailable")
         remember("identity", $0, 1)

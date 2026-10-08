@@ -67,7 +67,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 73
+WRAPPER_FORMAT_VERSION = 75
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -101,9 +101,61 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"export {VK_IMPLICIT_LAYER_PATH_ENV}=",
     f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
     "mako_steam_overlay_layers=",
+    "mako_disable_steam_overlay=",
+    "mako_steam_overlay_preload_removed=0",
+    'mako_steam_overlay_preload_filter_requested="${mako_disable_steam_overlay:-1}"',
     f"export {MAKO_PROFILE_FALLBACK_ENV}=",
     "mako_diagnostics_default=",
 )
+
+
+def steam_overlay_preload_policy_lines() -> list[str]:
+    """Apply the saved launch-time Steam overlay Performance setting.
+
+    Independently installed launchers retain native declarations; the preload
+    contract checks byte-identical policy and real exec behavior in both owners.
+    """
+    return r"""mako_steam_overlay_preload_removed=0
+mako_steam_overlay_preload_filter_requested="${mako_disable_steam_overlay:-1}"
+if [[ "$mako_steam_overlay_preload_filter_requested" == 1 ]]; then
+    export DISABLE_VK_LAYER_VALVE_steam_overlay_1=1
+    unset ENABLE_VK_LAYER_VALVE_steam_overlay_1
+    mako_overlay_instance_layers=":${VK_INSTANCE_LAYERS:-}:"
+    for mako_overlay_layer in VK_LAYER_VALVE_steam_overlay_64 VK_LAYER_VALVE_steam_overlay_32; do
+        while [[ "$mako_overlay_instance_layers" == *":$mako_overlay_layer:"* ]]; do
+            mako_overlay_instance_layers="${mako_overlay_instance_layers/:$mako_overlay_layer:/:}"
+        done
+    done
+    mako_overlay_instance_layers="${mako_overlay_instance_layers#:}"
+    mako_overlay_instance_layers="${mako_overlay_instance_layers%:}"
+    if [[ -n "$mako_overlay_instance_layers" ]]; then
+        export VK_INSTANCE_LAYERS="$mako_overlay_instance_layers"
+    else
+        unset VK_INSTANCE_LAYERS
+    fi
+    mako_preload_list="${LD_PRELOAD:-}"
+    mako_preload_list="${mako_preload_list//[$' \t\n\r\v\f:']/ }"
+    IFS=' ' read -r -a mako_preload_entries <<< "$mako_preload_list"
+    mako_retained_preloads=""
+    for mako_preload_entry in "${mako_preload_entries[@]}"; do
+        if [[ "${mako_preload_entry##*/}" == gameoverlayrenderer.so ]]; then
+            mako_steam_overlay_preload_removed=$((mako_steam_overlay_preload_removed + 1))
+        else
+            mako_retained_preloads="${mako_retained_preloads:+$mako_retained_preloads:}$mako_preload_entry"
+        fi
+    done
+    if ((mako_steam_overlay_preload_removed > 0)); then
+        if [[ -n "$mako_retained_preloads" ]]; then
+            export LD_PRELOAD="$mako_retained_preloads"
+        else
+            unset LD_PRELOAD
+        fi
+    fi
+    unset mako_overlay_instance_layers mako_overlay_layer
+    unset mako_preload_list mako_preload_entries mako_preload_entry mako_retained_preloads
+fi""".splitlines()
+
+
 def is_current_wrapper(
         content: str,
         wrapper_format_marker: str = WRAPPER_FORMAT_MARKER,
@@ -523,11 +575,12 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "esac",
         # Steam installs its architecture-specific overlay manifests in the
         # standard per-user implicit directory. MAKO keeps that directory out
-        # of implicit discovery, but Desktop Mode can safely expose it only as
-        # an explicit-layer source and place the overlay after MAKO. This keeps
+        # of implicit discovery. When overlay removal is off, Desktop Mode can
+        # expose it as an explicit-layer source after MAKO. This keeps
         # Steam's FPS counter without admitting Fossilize or arbitrary implicit
         # layers. Gaming Mode retains its compositor-owned performance path.
-        f'if [ "${{ENABLE_VK_LAYER_VALVE_steam_overlay_1:-0}}" = 1 ] && '
+        'if [ "${mako_disable_steam_overlay:-1}" != 1 ] && '
+        f'[ "${{ENABLE_VK_LAYER_VALVE_steam_overlay_1:-0}}" = 1 ] && '
         '[ "$mako_gamescope_wsi_session" != 1 ] && '
         '[ "$mako_flatpak_runtime" != 1 ] && '
         f'{{ [ -r {steam_overlay_manifest64} ] || '
@@ -603,6 +656,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "unset mako_vkbasalt_manifest32",
         f'export {VK_IMPLICIT_LAYER_PATH_ENV}="$mako_implicit_layer_path"',
         f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
+        *steam_overlay_preload_policy_lines(),
         f"export {MAKO_CONFIG_ENV}={shlex.quote(str(context.config_file_path))}",
         # A direct EmuDeck/Flatpak shortcut executes this wrapper on the host.
         # Per-launch Flatpak options must override its persisted app-wide
@@ -696,6 +750,12 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         '    printf "%s\\n" "$mako_gamescope_wsi_skip_log" >&2',
         "fi",
         "unset mako_gamescope_wsi_skip_log",
+        f'if [ "${{{PRESENT_DIAGNOSTICS_ENV}:-0}}" != 0 ]; then',
+        "    printf 'MAKO Renderer: present diagnostics: operation=launch-environment pid=%s steam_overlay_preload_filter_requested=%s steam_overlay_preload_removed=%s\\n' "
+        '"$$" "$mako_steam_overlay_preload_filter_requested" "$mako_steam_overlay_preload_removed" >&2',
+        "fi",
+        "unset mako_steam_overlay_preload_removed",
+        "unset mako_steam_overlay_preload_filter_requested mako_disable_steam_overlay",
     ]
 
 

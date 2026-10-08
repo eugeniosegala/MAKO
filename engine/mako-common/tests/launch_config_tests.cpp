@@ -49,9 +49,10 @@ namespace {
 
 int main() {
     const ls::LaunchConfigFile defaults;
-    expect(!defaults.settings().enable_zink &&
+    expect(defaults.settings().disable_steam_overlay &&
+            !defaults.settings().enable_zink &&
             !defaults.settings().force_alsa_audio,
-        "standalone launcher settings must fail closed by default");
+        "standalone launcher defaults must disable Steam overlay and preserve other defaults");
 
     const auto directory = std::filesystem::temp_directory_path() /
         ("mako-launch-config-test-" +
@@ -59,6 +60,7 @@ int main() {
     std::filesystem::create_directories(directory);
 
     ls::LaunchConfigFile configured;
+    configured.settings().disable_steam_overlay = false;
     configured.settings().enable_zink = true;
     configured.settings().force_alsa_audio = true;
     const auto canonicalPath = directory / "launcher.conf";
@@ -66,14 +68,27 @@ int main() {
 
     expect(readText(canonicalPath) ==
             "version=1\n"
+            "disable_steam_overlay=0\n"
             "enable_zink=1\n"
             "force_alsa_audio=1\n",
         "launcher configuration writer must retain its canonical shell-safe format");
 
     const ls::LaunchConfigFile restored(canonicalPath);
-    expect(restored.settings().enable_zink &&
+    expect(!restored.settings().disable_steam_overlay &&
+            restored.settings().enable_zink &&
             restored.settings().force_alsa_audio,
         "launcher configuration must round-trip every supported setting");
+
+    const auto legacyPath = directory / "legacy-launcher.conf";
+    writeText(legacyPath, "version=1\nenable_zink=1\nforce_alsa_audio=0\n");
+    expect(ls::LaunchConfigFile(legacyPath).settings().disable_steam_overlay,
+        "an existing launcher configuration must use the new overlay default");
+    expect(rejects(directory / "invalid-overlay.conf",
+            "version=1\ndisable_steam_overlay=true\n"),
+        "overlay launcher policy must accept only canonical booleans");
+    expect(rejects(directory / "duplicate-overlay.conf",
+            "version=1\ndisable_steam_overlay=1\ndisable_steam_overlay=0\n"),
+        "duplicate overlay policies must be rejected");
 
     expect(rejects(directory / "missing-version.conf", "enable_zink=1\n"),
         "launcher configuration without a version must be rejected");

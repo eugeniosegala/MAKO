@@ -105,6 +105,8 @@
   "CONFIG_ULTRA_PERFORMANCE": "ウルトラパフォーマンス（再起動）",
   "CONFIG_ULTRA_PERFORMANCE_DESC": "低消費電力デバイスで MAKO の GPU 負荷を軽減します。フロースケール 70%、軽量 FG モデル、スケーリング有効時は LS1 Performance を使用します。有効な MAKO 機能全体で、画質と引き換えにパフォーマンスを高めます。グローバルな FP16 設定を尊重します。",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Ultra Performance のオン／オフ切り替えにはゲームの再起動が必要です。その他の互換性のあるプロファイル設定は起動後も利用できます。",
+  "CONFIG_DISABLE_STEAM_OVERLAY": "Steam オーバーレイを無効化（再起動）",
+  "CONFIG_DISABLE_STEAM_OVERLAY_DESC": "動作が滑らかになる場合があります。ゲーム内の Steam オーバーレイフックを無効にし、Steam Input に影響する場合があります。",
   "CONFIG_PERFORMANCE_MODE": "軽量 FG モデル",
   "CONFIG_PERFORMANCE_MODE_DESC": "軽量 FG モデルは GPU 負荷を下げますが残像が増えます。ウルトラパフォーマンスでは強制的にオンです。",
   "CONFIG_DISABLE_STEAMDECK_MODE": "Steam Deckモードを無効化（再起動）",

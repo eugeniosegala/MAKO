@@ -25,6 +25,14 @@ namespace mako::layer::present_diagnostics {
     [[nodiscard]] double thresholdMilliseconds();
     [[nodiscard]] Clock::time_point start();
 
+    struct SteamOverlayLibraries {
+        bool hookLoaded{};
+        bool vulkanLoaded{};
+    };
+    /// Inspect loaded ELF names once at diagnostic process identification.
+    /// This neither loads libraries nor reads /proc or the environment.
+    [[nodiscard]] SteamOverlayLibraries steamOverlayLibraries();
+
     /// Fixed-size private-present CPU windows, including healthy sub-threshold
     /// work. Index order is total, fence, schedule, copy, acquire, generated
     /// submit, generated present, original present, unattributed.

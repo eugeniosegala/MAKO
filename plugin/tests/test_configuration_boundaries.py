@@ -66,6 +66,25 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertEqual(DEFAULT_PROFILE_NAME, SHARED_DEFAULT_PROFILE_NAME)
         self.assertEqual(DEFAULT_PROFILE_NAME, "mako")
 
+    def test_overlay_setting_preserves_saved_opt_out_and_defaults_existing_profiles(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "profile-wrapper-settings.json"
+            path.write_text(json.dumps({"version": 1, "profiles": {
+                "existing": {"force_alsa_audio": True},
+                "opt-out": {"disable_steam_overlay": False},
+            }}), encoding="utf-8")
+            settings = profile_storage.read_wrapper_profile_settings(path, 1, _Logger())
+            self.assertTrue(settings["existing"]["disable_steam_overlay"])
+            self.assertTrue(settings["existing"]["force_alsa_audio"])
+            self.assertFalse(settings["opt-out"]["disable_steam_overlay"])
+            profile_storage.write_wrapper_profile_settings(
+                path.parent, path, 1, settings,
+                lambda destination, content, _mode: destination.write_text(content, encoding="utf-8"),
+            )
+            restored = profile_storage.read_wrapper_profile_settings(path, 1, _Logger())
+            self.assertEqual(restored, settings)
+            self.assertTrue(profile_storage.wrapper_settings_for_profile("new", restored)["disable_steam_overlay"])
+
     def test_profile_metadata_owner_preserves_the_persisted_shape(self):
         captured_processes = ["Game.exe"]
         metadata = {
@@ -136,10 +155,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         defaults = ConfigurationManager.get_defaults()
         content = self.service._generate_script_content(defaults)
 
-        self.assertEqual(len(content.encode("utf-8")), 16322)
+        self.assertEqual(len(content.encode("utf-8")), 18734)
         self.assertEqual(
             _sha256(content),
-            "2c5f4630cbc2e0745e16b426f291ad0323fc4fcd6271b53307f8a90dad76bed0",
+            "160ce86b0b7eb16778a75e13f660bbe735347667854db2e9ac2b00684b7760c3",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -206,10 +225,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
                 profile_data
             )
 
-        self.assertEqual(len(content.encode("utf-8")), 19199)
+        self.assertEqual(len(content.encode("utf-8")), 21693)
         self.assertEqual(
             _sha256(content),
-            "dfebc3bf7febb539c55f24fa8838b1d1a18d0e08349da8827f16f1676d95df7c",
+            "3e06afc022e3ba51c6ce8b0c925fa17c90c1a6c882d208d79d967f7349197a87",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -300,7 +319,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "5e5aca4559e12259b0cd11a3f0e8bc540002ca6478d2796dd0fd03bb3fd04b13",
+            "5fbdd393d89a306a1af89d575bc52f2f5a78b4a78dec33e1b972ba875106d2ae",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):
@@ -341,7 +360,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertFalse(stored_wrapper_settings["vkbasalt_manage_custom_shaders"])
         self.assertEqual(
             _sha256(wrapper_content),
-            "2c4703a7b0e23f7ecee01164893185da234654dac78b5089f373dbac8339bf52",
+            "e49bd2eda5fa55a72c27e48dcb58422ea9adbc6057d1d0529bcf2eb988e51f71",
         )
         self.assertEqual(
             _sha256(metadata_content),

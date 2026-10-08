@@ -46,6 +46,8 @@ namespace mako::layer {
             ls::GameConfDefaults::adaptiveAutoBaseFpsCap
         };
         bool nearTargetNativePreference{false};
+        // Derived by the presentation owner; never a persisted setting.
+        bool validateIntegerPacing{false};
         bool dynamicCadenceRecovery{
             ls::GameConfDefaults::dynamicCadenceRecovery
         };
@@ -85,6 +87,8 @@ namespace mako::layer {
         size_t historyWarmupRemaining{0};
         double smoothedBaseFps{0.0};
         bool rampEvaluationActive{false};
+        bool pacedLoadValidationPending{false};
+        std::optional<size_t> pacedLoadRollbackGenerationLimit;
         std::optional<size_t> efficiencyProbeGenerationLimit;
         bool rearmRequired{false};
         bool discontinuityRecoveryActive{false};
@@ -170,6 +174,8 @@ namespace mako::layer {
         virtual void cadenceRefresh(std::string_view, size_t, size_t) {}
         virtual void automaticBaseCapSuppressed(size_t, double, double,
             std::string_view) {}
+        virtual void automaticBaseCapRestored(size_t, double, double,
+            std::string_view) {}
         virtual void nativeCadenceProbe(std::string_view, size_t, double,
             double, size_t) {}
         virtual void nearTargetNativePreference(std::string_view, uint32_t,
@@ -192,7 +198,8 @@ namespace mako::layer {
 
         [[nodiscard]] AdaptiveFramePlan planFrame(TimePoint now,
             bool generatedImageAcquireBackoff,
-            std::optional<size_t> orderedFifoGenerationLimit = std::nullopt);
+            std::optional<size_t> orderedFifoGenerationLimit = std::nullopt,
+            std::optional<size_t> integerBaseCapGenerationLimit = std::nullopt);
 
         void resetTiming(TimePoint now);
         void updateDynamicCadenceProbeInterval(
@@ -297,7 +304,10 @@ namespace mako::layer {
         [[nodiscard]] inline PlanningStageResult advanceDiscontinuityRecovery(
             TimePoint now, double baseFps);
         [[nodiscard]] inline PlanningStageResult advanceRescueMeasurement(
-            TimePoint now, double baseFps);
+            TimePoint now, double baseFps, double rawIntervalSeconds);
+        void startRescueMeasurement(TimePoint now, size_t generationLimit,
+            double baselineBaseFps, double currentBaseFps);
+        void cancelRescueMeasurement(std::string_view reason);
         [[nodiscard]] inline PlanningStageResult advanceStableCadence(
             TimePoint now, double baseFps,
             double desiredOutputsPerRealFrame,
@@ -323,6 +333,11 @@ namespace mako::layer {
         // This larger multiplier-validation stage follows the same inline
         // contract as the per-present stages above.
         inline void updateGenerationLimit(TimePoint now, double baseFps);
+        inline void advancePacedLoadValidation(TimePoint now,
+            double rawIntervalSeconds,
+            std::optional<size_t> orderedFifoGenerationLimit,
+            std::optional<size_t> integerBaseCapGenerationLimit);
+        void cancelPacedLoadValidation(std::string_view reason);
         [[nodiscard]] size_t configuredGenerationLimit() const;
 
         struct SchedulerState {
@@ -599,6 +614,47 @@ namespace mako::layer {
             } stabilization;
 
             struct Ramp {
+                // Recent trials use their adjacent baseline. A later applied
+                // pacing owner obtains a fresh baseline through EfficiencyProbe.
+                struct PacedLoad {
+                    std::optional<TimePoint> until;
+                    std::optional<TimePoint> settlingUntil;
+                    size_t testedLimit{0};
+                    size_t previousLimit{0};
+                    double baselineBaseFps{0.0};
+                    size_t previousFailures{0};
+                    bool fifo{false};
+                    bool refreshBaseline{false};
+                    bool lowerLoadProbe{false};
+                    double pacedBaseFps{0.0};
+                    double pacedOutputFps{0.0};
+                    bool deliveryObserved{false};
+                    size_t deliveredOutputs{0};
+                    double sampleSeconds{0.0};
+                    size_t sampleFrames{0};
+                    size_t sampleOutputs{0};
+                    double windowSeconds{0.0};
+                    size_t windowFrames{0};
+                    double minimumWindowFps{0.0};
+                    double maximumWindowFps{0.0};
+
+                    void reset() { *this = {}; }
+                    void resetSamples() {
+                        this->deliveryObserved = false;
+                        this->deliveredOutputs = 0;
+                        this->sampleSeconds = 0.0;
+                        this->sampleFrames = 0;
+                        this->sampleOutputs = 0;
+                        this->windowSeconds = 0.0;
+                        this->windowFrames = 0;
+                        this->minimumWindowFps = 0.0;
+                        this->maximumWindowFps = 0.0;
+                    }
+                } pacedLoad;
+                std::optional<size_t> observedPacingLimit;
+                bool observedPacingFifo{false};
+                std::optional<TimePoint> pacingResumeUntil;
+                std::optional<size_t> pacedLoadRollbackLimit;
                 // Higher promotions and stale-baseline replacement require
                 // a continuous, delivered sample of the current lower load.
                 struct LowerLoadSample {
@@ -689,10 +745,52 @@ namespace mako::layer {
             } efficiencyProbe;
 
             struct Rescue {
+                // A stable-cadence exit can precede the actual collapse.
+                // Retain its proof briefly, without probing every heavy scene.
+                std::optional<TimePoint> watchUntil;
                 std::optional<TimePoint> until;
+                std::optional<TimePoint> verificationUntil;
                 std::optional<TimePoint> cooldownUntil;
                 size_t previousLimit{0};
                 double baselineBaseFps{0.0};
+                double collapsedBaseFps{0.0};
+                bool previousCapSuppressed{false};
+                double sampleSeconds{0.0};
+                size_t sampleFrames{0};
+                bool skipNextSample{true};
+
+                void resetSamples(const bool skipFirst = true) {
+                    this->sampleSeconds = 0.0;
+                    this->sampleFrames = 0;
+                    this->skipNextSample = skipFirst;
+                }
+
+                void observe(const double intervalSeconds) {
+                    if (this->skipNextSample) {
+                        this->skipNextSample = false;
+                        return;
+                    }
+                    this->sampleSeconds += intervalSeconds;
+                    this->sampleFrames++;
+                }
+
+                [[nodiscard]] double measuredBaseFps() const {
+                    return this->sampleSeconds > 0.0
+                        ? static_cast<double>(this->sampleFrames) /
+                            this->sampleSeconds
+                        : 0.0;
+                }
+
+                void resetAttempt() {
+                    this->watchUntil.reset();
+                    this->until.reset();
+                    this->verificationUntil.reset();
+                    this->previousLimit = 0;
+                    this->baselineBaseFps = 0.0;
+                    this->collapsedBaseFps = 0.0;
+                    this->previousCapSuppressed = false;
+                    this->resetSamples();
+                }
             } rescue;
 
             struct AutomaticBaseCap {

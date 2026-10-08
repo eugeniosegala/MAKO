@@ -119,12 +119,13 @@ namespace {
         }
 
         void rampBackoff(size_t testedLimit, size_t failures, double,
-                std::chrono::steady_clock::duration) override {
+                std::chrono::steady_clock::duration retry) override {
             this->events.push_back({
                 .operation = "ramp-backoff",
                 .reason = {},
                 .previousLimit = failures,
                 .testedLimit = testedLimit,
+                .duration = std::chrono::duration_cast<std::chrono::milliseconds>(retry),
             });
         }
 
@@ -208,7 +209,8 @@ namespace {
                 .reason = std::string(reason),
                 .testedLimit = operation.starts_with(
                     "adaptive-efficiency-probe"
-                ) ? generatedLimit : 0,
+                ) || operation.starts_with("adaptive-paced-load")
+                    ? generatedLimit : 0,
             });
         }
 
@@ -229,6 +231,18 @@ namespace {
                 .reason = std::string(decision),
                 .previousLimit = previousLimit,
                 .testedLimit = resumedLimit,
+            });
+        }
+
+        void automaticBaseCapRestored(size_t previousLimit,
+                double baselineBaseFps, double measuredBaseFps,
+                std::string_view reason) override {
+            this->events.push_back({
+                .operation = "automatic-base-cap-restored",
+                .reason = std::string(reason),
+                .previousLimit = previousLimit,
+                .previousBaseFps = baselineBaseFps,
+                .currentBaseFps = measuredBaseFps,
             });
         }
 
@@ -286,7 +300,8 @@ namespace {
                 const std::optional<uint32_t> displayRefreshFps =
                     std::nullopt,
                 const bool nearTargetNativePreference = true,
-                const bool automaticBaseFpsCap = false) :
+                const bool automaticBaseFpsCap = false,
+                const bool validateIntegerPacing = false) :
             scheduler(
                 AdaptiveSchedulerConfig{
                     .targetFps = targetFps,
@@ -296,6 +311,7 @@ namespace {
                     .automaticBaseFpsCap = automaticBaseFpsCap,
                     .nearTargetNativePreference =
                         nearTargetNativePreference,
+                    .validateIntegerPacing = validateIntegerPacing,
                     .dynamicCadenceRecovery = dynamicCadenceRecovery,
                     .dynamicCadenceProbeInterval =
                         dynamicCadenceProbeInterval,
@@ -3339,6 +3355,516 @@ namespace {
             "Fractional policy accepted the Steady VRR FIFO override");
     }
 
+    void promoteForPacedLoadTest(Harness& harness, const size_t multiplier,
+            const double lowerOutputFps) {
+        harness.start();
+        const double baseline = lowerOutputFps /
+            static_cast<double>(multiplier - 1);
+        harness.runAtFps(baseline, 4s);
+        harness.scheduler.restoreGenerationLimit(harness.now, multiplier - 2,
+            "paced-test-lower-rung");
+        for (size_t frame = 0; frame < 1200; ++frame) {
+            harness.frameAtFps(baseline);
+            if (harness.scheduler.snapshot().rampEvaluationActive)
+                break;
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive &&
+                harness.scheduler.snapshot().generationLimit == multiplier - 1,
+            "paced test did not start its adjacent higher-load trial");
+        const double trialFps = 144.0 / static_cast<double>(multiplier);
+        for (size_t frame = 0; frame < 300; ++frame) {
+            harness.frameAtFps(trialFps);
+            if (!harness.scheduler.snapshot().rampEvaluationActive)
+                break;
+        }
+        require(harness.scheduler.snapshot().validatedGenerationLimit ==
+                multiplier - 1,
+            "paced test's ordinary load trial was not accepted");
+    }
+
+    AdaptiveFramePlan pacedLoadFrame(Harness& harness, const double fps,
+            const size_t generationLimit, const bool fifo,
+            const bool completeDelivery = true) {
+        harness.now += std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::duration<double>{1.0 / fps});
+        const auto plan = harness.scheduler.planFrame(harness.now, false,
+            fifo ? std::optional{generationLimit} : std::nullopt,
+            fifo ? std::nullopt : std::optional{generationLimit});
+        harness.scheduler.reportGeneratedFrameDelivery({
+            plan.size(), completeDelivery ? plan.size() : 0,
+        });
+        return plan;
+    }
+
+    void testIntegerPacingRechecksRealFrameCostAcrossMultipliers() {
+        for (const bool fifo : {false, true}) {
+            for (const size_t multiplier : {3U, 4U, 5U}) {
+                for (const bool paid : {false, true}) {
+                    Harness harness(120, multiplier, true,
+                        AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                        120, false, true, true);
+                    const double lowerOutputFps = paid ? 100.0
+                        : multiplier == 3 ? 108.0 : 114.0;
+                    promoteForPacedLoadTest(harness, multiplier, lowerOutputFps);
+                    require(harness.scheduler.snapshot().pacedLoadValidationPending,
+                        "integer pacing lost its recent accepted baseline");
+                    const auto initialRamps = harness.diagnostics.count("ramp");
+                    const double settledFps = 120.0 /
+                        static_cast<double>(multiplier);
+                    for (size_t frame = 0; frame < 100; ++frame) {
+                        pacedLoadFrame(harness, settledFps, multiplier - 1, fifo);
+                        if (!harness.scheduler.snapshot().pacedLoadValidationPending)
+                            break;
+                    }
+                    const auto snapshot = harness.scheduler.snapshot();
+                    require(!snapshot.pacedLoadValidationPending,
+                        "settled integer pacing did not complete its bounded check");
+                    require(snapshot.validatedGenerationLimit ==
+                            (paid ? multiplier - 1 : multiplier - 2),
+                        "settled pacing did not apply the ordinary real-frame cost rule");
+                    require(snapshot.historyWarmupRemaining == 0 &&
+                            !snapshot.automaticBaseCapSuppressed &&
+                            !snapshot.discontinuityRecoveryActive,
+                        "pacing validation changed history, cap ownership, or recovery");
+                    if (paid) {
+                        require(harness.diagnostics.contains("adaptive-paced-load-accepted"),
+                            "useful settled pacing was not accepted");
+                    } else {
+                        const auto* result = harness.diagnostics.last("ramp-result");
+                        require(result && !result->accepted &&
+                                result->reason == "paced-unpaid-real-frame-cost",
+                            "unpaid settled pacing lacked a measured rejection");
+                        require(snapshot.pacedLoadRollbackGenerationLimit == multiplier - 1,
+                            "pacing rollback did not mark its planned FIFO exit");
+                        requireNear(static_cast<float>(result->currentBaseFps),
+                            static_cast<float>(settledFps), 0.01F,
+                            "pacing check used the smoothed pre-handoff FPS");
+                        const auto* backoff = harness.diagnostics.last("ramp-backoff");
+                        require(backoff && backoff->previousLimit == 1 && backoff->duration == 5s,
+                            "pacing rejection did not use the adjacent-rung retry ladder");
+                        harness.runAtFps(lowerOutputFps /
+                            static_cast<double>(multiplier - 1), 4s);
+                        require(harness.diagnostics.count("ramp") == initialRamps,
+                            "pacing rejection retried before its cooldown");
+                        require(!harness.scheduler.snapshot().pacedLoadRollbackGenerationLimit,
+                            "planned rollback marker survived beyond one frame");
+                        for (size_t frame = 0; frame < 600; ++frame) {
+                            harness.frameAtFps(lowerOutputFps /
+                                static_cast<double>(multiplier - 1));
+                            if (harness.scheduler.snapshot().rampEvaluationActive)
+                                break;
+                        }
+                        require(harness.scheduler.snapshot().rampEvaluationActive,
+                            "fresh lower-load evidence could not retry paced rejection");
+                        for (size_t frame = 0; frame < 300; ++frame) {
+                            harness.frameAtFps(144.0 / static_cast<double>(multiplier));
+                            if (!harness.scheduler.snapshot().rampEvaluationActive)
+                                break;
+                        }
+                        require(harness.scheduler.snapshot().pacedLoadValidationPending,
+                            "revalidated load did not recheck its final pacing cost");
+                        for (size_t frame = 0; frame < 100; ++frame) {
+                            pacedLoadFrame(harness, settledFps, multiplier - 1, fifo);
+                            if (!harness.scheduler.snapshot().pacedLoadValidationPending)
+                                break;
+                        }
+                        backoff = harness.diagnostics.last("ramp-backoff");
+                        require(backoff && backoff->previousLimit == 2 &&
+                                backoff->duration == 15s,
+                            "provisional acceptance erased completed paced rejection backoff");
+                    }
+                }
+            }
+        }
+    }
+
+    void testPacedLoadRequiresFreshContinuousEvidence() {
+        for (const size_t multiplier : {3U, 4U, 5U}) {
+            for (size_t interruption = 0; interruption < 6; ++interruption) {
+                Harness harness(120, multiplier, true,
+                    AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                    120, false, true, true);
+                promoteForPacedLoadTest(harness, multiplier,
+                    multiplier == 3 ? 108.0 : 114.0);
+                const double settledFps = 120.0 / static_cast<double>(multiplier);
+                for (size_t frame = 0; frame < static_cast<size_t>(
+                        std::ceil(settledFps * 0.8)); ++frame)
+                    pacedLoadFrame(harness, settledFps, multiplier - 1, true);
+                switch (interruption) {
+                case 0:
+                    harness.frameAtFps(settledFps); // VRR handoff ended.
+                    break;
+                case 1:
+                    pacedLoadFrame(harness, settledFps, multiplier - 1, false);
+                    break;
+                case 2:
+                    pacedLoadFrame(harness, settledFps, multiplier - 1, true, false);
+                    pacedLoadFrame(harness, settledFps, multiplier - 1, true);
+                    break;
+                case 3:
+                    harness.frameAtFps(settledFps, true);
+                    break;
+                case 4:
+                    harness.scheduler.beginStabilization(harness.now, "test-menu");
+                    break;
+                case 5:
+                    for (size_t frame = 0; frame < 20; ++frame)
+                        pacedLoadFrame(harness, settledFps * 0.75,
+                            multiplier - 1, true);
+                    break;
+                }
+                require(!harness.scheduler.snapshot().pacedLoadValidationPending,
+                    "interrupted pacing kept stale comparison authority: " +
+                        std::to_string(multiplier) + "x case " +
+                        std::to_string(interruption));
+                const auto* result = harness.diagnostics.last("ramp-result");
+                require(result && result->accepted,
+                    "interrupted pacing demoted a previously accepted workload");
+                require(harness.diagnostics.contains("adaptive-paced-load-cancelled"),
+                    "interrupted pacing did not explain discarded evidence");
+            }
+        }
+
+        Harness expired(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false, true, true);
+        promoteForPacedLoadTest(expired, 3, 108.0);
+        expired.runAtFps(48.0, 9s);
+        require(!expired.scheduler.snapshot().pacedLoadValidationPending &&
+                !expired.diagnostics.contains("adaptive-paced-load-start"),
+            "an unapplied pacing policy retained its baseline indefinitely");
+        for (size_t frame = 0; frame < 80; ++frame) {
+            pacedLoadFrame(expired, 40.0, 2, true);
+            if (expired.scheduler.snapshot().efficiencyProbeGenerationLimit)
+                break;
+        }
+        require(expired.diagnostics.contains("adaptive-paced-load-baseline-probe") &&
+                expired.scheduler.snapshot().efficiencyProbeGenerationLimit == 1,
+            "later integer pacing did not obtain fresh adjacent-load evidence");
+
+        Harness unpaced(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false, true, false);
+        promoteForPacedLoadTest(unpaced, 3, 108.0);
+        unpaced.runAtFps(48.0, 16s);
+        for (size_t frame = 0; frame < 100; ++frame)
+            pacedLoadFrame(unpaced, 40.0, 2, true);
+        require(!unpaced.scheduler.snapshot().pacedLoadValidationPending,
+            "a policy without automatic integer pacing armed a comparison");
+        require(!unpaced.diagnostics.contains("adaptive-paced-load-baseline-probe"),
+            "an ineligible policy entered delayed pacing validation");
+    }
+
+    void testDelayedIntegerPacingRefreshesAdjacentBaseline() {
+        for (const bool fifo : {false, true}) {
+            for (const size_t multiplier : {3U, 4U, 5U}) {
+                for (const auto delay : {16s, 27s}) {
+                    for (const bool paid : {false, true}) {
+                        Harness harness(120, multiplier, true,
+                            AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                            120, false, true, true);
+                        // Deliberately make the old baseline predict the
+                        // opposite decision. Only current lower-load delivery
+                        // may decide the delayed handoff's real-frame cost.
+                        const double unpaidOutput = multiplier == 3 ? 108.0 : 114.0;
+                        promoteForPacedLoadTest(harness, multiplier,
+                            paid ? unpaidOutput : 100.0);
+                        harness.runAtFps(144.0 / static_cast<double>(multiplier), delay);
+                        require(!harness.scheduler.snapshot().pacedLoadValidationPending,
+                            "unapplied pacing blocked gameplay past its bounded watch");
+                        const double pacedFps = 120.0 / static_cast<double>(multiplier);
+                        for (size_t frame = 0; frame < 120; ++frame) {
+                            pacedLoadFrame(harness, pacedFps, multiplier - 1, fifo);
+                            if (harness.scheduler.snapshot().efficiencyProbeGenerationLimit)
+                                break;
+                        }
+                        require(harness.scheduler.snapshot().efficiencyProbeGenerationLimit ==
+                                multiplier - 2 &&
+                                harness.diagnostics.contains("adaptive-paced-load-baseline-probe"),
+                            "delayed pacing failed to start its fresh adjacent-load probe");
+                        const double freshLowerFps = (paid ? 100.0 : unpaidOutput) /
+                            static_cast<double>(multiplier - 1);
+                        for (size_t frame = 0; frame < 150; ++frame) {
+                            if (fifo)
+                                harness.frameAtFps(freshLowerFps);
+                            else
+                                pacedLoadFrame(harness, freshLowerFps, multiplier - 2, false);
+                            if (!harness.scheduler.snapshot().pacedLoadValidationPending)
+                                break;
+                        }
+                        const auto snapshot = harness.scheduler.snapshot();
+                        require(!snapshot.pacedLoadValidationPending &&
+                                !snapshot.efficiencyProbeGenerationLimit &&
+                                snapshot.validatedGenerationLimit ==
+                                    (paid ? multiplier - 1 : multiplier - 2),
+                            "delayed pacing did not use its freshly measured lower workload");
+                        require(snapshot.historyWarmupRemaining == 0 &&
+                                !snapshot.discontinuityRecoveryActive &&
+                                !snapshot.rearmRequired,
+                            "fresh pacing comparison entered transport or history recovery");
+                        if (paid) {
+                            require(harness.diagnostics.contains("adaptive-paced-load-accepted"),
+                                "paid delayed integer pacing was not retained");
+                            for (size_t frame = 0; frame < 70; ++frame)
+                                pacedLoadFrame(harness, pacedFps, multiplier - 1, fifo);
+                            require(harness.diagnostics.count("adaptive-paced-load-baseline-probe") == 1 &&
+                                    !harness.scheduler.snapshot().pacedLoadValidationPending,
+                                "planned probe return recursively revalidated the same pacing owner");
+                        } else {
+                            const auto* result = harness.diagnostics.last("ramp-result");
+                            require(result && !result->accepted &&
+                                    result->reason == "paced-unpaid-real-frame-cost",
+                                "unpaid delayed pacing lacked its measured rejection");
+                            requireNear(static_cast<float>(result->previousBaseFps),
+                                static_cast<float>(freshLowerFps), 0.01F,
+                                "delayed pacing reused the expired promotion baseline");
+                            const auto* backoff = harness.diagnostics.last("ramp-backoff");
+                            require(backoff && backoff->duration == 5s &&
+                                    snapshot.pacedLoadRollbackGenerationLimit == multiplier - 1,
+                                "fresh rejection lost adjacent retry or planned handoff exit");
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    void testFreshPacingProbeDiscardsInterruptedLowerEvidence() {
+        for (const bool fifo : {false, true}) {
+            for (size_t interruption = 0; interruption < 4; ++interruption) {
+                Harness harness(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+                    false, 2s, 120, false, true, true);
+                promoteForPacedLoadTest(harness, 3, 100.0);
+                harness.runAtFps(48.0, 16s);
+                for (size_t frame = 0; frame < 100; ++frame) {
+                    pacedLoadFrame(harness, 40.0, 2, fifo);
+                    if (harness.scheduler.snapshot().efficiencyProbeGenerationLimit)
+                        break;
+                }
+                require(harness.scheduler.snapshot().efficiencyProbeGenerationLimit == 1,
+                    "fresh interruption fixture never entered its lower-load probe");
+                for (size_t frame = 0; frame < 35; ++frame) {
+                    if (fifo)
+                        harness.frameAtFps(54.0);
+                    else
+                        pacedLoadFrame(harness, 54.0, 1, false);
+                }
+                switch (interruption) {
+                case 0:
+                    if (fifo) {
+                        harness.frameAtFps(54.0, false, false);
+                        harness.scheduler.reportGeneratedFrameDelivery({1, 0});
+                        harness.frameAtFps(54.0);
+                    } else {
+                        pacedLoadFrame(harness, 54.0, 1, false, false);
+                        pacedLoadFrame(harness, 54.0, 1, false);
+                    }
+                    break;
+                case 1:
+                    pacedLoadFrame(harness, 54.0, 1, fifo);
+                    break; // FIFO must remain released; cap must remain applied.
+                case 2:
+                    harness.scheduler.resetTiming(harness.now);
+                    break;
+                case 3:
+                    for (size_t frame = 0; frame < 20; ++frame) {
+                        if (fifo)
+                            harness.frameAtFps(35.0);
+                        else
+                            pacedLoadFrame(harness, 35.0, 1, false);
+                    }
+                    break;
+                }
+                // For a cap owner, explicit loss is the interruption.
+                if (interruption == 1 && !fifo)
+                    harness.frameAtFps(54.0);
+                const auto snapshot = harness.scheduler.snapshot();
+                require(!snapshot.pacedLoadValidationPending &&
+                        !snapshot.efficiencyProbeGenerationLimit &&
+                        snapshot.validatedGenerationLimit == 2 &&
+                        !harness.diagnostics.contains("adaptive-paced-load-accepted"),
+                    "interrupted fresh lower-load sample changed a validated workload: " +
+                        std::to_string(fifo) + " owner, case " +
+                        std::to_string(interruption) + ", pending=" +
+                        std::to_string(snapshot.pacedLoadValidationPending) + ", limit=" +
+                        std::to_string(snapshot.validatedGenerationLimit));
+                require(harness.diagnostics.contains("adaptive-paced-load-cancelled"),
+                    "interrupted fresh comparison lacked a discard reason");
+            }
+        }
+    }
+
+    void testHandoffAtBaselineExpiryStartsFreshComparison() {
+        Harness harness(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false, true, true);
+        promoteForPacedLoadTest(harness, 3, 100.0);
+        const auto acceptedAt = harness.now;
+        while (harness.now + 24ms < acceptedAt + 8s)
+            harness.frameAtFps(48.0);
+        require(harness.scheduler.snapshot().pacedLoadValidationPending,
+            "expiry-boundary fixture expired before the applied handoff");
+        pacedLoadFrame(harness, 40.0, 2, true);
+        require(harness.scheduler.snapshot().pacedLoadValidationPending &&
+                harness.diagnostics.contains("adaptive-paced-load-cancelled") &&
+                harness.diagnostics.contains("adaptive-paced-load-start"),
+            "handoff coinciding with baseline expiry lost its fresh validation");
+        for (size_t frame = 0; frame < 100; ++frame) {
+            pacedLoadFrame(harness, 40.0, 2, true);
+            if (harness.scheduler.snapshot().efficiencyProbeGenerationLimit)
+                break;
+        }
+        require(harness.diagnostics.contains("adaptive-paced-load-baseline-probe"),
+            "expiry-boundary handoff reused the expired comparison baseline");
+    }
+
+    void testDelayedCapReturnStartsAnotherFreshComparison() {
+        Harness harness(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false, true, true);
+        promoteForPacedLoadTest(harness, 3, 100.0);
+        harness.runAtFps(48.0, 16s);
+        for (size_t frame = 0; frame < 100; ++frame) {
+            pacedLoadFrame(harness, 40.0, 2, false);
+            if (harness.scheduler.snapshot().efficiencyProbeGenerationLimit)
+                break;
+        }
+        for (size_t frame = 0; frame < 150; ++frame) {
+            pacedLoadFrame(harness, 54.0, 1, false);
+            if (!harness.scheduler.snapshot().pacedLoadValidationPending)
+                break;
+        }
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "delayed cap return fixture did not restore its adjacent lower load");
+        for (size_t frame = 0; frame < 1000; ++frame) {
+            pacedLoadFrame(harness, 48.0, 1, false);
+            if (harness.scheduler.snapshot().rampEvaluationActive)
+                break;
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "delayed cap return fixture never retried its higher workload");
+        for (size_t frame = 0; frame < 150; ++frame) {
+            pacedLoadFrame(harness, 48.0, 1, false);
+            if (!harness.scheduler.snapshot().rampEvaluationActive)
+                break;
+        }
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "delayed cap return fixture did not accept its higher workload");
+        for (size_t frame = 0; frame < 800; ++frame)
+            pacedLoadFrame(harness, 48.0, 1, false);
+        require(!harness.scheduler.snapshot().pacedLoadValidationPending,
+            "delayed cap return fixture kept its expired promotion baseline");
+        for (size_t frame = 0; frame < 100; ++frame) {
+            pacedLoadFrame(harness, 40.0, 2, false);
+            if (harness.scheduler.snapshot().efficiencyProbeGenerationLimit)
+                break;
+        }
+        require(harness.scheduler.snapshot().efficiencyProbeGenerationLimit == 1 &&
+                harness.diagnostics.count("adaptive-paced-load-baseline-probe") == 2,
+            "a later 3x cap return was mistaken for its already checked lifetime");
+    }
+
+    void testFreshPacingProbeKeepsCadenceQualificationSeparate() {
+        Harness harness(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false, true, true);
+        promoteForPacedLoadTest(harness, 3, 100.0);
+        harness.runAtFps(48.0, 16s);
+        // Start qualification shortly before the applied cap. It must not
+        // enter its own trial while the pacing comparison owns delivery.
+        harness.runAtFps(40.0, 1800ms);
+        require(!harness.scheduler.snapshot().stableCadenceEvaluationActive,
+            "fresh pacing fixture qualified a cadence before its handoff");
+        for (size_t frame = 0; frame < 100; ++frame) {
+            pacedLoadFrame(harness, 40.0, 2, false);
+            const auto snapshot = harness.scheduler.snapshot();
+            require(!snapshot.stableCadenceEvaluationActive,
+                "constant-cadence qualification overlapped applied-pacing evidence");
+            if (snapshot.efficiencyProbeGenerationLimit)
+                break;
+        }
+        require(harness.scheduler.snapshot().efficiencyProbeGenerationLimit == 1,
+            "separate cadence qualification prevented the fresh lower-load probe");
+        for (size_t frame = 0; frame < 150; ++frame) {
+            pacedLoadFrame(harness, 50.0, 1, false);
+            if (!harness.scheduler.snapshot().pacedLoadValidationPending)
+                break;
+        }
+        require(harness.diagnostics.contains("adaptive-paced-load-accepted") &&
+                !harness.scheduler.snapshot().pacedLoadValidationPending,
+            "fresh pacing comparison did not finish without a cadence trial");
+    }
+
+    void testDelayedFractionalHandoffUsesFreshProbe() {
+        for (const bool paid : {false, true}) {
+            Harness harness(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+                false, 2s, 120, false, false, true);
+            promoteForPacedLoadTest(harness, 3, paid ? 108.0 : 100.0);
+            harness.runAtFps(48.0, 16s);
+            for (size_t frame = 0; frame < 500; ++frame) {
+                harness.frameAtFps(40.0);
+                const auto snapshot = harness.scheduler.snapshot();
+                if (snapshot.stableCadenceLimit == 2 &&
+                        !snapshot.stableCadenceEvaluationActive)
+                    break;
+            }
+            require(harness.scheduler.snapshot().stableCadenceLimit == 2 &&
+                    !harness.scheduler.snapshot().stableCadenceEvaluationActive,
+                "delayed Fractional fixture never qualified a constant cadence");
+            for (size_t frame = 0; frame < 100; ++frame) {
+                pacedLoadFrame(harness, 40.0, 2, true);
+                if (harness.scheduler.snapshot().efficiencyProbeGenerationLimit)
+                    break;
+            }
+            require(harness.scheduler.snapshot().efficiencyProbeGenerationLimit == 1,
+                "delayed accepted Fractional handoff skipped its fresh comparison");
+            for (size_t frame = 0; frame < 150; ++frame) {
+                harness.frameAtFps(paid ? 50.0 : 54.0);
+                if (!harness.scheduler.snapshot().pacedLoadValidationPending)
+                    break;
+            }
+            require(!harness.scheduler.snapshot().efficiencyProbeGenerationLimit &&
+                    !harness.scheduler.snapshot().pacedLoadValidationPending &&
+                    harness.scheduler.snapshot().validatedGenerationLimit == (paid ? 2U : 1U),
+                "fresh Fractional comparison did not retain or restore its validated workload");
+        }
+    }
+
+    void testAcceptedFractionalCadenceChecksVrrPacingCost() {
+        for (const size_t multiplier : {3U, 4U, 5U}) {
+            Harness harness(120, multiplier, true,
+                AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                120, false, false, true);
+            promoteForPacedLoadTest(harness, multiplier, 100.0);
+            const double settledFps = 120.0 / static_cast<double>(multiplier);
+            for (size_t frame = 0; frame < 500; ++frame) {
+                harness.frameAtFps(settledFps);
+                const auto snapshot = harness.scheduler.snapshot();
+                if (snapshot.stableCadenceLimit == multiplier - 1 &&
+                        !snapshot.stableCadenceEvaluationActive)
+                    break;
+            }
+            require(harness.scheduler.snapshot().pacedLoadValidationPending &&
+                    harness.scheduler.snapshot().stableCadenceLimit == multiplier - 1 &&
+                    !harness.scheduler.snapshot().stableCadenceEvaluationActive,
+                "Fractional constant cadence could not qualify within the recent trial window");
+            for (size_t frame = 0; frame < 100; ++frame) {
+                pacedLoadFrame(harness, settledFps, multiplier - 1, true);
+                if (!harness.scheduler.snapshot().pacedLoadValidationPending)
+                    break;
+            }
+            require(harness.diagnostics.contains("adaptive-paced-load-accepted"),
+                "accepted uncapped Fractional cadence did not validate its FIFO pacing cost");
+        }
+    }
+
+    void testUnreachableIntegerPacingDoesNotDelayHigherWorkloads() {
+        Harness harness(120, 5, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false, true, true);
+        harness.start();
+        harness.runAtFps(20.0, 18s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 4 &&
+                !harness.scheduler.snapshot().pacedLoadValidationPending,
+            "unreachable integer pacing delayed useful 4x/5x qualification");
+        require(!harness.diagnostics.contains("adaptive-paced-load-start"),
+            "a target-deficit source invented an integer pacing experiment");
+    }
+
     void testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget() {
         Harness harness(
             120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
@@ -4257,6 +4783,128 @@ namespace {
             "post-collapse recovery returned to a constant 2x cadence instead of Fractional output");
     }
 
+    void testSmoothRescueRestoresCapWithoutNativeHeadroom() {
+        for (const double measuredFps : {30.0, 45.0}) {
+            Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+                false, 2s, 90, true, true);
+            harness.start();
+            harness.runAtFps(47.0, 12s);
+            for (size_t frame = 0; frame < 120 &&
+                    !harness.diagnostics.contains("rescue-start"); ++frame)
+                harness.frameAtFps(30.0);
+            require(harness.diagnostics.contains("rescue-start"),
+                "precondition failed: collapse did not start rescue");
+            harness.runAtFps(measuredFps, 2s);
+            require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                "native sample without cap headroom left the automatic cap released");
+            const auto* restored = harness.diagnostics.last("automatic-base-cap-restored");
+            require(restored && restored->reason == "native-sample-no-cap-benefit",
+                "unsuccessful native sample did not diagnose cap restoration");
+            harness.runAtFps(30.0, 35s);
+            require(harness.diagnostics.count("rescue-start") == 1,
+                "an unchanged heavy scene repeatedly started real-only rescue");
+        }
+    }
+
+    void testSmoothRescueVerifiesRestoredGeneratedLoad() {
+        Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 90, true, true);
+        harness.start();
+        harness.runAtFps(47.0, 12s);
+        for (size_t frame = 0; frame < 120 &&
+                !harness.diagnostics.contains("rescue-start"); ++frame)
+            harness.frameAtFps(30.0);
+        require(harness.diagnostics.contains("rescue-start"),
+            "precondition failed: collapse did not start rescue");
+        for (size_t frame = 0; frame < 120 &&
+                harness.scheduler.snapshot().phase ==
+                    AdaptiveSchedulerPhase::RescueMeasurement; ++frame)
+            harness.frameAtFps(60.0);
+        require(harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "useful native sample did not arm cap verification");
+        harness.runAtFps(35.0, 2s);
+        require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "native-only improvement persisted after generated load lost that improvement");
+        const auto* restored = harness.diagnostics.last("automatic-base-cap-restored");
+        require(restored && restored->reason == "generated-load-not-recovered",
+            "lost generated-load recovery did not diagnose rollback");
+    }
+
+    void testSmoothRescueHandlesCollapseAfterStableExit() {
+        Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 90, true, true);
+        harness.start();
+        harness.runAtFps(45.0, 12s);
+        harness.runAtFps(38.0, 800ms);
+        require(harness.diagnostics.last("adaptive-stable-cadence-disabled") &&
+                harness.diagnostics.last("adaptive-stable-cadence-disabled")->reason ==
+                    "outside-useful-range" &&
+                !harness.diagnostics.contains("rescue-start"),
+            "precondition failed: ordinary cadence exit unexpectedly started rescue");
+        // The reported late-session signature: five normal source frames,
+        // then one with an additional 50 ms stall (about 33 FPS on average).
+        for (size_t frame = 0; frame < 120 &&
+                !harness.diagnostics.contains("rescue-start"); ++frame)
+            harness.frame(frame % 6 == 5 ? 72222us : 22222us);
+        require(harness.diagnostics.contains("rescue-start"),
+            "bursty collapse after cadence exit lost its accepted baseline");
+        for (size_t frame = 0; frame < 120; ++frame)
+            harness.frame(frame % 6 == 5 ? 72222us : 22222us);
+        require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "external-style stalls without native improvement left cap suppression active");
+        require(harness.diagnostics.count("rescue-start") == 1,
+            "bursty unrecovered source repeatedly started rescue");
+    }
+
+    void testSmoothRescueRollsBackInterruptedMeasurement() {
+        for (const size_t interruption : {0U, 1U, 2U}) {
+            Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+                false, 2s, 90, true, true);
+            harness.start();
+            harness.runAtFps(47.0, 12s);
+            for (size_t frame = 0; frame < 120 &&
+                    !harness.diagnostics.contains("rescue-start"); ++frame)
+                harness.frameAtFps(30.0);
+            require(harness.diagnostics.contains("rescue-start"),
+                "precondition failed: collapse did not start rescue");
+            if (interruption == 1)
+                harness.frame(1ms);
+            else if (interruption == 2)
+                harness.frameAtFps(30.0, true);
+            else
+                harness.scheduler.resetTiming(harness.now);
+            require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
+                "interrupted rescue retained temporary automatic-cap suppression");
+        }
+    }
+
+    void testSmoothRescueWatchExpiresWithoutCollapse() {
+        Harness harness(90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 90, true, true);
+        harness.start();
+        harness.runAtFps(45.0, 12s);
+        harness.runAtFps(38.0, 4s);
+        harness.runAtFps(30.0, 4s);
+        require(!harness.diagnostics.contains("rescue-start") &&
+                !harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "expired cadence-exit proof triggered rescue in a later heavy scene");
+    }
+
+    void testSmoothRescueFailurePreservesSceneAdaptation() {
+        Harness harness(90, 4, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 90, true, true);
+        harness.start();
+        harness.runAtFps(30.0, 15s);
+        require(harness.scheduler.snapshot().stableCadenceLimit == 2,
+            "precondition failed: 3x cadence was not accepted");
+        harness.runAtFps(20.0, 5s);
+        require(harness.diagnostics.contains("rescue-start") &&
+                !harness.scheduler.snapshot().automaticBaseCapSuppressed &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 3 &&
+                !harness.scheduler.snapshot().rampEvaluationActive,
+            "failed rescue blocked a useful ordinary Adaptive workload trial");
+    }
+
     void testGeneratedImageRecoveryFallsBackToProvenLoad() {
         Harness harness(110, 3);
         harness.start();
@@ -4696,6 +5344,16 @@ int main() {
         {"Smooth Cadence rejects unproven 2x convergence", testSmoothCadenceRejectsTwoXThatDoesNotConverge},
         {"Smooth Cadence convergence requires matching ordered FIFO", testSmoothCadenceConvergenceRequiresTargetMatchedOrderedFifo},
         {"VRR FIFO uses only a validated higher rung", testVrrFullFifoUsesOnlyValidatedHigherRung},
+        {"integer pacing rechecks 3x through 5x real-frame cost", testIntegerPacingRechecksRealFrameCostAcrossMultipliers},
+        {"paced load needs fresh continuous evidence", testPacedLoadRequiresFreshContinuousEvidence},
+        {"delayed integer pacing refreshes its adjacent baseline", testDelayedIntegerPacingRefreshesAdjacentBaseline},
+        {"fresh pacing probes discard interrupted lower evidence", testFreshPacingProbeDiscardsInterruptedLowerEvidence},
+        {"handoff at baseline expiry starts fresh comparison", testHandoffAtBaselineExpiryStartsFreshComparison},
+        {"delayed cap return starts another fresh comparison", testDelayedCapReturnStartsAnotherFreshComparison},
+        {"fresh pacing probe keeps cadence qualification separate", testFreshPacingProbeKeepsCadenceQualificationSeparate},
+        {"delayed Fractional handoff uses fresh probe", testDelayedFractionalHandoffUsesFreshProbe},
+        {"accepted Fractional cadence checks VRR pacing cost", testAcceptedFractionalCadenceChecksVrrPacingCost},
+        {"unreachable integer pacing does not delay higher loads", testUnreachableIntegerPacingDoesNotDelayHigherWorkloads},
         {"Smooth Cadence accepts target-preserving downshift", testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget},
         {"Smooth Cadence lets promising downshift recovery settle", testSmoothCadenceDownshiftAllowsPromisingRecoveryToSettle},
         {"Smooth Cadence rejects insufficient downshift", testSmoothCadenceRejectsInsufficientDownshiftAndBacksOff},
@@ -4724,6 +5382,12 @@ int main() {
         {"failed higher load cannot ratchet to degraded baseline", testFailedHigherLoadCannotRatchetToDegradedBaseline},
         {"Smooth Cadence collapse measures real-only", testSmoothCadenceCollapseUsesRealOnlyMeasurement},
         {"Ordered SDR Smooth collapse releases automatic cap", testOrderedSdrSmoothCollapseReleasesAutomaticCap},
+        {"Smooth rescue restores cap without headroom", testSmoothRescueRestoresCapWithoutNativeHeadroom},
+        {"Smooth rescue verifies generated load", testSmoothRescueVerifiesRestoredGeneratedLoad},
+        {"Smooth rescue catches post-exit collapse", testSmoothRescueHandlesCollapseAfterStableExit},
+        {"Smooth rescue rolls back interruption", testSmoothRescueRollsBackInterruptedMeasurement},
+        {"Smooth rescue watch expires", testSmoothRescueWatchExpiresWithoutCollapse},
+        {"Smooth rescue preserves scene adaptation", testSmoothRescueFailurePreservesSceneAdaptation},
         {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
         {"transport-failed multiplier probes keep proven load", testTransportFailureDuringAnyMultiplierProbeRetainsProvenLoad},
         {"qualified transport failure backs off accepted load", testQualifiedTransportFailureBacksOffAcceptedLoad},

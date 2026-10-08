@@ -122,7 +122,12 @@ def generate_script_generation() -> str:
         field_type = ConfigFieldType(field_def["fieldType"])
 
         if field_type == ConfigFieldType.BOOLEAN:
-            if field_name == "disable_steamdeck_mode":
+            if field_name == "disable_steam_overlay":
+                # Keep an explicit local shell value for either saved choice;
+                # the launch policy consumes it without exporting it to games.
+                lines.append('        lines.append("mako_disable_steam_overlay=" +')
+                lines.append('            ("1" if config.get("disable_steam_overlay", True) else "0"))')
+            elif field_name == "disable_steamdeck_mode":
                 # Special case: disable_steamdeck_mode=True should export SteamDeck=0
                 lines.append(f'        if config.get("{field_name}", False):')
                 lines.append(f'            lines.append("export {env_var}=0")')

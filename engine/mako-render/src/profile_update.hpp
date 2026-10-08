@@ -464,7 +464,8 @@ namespace mako::layer {
 
     /// A proven Ordered-SDR collapse may ask the presentation pacer to release
     /// only Adaptive's automatic half-target cap. Manual and Fixed caps remain
-    /// authoritative, and a fresh scheduler resets this per-swapchain proof.
+    /// authoritative. Rescue verifies source improvement before retaining the
+    /// release; a failed or interrupted attempt restores the previous policy.
     [[nodiscard]] inline double effectiveBaseFpsCap(
             const ls::GameConf& profile,
             const AdaptiveSchedulerSnapshot& scheduler,
@@ -580,7 +581,13 @@ namespace mako::layer {
             const GamescopePresentationFeedback& presentationFeedback,
             const std::optional<size_t> activeGenerationLimit) {
         return profile.adaptive &&
-            profile.adaptive_auto_base_fps_cap &&
+            (profile.adaptive_auto_base_fps_cap ||
+             (effectiveBaseFpsCap(profile, gamescopeRefreshHz) <= 0.0 &&
+              scheduler.pacedLoadValidationPending &&
+              scheduler.efficiencyProbeGenerationLimit) ||
+             (activeGenerationLimit &&
+              scheduler.pacedLoadRollbackGenerationLimit ==
+                  activeGenerationLimit)) &&
             profile.adaptive_stable_cadence &&
             effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
             privateOrderedTransport &&
@@ -592,10 +599,14 @@ namespace mako::layer {
             activeGenerationLimit && *activeGenerationLimit > 1 &&
             (scheduler.phase == AdaptiveSchedulerPhase::Active ||
              scheduler.phase == AdaptiveSchedulerPhase::StableCadence) &&
-            scheduler.efficiencyProbeGenerationLimit &&
-            *scheduler.efficiencyProbeGenerationLimit <
-                *activeGenerationLimit &&
-            scheduler.validatedGenerationLimit >= *activeGenerationLimit &&
+            ((scheduler.efficiencyProbeGenerationLimit &&
+              *scheduler.efficiencyProbeGenerationLimit <
+                  *activeGenerationLimit) ||
+             scheduler.pacedLoadRollbackGenerationLimit ==
+                 activeGenerationLimit) &&
+            (scheduler.validatedGenerationLimit >= *activeGenerationLimit ||
+             scheduler.pacedLoadRollbackGenerationLimit ==
+                 activeGenerationLimit) &&
             !scheduler.rampEvaluationActive &&
             !scheduler.stableCadenceEvaluationActive &&
             !scheduler.nativeCadenceProbeActive &&

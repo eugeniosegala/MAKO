@@ -21,6 +21,8 @@ test_data_home="$test_root/data"
 test_config_home="$test_root/config"
 mkdir -p "$test_data_home" "$test_config_home"
 export XDG_CONFIG_HOME="$test_config_home"
+overlay_enabled_config="$test_root/overlay-enabled.conf"
+printf '%s\n' 'version=1' 'disable_steam_overlay=0' > "$overlay_enabled_config"
 # The fake Gamescope names below must not resolve to a live compositor socket
 # when this portable test runs alongside a real Gym session.
 export XDG_RUNTIME_DIR="$test_root/runtime"
@@ -75,6 +77,7 @@ mkdir -p "$steam_overlay_dir"
 touch "$steam_overlay_dir/steamoverlay_x86_64.json"
 touch "$steam_overlay_dir/steamoverlay_i386.json"
 desktop_overlay_output="$({
+    MAKO_LAUNCH_CONFIG="$overlay_enabled_config" \
     ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
         XDG_DATA_HOME="$test_data_home" \
         VK_LAYER_PATH="/caller/explicit" \
@@ -94,6 +97,7 @@ if [[ "$desktop_overlay_output" != "$expected_desktop_overlay" ]]; then
 fi
 
 gaming_overlay_output="$({
+    MAKO_LAUNCH_CONFIG="$overlay_enabled_config" \
     ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
         GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
         WAYLAND_DISPLAY=gamescope-0 \
@@ -114,6 +118,7 @@ printf '%s\n' '#!/usr/bin/env bash' \
     'printf "%s\n" "${VK_INSTANCE_LAYERS:-unset}" "${VK_LAYER_PATH:-unset}"' > "$fake_flatpak"
 chmod +x "$fake_flatpak"
 flatpak_overlay_output="$({
+    MAKO_LAUNCH_CONFIG="$overlay_enabled_config" \
     ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
         XDG_DATA_HOME="$test_data_home" \
         "$launcher" "$fake_flatpak" run example.App
@@ -123,6 +128,65 @@ if [[ "$flatpak_overlay_output" != $'unset\nunset' ]]; then
 fi
 rm -f "$steam_overlay_dir/steamoverlay_x86_64.json"
 rm -f "$steam_overlay_dir/steamoverlay_i386.json"
+
+# Load synthetic hooks through the actual dynamic linker, then check symbol
+# visibility in the final application rather than just printing LD_PRELOAD.
+preload_fixture="$(dirname -- "${BASH_SOURCE[0]}")/test-launch-preload.cpp"
+preload_compiler="${CXX:-c++}"
+mkdir -p "$test_root/preload/64" "$test_root/preload/32"
+"$preload_compiler" -shared -fPIC -DMAKO_TEST_OVERLAY "$preload_fixture" \
+    -o "$test_root/preload/64/gameoverlayrenderer.so"
+cp "$test_root/preload/64/gameoverlayrenderer.so" "$test_root/preload/32/gameoverlayrenderer.so"
+"$preload_compiler" -shared -fPIC -DMAKO_TEST_RETAINED "$preload_fixture" \
+    -o "$test_root/preload/retained.so"
+"$preload_compiler" "$preload_fixture" -ldl -o "$test_root/preload/probe"
+for separator in ':' ' ' $'\t' $'\n' $'\r' $'\v' $'\f'; do
+    preload_output="$(
+        GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
+        XDG_DATA_HOME="$test_data_home" \
+        LD_PRELOAD="$test_root/preload/64/gameoverlayrenderer.so${separator}$test_root/preload/retained.so${separator}$test_root/preload/32/gameoverlayrenderer.so" \
+        "$launcher" "$test_root/preload/probe" 2> "$test_root/preload/stderr"
+    )" || fail "isolated preload launch failed"
+    [[ "$preload_output" == 'overlay=0 retained=1' ]] ||
+        fail "isolated launch retained an orphaned hook or lost another preload: $preload_output"
+done
+preload_output="$(
+    GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
+    XDG_DATA_HOME="$test_data_home" \
+    MAKO_PRESENT_DIAGNOSTICS=1 \
+    LD_PRELOAD="$test_root/preload/64/gameoverlayrenderer.so" \
+    "$launcher" "$test_root/preload/probe" 2> "$test_root/preload/stderr"
+)" || fail "overlay-only preload launch failed"
+[[ "$preload_output" == 'overlay=0 retained=0' ]] || fail "overlay-only hooks survived exec"
+[[ "$(cat "$test_root/preload/stderr")" == *'operation=launch-environment'*'steam_overlay_preload_removed=1'* ]] ||
+    fail "launch diagnostics did not report removal"
+preload_output="$(
+    GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
+    XDG_DATA_HOME="$test_data_home" \
+    LD_PRELOAD="$test_root/preload/64/gameoverlayrenderer.so:$test_root/preload/retained.so" \
+    "$launcher" "$test_root/preload/probe" 2> "$test_root/preload/stderr"
+)" || fail "default Steam preload removal failed"
+[[ "$preload_output" == 'overlay=0 retained=1' ]] || fail "default launch retained Steam input hooks"
+touch "$steam_overlay_dir/steamoverlay_x86_64.json"
+preload_output="$(
+    env -u GAMESCOPE_WAYLAND_DISPLAY \
+    MAKO_LAUNCH_CONFIG="$overlay_enabled_config" \
+    ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
+    XDG_DATA_HOME="$test_data_home" \
+    LD_PRELOAD="$test_root/preload/64/gameoverlayrenderer.so:$test_root/preload/retained.so" \
+    "$launcher" "$test_root/preload/probe" 2> "$test_root/preload/stderr"
+)" || fail "paired Desktop overlay preload launch failed"
+[[ "$preload_output" == 'overlay=1 retained=1' ]] || fail "paired Desktop overlay hooks were removed"
+desktop_disabled_output="$(
+    env -u GAMESCOPE_WAYLAND_DISPLAY \
+    ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
+    XDG_DATA_HOME="$test_data_home" \
+    VK_INSTANCE_LAYERS="VK_LAYER_existing:VK_LAYER_VALVE_steam_overlay_64:VK_LAYER_VALVE_steam_overlay_32" \
+    LD_PRELOAD="$test_root/preload/64/gameoverlayrenderer.so:$test_root/preload/retained.so" \
+    "$launcher" bash -c 'printf "%s\n" "${VK_INSTANCE_LAYERS:-unset}" "${DISABLE_VK_LAYER_VALVE_steam_overlay_1:-unset}"; exec "$1"' _ "$test_root/preload/probe" 2> "$test_root/preload/stderr"
+)" || fail "Desktop overlay disable setting failed"
+[[ "$desktop_disabled_output" == $'VK_LAYER_existing\n1\noverlay=0 retained=1' ]] || fail "Desktop overlay request bypassed the default Performance setting"
+rm -f "$steam_overlay_dir/steamoverlay_x86_64.json"
 
 allow_output="$({
     DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_GAMESCOPE_WSI=1 \
@@ -182,6 +246,7 @@ touch "$steam_overlay_dir/steamoverlay_x86_64.json"
 touch "$steam_overlay_dir/steamoverlay_i386.json"
 
 vkbasalt_output="$({
+    MAKO_LAUNCH_CONFIG="$overlay_enabled_config" \
     ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
         ENABLE_VKBASALT=1 \
         DISABLE_VKBASALT=1 \

@@ -117,6 +117,9 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             presentNow, orderedAcquireRecoveryProbe,
             this->gamescopePresentationFeedback.variableRefreshRequested()
                 ? this->smoothCadencePacerHandoff.activeGenerationLimit()
+                : std::nullopt,
+            this->profile.adaptive && !this->smoothCadencePacerHandoff.active()
+                ? this->smoothCadenceBaseCap.activeGenerationLimit()
                 : std::nullopt
         )
         : AdaptiveFramePlan{};

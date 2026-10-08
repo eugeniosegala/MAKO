@@ -12,8 +12,23 @@
 #include <string_view>
 
 #include <unistd.h>
+#include <link.h>
 
 namespace mako::layer::present_diagnostics {
+SteamOverlayLibraries steamOverlayLibraries() {
+    SteamOverlayLibraries libraries;
+    dl_iterate_phdr([](dl_phdr_info* info, size_t, void* state) {
+        auto& loaded = *static_cast<SteamOverlayLibraries*>(state);
+        std::string_view name{info->dlpi_name ? info->dlpi_name : ""};
+        const auto slash = name.find_last_of('/');
+        if (slash != std::string_view::npos) name.remove_prefix(slash + 1);
+        loaded.hookLoaded |= name == "gameoverlayrenderer.so";
+        loaded.vulkanLoaded |= name == "steamoverlayvulkanlayer.so";
+        return 0;
+    }, &libraries);
+    return libraries;
+}
+
 void recordPresentPhaseTiming(const uint64_t context, const size_t frame,
         const size_t sequence, const Clock::time_point finished,
         const std::array<double, 9>& milliseconds) noexcept {
@@ -724,6 +739,21 @@ namespace {
             logAdaptiveAutomaticBaseCapSuppressed(
                 generationLimit, baselineBaseFps, currentBaseFps, reason
             );
+        }
+
+        void automaticBaseCapRestored(const size_t generationLimit,
+                const double baselineBaseFps, const double measuredBaseFps,
+                const std::string_view reason) override {
+            if (!enabled())
+                return;
+            std::cerr << "MAKO Renderer: present diagnostics: operation="
+                         "adaptive-auto-base-cap-restored"
+                      << " context=" << activeContextId
+                      << " generated_limit=" << generationLimit
+                      << " baseline_base_fps=" << baselineBaseFps
+                      << " measured_base_fps=" << measuredBaseFps
+                      << " reason=" << reason
+                      << " action=restore-half-target-pacer\n";
         }
 
         void discontinuityRecoveryStart(const size_t generationLimit,

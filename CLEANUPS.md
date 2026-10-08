@@ -16,6 +16,8 @@ Generated files and user data have different lifecycles:
 - Persisted values that exist nowhere else are user data. Keep an idempotent migration until MAKO ends the direct-upgrade path from the affected release.
 - Deny-lists and fail-closed host guards remain current safety rules while stale artifacts could reactivate unsupported behavior.
 
+Wrapper format 75 consumes the saved `disable_steam_overlay` Performance setting, defaulting to true for profiles without a saved value. It replaces the unreleased diagnostic-only preload experiment without an environment-variable migration or reader. Canonical script settings preserve explicit false values in existing sidecars; older wrappers are regenerated from those settings. Standalone `launcher.conf` version 1 gains the optional same-named boolean, with true as the absent-field default. Use a matching launcher and UI; older strict readers cannot consume the new field.
+
 MAKO supports direct upgrades from MAKO 2.0.0, with no maximum skipped-version gap, but does not import state from differently named experimental predecessors or pre-public wrapper formats. A data migration can be removed only after MAKO declares a newer minimum direct-upgrade baseline than its source release or provides an equivalent state-preserving replacement.
 
 When adding transitional compatibility, update this ledger in the same change with its owner, reason, removal gate, and regression test. Prefer one generic contract test over one test per historical version when the implementation does not branch on version.

@@ -1217,6 +1217,12 @@ namespace mako::layer {
             return std::chrono::milliseconds{250};
         }
 
+        [[nodiscard]] std::optional<size_t> activeGenerationLimit() const {
+            const auto multiplier = this->effectiveMultiplier();
+            return multiplier && *multiplier > 1
+                ? std::optional<size_t>{*multiplier - 1} : std::nullopt;
+        }
+
     private:
         [[nodiscard]] std::optional<size_t> effectiveMultiplier() const {
             return this->probeMultiplier

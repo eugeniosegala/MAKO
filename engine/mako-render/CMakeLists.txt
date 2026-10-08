@@ -186,6 +186,19 @@ if(BUILD_TESTING)
             LABELS "portable-policy")
     endfunction()
 
+    add_library(mako-launch-preload-fixture SHARED
+        "../scripts/test-launch-preload.cpp")
+    target_compile_definitions(mako-launch-preload-fixture PRIVATE MAKO_TEST_RETAINED)
+    add_executable(mako-steam-overlay-diagnostics-tests
+        "tests/steam_overlay_libraries_tests.cpp" "src/present_diagnostics.cpp")
+    target_include_directories(mako-steam-overlay-diagnostics-tests PRIVATE "src")
+    target_link_libraries(mako-steam-overlay-diagnostics-tests
+        PRIVATE mako-adaptive ${CMAKE_DL_LIBS})
+    add_dependencies(mako-steam-overlay-diagnostics-tests mako-launch-preload-fixture)
+    add_test(NAME steam-overlay-library-diagnostics
+        COMMAND mako-steam-overlay-diagnostics-tests $<TARGET_FILE:mako-launch-preload-fixture>)
+    mako_register_portable_policy_test(mako-steam-overlay-diagnostics-tests steam-overlay-library-diagnostics)
+
     add_executable(mako-runtime-health-tests
         "tests/runtime_health_tests.cpp" "src/runtime_health.cpp")
     target_link_libraries(mako-runtime-health-tests PRIVATE mako-common Threads::Threads)

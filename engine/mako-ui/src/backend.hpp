@@ -57,6 +57,7 @@ namespace mako::ui {
         Q_PROPERTY(bool lossless_scaling_missing READ isLosslessScalingMissing NOTIFY refreshUI)
         Q_PROPERTY(bool allow_fp16 READ getAllowFP16 WRITE allowFP16Updated NOTIFY refreshUI)
         Q_PROPERTY(bool enable_zink READ getEnableZink WRITE enableZinkUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool disable_steam_overlay READ getDisableSteamOverlay WRITE disableSteamOverlayUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool force_alsa_audio READ getForceAlsaAudio WRITE forceAlsaAudioUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool enable_vkbasalt READ getEnableVkBasalt WRITE enableVkBasaltUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString vkbasalt_sharpening READ getVkBasaltSharpening WRITE vkBasaltSharpeningUpdated NOTIFY refreshUI)
@@ -239,6 +240,9 @@ namespace mako::ui {
         }
         [[nodiscard]] bool getEnableZink() const {
             return this->m_launch.enable_zink;
+        }
+        [[nodiscard]] bool getDisableSteamOverlay() const {
+            return this->m_launch.disable_steam_overlay;
         }
         [[nodiscard]] bool getForceAlsaAudio() const {
             return this->m_launch.force_alsa_audio;
@@ -587,6 +591,10 @@ namespace mako::ui {
         }
         void enableZinkUpdated(bool enable_zink) {
             this->m_launch.enable_zink = enable_zink;
+            MARK_LAUNCH_DIRTY()
+        }
+        void disableSteamOverlayUpdated(bool disabled) {
+            this->m_launch.disable_steam_overlay = disabled;
             MARK_LAUNCH_DIRTY()
         }
         void forceAlsaAudioUpdated(bool force_alsa_audio) {

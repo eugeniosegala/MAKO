@@ -34,7 +34,8 @@ FIXTURE = """\
 [Gamescope WSI] HDR output available
 MAKO Decky: Gamescope WSI skipped: no active Gamescope session; continuing with the managed WSI and spatial chain disabled.
 MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0; fingerprint=abc123.dirty.12345678
-MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executable=game.exe wine_executable=game.exe process_name=GameThread profile=mako identification=fallback build=1.0.0 fingerprint=abc123.dirty.12345678
+MAKO Renderer: present diagnostics: operation=launch-environment pid=4242 steam_overlay_preload_filter_requested=1 steam_overlay_preload_removed=2
+MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executable=game.exe wine_executable=game.exe process_name=GameThread profile=mako identification=fallback build=1.0.0 fingerprint=abc123.dirty.12345678 steam_overlay_hook_loaded=0 steam_overlay_vulkan_loaded=0
 MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
 MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
 MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
@@ -124,6 +125,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
 
     def test_recent_trace_preserves_initial_and_latest_context(self):
         records = [
+            "MAKO Renderer: present diagnostics: operation=launch-environment pid=42 steam_overlay_preload_filter_requested=1 steam_overlay_preload_removed=2",
             "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=4.0.0; fingerprint=long-session",
             "MAKO Renderer: present diagnostics: operation=process-identity pid=42 profile=test",
             "MAKO Renderer: backend GPU selection: following game device=1002:1435",
@@ -145,7 +147,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
                         self.assertEqual(result.stdout.count(record + "\n"), 1)
                     self.assertEqual(result.stdout.splitlines()[-3:], trace[-3:])
                     self.assertIn("omitted_trace_lines=", result.stderr)
-                    self.assertIn("earlier_context_records=8", result.stderr)
+                    self.assertIn("earlier_context_records=9", result.stderr)
                     self.assertNotIn("unrelated application output", result.stdout)
 
     def test_context_limits_do_not_lose_identity_to_swapchain_or_monitor_churn(self):
@@ -183,6 +185,39 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.splitlines(), records)
         self.assertIn("earlier_context_records=0", result.stderr)
+
+    def test_bounded_rescue_decisions_survive_focused_collection(self):
+        records = [
+            "MAKO Renderer: present diagnostics: operation=adaptive-rescue-start context=1 reason=stable-cadence-collapse measurement_ms=1000",
+            "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete context=1 measured_base_fps=60 decision=verify-cap-release",
+            "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete context=1 measured_base_fps=60 decision=cap-release-verified",
+            "MAKO Renderer: present diagnostics: operation=adaptive-auto-base-cap-suppressed context=1 reason=stable-cadence-collapse",
+            "MAKO Renderer: present diagnostics: operation=adaptive-auto-base-cap-restored context=1 measured_base_fps=35 reason=generated-load-not-recovered action=restore-half-target-pacer",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "rescue.log"
+            path.write_text("\n".join(records) + "\n", encoding="utf-8")
+            for preset in ("all", "adaptive", "recovery", "performance"):
+                result = self._run("--log", str(path), preset)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.stdout.splitlines(), records)
+
+    def test_settled_pacing_decisions_survive_focused_collection(self):
+        records = [
+            "MAKO Renderer: present diagnostics: operation=adaptive-paced-load-start context=1 generated_limit=2 baseline_base_fps=54 current_base_fps=48 reason=ordered-fifo",
+            "MAKO Renderer: present diagnostics: operation=adaptive-paced-load-baseline-probe context=1 generated_limit=1 baseline_base_fps=40 current_base_fps=40 reason=fresh-adjacent-lower-load",
+            "MAKO Renderer: present diagnostics: operation=adaptive-load-shed context=1 previous_generated_limit=1 tested_generated_limit=2 previous_base_fps=54 current_base_fps=40 previous_output_fps=108 current_output_fps=120 reason=paced-unpaid-real-frame-cost",
+            "MAKO Renderer: present diagnostics: operation=adaptive-paced-load-accepted context=1 generated_limit=3 baseline_base_fps=33 current_base_fps=30 reason=settled-real-frame-cost-paid",
+            "MAKO Renderer: present diagnostics: operation=adaptive-paced-load-cancelled context=1 generated_limit=4 baseline_base_fps=28 current_base_fps=24 reason=pacing-policy-changed",
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "paced-load.log"
+            path.write_text("\n".join(records) + "\n", encoding="utf-8")
+            for preset in ("all", "adaptive", "recovery", "performance"):
+                with self.subTest(preset=preset):
+                    result = self._run("--log", str(path), preset)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.splitlines(), records)
 
     def test_context_anchors_isolate_layer_roles_and_processes(self):
         records = []
@@ -445,6 +480,9 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("render layer active", result.stdout)
                     self.assertIn("fingerprint=abc123.dirty.12345678", result.stdout)
                     self.assertIn("operation=process-identity", result.stdout)
+                    self.assertIn("operation=launch-environment", result.stdout)
+                    self.assertIn("steam_overlay_hook_loaded=0", result.stdout)
+                    self.assertIn("steam_overlay_vulkan_loaded=0", result.stdout)
                     self.assertIn("operation=swapchain-context-create", result.stdout)
                     self.assertIn("Gamescope presentation feedback initialized", result.stdout)
                     self.assertIn("operation=gamescope-presentation-feedback", result.stdout)

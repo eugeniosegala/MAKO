@@ -105,6 +105,8 @@
   "CONFIG_ULTRA_PERFORMANCE": "极致性能（重启）",
   "CONFIG_ULTRA_PERFORMANCE_DESC": "降低 MAKO 在低功耗设备上的 GPU 负载。它使用 70% 光流缩放、轻量帧生成模型，并在启用缩放时使用 LS1 Performance。以画质换取所有已启用 MAKO 功能的性能。遵循全局 FP16 设置。",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "开启或关闭 Ultra Performance 需要重启游戏。其他兼容的配置文件控件在启动后仍可使用。",
+  "CONFIG_DISABLE_STEAM_OVERLAY": "禁用 Steam 叠加层（重启）",
+  "CONFIG_DISABLE_STEAM_OVERLAY_DESC": "可能改善流畅度。禁用游戏内 Steam 叠加层钩子，可能影响 Steam Input。",
   "CONFIG_PERFORMANCE_MODE": "轻量帧生成模型",
   "CONFIG_PERFORMANCE_MODE_DESC": "轻量 FG 模型降低 GPU 开销，但增加重影；极致性能会强制开启。",
   "CONFIG_DISABLE_STEAMDECK_MODE": "禁用 Steam Deck 模式（重启）",

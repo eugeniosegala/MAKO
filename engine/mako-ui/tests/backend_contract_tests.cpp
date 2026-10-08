@@ -615,7 +615,7 @@ void test_compact_restart_markers() {
     QFile ui_file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(ui_file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString ui_qml = QString::fromUtf8(ui_file.readAll());
-    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 10,
+    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 11,
         "Every restart-bound Renderer control must opt into the compact marker");
 
     QFile entry_file(QString::fromUtf8(MAKO_UI_GROUP_ENTRY_QML_FILE));
@@ -665,6 +665,9 @@ void test_save_lifetime() {
         backend.targetFPSUpdated(144);
         require(backend.fractionalRealFramePriorityCapFor(QStringLiteral("high")) == 108.0,
             "Priority preview did not update with Target FPS");
+        require(backend.getDisableSteamOverlay(),
+            "Steam overlay removal must default to enabled in the Qt UI");
+        backend.disableSteamOverlayUpdated(false);
         backend.enableZinkUpdated(true);
         backend.enableVkBasaltUpdated(true);
         backend.vkBasaltSharpeningUpdated(QStringLiteral("dls"));
@@ -678,6 +681,8 @@ void test_save_lifetime() {
         events.exec();
         require(ls::ConfigFile(configPath).profiles().front().target_fps == 144,
             "UI timer did not save the latest edit");
+        require(!ls::LaunchConfigFile(launchPath).settings().disable_steam_overlay,
+            "UI timer did not persist an explicit overlay opt-out");
         require(ls::LaunchConfigFile(launchPath).settings().enable_zink,
             "UI timer did not save launcher settings");
         const auto vkBasaltPath = directory.filePath(
@@ -867,6 +872,7 @@ void test_save_lifetime() {
         require(std::filesystem::last_write_time(configPath) == timestamp,
             "Idle UI rewrote the configuration");
         backend.targetFPSUpdated(165);
+        backend.disableSteamOverlayUpdated(true);
         backend.forceAlsaAudioUpdated(true);
         // No event loop: closing before the debounce must still save both files.
     }
@@ -878,6 +884,8 @@ void test_save_lifetime() {
     }
     require(ls::ConfigFile(configPath).profiles().front().target_fps == 165,
         "Closing the UI lost the pending profile edit");
+    require(ls::LaunchConfigFile(launchPath).settings().disable_steam_overlay,
+        "Closing the UI lost the pending overlay edit");
     require(ls::LaunchConfigFile(launchPath).settings().force_alsa_audio,
         "Closing the UI lost the pending launcher edit");
     QFile invalid(QString::fromStdString(configPath));

@@ -33,6 +33,9 @@ from py_modules.mako_plugin.config_schema_generated import (  # noqa: E402
     get_script_generation_logic,
 )
 from shared_config import VKBASALT_SHADER_VALUES  # noqa: E402
+from py_modules.mako_plugin.wrapper_generation import (  # noqa: E402
+    steam_overlay_preload_policy_lines,
+)
 
 
 class WrapperEnvironmentTests(unittest.TestCase):
@@ -90,6 +93,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "VKBASALT_RELOAD=%s\\n" "${VKBASALT_CONFIG_RELOAD:-}"',
             'printf "DEVICE_SELECT_DISABLED=%s\\n" "${NODEVICE_SELECT:-}"',
             'printf "MESA_ANTI_LAG_DISABLED=%s\\n" "${DISABLE_LAYER_MESA_ANTI_LAG:-}"',
+            'printf "PRELOAD=%s\\n" "${LD_PRELOAD:-}"',
         ])
         environment = {
             "PATH": os.environ.get("PATH", ""),
@@ -104,6 +108,75 @@ class WrapperEnvironmentTests(unittest.TestCase):
         )
         self.last_stderr = result.stderr
         return dict(line.split("=", 1) for line in result.stdout.splitlines())
+
+    def test_preload_policy_matches_independent_native_launcher(self):
+        launcher = Path(__file__).resolve().parents[2] / "engine/scripts/mako-launch"
+        policy = launcher.read_text(encoding="utf-8").split(
+            "# BEGIN MAKO_STEAM_OVERLAY_PRELOAD_POLICY\n", 1
+        )[1].split("# END MAKO_STEAM_OVERLAY_PRELOAD_POLICY", 1)[0]
+        self.assertEqual(policy.splitlines(), steam_overlay_preload_policy_lines())
+
+    def test_isolated_launch_removes_only_exact_steam_hook_tokens(self):
+        for separator in (":", " ", "\t", "\n", "\r", "\v", "\f"):
+            with self.subTest(separator=repr(separator)):
+                values = self._evaluate({
+                    **self.gamescope_environment,
+                    "LD_PRELOAD": separator.join([
+                        "/steam/ubuntu12_64/gameoverlayrenderer.so",
+                        "/tool/keep.so",
+                        "/steam/ubuntu12_32/gameoverlayrenderer.so",
+                        "$ORIGIN/literal*.so",
+                        "/tool/gameoverlayrenderer.so.backup",
+                    ]),
+                })
+                self.assertEqual(values["PRELOAD"],
+                    "/tool/keep.so:$ORIGIN/literal*.so:/tool/gameoverlayrenderer.so.backup")
+
+    def test_preloads_are_unchanged_without_steam_hooks(self):
+        for preload in ("", "/tool/a.so  :/tool/b.so", "$ORIGIN/literal*.so"):
+            with self.subTest(preload=preload):
+                self.assertEqual(self._evaluate({"LD_PRELOAD": preload})["PRELOAD"], preload)
+
+    def test_orphaned_preload_is_unset_before_application_exec(self):
+        lines = [
+            *self.service._script_configuration_lines(ConfigurationManager.get_defaults()),
+            *self.service._generate_layer_environment_lines(),
+        ]
+        result = subprocess.run(
+            ["bash", "-euc", "\n".join(lines + ['exec /usr/bin/env']), "_", "/usr/bin/env"],
+            env={"PATH": os.environ.get("PATH", ""),
+                 **self.gamescope_environment,
+                 "LD_PRELOAD": "/steam/ubuntu12_64/gameoverlayrenderer.so"},
+            capture_output=True, text=True, check=True,
+        )
+        self.assertNotIn("LD_PRELOAD=", result.stdout)
+
+    def test_paired_desktop_overlay_preserves_original_preload(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.service.user_vulkan_layer_dir = Path(directory)
+            (Path(directory) / "steamoverlay_x86_64.json").write_text("{}", encoding="utf-8")
+            preload = "/steam/gameoverlayrenderer.so : /tool/keep.so"
+            values = self._evaluate({
+                "ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1", "LD_PRELOAD": preload,
+            }, {**ConfigurationManager.get_defaults(), "disable_steam_overlay": False})
+        self.assertEqual(values["PRELOAD"], preload)
+
+    def test_saved_overlay_setting_controls_preload_removal(self):
+        preload = "/steam/gameoverlayrenderer.so : /tool/keep.so"
+        for disabled in (True, False):
+            with self.subTest(disabled=disabled):
+                config = {**ConfigurationManager.get_defaults(), "disable_steam_overlay": disabled}
+                values = self._evaluate({**self.gamescope_environment, "LD_PRELOAD": preload}, config)
+                self.assertEqual(values["PRELOAD"], "/tool/keep.so" if disabled else preload)
+
+    def test_default_removes_explicit_desktop_overlay_layers(self):
+        values = self._evaluate({
+            "ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1",
+            "VK_INSTANCE_LAYERS": "VK_LAYER_existing:VK_LAYER_VALVE_steam_overlay_64:VK_LAYER_VALVE_steam_overlay_32",
+            "LD_PRELOAD": "/steam/gameoverlayrenderer.so:/tool/keep.so",
+        }, ConfigurationManager.get_defaults())
+        self.assertEqual(values["INSTANCE"], "VK_LAYER_existing")
+        self.assertEqual(values["PRELOAD"], "/tool/keep.so")
 
     def test_host_uses_deterministic_private_layer_boundary(self):
         values = self._evaluate(config=ConfigurationManager.get_defaults())
@@ -144,7 +217,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     "VK_INSTANCE_LAYERS":
                         "VK_LAYER_existing:VK_LAYER_VALVE_steam_overlay_64",
                 },
-                ConfigurationManager.get_defaults(),
+                {**ConfigurationManager.get_defaults(), "disable_steam_overlay": False},
             )
 
         self.assertEqual(
@@ -198,6 +271,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             ).write_text("{}", encoding="utf-8")
             config = ConfigurationManager.get_defaults()
             config["external_vulkan_layer"] = "vkbasalt"
+            config["disable_steam_overlay"] = False
             values = self._evaluate(
                 {"ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1"},
                 config,
@@ -213,7 +287,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
     def test_desktop_steam_overlay_requires_a_readable_manifest(self):
         values = self._evaluate(
             {"ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1"},
-            ConfigurationManager.get_defaults(),
+            {**ConfigurationManager.get_defaults(), "disable_steam_overlay": False},
         )
 
         self.assertEqual(values["INSTANCE"], "")
@@ -1690,23 +1764,14 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
 
-            self.assertEqual(log_path.read_text(encoding="utf-8"), "run-six\n")
-            self.assertEqual(
-                Path(f"{log_path}.1").read_text(encoding="utf-8"),
-                "run-five\n",
-            )
-            self.assertEqual(
-                Path(f"{log_path}.2").read_text(encoding="utf-8"),
-                "run-four\n",
-            )
-            self.assertEqual(
-                Path(f"{log_path}.3").read_text(encoding="utf-8"),
-                "run-three\n",
-            )
-            self.assertEqual(
-                Path(f"{log_path}.4").read_text(encoding="utf-8"),
-                "run-two\n",
-            )
+            for suffix, session in (
+                ("", "run-six"), (".1", "run-five"), (".2", "run-four"),
+                (".3", "run-three"), (".4", "run-two"),
+            ):
+                records = Path(f"{log_path}{suffix}").read_text(encoding="utf-8").splitlines()
+                self.assertEqual(len(records), 2)
+                self.assertRegex(records[0], r"^MAKO Renderer: present diagnostics: operation=launch-environment pid=\d+ steam_overlay_preload_filter_requested=1 steam_overlay_preload_removed=0$")
+                self.assertEqual(records[1], session)
             self.assertEqual(
                 sorted(path.name for path in log_path.parent.iterdir()),
                 [

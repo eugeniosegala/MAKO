@@ -815,6 +815,8 @@ int main() {
     );
     expect(!cadenceCap.framesPerSecond && !cadenceCap.changed,
         "Steady integer cadence activated without qualification");
+    expect(!cadenceBaseCap.activeGenerationLimit(),
+        "pending integer cap was reported as applied pacing");
     cadenceCap = cadenceBaseCap.update(
         pacingStart + 999ms, true, 120, cadenceSnapshot
     );
@@ -828,6 +830,8 @@ int main() {
             cadenceCap.multiplier == 3 &&
             std::abs(*cadenceCap.framesPerSecond - 40.0) < 0.001,
         "Steady Adaptive did not align a proven 3x load to 40 -> 120 FPS");
+    expect(cadenceBaseCap.activeGenerationLimit() == 2,
+        "qualified integer cap did not expose its applied generation rung");
     cadenceCap = cadenceBaseCap.update(
         pacingStart + 2s, true, 120, cadenceSnapshot
     );
@@ -840,6 +844,8 @@ int main() {
     );
     expect(!cadenceCap.framesPerSecond && cadenceCap.changed,
         "an Adaptive ramp did not restore the conservative target/2 cap");
+    expect(!cadenceBaseCap.activeGenerationLimit(),
+        "released integer cap retained stale applied pacing authority");
     cadenceSnapshot.rampEvaluationActive = false;
     cadenceSnapshot.validatedGenerationLimit = 1;
     cadenceSnapshot.smoothedBaseFps = 58.0;

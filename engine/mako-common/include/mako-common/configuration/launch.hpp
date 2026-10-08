@@ -9,6 +9,7 @@ namespace ls {
 
     /// Process-start compatibility settings consumed by standalone mako-launch.
     struct LaunchConf {
+        bool disable_steam_overlay{true};
         bool enable_zink{false};
         bool force_alsa_audio{false};
     };

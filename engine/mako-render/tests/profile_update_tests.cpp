@@ -735,6 +735,16 @@ int main() {
             fractionalVrr, true, false, 120, acceptedThreeX,
             activeVrr, 2),
         "Fractional efficiency probe entered the Steady-only retry exception");
+    acceptedThreeX.pacedLoadValidationPending = true;
+    expect(smoothCadencePacerHandoffPlannedProbe(
+            fractionalVrr, true, false, 120, acceptedThreeX, activeVrr, 2),
+        "fresh Fractional pacing comparison armed an unrelated FIFO cooldown");
+    auto manuallyCappedFractional = fractionalVrr;
+    manuallyCappedFractional.base_fps_cap = 60;
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            manuallyCappedFractional, true, false, 120, acceptedThreeX, activeVrr, 2),
+        "manual Fractional cap entered the fresh pacing probe exception");
+    acceptedThreeX.pacedLoadValidationPending = false;
     expect(!smoothCadencePacerHandoffPlannedProbe(
             steadyPacing, false, false, 120, acceptedThreeX,
             activeVrr, 2),
@@ -760,6 +770,27 @@ int main() {
         "scheduler rearm bypassed the handoff retry guard");
     acceptedThreeX.rearmRequired = false;
     acceptedThreeX.efficiencyProbeGenerationLimit.reset();
+    acceptedThreeX.generationLimit = 1;
+    acceptedThreeX.validatedGenerationLimit = 1;
+    acceptedThreeX.pacedLoadRollbackGenerationLimit = 2;
+    expect(smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, false, 120, acceptedThreeX, activeVrr, 2),
+        "measured pacing rollback armed a separate FIFO failure cooldown");
+    expect(smoothCadencePacerHandoffPlannedProbe(
+            fractionalVrr, true, false, 120, acceptedThreeX, activeVrr, 2),
+        "accepted Fractional pacing rollback armed a FIFO failure cooldown");
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, true, 120, acceptedThreeX, activeVrr, 2),
+        "paced rollback bypassed actual acquire recovery");
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, false, 120, acceptedThreeX, activeVrr, 3),
+        "paced rollback bypassed another rung's FIFO failure cooldown");
+    acceptedThreeX.pacedLoadRollbackGenerationLimit.reset();
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, false, 120, acceptedThreeX, activeVrr, 2),
+        "ordinary qualification loss became a planned pacing rollback");
+    acceptedThreeX.generationLimit = 2;
+    acceptedThreeX.validatedGenerationLimit = 2;
     acceptedThreeX.stableCadenceLimit = 2;
     acceptedThreeX.stableCadenceEvaluationActive = true;
     acceptedThreeX.phase = AdaptiveSchedulerPhase::StableCadence;
