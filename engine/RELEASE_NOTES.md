@@ -4,7 +4,7 @@
 
 ### Release codename: Maelstrom
 
-> _“The storm took every bearing. The mako needed none.”_
+> _“The fleet braced for the wave. Then the wave opened its jaws.”_
 >
 > **Captain Matteo Veyr, _Chronicles of the Last Fleet_**
 

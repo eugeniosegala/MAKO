@@ -4,7 +4,7 @@
 
 ### Release codename: Maelstrom
 
-> _“We lashed the charts to the mast. The sea had begun rewriting them.”_
+> _“I drew a course around the storm. By morning, the storm had drawn a course around us.”_
 >
 > **Mira Valen, _Charts of the Last Fleet_**
 
@@ -27,5 +27,5 @@ Maelstrom adds AC/battery settings, display-aware Adaptive targets, custom shade
 - **Frame pacing and recovery:** The matching Renderer improves capped Fractional spacing, completion pacing and recovery from retired Gamescope scaling swapchains, while keeping native fallback responsive.
 - **Shader overhead:** The bundled vkBasalt reduces per-frame CPU work and preserves ReShade effect settings. Effect GPU cost still increases with the Frame Generation multiplier.
 - **Clearer guides and reports:** Setup, configuration, Remote Play, Flatpak and troubleshooting guides are shorter. Diagnostic instructions now request 5,000 lines; reports retain startup, state and process/GPU health context.
-- **German interface:** MAKO Decky now follows Steam's German interface language with a complete translated catalog.
+- **German interface:** MAKO Decky now follows Steam's German interface language with a complete translated catalog. Thanks to [Hu2ki3](https://github.com/Hu2ki3) for contributing German support to the Renderer configuration app in [PR #77](https://github.com/eugeniosegala/MAKO/pull/77).
 - **Japanese translations:** Clearer shader controls, installation messages, and explanations. Thanks to [Tak-attack](https://github.com/Tak-attack) for [PR #71](https://github.com/eugeniosegala/MAKO/pull/71).
