@@ -911,6 +911,34 @@ class GameProfileTests(unittest.TestCase):
         metadata = self.service._read_profile_metadata(self.service._get_profile_data())
         self.assertEqual(metadata[profile_name]["captured_processes"], ["witcher3.exe"])
 
+    def test_capture_and_sync_follow_umu_preserved_steam_shortcut(self):
+        app_id = "2874687018"
+        proc_root = Path(self.temp_dir.name) / "proc"
+        process = proc_root / "101"
+        process.mkdir(parents=True)
+        (process / "environ").write_bytes(
+            b"SteamAppId=0\0SteamGameId=0\0"
+            b"STEAM_COMPAT_APP_ID=b0b6d450904254ae01899f959af6abf0\0"
+            b"UMU_STEAM_GAME_ID=12346686728579317760\0"
+        )
+        (process / "exe").symlink_to("/proton/wine64-preloader")
+        (process / "comm").write_text("MainThread\n")
+        (process / "maps").write_text("/games/witcher3.exe\n")
+        (process / "cmdline").write_bytes(b"witcher3.exe\0")
+        with patch.object(configuration_module, "detect_processes_for_steam_app",
+                          side_effect=lambda app: detect_processes_for_steam_app(app, proc_root)):
+            captured = self.service.capture_game_profile(app_id, "The Witcher 3")
+            self.assertTrue(captured["success"], captured)
+            self.assertIn("witcher3.exe", captured["profile"]["processes"])
+            self.assertEqual(captured["profile"]["steam_app_id"], app_id)
+            synced = self.service.sync_current_profile(app_id)
+            self.assertTrue(synced["game_running"], synced)
+            self.assertEqual(synced["profile_name"], captured["profile_name"])
+            (process / "environ").unlink()
+            exited = self.service.sync_current_profile(app_id)
+            self.assertFalse(exited["game_running"], exited)
+            self.assertEqual(exited["profile_name"], "mako")
+
     def test_capture_creates_then_updates_one_profile_for_the_same_app(self):
         previous = configuration_module.detect_processes_for_steam_app
         detected_processes = ["CoolGame.exe"]
@@ -1817,6 +1845,53 @@ class GameProfileTests(unittest.TestCase):
 
 
 class ProcessDetectionTests(unittest.TestCase):
+    def test_umu_shortcut_identity_preserves_game_and_launcher_isolation(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proc_root = Path(temp_dir)
+            for pid, executable, game_id in (
+                (101, "witcher3.exe", "12346686728579317760"),
+                (102, "OtherGame.exe", "15457791678651301888"),
+                (103, "REDprelauncher.exe", "12346686728579317760"),
+                (104, "comet", "12346686728579317760"),
+            ):
+                process = proc_root / str(pid)
+                process.mkdir()
+                (process / "environ").write_bytes(
+                    ("SteamAppId=0\0SteamGameId=0\0STEAM_COMPAT_APP_ID=umu-id\0"
+                     f"UMU_STEAM_GAME_ID={game_id}\0").encode()
+                )
+                windows = executable.endswith(".exe")
+                (process / "exe").symlink_to(
+                    "/proton/wine64-preloader" if windows else f"/app/{executable}"
+                )
+                (process / "comm").write_text(executable[:15] + "\n")
+                (process / "cmdline").write_bytes((executable + "\0").encode())
+                (process / "maps").write_text(f"/games/{executable}\n" if windows else "")
+            self.assertEqual(detect_processes_for_steam_app("2874687018", proc_root),
+                             ["witcher3.exe"])
+            self.assertEqual(detect_processes_for_steam_app("3599047586", proc_root),
+                             ["OtherGame.exe"])
+
+    def test_umu_identity_rejects_malformed_or_other_game_ids(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proc_root = Path(temp_dir)
+            process = proc_root / "101"
+            process.mkdir()
+            (process / "comm").write_text("Game.exe\n")
+            for game_id in ("", "0", "-1", "2874687018", "12346686728579317761",
+                            "12346686728562540544", "18446744073709551616",
+                            "not-a-game-id", "9" * 5000):
+                with self.subTest(game_id=game_id[:30]):
+                    (process / "environ").write_bytes(
+                        f"SteamAppId=0\0UMU_STEAM_GAME_ID={game_id}\0".encode()
+                    )
+                    self.assertEqual(detect_processes_for_steam_app("2874687018", proc_root), [])
+            (process / "environ").write_bytes(b"SteamAppId=0\0UMU_STEAM_GAME_ID=292030\0")
+            self.assertEqual(detect_processes_for_steam_app("292030", proc_root), ["Game.exe"])
+            for app_id in ("", "0", "-1", "4294967296", "9" * 5000):
+                with self.subTest(app_id=app_id[:30]):
+                    self.assertEqual(detect_processes_for_steam_app(app_id, proc_root), [])
+
     def test_launcher_identity_excludes_browser_threads_and_game_arguments(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             proc_root = Path(temp_dir)

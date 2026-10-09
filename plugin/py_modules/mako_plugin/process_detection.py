@@ -5,7 +5,7 @@ import os
 import re
 from typing import Dict, Iterable, Optional
 
-from .constants import SCRIPT_NAME, STEAM_APP_ID_ENV_KEYS
+from .constants import SCRIPT_NAME, STEAM_APP_ID_ENV_KEYS, UMU_STEAM_GAME_ID_ENV
 from .launcher_exclusions_generated import EXCLUDED_WINDOWS_LAUNCHERS
 
 _HELPER_PROCESS_NAMES = {
@@ -160,8 +160,20 @@ def detect_processes_for_steam_app(
     names from a different game, Decky, Steam, or another plugin.
     """
     normalized_app_id = str(app_id).strip()
-    if not normalized_app_id:
+    if not re.fullmatch(r"[0-9]{1,10}", normalized_app_id):
         return []
+    numeric_app_id = int(normalized_app_id)
+    if not 0 < numeric_app_id <= 0xFFFFFFFF:
+        return []
+
+    # UMU replaces the usual Steam IDs with its compatibility identity, but
+    # preserves the original SteamGameId. A shortcut stores its unsigned AppID
+    # in the upper 32 bits and the shortcut type in the low word. Compare the
+    # complete value so another game or a different GameID type cannot match.
+    preserved_game_id = str(
+        (numeric_app_id << 32) | 0x02000000
+        if numeric_app_id & 0x80000000 else numeric_app_id
+    )
 
     candidates: set[str] = set()
     try:
@@ -178,7 +190,7 @@ def detect_processes_for_steam_app(
             continue
         if normalized_app_id not in {
             environment.get(key, "").strip() for key in STEAM_APP_ID_ENV_KEYS
-        }:
+        } and environment.get(UMU_STEAM_GAME_ID_ENV, "").strip() != preserved_game_id:
             continue
         candidates.update(_candidate_names(process_dir))
 
