@@ -16,7 +16,7 @@ MAKO Decky's panel composes independently owned state and view modules. Keep pro
 | Native Remote Play controls | `src/components/RemotePlaySection.tsx` | Polls typed override status without overlapping requests, drains queued profile writes before mutations, rejects stale poll results, and refreshes the existing profile list after successful installation/removal. Groups the action, optional help, and compact status panel with shared section spacing; checking, working, unavailable, and recovery states stay visible when info is hidden. |
 | Shared presentation | `src/components/MakoUi.tsx`, `ContentNotices.tsx`, and `RuntimeStatusCard.tsx` | Renders controls, notices, and status without persisting profile state. |
 
-`ModelWarning.tsx` owns the single Lossless Scaling warning, with status-dependent bullets and a compact header action. `ScalingControl.tsx` retains scaling controls and surface guidance without duplicating DLL/model warnings.
+`ModelWarning.tsx` owns the single Lossless Scaling warning, with status-dependent bullets and a full-width action below the explanation. `ScalingControl.tsx` retains scaling controls and surface guidance without duplicating DLL/model warnings.
 
 `InfoVisibility.tsx` owns panel focus scrolling and R1 position restoration. Ordinary settings centre on navigation; controls inside `data-mako-focus-scroll="nearest"` scroll only as needed to remain visible. The effects selector uses this policy and disables Steam's enclosing Field scroll-on-child-focus option, so moving between visible rows does not recenter the panel. Its controls own their focus outlines, clear stale hover on navigation, and ignore blur events from an older focus target.
 

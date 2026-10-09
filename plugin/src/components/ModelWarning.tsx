@@ -31,47 +31,8 @@ export function ModelWarning({
     <PanelSectionRow>
       <div role="alert" style={{ marginBottom: "6px" }}>
         <MakoInlineTip tone="warning" alwaysVisible>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ fontWeight: 700, flex: 1 }}>
-              {t("MODEL_WARNING_TITLE", "Lossless Scaling")}
-            </span>
-            <DialogButton
-              className="Mako_DialogButton"
-              aria-label={
-                missingDll
-                  ? t(
-                      "LOSSLESS_WARNING_OPEN_STEAM",
-                      "Open Lossless Scaling in Steam",
-                    )
-                  : t(
-                      "MODEL_WARNING_CHECK_UPDATES",
-                      "Check for MAKO Decky updates",
-                    )
-              }
-              style={{
-                ...makoDialogButtonStyle(actionFocused),
-                minWidth: 0,
-                minHeight: "22px",
-                height: "22px",
-                width: "auto",
-                padding: "2px 8px",
-                fontSize: "10px",
-                lineHeight: "16px",
-              }}
-              onGamepadFocus={() => setActionFocused(true)}
-              onGamepadBlur={() => setActionFocused(false)}
-              onClick={() =>
-                Navigation.NavigateToExternalWeb(
-                  missingDll
-                    ? "https://store.steampowered.com/app/993090/Lossless_Scaling/"
-                    : "https://github.com/eugeniosegala/MAKO/releases/latest",
-                )
-              }
-            >
-              {missingDll
-                ? t("LOSSLESS_WARNING_INSTALL_ACTION", "Install")
-                : t("MODEL_WARNING_UPDATES_ACTION", "Updates")}
-            </DialogButton>
+          <div style={{ fontWeight: 700 }}>
+            {t("MODEL_WARNING_TITLE", "Lossless Scaling")}
           </div>
           <ul
             style={{
@@ -112,6 +73,46 @@ export function ModelWarning({
             )}
           </ul>
         </MakoInlineTip>
+        <DialogButton
+          className="Mako_DialogButton"
+          aria-label={
+            missingDll
+              ? t(
+                  "LOSSLESS_WARNING_OPEN_STEAM",
+                  "Open Lossless Scaling in Steam",
+                )
+              : t(
+                  "MODEL_WARNING_CHECK_UPDATES",
+                  "Check for MAKO Decky updates",
+                )
+          }
+          style={{
+            ...makoDialogButtonStyle(actionFocused),
+            boxSizing: "border-box",
+            minWidth: 0,
+            minHeight: "32px",
+            height: "auto",
+            width: "100%",
+            marginTop: "8px",
+            padding: "6px 12px",
+            fontSize: "12px",
+            lineHeight: "18px",
+            whiteSpace: "normal",
+          }}
+          onGamepadFocus={() => setActionFocused(true)}
+          onGamepadBlur={() => setActionFocused(false)}
+          onClick={() =>
+            Navigation.NavigateToExternalWeb(
+              missingDll
+                ? "https://store.steampowered.com/app/993090/Lossless_Scaling/"
+                : "https://github.com/eugeniosegala/MAKO/releases/latest",
+            )
+          }
+        >
+          {missingDll
+            ? t("LOSSLESS_WARNING_INSTALL_ACTION", "Install")
+            : t("MODEL_WARNING_UPDATES_ACTION", "Updates")}
+        </DialogButton>
       </div>
     </PanelSectionRow>
   );
