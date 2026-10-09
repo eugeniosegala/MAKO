@@ -45,7 +45,7 @@ namespace vk {
         /// @return the image handle
         [[nodiscard]] const auto& handle() const { return this->image.get(); }
         /// get the image view handle
-        /// @return the image view handle
+        /// @return the image view handle, or null for transfer-only images
         [[nodiscard]] const auto& imageview() const { return this->view.get(); }
 
         /// get the extent of the image

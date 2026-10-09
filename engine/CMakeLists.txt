@@ -275,7 +275,11 @@ endif()
 add_subdirectory(scripts/mako_remote_play)
 if(BUILD_TESTING AND TARGET mako-remote-play-sdr)
     set(remote_play_test_environment "MAKO_TEST_SDR_NATIVE_HELPER=$<TARGET_FILE:mako-remote-play-sdr>;MAKO_TEST_SDR_CLIENT=$<TARGET_FILE:mako-remote-play-sdr-tests>;MAKO_TEST_SDL_FIXTURE_DIR=$<TARGET_FILE_DIR:mako-remote-play-sdl-fixture>")
-    if(NOT MAKO_ENABLE_SANITIZERS)
+    if(MAKO_ENABLE_SANITIZERS)
+        # Match the SDL helper tests: the real launcher preloads the instrumented
+        # helper ahead of DT_NEEDED entries using the same sanitizer runtime.
+        list(APPEND remote_play_test_environment "ASAN_OPTIONS=verify_asan_link_order=0")
+    else()
         # Instrumented Clang DSOs need the executable's ASan runtime. The
         # SDL client below supplies it; /usr/bin/env environment fixtures do not.
         list(APPEND remote_play_test_environment "MAKO_TEST_SDR_HELPER=$<TARGET_FILE:mako-remote-play-sdr>")

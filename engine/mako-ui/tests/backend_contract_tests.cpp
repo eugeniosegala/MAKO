@@ -615,7 +615,7 @@ void test_compact_restart_markers() {
     QFile ui_file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(ui_file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString ui_qml = QString::fromUtf8(ui_file.readAll());
-    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 11,
+    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 12,
         "Every restart-bound Renderer control must opt into the compact marker");
 
     QFile entry_file(QString::fromUtf8(MAKO_UI_GROUP_ENTRY_QML_FILE));
@@ -667,6 +667,8 @@ void test_save_lifetime() {
             "Priority preview did not update with Target FPS");
         require(backend.getDisableSteamOverlay(),
             "Steam overlay removal must default to enabled in the Qt UI");
+        require(backend.getDisableHdrExposure(), "HDR must remain disabled by default");
+        backend.disableHdrExposureUpdated(false);
         backend.disableSteamOverlayUpdated(false);
         backend.enableZinkUpdated(true);
         backend.enableVkBasaltUpdated(true);
@@ -681,6 +683,8 @@ void test_save_lifetime() {
         events.exec();
         require(ls::ConfigFile(configPath).profiles().front().target_fps == 144,
             "UI timer did not save the latest edit");
+        require(!ls::LaunchConfigFile(launchPath).settings().disable_hdr_exposure,
+            "Qt must persist the explicit HDR opt-in");
         require(!ls::LaunchConfigFile(launchPath).settings().disable_steam_overlay,
             "UI timer did not persist an explicit overlay opt-out");
         require(ls::LaunchConfigFile(launchPath).settings().enable_zink,
@@ -872,6 +876,7 @@ void test_save_lifetime() {
         require(std::filesystem::last_write_time(configPath) == timestamp,
             "Idle UI rewrote the configuration");
         backend.targetFPSUpdated(165);
+        backend.disableHdrExposureUpdated(true);
         backend.disableSteamOverlayUpdated(true);
         backend.forceAlsaAudioUpdated(true);
         // No event loop: closing before the debounce must still save both files.

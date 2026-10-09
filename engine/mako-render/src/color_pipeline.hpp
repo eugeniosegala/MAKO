@@ -27,15 +27,11 @@ namespace mako::layer {
         std::string_view reason{};
     };
 
-    /// Spatial reconstruction is currently restricted to validated, non-HDR
-    /// SDR pipelines. Unsupported colour pairs retain the default enum value,
-    /// so callers must test the complete classification rather than encoding
-    /// alone.
+    /// Scaling preserves the classified encoding in high-precision exchange
+    /// images. Unsupported format/colour-space pairs must fail closed.
     [[nodiscard]] constexpr bool spatialScalingColorSupported(
             const SwapchainColorPipeline& pipeline) noexcept {
-        return pipeline.generationSupported && !pipeline.hdr &&
-            (pipeline.encoding == backend::FrameEncoding::Sdr8 ||
-             pipeline.encoding == backend::FrameEncoding::SdrHighPrecision);
+        return pipeline.generationSupported;
     }
 
     /// Classify a swapchain without relying on VkFormat enum ordering.

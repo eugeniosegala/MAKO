@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ -n "${MAKO_VKBASALT_LOCAL_ARCHIVE:-}" ]]; then
+    echo "Local vkBasalt candidates cannot be published; verify and pin a public dependency first." >&2
+    exit 1
+fi
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 script_dir="$project_dir/scripts"
@@ -322,10 +326,6 @@ printf '%s\n' \
   '6. In **Flatpak Setup**, select **Update** for every prepared application’s matching runtime extension. This replaces its Flatpak layer with the engine bundled in the new ZIP while preserving its preparation and per-game Wrapper commands.' \
   '' \
   'Existing profiles and Steam launch options are retained. The shared native Renderer and launcher are re-created in step 5; shared Flatpak extensions are retained, then refreshed in step 6.' \
-  '' \
-  '## Known limitation' \
-  '' \
-  '- **HDR frame generation and scaling are unavailable:** MAKO Decky does not expose the engine’s HDR path yet; in-game HDR controls may be unavailable.' \
   '' \
   '## Before you play' \
   '' \

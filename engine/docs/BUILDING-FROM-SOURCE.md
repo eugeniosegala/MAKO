@@ -243,3 +243,7 @@ sudo cmake --install build
 ```
 
 Start a native game with `mako-launch <command>`. The helper selects the install prefix's private manifests, activates MAKO for that child, excludes competing frame generation and Gamescope WSI, and selects the supported SDR boundary. A directly installed CMake build does not fetch the optional vkBasalt payload; use `scripts/package-local.sh` for the complete archive that supports `ENABLE_VKBASALT=1 mako-launch <command>`. Read [WSI isolation](WSI-ISOLATION.md) and [Optional graphics integrations](LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) before changing manifests or launch variables.
+
+### Local vkBasalt candidates
+
+For coordinated shader-layer development, build and verify both architectures with the sibling fork’s `scripts/package-mako-release.sh`, place the archive under this checkout’s ignored `engine/out/`, and export `MAKO_VKBASALT_LOCAL_ARCHIVE=engine/out/vkBasalt-hdr-local.tar.xz` before the ordinary portable tester build. The path must be repository-relative and cannot contain `..`. The native and Flatpak owners validate archive checksums, architecture, provenance, headers and layer entrypoints; generated local Flatpak manifests stay in the build directory. Embedded metadata identifies a `local-candidate` with no public download URL. Decky’s cache identity includes the archive checksum. Tracked release pins remain untouched, and publication entry points reject this override. Unset it to return to the verified public dependency.

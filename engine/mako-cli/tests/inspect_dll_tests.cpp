@@ -26,7 +26,7 @@ namespace mako::backend {
     LosslessDllInspection inspectLosslessDll(const std::filesystem::path&) {
         throw std::runtime_error("LSFG-only inspection must not inspect LS1");
     }
-    Ls1ShaderSet loadLs1ShaderSet(const std::filesystem::path&, Ls1Mode mode, float sharpness) {
+    Ls1ShaderSet loadLs1ShaderSet(const std::filesystem::path&, Ls1Mode mode, float sharpness, bool) {
         checkedLs1Modes.push_back(mode);
         checkedSharpness.push_back(sharpness);
         if (!ls1Compatible)

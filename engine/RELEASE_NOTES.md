@@ -1,4 +1,4 @@
-## What's new in MAKO Renderer v4.1.0
+## What's new in MAKO Renderer v4.5.0
 
 <img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/maelstrom.png" alt="Maelstrom release artwork: a colossal mako draws a storm-torn sea into the glowing whirlpool inside its jaws" width="100%">
 
@@ -10,8 +10,9 @@
 
 ---
 
-Maelstrom adds AC/battery profiles, display-aware Adaptive targets, custom shaders and native Steam Remote Play, with new Steam Overlay controls and further pacing, recovery and Flatpak improvements.
+Maelstrom adds experimental HDR, AC/battery profiles, display-aware Adaptive targets, custom shaders and native Steam Remote Play, with new Steam Overlay controls and further pacing, recovery and Flatpak improvements.
 
+- **Experimental HDR (disabled by default):** Use HDR10/PQ or linear scRGB with Scaling, Frame Generation and Shaders through MAKO's Gamescope bridge. In the Qt UI, turn off **Disable HDR (Restart)**, restart the game, and enable its HDR setting. Requires an HDR-capable display and HDR enabled in Gamescope.
 - **AC and battery profiles:** Save separate Frame Generation, Scaling and performance settings for battery and AC power. The Renderer switches automatically during play, without keeping the configuration app open. Charging selects AC settings; normal live/restart rules apply.
 - **Match Display Refresh Rate:** Adaptive can follow Gamescope's refresh rate while preserving a manual fallback target. Targets and caps track refresh and live mode changes. Turn matching off to edit the target; Fixed mode keeps its selected multiplier.
 - **Custom shader controls:** Combine compatible ReShade `.fx` files with bundled effects in one ordered list. Selection, ordering and deletion apply live while Shaders is active; **Refresh** reloads edited files and dependencies. Failed edits keep the previous chain running. Flatpak games need access to the files and dependencies.

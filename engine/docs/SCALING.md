@@ -54,7 +54,7 @@ Application
 
 The lower spatial role owns surface capabilities and physical lower-swapchain extent expansion. It performs no presentation-time GPU work. The upper role owns reconstruction, optional Frame Generation, private resources, and runtime status. The split must be selected explicitly; implicit-manifest directory order is not an ordering contract. [WSI isolation](WSI-ISOLATION.md) owns the launch and proof requirements.
 
-With Scaling on and Gamescope WSI off, the combined Renderer provisions a minimal X11-to-Wayland surface association at process start. Application queries retain concrete X11 extents and the shared format intersection; only internal driver queries use variable Wayland geometry. The application request remains the source and scaler policy selects the output. The adapter supplies one protocol object per swapchain, preserves distinct generated/real output timing, and adds no WSI layer, limiter, or HDR control. Missing session, protocol, library, or window proof preserves native surface handling. [WSI isolation](WSI-ISOLATION.md#guarded-gamescope-wsi-paths) owns association lifetime, readiness lead, output clocks, and timing bounds.
+With Scaling on and Gamescope WSI off, the combined Renderer provisions a minimal X11-to-Wayland surface association at process start. Application queries retain concrete X11 extents and the shared format intersection; only internal driver queries use variable Wayland geometry. The application request remains the source and scaler policy selects the output. The adapter supplies one protocol object per swapchain, preserves distinct generated/real output timing, and adds no WSI layer or limiter. An explicit HDR opt-in reuses this owner for colour-space and metadata requests; disabled HDR adds none of that activity. Missing session, protocol, library, or window proof preserves native surface handling. [WSI isolation](WSI-ISOLATION.md#guarded-gamescope-wsi-paths) owns association lifetime, readiness lead, output clocks, and timing bounds.
 
 ## Pipeline placement
 
@@ -114,7 +114,7 @@ Memory admission is a conservative allocation estimate, not a measurement of spa
 
 ## Swapchain and queue requirements
 
-Scaling supports ordinary opaque, unprotected, single-array-layer swapchains. The selected source format must support the sampled, transfer, and storage operations used by the active method; LS1 converts at its validated RGBA8 graph boundary while the Renderer preserves the swapchain's supported SDR format.
+Scaling supports ordinary opaque, unprotected, single-array-layer swapchains. The selected source format must support the sampled, transfer, and storage operations used by the active method; LS1 uses RGBA8 for ordinary SDR and RGBA16F reconstruction for HDR/high-precision pipelines. Linear-scRGB LS1 inputs use the colour conversion boundary described in [HDR handling](HDR-PIPELINE.md#scaling-and-shaders).
 
 The application must create an ordinary graphics-and-compute queue family supported by the surface, and presentation must use a registered queue from that family. Unsupported shapes, formats, queues, protected presentation, shared-present modes, or managed multi-swapchain present batches fail closed before consuming application waits. The original real frame remains the fallback whenever private reconstruction cannot be used safely.
 

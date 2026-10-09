@@ -41,6 +41,12 @@ namespace {
     int mode{};
     int associations{};
     int feedbacks{};
+    uint32_t hdrOutput{};
+    bool externalOutput{};
+    int hdrQueries{};
+    uint32_t feedbackColorSpace{};
+    int hdrMetadataCalls{};
+    uint32_t hdrMetadata[12]{};
     int presentModes{};
     int presentTimes{};
     uint32_t presentId{};
@@ -125,6 +131,13 @@ extern "C" {
     int mako_test_surface_objects() { return static_cast<int>(objects.size()) + queues; }
     int mako_test_surface_associations() { return associations; }
     int mako_test_surface_feedbacks() { return feedbacks; }
+    void mako_test_surface_hdr_output(uint32_t value) { hdrOutput = value; }
+    void mako_test_surface_external_output(bool value) { externalOutput = value; }
+    int mako_test_surface_hdr_queries() { return hdrQueries; }
+    uint32_t mako_test_surface_feedback_color() { return feedbackColorSpace; }
+    int mako_test_surface_hdr_metadata_calls() { return hdrMetadataCalls; }
+    uint32_t mako_test_surface_hdr_metadata(unsigned index) { return hdrMetadata[index]; }
+
     int mako_test_surface_present_times() { return presentTimes; }
     uint32_t mako_test_surface_present_id() { return presentId; }
     uint64_t mako_test_surface_present_time() { return presentTime; }
@@ -218,17 +231,22 @@ extern "C" {
             } else if (opcode == 2) {
                 ++feedbacks;
                 feedbackImageCount = args[0].u;
+                feedbackColorSpace = args[2].u;
                 feedbackEngine = args[6].s;
             } else if (opcode == 3) {
                 ++presentModes;
                 presentMode = args[0].u;
+            } else if (opcode == 4) {
+                ++hdrMetadataCalls;
+                for (unsigned index = 0; index < 12; ++index)
+                    hdrMetadata[index] = args[index].u;
             } else if (opcode == 5) {
                 lastTimedProxy = proxy;
                 ++presentTimes;
                 presentId = args[0].u;
                 presentTime = (uint64_t{args[1].u} << 32) | args[2].u;
             } else {
-                std::abort(); // No limiter or HDR control requests.
+                std::abort(); // No limiter control requests.
             }
             return nullptr;
         }
@@ -296,6 +314,12 @@ extern "C" {
         return reply;
     }
     xcb_intern_atom_cookie_t xcb_intern_atom(xcb_connection_t*, uint8_t, uint16_t size, const char* name) {
+        if (std::string_view(name, size) == "GAMESCOPE_HDR_OUTPUT_FEEDBACK") {
+            ++hdrQueries;
+            return {102};
+        }
+        if (std::string_view(name, size) == "GAMESCOPE_DISPLAY_IS_EXTERNAL")
+            return {103};
         return {std::string_view(name, size) == "GAMESCOPE_PID" ? 100u : 101u};
     }
     xcb_intern_atom_reply_t* xcb_intern_atom_reply(xcb_connection_t*, xcb_intern_atom_cookie_t cookie, xcb_generic_error_t**) {
@@ -310,7 +334,8 @@ extern "C" {
         reply->format = mode == 9 ? 8 : 32;
         reply->value_len = 1;
         const uint32_t value = cookie.sequence == 100
-            ? static_cast<uint32_t>(getpid()) + (mode == 10 ? 1 : 0) : 9;
+            ? static_cast<uint32_t>(getpid()) + (mode == 10 ? 1 : 0)
+            : cookie.sequence == 102 ? hdrOutput : cookie.sequence == 103 ? externalOutput : 9;
         std::memcpy(reply + 1, &value, 4);
         return reply;
     }

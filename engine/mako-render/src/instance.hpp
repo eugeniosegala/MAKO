@@ -87,14 +87,20 @@ namespace mako::layer {
                 spatialScalingProcessSupported(
                     this->gamescopeEnvironmentDetected,
                     this->gamescopeDetected,
-                    this->presentationEnvironment.hdrExposureDisabled
+                    this->presentationEnvironment.hdrExposureDisabled,
+                    this->presentationEnvironment.gamescopeWsiDisabled
                 );
         }
 
         [[nodiscard]] bool scalingSurfaceConnectionProvisioned() const {
-            return this->scalingEngineConfiguredAtStartup &&
-                this->scalingEngineProvisioned() &&
+            return this->active_profile &&
+                ((this->scalingEngineConfiguredAtStartup && this->scalingEngineProvisioned()) ||
+                    !this->presentationEnvironment.hdrExposureDisabled) &&
                 this->presentationEnvironment.gamescopeWsiDisabled;
+        }
+
+        [[nodiscard]] bool hdrExposureEnabled() const {
+            return !this->presentationEnvironment.hdrExposureDisabled;
         }
 
         [[nodiscard]] bool gamescopeWsiTimingProvisioned() const {

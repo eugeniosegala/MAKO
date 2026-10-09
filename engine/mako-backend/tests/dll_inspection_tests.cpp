@@ -6,6 +6,7 @@
 #include "extraction/model_resources.hpp"
 #include "extraction/lsfg_shader_set.hpp"
 #include "extraction/spirv_fp16.hpp"
+#include "mako-backend/ls1.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <algorithm>
@@ -650,6 +651,39 @@ namespace {
         require(mako::backend::resolveLs1ModelResources(*modelArchive,
                 mako::backend::Ls1Mode::Performance, 0).idOffset == 0,
             "synthetic selected model did not resolve");
+        {
+            const char* previous = std::getenv("MAKO_VKD3D_SHADER_PATH");
+            const std::string previousPath = previous ? previous : "";
+            struct RestoreTranslator {
+                std::string path;
+                bool present;
+                ~RestoreTranslator() {
+                    if (present) ::setenv("MAKO_VKD3D_SHADER_PATH", path.c_str(), 1);
+                    else ::unsetenv("MAKO_VKD3D_SHADER_PATH");
+                    ::unsetenv("MAKO_TEST_TRANSLATION_FAILURE");
+                }
+            } restore{previousPath, previous != nullptr};
+            ::setenv("MAKO_VKD3D_SHADER_PATH", MAKO_TEST_TRANSLATOR_PATH, 1);
+            using namespace mako::backend;
+            const auto sdr = loadLs1ShaderSet(modelPath, Ls1Mode::Performance, 0.0F, false);
+            const auto hdr = loadLs1ShaderSet(modelPath, Ls1Mode::Performance, 0.0F, true);
+            require(sdr.stage1 == hdr.stage1 && sdr.reconstruction != hdr.reconstruction,
+                "HDR must preserve model feature precision and replace reconstruction storage");
+            const auto storageFormat = [](const std::vector<uint8_t>& bytes) {
+                std::vector<uint32_t> words(bytes.size() / sizeof(uint32_t));
+                std::memcpy(words.data(), bytes.data(), bytes.size());
+                for (size_t i = 5; i < words.size(); i += words.at(i) >> 16U)
+                    if ((words.at(i) & 0xffffU) == 25U && words.at(i + 7) == 2U)
+                        return words.at(i + 8);
+                return UINT32_MAX;
+            };
+            require(storageFormat(sdr.reconstruction) == 4 && storageFormat(hdr.reconstruction) == 2,
+                "LS1 reconstruction must select RGBA8 for SDR and RGBA16F for HDR");
+            ::setenv("MAKO_TEST_TRANSLATION_FAILURE", "compile", 1);
+            require(loadLs1ShaderSet(modelPath, Ls1Mode::Performance, 0.0F, false).reconstruction == sdr.reconstruction &&
+                    loadLs1ShaderSet(modelPath, Ls1Mode::Performance, 0.0F, true).reconstruction == hdr.reconstruction,
+                "SDR and HDR cache entries must remain distinct without retranslating");
+        }
         const auto modelTime = std::filesystem::last_write_time(modelPath);
         model[0x300U] = 0U;
         writeFile(modelPath, model);

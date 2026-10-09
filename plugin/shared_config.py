@@ -407,13 +407,11 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "script"
     },
 
-    # HDR frame generation is still under active development. The Decky .25
-    # package deliberately locks this safety boundary on so existing profiles
-    # cannot opt into the unfinished transport accidentally.
+    # Restart-only opt-in. Keep existing profiles on SDR by default.
     "disable_hdr_exposure": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
-        "description": "required SDR safety boundary while HDR is unavailable",
+        "description": "disable game HDR exposure on the next launch",
         "location": "script"
     },
 

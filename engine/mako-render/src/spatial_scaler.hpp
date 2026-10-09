@@ -3,6 +3,7 @@
 #pragma once
 
 #include "mako-common/configuration/config.hpp"
+#include "mako-backend/mako.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 
@@ -30,7 +31,8 @@ namespace mako::layer {
             VkFormat workingFormat, ls::ScalingMethod requestedMethod,
             float sharpness,
             const std::optional<std::filesystem::path>& shaderDllPath,
-            bool fp16Requested);
+            bool fp16Requested,
+            backend::FrameEncoding encoding = backend::FrameEncoding::Sdr8);
         ~SpatialScaler();
 
         SpatialScaler(const SpatialScaler&) = delete;

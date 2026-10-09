@@ -1391,7 +1391,50 @@ class WrapperEnvironmentTests(unittest.TestCase):
             arguments = captured.read_text(encoding="utf-8").splitlines()
             self.assertIn("--unset-env=ENABLE_MAKO", arguments)
             self.assertIn("--env=DISABLE_MAKO=1", arguments)
+            self.assertIn("--env=MAKO_DISABLE_HDR_EXPOSURE=1", arguments)
+            self.assertIn("--unset-env=DXVK_HDR", arguments)
             self.assertNotIn("--env=ENABLE_MAKO=1", arguments)
+            self.assertEqual(arguments[-1], "example.Game")
+
+    def test_direct_flatpak_hdr_opt_in_overrides_persisted_sdr(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.service.config_dir = root / "config"
+            self.service.config_file_path = self.service.config_dir / "conf.toml"
+            config = ConfigurationManager.get_defaults()
+            config["frame_generation_provisioned"] = False
+            config["scaling_enabled"] = False
+            config["disable_hdr_exposure"] = False
+            wrapper = root / "mako-run"
+            wrapper.write_text(
+                self.service._generate_script_content(config),
+                encoding="utf-8",
+            )
+            wrapper.chmod(0o755)
+
+            captured = root / "flatpak-arguments"
+            fake_flatpak = root / "flatpak"
+            fake_flatpak.write_text(
+                "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$MAKO_CAPTURE\"\n",
+                encoding="utf-8",
+            )
+            fake_flatpak.chmod(0o755)
+            subprocess.run(
+                [str(wrapper), str(fake_flatpak), "run", "example.Game"],
+                check=True,
+                env={
+                    "PATH": os.environ.get("PATH", ""),
+                    "MAKO_CAPTURE": str(captured),
+                    "ENABLE_MAKO": "1",
+                },
+            )
+
+            arguments = captured.read_text(encoding="utf-8").splitlines()
+            self.assertIn("--env=MAKO_DISABLE_HDR_EXPOSURE=0", arguments)
+            self.assertIn("--env=DXVK_HDR=1", arguments)
+            self.assertIn("--env=ENABLE_MAKO=1", arguments)
+            self.assertNotIn("--env=MAKO_DISABLE_HDR_EXPOSURE=1", arguments)
+            self.assertNotIn("--unset-env=DXVK_HDR", arguments)
             self.assertEqual(arguments[-1], "example.Game")
 
     def test_flatpak_sdr_boundary_keeps_gamescope_wsi_out_of_umu_chain(self):
@@ -1453,11 +1496,11 @@ class WrapperEnvironmentTests(unittest.TestCase):
         settings = self.service._wrapper_settings_defaults()
         self.assertTrue(settings["disable_hdr_exposure"])
 
-    def test_saved_hdr_test_opt_in_is_overridden(self):
+    def test_saved_hdr_opt_in_is_preserved(self):
         settings = self.service._normalize_wrapper_settings({
             "disable_hdr_exposure": False,
         })
-        self.assertTrue(settings["disable_hdr_exposure"])
+        self.assertFalse(settings["disable_hdr_exposure"])
 
     def test_released_v22_gamescope_selector_survives_wrapper_regeneration(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1576,13 +1619,13 @@ class WrapperEnvironmentTests(unittest.TestCase):
             )
             self.assertEqual(values["SELECTOR"], "")
 
-    def test_explicit_hdr_test_opt_in_remains_blocked(self):
+    def test_explicit_hdr_opt_in_retains_gamescope_wsi_isolation(self):
         lines = self.service._hdr_activation_lines({
             "disable_hdr_exposure": False,
         })
         self.assertEqual(lines, [
-            "export MAKO_DISABLE_HDR_EXPOSURE=1",
-            "unset DXVK_HDR",
+            "export MAKO_DISABLE_HDR_EXPOSURE=0",
+            "export DXVK_HDR=1",
         ])
 
         values = self._evaluate(
@@ -1600,8 +1643,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
         )
         self.assertEqual(values["ENABLE"], "1")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
-        self.assertEqual(values["HDR_EXPOSURE_DISABLED"], "1")
-        self.assertEqual(values["DXVK_HDR"], "")
+        self.assertEqual(values["HDR_EXPOSURE_DISABLED"], "0")
+        self.assertEqual(values["DXVK_HDR"], "1")
         self.assertEqual(values["DISABLE_MAKO"], "")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
 
@@ -1620,9 +1663,22 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["INSTANCE"], "VK_LAYER_existing")
         self.assertEqual(values["HDR_EXPOSURE_DISABLED"], "1")
         self.assertEqual(values["DXVK_HDR"], "")
-        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
-        self.assertEqual(values["DISABLE_MAKO"], "")
-        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+
+    def test_hdr_only_launch_loads_renderer_only_when_opted_in(self):
+        for disabled, shaders in product((False, True), (False, True)):
+            with self.subTest(disabled=disabled, shaders=shaders):
+                values = self._evaluate(self.gamescope_environment, {
+                    **ConfigurationManager.get_defaults(),
+                    "frame_generation_provisioned": False,
+                    "frame_generation_enabled": False,
+                    "scaling_enabled": False,
+                    "external_vulkan_layer": "vkbasalt" if shaders else "none",
+                    "disable_hdr_exposure": disabled,
+                })
+                self.assertEqual(values["ENABLE"], "" if disabled else "1")
+                self.assertEqual(values["HDR_EXPOSURE_DISABLED"], "1" if disabled else "0")
+                self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+                self.assertEqual(values["ENABLE_GAMESCOPE"], "")
 
     def test_full_layer_disable_keeps_hdr_exposure_blocked(self):
         lines = self.service._hdr_activation_lines({

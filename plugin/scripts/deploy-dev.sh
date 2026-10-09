@@ -66,6 +66,7 @@ if [[ -z "$flatpak_runtime_summary" ]]; then
 fi
 plugin_dir="${DECKY_PLUGIN_DIR:-$HOME/homebrew/plugins/Mako}"
 engine_repo="${MAKO_ENGINE_REPO:-$project_dir/../engine}"
+local_vkbasalt_archive="${MAKO_VKBASALT_LOCAL_ARCHIVE:-}"
 deploy_frontend=false
 deploy_backend=false
 deploy_engine=false
@@ -197,6 +198,15 @@ fi
 if [[ "$action_selected" == false ]]; then
   deploy_frontend=true
   deploy_backend=true
+fi
+
+if [[ -n "$local_vkbasalt_archive" &&
+      ( "$deploy_engine" == true || "$deploy_engine_32" == true ) ]]; then
+  if [[ "$local_vkbasalt_archive" == /* || "$local_vkbasalt_archive" == *..* ||
+        ! -f "$repository_root/$local_vkbasalt_archive" ]]; then
+    echo "MAKO_VKBASALT_LOCAL_ARCHIVE must be an existing repository-relative archive." >&2
+    exit 1
+  fi
 fi
 
 # Every direct development deployment refreshes the visible status box. An
@@ -335,6 +345,10 @@ built_cli=""
 built_remote_play_sdr=""
 installed_cli=""
 built_layer_32=""
+built_renderer_manifest_64=""
+built_renderer_manifest_32=""
+installed_renderer_manifests_64=()
+installed_renderer_manifests_32=()
 built_spatial_layer_64=""
 built_spatial_layer_32=""
 built_spatial_manifest_64=""
@@ -425,6 +439,9 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   if [[ "$deploy_engine_32" == false ]]; then
     vkbasalt_stage_args+=(--64-bit-only)
   fi
+  if [[ -n "$local_vkbasalt_archive" ]]; then
+    vkbasalt_stage_args+=(--local-archive "$repository_root/$local_vkbasalt_archive")
+  fi
   python3 "$engine_repo/scripts/manage-vkbasalt-release.py" \
     "${vkbasalt_stage_args[@]}"
 
@@ -474,6 +491,31 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     echo "Incremental engine build produced a non-executable CLI: $built_cli" >&2
     exit 1
   fi
+  for bits in 64 32; do
+    if [[ "$bits" == 64 && "$deploy_engine" == false ]] ||
+        [[ "$bits" == 32 && "$deploy_engine_32" == false ]]; then
+      continue
+    fi
+    renderer_build_dir="$engine_build_dir/mako-render"
+    if [[ "$bits" == 32 ]]; then
+      renderer_build_dir="$engine_build_32_dir/mako-render"
+    fi
+    staged_manifest="$vkbasalt_stage_dir/renderer-$bits.json"
+    manifest_path_output="$(python3 "$project_dir/scripts/dev-renderer-selection.py" \
+      --bits "$bits" --prepare-manifest "$renderer_build_dir" "$staged_manifest")"
+    mapfile -t manifest_paths <<< "$manifest_path_output"
+    if ((${#manifest_paths[@]} != 2)); then
+      echo "Incomplete Renderer manifest selection for $bits-bit deployment." >&2
+      exit 1
+    fi
+    if [[ "$bits" == 64 ]]; then
+      built_renderer_manifest_64="$staged_manifest"
+      installed_renderer_manifests_64=("${manifest_paths[@]}")
+    else
+      built_renderer_manifest_32="$staged_manifest"
+      installed_renderer_manifests_32=("${manifest_paths[@]}")
+    fi
+  done
   for installed_path in "$installed_layer_64" "$installed_layer_32"; do
     if [[ -n "$installed_path" && ! -f "$installed_path" ]]; then
       echo "MAKO Renderer is not installed yet: $installed_path" >&2
@@ -636,6 +678,9 @@ fi
 
 if [[ -n "$built_layer_64" ]]; then
   copy_file "$built_layer_64" "$installed_layer_64"
+  for manifest in "${installed_renderer_manifests_64[@]}"; do
+    copy_file "$built_renderer_manifest_64" "$manifest"
+  done
   copy_file "$built_spatial_layer_64" "$installed_spatial_layer_64"
   copy_file "$built_spatial_manifest_64" "$installed_spatial_manifest_64"
   copy_file "$built_vkbasalt_library_64" "$installed_vkbasalt_library_64"
@@ -660,6 +705,9 @@ if [[ -n "$built_layer_64" ]]; then
 fi
 if [[ -n "$built_layer_32" ]]; then
   copy_file "$built_layer_32" "$installed_layer_32"
+  for manifest in "${installed_renderer_manifests_32[@]}"; do
+    copy_file "$built_renderer_manifest_32" "$manifest"
+  done
   copy_file "$built_spatial_layer_32" "$installed_spatial_layer_32"
   copy_file "$built_spatial_manifest_32" "$installed_spatial_manifest_32"
   copy_file "$built_vkbasalt_library_32" "$installed_vkbasalt_library_32"

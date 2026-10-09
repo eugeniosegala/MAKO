@@ -55,8 +55,8 @@ int main() {
         "Gamescope-normalized packed 10-bit should recover PQ semantics");
     expect(gamescopeHdr10.hdr,
         "Gamescope-normalized packed 10-bit should be classified as HDR");
-    expect(!layer::spatialScalingColorSupported(gamescopeHdr10),
-        "Gamescope-normalized HDR must not enter the SDR scaler");
+    expect(layer::spatialScalingColorSupported(gamescopeHdr10),
+        "classified HDR must use the high-precision scaler");
     expect(gamescopeHdr10.gamescopeColorSpaceRecovered,
         "Gamescope-normalized HDR10 should identify its recovered source");
 

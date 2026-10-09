@@ -43,6 +43,7 @@ LaunchConfigFile::LaunchConfigFile(const std::filesystem::path& path) {
         throw ls::error("unable to open launcher configuration");
 
     bool versionSeen = false;
+    bool disableHdrExposureSeen = false;
     bool enableZinkSeen = false;
     bool forceAlsaAudioSeen = false;
     bool disableSteamOverlaySeen = false;
@@ -64,6 +65,11 @@ LaunchConfigFile::LaunchConfigFile(const std::filesystem::path& path) {
             if (versionSeen || value != "1")
                 throw ls::error("unsupported launcher configuration version");
             versionSeen = true;
+        } else if (key == "disable_hdr_exposure") {
+            if (disableHdrExposureSeen)
+                throw ls::error("duplicate disable_hdr_exposure launcher setting");
+            this->launchConf.disable_hdr_exposure = parseBoolean(key, value);
+            disableHdrExposureSeen = true;
         } else if (key == "disable_steam_overlay") {
             if (disableSteamOverlaySeen)
                 throw ls::error("duplicate disable_steam_overlay launcher setting");
@@ -93,6 +99,8 @@ void LaunchConfigFile::write(const std::filesystem::path& path) const {
         std::ostringstream output;
 
         output << "version=" << LaunchConfigFile::formatVersion << '\n'
+            << "disable_hdr_exposure="
+            << static_cast<int>(this->launchConf.disable_hdr_exposure) << '\n'
             << "disable_steam_overlay="
             << static_cast<int>(this->launchConf.disable_steam_overlay) << '\n'
             << "enable_zink="

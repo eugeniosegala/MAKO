@@ -2,6 +2,8 @@
 
 #include "color_conversion.hpp"
 #include "../helpers/utils.hpp"
+#include "../shaders/color_conversion_spirv.hpp"
+#include "mako-backend/mako.hpp"
 
 #include <stdexcept>
 
@@ -51,4 +53,10 @@ ColorConversion::ColorConversion(const Ctx& ctx, const vk::Shader& shader,
 void ColorConversion::render(const vk::Vulkan& vk,
         const vk::CommandBuffer& cmd, const size_t idx) const {
     this->sets.at(idx % this->sets.size()).dispatch(vk, cmd, this->dispatchExtent);
+}
+
+std::vector<uint8_t> mako::backend::hdrColorConversionShader(const bool linearToPq) {
+    if (linearToPq)
+        return embedded::scRgbToHdr10PqSpirv;
+    return embedded::hdr10PqToScRgbSpirv;
 }

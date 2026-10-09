@@ -8,6 +8,9 @@
     "library_arch": "@MAKO_LAYER_LIBRARY_ARCH@",
     "type": "GLOBAL",
     "api_version": "1.4.365",
+    "instance_extensions": [
+      { "name": "VK_EXT_swapchain_colorspace", "spec_version": "4" }
+    ],
     "enable_environment": {
       "ENABLE_MAKO": "1"
     },

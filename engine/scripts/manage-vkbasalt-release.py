@@ -370,6 +370,44 @@ def _flatpak_module(pin: dict[str, Any]) -> str:
     return json.dumps(module, indent=2) + "\n"
 
 
+def _local_candidate(archive: Path) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """Verify a developer archive without changing or impersonating a release pin."""
+    pin = _pin_from_archive(archive)
+    members = _validate_archive(pin, archive)
+    # This candidate workflow accompanies the HDR handoff. Check both native
+    # declarations through the compiled payload before packaging either arch.
+    for key in ("lib64", "lib32"):
+        if b"makoSetSwapchainColorSpaceV1" not in members[SOURCE_PATHS[key]]:
+            raise ValueError(f"local vkBasalt {key} lacks the HDR colour-space handoff")
+    pin["build_kind"] = "local-candidate"
+    pin["url"] = None
+    return pin, members
+
+
+def _prepare_local_flatpak(archive: Path, target: Path) -> None:
+    pin, _ = _local_candidate(archive)
+    target.mkdir(parents=True, exist_ok=True)
+    source = ENGINE_ROOT / "dist/flatpak/mako-render"
+    module = json.loads(_flatpak_module(pin))
+    module["sources"][0] = {
+        "type": "archive", "path": str(archive.resolve()), "sha256": pin["sha256"],
+    }
+    module["sources"][-1]["path"] = "vkbasalt-release.json"
+    _write(target / "vkbasalt-module.json", (json.dumps(module, indent=2) + "\n").encode(), 0o644)
+    _write(target / "vkbasalt-release.json", (json.dumps(pin, indent=2) + "\n").encode(), 0o644)
+    for name, architecture in (("vkBasalt.flatpak.json", "64"), ("vkBasalt.flatpak.x86.json", "32")):
+        _write(target / name, _flatpak_manifest(pin, architecture).encode(), 0o644)
+    shutil.copyfile(source / "vulkan-headers.json", target / "vulkan-headers.json")
+    # Keep the generated runtime manifests authoritative. Relocate only their
+    # checkout source path in this ignored build directory, never tracked files.
+    for manifest in source.glob("org.freedesktop.Platform.VulkanLayer.makorender_*.yml"):
+        text = manifest.read_text()
+        if text.count("path: ../../../..") != 2:
+            raise ValueError("unexpected Flatpak source layout: " + str(manifest))
+        text = text.replace("path: ../../../..", "path: " + json.dumps(str(ENGINE_ROOT.parent)))
+        _write(target / manifest.name, text.encode(), 0o644)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -381,11 +419,22 @@ def main() -> int:
     parser.add_argument("--update-from-archive", type=Path, help="Validate a downloaded public archive, then replace the dependency pin")
     parser.add_argument("--stage-native", type=Path)
     parser.add_argument("--archive", type=Path)
+    parser.add_argument("--local-archive", type=Path, help="Verified developer payload for staging only; never updates release pins")
+    parser.add_argument("--prepare-local-flatpak", type=Path, help="Create ignored Flatpak manifests using --local-archive")
     parser.add_argument("--cache-dir", type=Path)
     parser.add_argument("--64-bit-only", action="store_true")
     parser.add_argument("--generate-flatpak-module", type=Path)
     parser.add_argument("--check-flatpak-module", type=Path)
     args = parser.parse_args()
+
+    if args.local_archive and (args.update_from_archive or args.generate_flatpak_module or args.check_flatpak_module):
+        parser.error("local candidates cannot update or replace release metadata")
+    if args.prepare_local_flatpak:
+        if not args.local_archive:
+            parser.error("--prepare-local-flatpak requires --local-archive")
+        _prepare_local_flatpak(args.local_archive, args.prepare_local_flatpak)
+        print("Prepared local vkBasalt candidate Flatpak manifests.")
+        return 0
 
     if args.update_from_archive:
         pin = _pin_from_archive(args.update_from_archive)
@@ -414,8 +463,11 @@ def main() -> int:
                 raise ValueError(f"generated Flatpak vkBasalt manifest is stale: {manifest}")
     if args.stage_native:
         cache_dir = args.cache_dir or args.pin.parent / "build/cache/vkbasalt"
-        archive = args.archive or _obtain_archive(pin, cache_dir)
-        members = _validate_archive(pin, archive)
+        if args.local_archive:
+            pin, members = _local_candidate(args.local_archive)
+        else:
+            archive = args.archive or _obtain_archive(pin, cache_dir)
+            members = _validate_archive(pin, archive)
         _stage_native(
             pin,
             members,
@@ -430,7 +482,8 @@ def main() -> int:
         args.check_flatpak_module,
     )):
         parser.error("select --check, --stage-native, or a Flatpak module operation")
-    print(f"vkBasalt pin is current: {pin['tag']} ({pin['sha256']})")
+    kind = "local candidate" if args.local_archive else "pin"
+    print(f"vkBasalt {kind} is current: {pin['tag']} ({pin['sha256']})")
     return 0
 
 

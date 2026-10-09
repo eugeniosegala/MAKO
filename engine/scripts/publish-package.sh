@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ -n "${MAKO_VKBASALT_LOCAL_ARCHIVE:-}" ]]; then
+    echo "Local vkBasalt candidates cannot be published; verify and pin a public dependency first." >&2
+    exit 1
+fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repository_root="$(cd "$repo_root/.." && pwd)"
@@ -270,10 +274,6 @@ flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.fla
 4. Restart the game. Revalidate the configuration with \`mako-cli validate\` if you changed the DLL path or profiles.
 
 Keep the previous archives until the new version has been tested with your games.
-
-## Known limitation
-
-- **HDR frame generation and scaling are not currently supported:** HDR pipeline groundwork remains in the renderer, but MAKO does not present either feature as an enabled HDR release path yet.
 
 ## Before you play
 

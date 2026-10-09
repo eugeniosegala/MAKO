@@ -335,6 +335,15 @@ if [[ "$compatibility_output" != "$expected_compatibility" ]]; then
     fail "standalone compatibility settings were not applied safely:\n$compatibility_output"
 fi
 
+for disable_hdr in 0 1; do
+    printf '%s\n' 'version=1' "disable_hdr_exposure=$disable_hdr" > "$launch_config"
+    hdr_output="$(MAKO_LAUNCH_CONFIG="$launch_config" DXVK_HDR=1 "$launcher" bash -c \
+        'printf "%s %s %s" "$MAKO_DISABLE_HDR_EXPOSURE" "${DXVK_HDR:-unset}" "$DISABLE_GAMESCOPE_WSI"')"
+    expected_hdr="$disable_hdr unset 1"
+    [[ "$disable_hdr" == 0 ]] && expected_hdr="0 1 1"
+    [[ "$hdr_output" == "$expected_hdr" ]] || fail "HDR toggle changed WSI ownership: $hdr_output"
+done
+
 printf '%s\n' 'version=1' 'unknown_setting=1' > "$launch_config"
 invalid_config_output="$({
     MAKO_LAUNCH_CONFIG="$launch_config" \

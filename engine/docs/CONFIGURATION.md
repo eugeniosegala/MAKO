@@ -129,3 +129,7 @@ Launcher settings apply globally to `mako-launch` games. **Disable Steam Overlay
 ## Advanced configuration
 
 For manual TOML fields, defaults, and environment variables, see the [advanced reference](CONFIGURATION-REFERENCE.md). For problems, see [troubleshooting](TROUBLESHOOTING.md) or [collect diagnostics](COLLECT_DIAGNOSTICS.md).
+
+## HDR through the isolated Gamescope bridge
+
+Keep **Gamescope WSI** off, turn **Disable HDR (Restart)** off, restart the game, then enable HDR in the game. Use Gaming Mode with the Steam Deck OLED’s built-in screen or an HDR-capable external display, with HDR allowed in Gamescope. Both use the same bridge and toggle; no dock or charger is required. The Steam Deck LCD’s built-in screen remains SDR. Restart the game after switching between HDR and SDR displays so the bridge detects the new output. Decky stores the toggle in the game profile; Qt’s standalone launch control stores it globally in `launcher.conf`. Turning **Disable HDR** on restores the SDR launch on the next restart. Its setting does not depend on the Scaling, Frame Generation, or Shaders switches. The same bridge serves all combinations; HDR disabled means no HDR capability query, format exposure, or metadata forwarding from that bridge. See [HDR pipeline](HDR-PIPELINE.md) for colour handling and the testing boundary.

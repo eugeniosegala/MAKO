@@ -184,6 +184,7 @@ test("uses localized restart markers only for process-start controls", async () 
     zh: "（重启）",
   };
   const processStartKeys = [
+    "CONFIG_DISABLE_HDR_EXPOSURE",
     "CONFIG_ULTRA_PERFORMANCE",
     "CONFIG_DISABLE_STEAMDECK_MODE",
     "CONFIG_ENABLE_ZINK",
@@ -206,7 +207,6 @@ test("uses localized restart markers only for process-start controls", async () 
     "CONFIG_FRAME_GENERATION_REFRESH_GUARD",
     "CONFIG_PERFORMANCE_MODE",
     "CONFIG_DISABLE_MAKO_NEXT_LAUNCH",
-    "CONFIG_DISABLE_HDR_EXPOSURE",
     "FIXED_MULTIPLIER",
     "ADAPTIVE_TITLE",
     "ADAPTIVE_TARGET_FPS",

@@ -631,6 +631,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.scalingEnabled
                         description: t.scalingEnabledDesc + "\n\n" + t.scalingEnabledWarning
+                        experimentalLabel: t.experimentalLabel
                         compactRestartMarker: true
 
                         CheckBox {
@@ -718,6 +719,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.enableShaders
                         description: t.enableShadersDesc
+                        experimentalLabel: t.experimentalLabel
                         compactRestartMarker: true
 
                         CheckBox {
@@ -1087,6 +1089,19 @@ ApplicationWindow {
 
                 Group {
                     name: t.standaloneLaunchSettings
+
+                    GroupEntry {
+                        title: t.disableHdrExposure
+                        description: t.disableHdrExposureDesc
+                        experimentalLabel: t.experimentalLabel
+                        compactRestartMarker: true
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+                            checked: backend.disable_hdr_exposure
+                            onToggled: backend.disable_hdr_exposure = checked
+                        }
+                    }
 
                     Label {
                         Layout.fillWidth: true

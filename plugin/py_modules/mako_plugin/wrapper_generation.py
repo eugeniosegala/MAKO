@@ -68,7 +68,7 @@ from .profile_storage import (
 from .process_detection import is_matchable_process_name
 
 
-WRAPPER_FORMAT_VERSION = 76
+WRAPPER_FORMAT_VERSION = 77
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -237,8 +237,12 @@ def profile_selection_lines(
 
 
 def hdr_activation_lines(config: Dict[str, Any]) -> list[str]:
-    """Keep the packaged Decky launcher on its proven SDR contract."""
-    del config
+    """Select HDR exposure before Vulkan starts without opting into full WSI."""
+    if not config.get("disable_hdr_exposure", True) and not config.get("disable_mako", False):
+        return [
+            f"export {HDR_EXPOSURE_DISABLE_ENV}=0",
+            f"export {DXVK_HDR_ENV}=1",
+        ]
     return [
         f"export {HDR_EXPOSURE_DISABLE_ENV}=1",
         f"unset {DXVK_HDR_ENV}",
@@ -262,7 +266,7 @@ def script_configuration_lines(
     )
     lines.append(
         "mako_renderer_required="
-        f"{1 if (config.get('frame_generation_provisioned', True) or config.get('scaling_enabled', False)) else 0}"
+        f"{1 if (config.get('frame_generation_provisioned', True) or config.get('scaling_enabled', False) or not config.get('disable_hdr_exposure', True)) else 0}"
     )
     lines.append(
         "mako_spatial_scaling_required="
@@ -673,6 +677,13 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f'--env={MAKO_CONFIG_ENV}="${{{MAKO_CONFIG_ENV}}}" '
         f'--unset-env={VK_ADD_IMPLICIT_LAYER_PATH_ENV} '
         '"$@"',
+        f'    if [ "${{{HDR_EXPOSURE_DISABLE_ENV}:-1}}" = 0 ]; then',
+        '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--env={HDR_EXPOSURE_DISABLE_ENV}=0 --env={DXVK_HDR_ENV}=1 "${{@:3}}"',
+        '    else',
+        '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--env={HDR_EXPOSURE_DISABLE_ENV}=1 --unset-env={DXVK_HDR_ENV} "${{@:3}}"',
+        '    fi',
         '    if [ "$mako_renderer_enabled" = 1 ] && '
         f'[ -z "${{{VK_INSTANCE_LAYERS_ENV}:-}}" ]; then',
         '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '

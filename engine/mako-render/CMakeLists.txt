@@ -186,6 +186,9 @@ if(BUILD_TESTING)
             LABELS "portable-policy")
     endfunction()
 
+    add_dependencies(mako-portable-policy-test-binaries
+        mako-external-fd-tests mako-descriptor-pool-tests)
+
     add_library(mako-launch-preload-fixture SHARED
         "../scripts/test-launch-preload.cpp")
     target_compile_definitions(mako-launch-preload-fixture PRIVATE MAKO_TEST_RETAINED)
@@ -317,6 +320,25 @@ if(BUILD_TESTING)
         mako-presentation-policy-tests presentation-policy)
 
     if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_library(mako-feedback-client-fixture SHARED
+            "tests/gamescope_feedback_client_fixture.cpp")
+        set_target_properties(mako-feedback-client-fixture PROPERTIES
+            OUTPUT_NAME "X11" SOVERSION 6
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/feedback-client-fixture")
+        add_executable(mako-gamescope-feedback-reader-tests
+            "tests/gamescope_feedback_reader_tests.cpp"
+            "src/gamescope_hdr_feedback.cpp")
+        target_include_directories(mako-gamescope-feedback-reader-tests
+            PRIVATE "src" "../mako-common/include")
+        target_link_libraries(mako-gamescope-feedback-reader-tests
+            PRIVATE mako-feedback-client-fixture Threads::Threads ${CMAKE_DL_LIBS})
+        add_test(NAME gamescope-feedback-reader
+            COMMAND ${CMAKE_COMMAND} -E env
+                "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:mako-feedback-client-fixture>"
+                $<TARGET_FILE:mako-gamescope-feedback-reader-tests>)
+        mako_register_portable_policy_test(
+            mako-gamescope-feedback-reader-tests gamescope-feedback-reader)
+
         add_library(mako-surface-client-fixture SHARED
             "tests/gamescope_surface_client_fixture.cpp")
         set_target_properties(mako-surface-client-fixture PROPERTIES

@@ -6,6 +6,7 @@
 #include "mako-common/vulkan/vulkan.hpp"
 
 #include <array>
+#include <algorithm>
 #include <cstdint>
 
 #include <vulkan/vulkan_core.h>
@@ -18,7 +19,7 @@ namespace {
             const Limits& limits) {
         VkDescriptorPool handle{};
 
-        const std::array<VkDescriptorPoolSize, 4> poolCounts{{
+        std::array<VkDescriptorPoolSize, 4> poolCounts{{
             {
                 .type = VK_DESCRIPTOR_TYPE_SAMPLER,
                 .descriptorCount = limits.samplers
@@ -36,11 +37,15 @@ namespace {
                 .descriptorCount = limits.uniform_buffers
             }
         }};
+        // Vulkan rejects zero-sized entries. Conversion-only pipelines do not
+        // need uniform buffers; keep absent descriptor types out of the pool.
+        const auto end = std::remove_if(poolCounts.begin(), poolCounts.end(),
+            [](const auto& entry) { return entry.descriptorCount == 0; });
         const VkDescriptorPoolCreateInfo descpoolInfo{
             .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO,
             .flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT,
             .maxSets = limits.sets,
-            .poolSizeCount = static_cast<uint32_t>(poolCounts.size()),
+            .poolSizeCount = static_cast<uint32_t>(end - poolCounts.begin()),
             .pPoolSizes = poolCounts.data()
         };
         auto res = vk.df().CreateDescriptorPool(vk.dev(), &descpoolInfo, VK_NULL_HANDLE, &handle);

@@ -377,7 +377,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "disable_hdr_exposure",
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
-    description: "required SDR safety boundary while HDR is unavailable"
+    description: "disable game HDR exposure on the next launch"
   },
   gamescope_wsi_compatibility: {
     name: "gamescope_wsi_compatibility",

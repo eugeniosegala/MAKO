@@ -9,6 +9,7 @@
 #include <array>
 #include <cerrno>
 #include <chrono>
+#include <cmath>
 #include <cstdlib>
 #include <cstring>
 #include <dlfcn.h>
@@ -66,6 +67,42 @@ namespace {
 
     constexpr uint32_t destroyFlag = 1;
     constexpr auto discoveryTimeout = std::chrono::milliseconds(500);
+
+    constexpr std::array<VkSurfaceFormatKHR, 3> hdrFormats{{
+        {VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT},
+        {VK_FORMAT_A2R10G10B10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_ST2084_EXT},
+        {VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT},
+    }};
+
+    std::optional<std::vector<VkSurfaceFormatKHR>> enumerateFormats(
+            VkPhysicalDevice physicalDevice, VkSurfaceKHR surface,
+            PFN_vkGetPhysicalDeviceSurfaceFormatsKHR lowerFormats) {
+        if (!lowerFormats)
+            return std::nullopt;
+        for (uint32_t attempt = 0; attempt < 3; ++attempt) {
+            uint32_t count{};
+            if (lowerFormats(physicalDevice, surface, &count, nullptr) != VK_SUCCESS ||
+                    count == 0 || count > 256)
+                return std::nullopt;
+            std::vector<VkSurfaceFormatKHR> formats(count);
+            const auto result = lowerFormats(physicalDevice, surface, &count, formats.data());
+            if (result == VK_SUCCESS && count <= formats.size()) {
+                formats.resize(count);
+                return formats;
+            }
+            if (result != VK_INCOMPLETE)
+                return std::nullopt;
+        }
+        return std::nullopt;
+    }
+
+    bool supportsHdrStorage(const std::vector<VkSurfaceFormatKHR>& formats,
+            const VkFormat format) {
+        return std::ranges::any_of(formats, [format](const auto& item) {
+            return (item.format == format || item.format == VK_FORMAT_UNDEFINED) &&
+                item.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+        });
+    }
 }
 
 struct GamescopeScalingSurface::Impl {
@@ -79,6 +116,7 @@ struct GamescopeScalingSurface::Impl {
     wl_proxy* compositor{};
     wl_proxy* factory{};
     bool ready{};
+    bool allowHdr{};
     pid_t peerPid{};
 
     wl_display* (*displayConnect)(const char*){};
@@ -116,7 +154,8 @@ struct GamescopeScalingSurface::Impl {
     // Minimal wire subset of Gamescope's MIT-licensed swapchain protocol at
     // 2d217a16c7e5b56c7417257279bf102320cff024. Association plus create-time
     // swapchain feedback are used. Ordered combined delivery annotates every
-    // commit with FIFO and its own timestamp; limiter and HDR control remain inactive.
+    // commit with FIFO and its own timestamp. HDR uses only colour feedback
+    // and metadata; the limiter interface remains unused.
     // All v1 events are declared so unsolicited feedback is consumed without
     // retaining history.
     // See THIRD_PARTY_NOTICES.md.
@@ -147,6 +186,8 @@ struct GamescopeScalingSurface::Impl {
         Impl* owner{};
         wl_proxy* proxy{};
         bool retired{};
+        bool hdr{};
+        std::optional<std::array<uint32_t, 12>> hdrMetadata;
         bool failureLogged{};
         std::optional<VkExtent2D> applicationExtent;
         VkResult acquisitionResult{VK_SUCCESS};
@@ -170,6 +211,7 @@ struct GamescopeScalingSurface::Impl {
         Display* xlibDisplay{};
         uint32_t server{};
         uint32_t window{};
+        bool hdrOutput{};
         bool formatPolicyLogged{};
         bool failureLogged{};
         std::optional<VkExtent2D> queriedExtent;
@@ -489,6 +531,10 @@ struct GamescopeScalingSurface::Impl {
         state->xlibDisplay = xlibDisplay;
         state->server = *server;
         state->window = window;
+        // Gamescope publishes this capability for both internal OLED panels
+        // and external HDR displays, even when the current content is SDR.
+        state->hdrOutput = allowHdr && cardinal(connection, geometry->root,
+            "GAMESCOPE_HDR_OUTPUT_FEEDBACK").value_or(0) == 1;
         state->connection = connection;
         wl_argument newId{.o = nullptr};
         state->surface = marshal(compositor, 0, surfaceInterface, 1, 0, &newId);
@@ -536,7 +582,9 @@ struct GamescopeScalingSurface::Impl {
     }
 };
 
-GamescopeScalingSurface::GamescopeScalingSurface() : impl(std::make_unique<Impl>()) {}
+GamescopeScalingSurface::GamescopeScalingSurface(const bool allowHdr) : impl(std::make_unique<Impl>()) {
+    impl->allowHdr = allowHdr;
+}
 GamescopeScalingSurface::~GamescopeScalingSurface() = default;
 
 bool GamescopeScalingSurface::connect() {
@@ -601,6 +649,10 @@ bool GamescopeScalingSurface::owns(const VkSurfaceKHR surface) const {
     return impl->surfaces.contains(surface);
 }
 
+bool GamescopeScalingSurface::hdrEnabled() const {
+    return impl->allowHdr;
+}
+
 bool GamescopeScalingSurface::createSwapchain(
         const VkSurfaceKHR surface, const VkSwapchainKHR swapchain,
         const VkSwapchainCreateInfoKHR& info, const VkExtent2D applicationExtent,
@@ -624,6 +676,9 @@ bool GamescopeScalingSurface::createSwapchain(
         return false;
     auto content = std::make_unique<Impl::Content>();
     content->owner = impl.get();
+    content->hdr = state.hdrOutput &&
+        (info.imageColorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT ||
+         info.imageColorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT);
     // Explicit swapchain-maintenance scaling can legally use an image size
     // different from the window. Leave that lower-WSI contract in charge.
     bool exactWindowExtent = true;
@@ -782,26 +837,7 @@ GamescopeScalingSurface::applicationFormats(
     if (found == impl->surfaces.end() || !lowerFormats)
         return std::nullopt;
     auto& state = *found->second;
-    const auto enumerate = [&](const VkSurfaceKHR handle)
-            -> std::optional<std::vector<VkSurfaceFormatKHR>> {
-        for (uint32_t attempt = 0; attempt < 3; ++attempt) {
-            uint32_t count{};
-            if (lowerFormats(physicalDevice, handle, &count, nullptr) != VK_SUCCESS ||
-                    count == 0 || count > 256)
-                return std::nullopt;
-            std::vector<VkSurfaceFormatKHR> formats(count);
-            const auto result = lowerFormats(physicalDevice, handle, &count,
-                formats.data());
-            if (result == VK_SUCCESS) {
-                formats.resize(count);
-                return formats;
-            }
-            if (result != VK_INCOMPLETE)
-                return std::nullopt;
-        }
-        return std::nullopt;
-    };
-    const auto waylandFormats = enumerate(surface);
+    const auto waylandFormats = enumerateFormats(physicalDevice, surface, lowerFormats);
     if (!waylandFormats)
         return std::nullopt;
 
@@ -842,7 +878,7 @@ GamescopeScalingSurface::applicationFormats(
         PFN_vkDestroySurfaceKHR destroy;
         ~NativeSurfaceGuard() { destroy(instance, surface, nullptr); }
     } nativeGuard{state.instance, nativeSurface, destroy};
-    const auto nativeFormats = enumerate(nativeSurface);
+    const auto nativeFormats = enumerateFormats(physicalDevice, nativeSurface, lowerFormats);
     if (!nativeFormats)
         return std::nullopt;
 
@@ -870,16 +906,105 @@ GamescopeScalingSurface::applicationFormats(
             }
         }
     }
+    const bool waylandFallback = exposed.empty();
+    if (waylandFallback)
+        exposed = *waylandFormats;
+    // The bridge owns colour interpretation. Only advertise its supported
+    // opt-in HDR pairs, even if a newer lower WSI reports other colour spaces.
+    std::erase_if(exposed, [](const auto& format) {
+        return format.colorSpace != VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    });
+    if (state.hdrOutput) {
+        for (const auto& hdr : hdrFormats) {
+            if (supportsHdrStorage(*waylandFormats, hdr.format) &&
+                    std::ranges::none_of(exposed, [&](const auto& item) {
+                        return item.format == hdr.format && item.colorSpace == hdr.colorSpace;
+                    }))
+                exposed.push_back(hdr);
+        }
+    }
     if (!state.formatPolicyLogged) {
         state.formatPolicyLogged = true;
         std::cerr << "MAKO Renderer: spatial scaling surface formats: "
                   << "native=" << nativeFormats->size()
                   << "; wayland=" << waylandFormats->size()
                   << "; shared=" << exposed.size()
-                  << "; action=" << (exposed.empty() ? "wayland-fallback" : "intersection")
+                  << "; action=" << (waylandFallback ? "wayland-fallback" : "intersection")
                   << '\n';
     }
-    return exposed.empty() ? waylandFormats : std::optional{std::move(exposed)};
+    return exposed;
+}
+
+VkResult GamescopeScalingSurface::prepareSwapchain(
+        const VkPhysicalDevice physicalDevice, VkSwapchainCreateInfoKHR& info,
+        const PFN_vkGetPhysicalDeviceSurfaceFormatsKHR lowerFormats) const {
+    const std::lock_guard lock(impl->mutex);
+    const auto found = impl->surfaces.find(info.surface);
+    if (found == impl->surfaces.end() ||
+            info.imageColorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        return VK_SUCCESS;
+    const bool hdr = std::ranges::any_of(hdrFormats, [&](const auto& format) {
+        return format.format == info.imageFormat && format.colorSpace == info.imageColorSpace;
+    });
+    // Colour interpretation belongs to Gamescope's swapchain feedback. The
+    // lower Wayland driver transports identical pixels in its supported format.
+    if (!hdr && (info.imageColorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT ||
+            info.imageColorSpace == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT))
+        return VK_ERROR_FORMAT_NOT_SUPPORTED;
+    if (hdr) {
+        if (!found->second->hdrOutput)
+            return VK_ERROR_FORMAT_NOT_SUPPORTED;
+        const auto formats = enumerateFormats(physicalDevice, info.surface, lowerFormats);
+        if (!formats || !supportsHdrStorage(*formats, info.imageFormat))
+            return VK_ERROR_FORMAT_NOT_SUPPORTED;
+        info.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+    }
+    return VK_SUCCESS;
+}
+
+bool GamescopeScalingSurface::setHdrMetadata(const VkSurfaceKHR surface,
+        const VkSwapchainKHR swapchain, const VkHdrMetadataEXT& metadata) {
+    const std::lock_guard lock(impl->mutex);
+    const auto found = impl->surfaces.find(surface);
+    if (found == impl->surfaces.end())
+        return false;
+    const auto content = found->second->contents.find(swapchain);
+    if (content == found->second->contents.end())
+        return false;
+    if (!content->second->hdr || content->second->retired)
+        return true;
+    // CTA-861 units from the pinned Gamescope protocol. Clamp malformed input
+    // before integer conversion; no allocation, polling or roundtrip is needed.
+    const auto quantize = [](const float value, const double scale) -> uint32_t {
+        if (!std::isfinite(value) || value <= 0.0F)
+            return 0;
+        return static_cast<uint32_t>(std::round(std::min(65535.0, value * scale)));
+    };
+    const std::array values{
+        quantize(metadata.displayPrimaryRed.x, 50000.0),
+        quantize(metadata.displayPrimaryRed.y, 50000.0),
+        quantize(metadata.displayPrimaryGreen.x, 50000.0),
+        quantize(metadata.displayPrimaryGreen.y, 50000.0),
+        quantize(metadata.displayPrimaryBlue.x, 50000.0),
+        quantize(metadata.displayPrimaryBlue.y, 50000.0),
+        quantize(metadata.whitePoint.x, 50000.0),
+        quantize(metadata.whitePoint.y, 50000.0),
+        quantize(metadata.maxLuminance, 1.0),
+        quantize(metadata.minLuminance, 10000.0),
+        quantize(metadata.maxContentLightLevel, 1.0),
+        quantize(metadata.maxFrameAverageLightLevel, 1.0),
+    };
+    // Some games submit static metadata each frame. Compare the wire values
+    // so insignificant float jitter adds neither requests nor socket flushes.
+    if (content->second->hdrMetadata == values)
+        return true;
+    std::array<wl_argument, 12> args{};
+    for (size_t index = 0; index < values.size(); ++index)
+        args[index].u = values[index];
+    impl->marshal(content->second->proxy, 4, nullptr, 1, 0, args.data());
+    content->second->hdrMetadata = values;
+    impl->displayFlush(impl->display);
+    return true;
 }
 
 VkResult GamescopeScalingSurface::preparePresent(

@@ -12,6 +12,13 @@ fi
 if [[ "$build_work_root" != /* ]]; then
     build_work_root="$repo_root/$build_work_root"
 fi
+local_vkbasalt_archive="${MAKO_VKBASALT_LOCAL_ARCHIVE:-}"
+if [[ -n "$local_vkbasalt_archive" ]]; then
+    if [[ "$local_vkbasalt_archive" == /* || "$local_vkbasalt_archive" == *..* || ! -f "$monorepo_root/$local_vkbasalt_archive" ]]; then
+        echo "MAKO_VKBASALT_LOCAL_ARCHIVE must be an existing repository-relative archive." >&2
+        exit 1
+    fi
+fi
 version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
 default_output="$repo_root/out/MAKO-Renderer-v$version-flatpaks.tar.xz"
 output_path="${1:-$default_output}"
@@ -63,6 +70,7 @@ if [[ "$containerized_build" != "1" && "$needs_container" == true ]]; then
         -e MAKO_FLATPAK_CONTAINERIZED=1 \
         -e MAKO_FLATPAK_CACHE_ROOT=/cache \
         -e MAKO_FLATPAK_WORK_ROOT=/cache \
+        -e MAKO_VKBASALT_LOCAL_ARCHIVE="$local_vkbasalt_archive" \
         -v "$monorepo_root:/workspace" \
         -w /workspace/engine \
         ubuntu:24.04 \
@@ -161,6 +169,13 @@ bundle_dir="$build_root/bundles"
 repo_dir="$build_root/repo"
 mkdir -p "$bundle_dir" "$repo_dir"
 
+manifest_root="$repo_root/dist/flatpak/mako-render"
+if [[ -n "$local_vkbasalt_archive" ]]; then
+    manifest_root="$build_root/local-manifests"
+    python3 "$repo_root/scripts/manage-vkbasalt-release.py" \
+        --local-archive "$monorepo_root/$local_vkbasalt_archive" \
+        --prepare-local-flatpak "$manifest_root"
+fi
 extension_id="org.freedesktop.Platform.VulkanLayer.makorender"
 runtime_versions_file="$repo_root/dist/flatpak/mako-render/runtime-versions.txt"
 runtime_count=0
@@ -169,7 +184,7 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
         continue
     fi
     runtime_count=$((runtime_count + 1))
-    manifest="$repo_root/dist/flatpak/mako-render/$extension_id"_"$runtime_version.yml"
+    manifest="$manifest_root/$extension_id"_"$runtime_version.yml"
     build_dir="$build_root/build-$runtime_version"
     bundle="$bundle_dir/$extension_id-$runtime_version.flatpak"
 

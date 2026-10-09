@@ -43,8 +43,10 @@ class VkBasaltReleaseTests(unittest.TestCase):
             "sha256": "0" * 64,
         }
 
-    def _archive(self, root: Path, *, manifest_api: str | None = None, source_revision: str | None = None) -> Path:
+    def _archive(self, root: Path, *, manifest_api: str | None = None, source_revision: str | None = None, hdr: bool = True) -> Path:
         live_reload_markers = b" ".join(MODULE.LIVE_RELOAD_MARKERS)
+        if hdr:
+            live_reload_markers += b" makoSetSwapchainColorSpaceV1"
         manifest = lambda architecture: (json.dumps({
             "file_format_version": "1.2.1",
             "layer": {
@@ -121,10 +123,38 @@ class VkBasaltReleaseTests(unittest.TestCase):
                 "../../../../lib/vkbasalt/libvkbasalt.so",
             )
 
+    def test_local_candidate_stages_without_mutating_the_release_pin(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = self._archive(root)
+            tracked = (MODULE.ENGINE_ROOT / "vkbasalt-release.json").read_bytes()
+            pin, members = MODULE._local_candidate(archive)
+            self.assertEqual(pin["build_kind"], "local-candidate")
+            self.assertIsNone(pin["url"])
+            self.assertEqual(pin["sha256"], MODULE._sha256(archive))
+            MODULE._stage_native(pin, members, root / "native", True)
+            MODULE._prepare_local_flatpak(archive, root / "flatpak")
+            module = json.loads((root / "flatpak/vkbasalt-module.json").read_text())
+            self.assertEqual(module["sources"][0]["path"], str(archive.resolve()))
+            self.assertNotIn("url", module["sources"][0])
+            self.assertEqual(module["sources"][0]["sha256"], pin["sha256"])
+            self.assertEqual(tracked, (MODULE.ENGINE_ROOT / "vkbasalt-release.json").read_bytes())
+            manifests = list((root / "flatpak").glob("*.yml"))
+            self.assertTrue(manifests)
+            for manifest in manifests:
+                self.assertNotIn("path: ../../../..", manifest.read_text())
+                self.assertIn(str(MODULE.ENGINE_ROOT.parent), manifest.read_text())
+
     def test_derives_pin_from_verified_archive(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             archive = self._archive(Path(directory))
             self.assertEqual(MODULE._pin_from_archive(archive), self.pin)
+
+    def test_local_hdr_candidate_rejects_an_old_shader_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            archive = self._archive(Path(directory), hdr=False)
+            with self.assertRaisesRegex(ValueError, "HDR colour-space handoff"):
+                MODULE._local_candidate(archive)
 
     def test_stale_flatpak_manifest_is_detected_without_rewriting(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

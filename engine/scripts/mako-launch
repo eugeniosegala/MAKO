@@ -70,6 +70,8 @@ fi
 unset MAKO_LAUNCH_CONFIG
 
 mako_launch_version_seen=0
+mako_disable_hdr_exposure=1
+mako_disable_hdr_exposure_seen=0
 mako_disable_steam_overlay=1
 mako_disable_steam_overlay_seen=0
 mako_launch_enable_zink=0
@@ -105,6 +107,15 @@ if [[ -f "$mako_launch_config_path" ]]; then
                     break
                 fi
                 mako_launch_version_seen=1
+                ;;
+            disable_hdr_exposure)
+                if [[ "$mako_disable_hdr_exposure_seen" != 0 ||
+                        "$mako_launch_value" != 0 && "$mako_launch_value" != 1 ]]; then
+                    mako_launch_config_valid=0
+                    break
+                fi
+                mako_disable_hdr_exposure="$mako_launch_value"
+                mako_disable_hdr_exposure_seen=1
                 ;;
             disable_steam_overlay)
                 if [[ "$mako_disable_steam_overlay_seen" != 0 ||
@@ -148,12 +159,14 @@ if [[ -f "$mako_launch_config_path" ]]; then
         mako_launch_enable_zink=0
         mako_launch_force_alsa_audio=0
         mako_disable_steam_overlay=1
+        mako_disable_hdr_exposure=1
     fi
 fi
 unset mako_launch_config_path mako_launch_line mako_launch_key mako_launch_value
 unset mako_launch_version_seen mako_launch_config_valid
 unset mako_launch_enable_zink_seen mako_launch_force_alsa_audio_seen
 unset mako_disable_steam_overlay_seen
+unset mako_disable_hdr_exposure_seen
 
 if [[ "$mako_launch_enable_zink" == 1 ]]; then
     export __GLX_VENDOR_LIBRARY_NAME=mesa
@@ -401,11 +414,14 @@ unset mako_steam_overlay_layers mako_gamescope_session mako_flatpak_launch
 export DISABLE_GAMESCOPE_WSI=1
 unset ENABLE_GAMESCOPE_WSI
 
-# The current supported path is SDR. Gamescope WSI membership is fixed before
-# Vulkan starts, so its experimental HDR bridge cannot be enabled later by
-# live compositor feedback. Keep the launch contract explicit on both sides.
-export MAKO_DISABLE_HDR_EXPOSURE=1
-unset DXVK_HDR
+# HDR uses MAKO's private Gamescope surface bridge, independently of full WSI.
+export MAKO_DISABLE_HDR_EXPOSURE="$mako_disable_hdr_exposure"
+if [[ "$mako_disable_hdr_exposure" == 0 ]]; then
+    export DXVK_HDR=1
+else
+    unset DXVK_HDR
+fi
+unset mako_disable_hdr_exposure
 if [[ "$mako_vkbasalt_enabled" == 1 || -n "${VK_INSTANCE_LAYERS:-}" &&
         ":${VK_INSTANCE_LAYERS}:" == *":VK_LAYER_MAKO_render:"* ]]; then
     unset ENABLE_MAKO

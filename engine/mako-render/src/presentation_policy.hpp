@@ -171,8 +171,8 @@ namespace mako::layer {
 
     /// Process-start policy shared by HDR classification and presentation
     /// transport selection. Gamescope WSI membership is fixed before Vulkan
-    /// instance creation, so an isolated WSI process cannot safely enter the
-    /// Gamescope HDR bridge later, even if compositor feedback reports HDR.
+    /// instance creation. The isolated surface bridge carries explicit HDR
+    /// colour and metadata without switching to the legacy full-WSI transport.
     struct PresentationEnvironmentPolicy {
         bool gamescopeWsiDisabled{false};
         bool hdrExposureDisabled{false};
@@ -185,8 +185,9 @@ namespace mako::layer {
         const bool wsiDisabled = environmentFlagEnabled(gamescopeWsiDisable);
         return {
             .gamescopeWsiDisabled = wsiDisabled,
-            .hdrExposureDisabled = wsiDisabled ||
-                environmentFlagEnabled(explicitHdrDisable) ||
+            .hdrExposureDisabled = environmentFlagEnabled(explicitHdrDisable) ||
+                (wsiDisabled && (!explicitHdrDisable ||
+                    std::string_view(explicitHdrDisable) != "0")) ||
                 (dxvkHdr && !environmentFlagEnabled(dxvkHdr)),
         };
     }
@@ -206,6 +207,8 @@ namespace mako::layer {
     /// contract because its format/colour-space normalization and HDR feedback
     /// are part of that bridge. The decision is made once from create-time
     /// capability and must remain stable for the lifetime of the swapchain.
+    // OrderedSdr is the established private ordered transport name. Explicit
+    // HDR on the isolated bridge uses that same scheduling contract.
     enum class PresentationTransport {
         OrderedSdr,
         GamescopeHdr,

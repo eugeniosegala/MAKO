@@ -30,6 +30,8 @@ The application-facing device and private backend device can differ. Export/impo
 
 Allocation or binding failure propagates to the owning construction path. A successful allocation call returning a null memory handle is also rejected. The allocator does not evict another context, alias live images, or move a failed device-local request into a different storage policy.
 
+Transfer-only images, including Native Resolution scratch images, have no image view: their copy/blit commands use the image handle directly, and Vulkan does not allow views for transfer-only usage. Sampled, storage, and attachment images retain their views. This avoids unused view construction without widening image usage or changing import/export ownership.
+
 ### Internal image pooling
 
 `ImageMemoryPool` reduces separate Vulkan allocation calls for the many LSFG model intermediates. Each block has one memory type and a linear cursor. Binding searches existing blocks of the selected type, aligns the cursor to the image requirement, and reserves a non-overlapping range. The cursor rejects invalid alignment, arithmetic overflow, and requests that do not fit without changing its position.

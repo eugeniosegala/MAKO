@@ -11,6 +11,13 @@ fi
 if [[ "$build_work_root" != /* ]]; then
     build_work_root="$repo_root/$build_work_root"
 fi
+local_vkbasalt_archive="${MAKO_VKBASALT_LOCAL_ARCHIVE:-}"
+if [[ -n "$local_vkbasalt_archive" ]]; then
+    if [[ "$local_vkbasalt_archive" == /* || "$local_vkbasalt_archive" == *..* || ! -f "$monorepo_root/$local_vkbasalt_archive" ]]; then
+        echo "MAKO_VKBASALT_LOCAL_ARCHIVE must be an existing repository-relative archive." >&2
+        exit 1
+    fi
+fi
 version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
 default_output="$repo_root/out/MAKO-Renderer-v$version-linux.tar.xz"
 output_path=""
@@ -99,6 +106,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
         -e MAKO_PACKAGE_CONTAINERIZED=1 \
         -e MAKO_VULKAN_HEADERS_REVISION="$vulkan_headers_revision" \
         -e MAKO_RELEASE_SKIP_TESTS="${MAKO_RELEASE_SKIP_TESTS:-0}" \
+        -e MAKO_VKBASALT_LOCAL_ARCHIVE="$local_vkbasalt_archive" \
         -v "$monorepo_root:/workspace" \
         -w /workspace/engine \
         ubuntu:22.04 \
@@ -324,6 +332,9 @@ vkbasalt_stage_args=(
 )
 if [[ "$build_32_bit" == false ]]; then
     vkbasalt_stage_args+=(--64-bit-only)
+fi
+if [[ -n "$local_vkbasalt_archive" ]]; then
+    vkbasalt_stage_args+=(--local-archive "$monorepo_root/$local_vkbasalt_archive")
 fi
 python3 "$repo_root/scripts/manage-vkbasalt-release.py" \
     "${vkbasalt_stage_args[@]}"

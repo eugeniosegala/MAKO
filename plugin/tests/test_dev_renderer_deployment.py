@@ -56,18 +56,31 @@ printf '%s\\n' "$@" > "$(dirname "$0")/build-args.txt"
         self.write(self.built_cli, "#!/bin/sh\n# new model inspector\nexit 0\n", executable=True)
         self.write(self.engine / 'build/steamos-dev/scripts/mako_remote_play/libmako-remote-play-sdr.so', 'new SDR helper')
         self.write(self.engine / "scripts/manage-vkbasalt-release.py", """
-import pathlib, shutil, sys
+import json, pathlib, shutil, sys
 source = pathlib.Path(__file__).parents[1] / 'vkbasalt-fixture'
+(source.parent / 'vkbasalt-args.json').write_text(json.dumps(sys.argv[1:]))
+if '--local-archive' in sys.argv:
+    archive = pathlib.Path(sys.argv[sys.argv.index('--local-archive') + 1])
+    if archive.read_text() == 'rejected candidate':
+        raise SystemExit('invalid local candidate')
 shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exist_ok=True)
 """, executable=True)
         self.env = {**os.environ, "HOME": str(self.home),
                     "PATH": f"{self.root / 'bin'}:{os.environ['PATH']}"}
-        for name in ("MAKO_BUILD_DIR", "MAKO_BUILD_32_DIR", "MAKO_ENGINE_REPO", "DECKY_PLUGIN_DIR"):
+        for name in ("MAKO_BUILD_DIR", "MAKO_BUILD_32_DIR", "MAKO_ENGINE_REPO", "DECKY_PLUGIN_DIR", "MAKO_VKBASALT_LOCAL_ARCHIVE"):
             self.env.pop(name, None)
         for bits in (64, 32):
             build = self.build_dir(bits)
             self.write(build / paths.LIB_FILENAME, f"new FG {bits}")
             self.write(build / paths.SPATIAL_SCALING_LIB_FILENAME, f"new spatial {bits}")
+            renderer_name = paths.JSON_FILENAME if bits == 64 else paths.JSON32_FILENAME
+            self.write(build / "private-manifest" / renderer_name, json.dumps({
+                "file_format_version": "1.2.1",
+                "layer": {"name": paths.MAKO_LAYER_NAME, "library_arch": str(bits),
+                          "library_path": "build-relative/libmako-render.so",
+                          "enable_environment": {"ENABLE_MAKO": "1"},
+                          "instance_extensions": [{"name": "VK_EXT_swapchain_colorspace", "spec_version": "4"}]},
+            }))
             spatial = paths.SPATIAL_SCALING_JSON_FILENAME if bits == 64 else paths.SPATIAL_SCALING_JSON32_FILENAME
             self.manifest(build / "private-scaling-manifest" / spatial,
                           self.library_dir("decky", bits) / paths.SPATIAL_SCALING_LIB_FILENAME,
@@ -131,6 +144,9 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                     original_manifest = (self.build_dir(bits) / "private-scaling-manifest" /
                         (paths.SPATIAL_SCALING_JSON_FILENAME if bits == 64 else paths.SPATIAL_SCALING_JSON32_FILENAME))
                     original_build_manifest = original_manifest.read_bytes()
+                    renderer_name = paths.JSON_FILENAME if bits == 64 else paths.JSON32_FILENAME
+                    renderer_source = self.build_dir(bits) / "private-manifest" / renderer_name
+                    original_renderer_manifest = renderer_source.read_bytes()
                     result = self.deploy(bits)
                     self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
                     self.assertIn(f"verified active {bits}-bit {owner}", result.stdout)
@@ -152,6 +168,11 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                     self.assertEqual((self.library_dir(owner, other_bits) / paths.LIB_FILENAME).read_text(), f"old {owner} {other_bits}")
                     self.assertEqual(state.read_bytes(), original_state)
                     self.assertEqual(original_manifest.read_bytes(), original_build_manifest)
+                    self.assertEqual(renderer_source.read_bytes(), original_renderer_manifest)
+                    expected = json.loads(original_renderer_manifest)
+                    expected["layer"]["library_path"] = str((self.library_dir(owner, bits) / paths.LIB_FILENAME).resolve())
+                    for directory in (paths.VULKAN_LAYER_DIR, paths.USER_VULKAN_LAYER_DIR):
+                        self.assertEqual(json.loads((self.home / directory / renderer_name).read_text()), expected)
                     self.assertEqual((self.home / ".config/mako-render/conf.toml").read_text(), "keep profiles")
 
     def test_experimental_precision_is_forwarded_only_when_requested(self):
@@ -164,6 +185,42 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                 self.assertIn("--experimental-lsfg-fp16", args)
                 self.assertEqual("--32-bit-only" in args, bits == 32)
                 self.assertNotIn("--with-32-bit", args)
+
+    def test_local_shader_candidate_uses_shared_verifier_and_requested_architecture(self):
+        archive = self.engine / "out/local shaders.tar.xz"
+        self.write(archive, "verified candidate fixture")
+        self.env["MAKO_VKBASALT_LOCAL_ARCHIVE"] = "engine/out/local shaders.tar.xz"
+        for bits in (64, 32):
+            with self.subTest(bits=bits):
+                self.prepare("standalone")
+                result = self.deploy(bits)
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                args = json.loads((self.engine / "vkbasalt-args.json").read_text())
+                self.assertEqual(args[args.index("--local-archive") + 1], str(archive))
+                self.assertEqual("--64-bit-only" in args, bits == 64)
+                self.assertIn(f"verified active {bits}-bit standalone", result.stdout)
+
+    def test_invalid_local_shader_path_fails_before_build_or_deploy(self):
+        for path in ("/tmp/candidate.tar.xz", "../candidate.tar.xz", "engine/out/missing.tar.xz"):
+            with self.subTest(path=path):
+                self.prepare("standalone")
+                self.env["MAKO_VKBASALT_LOCAL_ARCHIVE"] = path
+                result = self.deploy(64)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("existing repository-relative archive", result.stderr)
+                self.assertFalse((self.engine / "scripts/build-args.txt").exists())
+                self.assertEqual((self.installed_plugin / "dist/index.js").read_text(), "old frontend")
+                self.assertEqual((self.library_dir("standalone", 64) / paths.LIB_FILENAME).read_text(), "old standalone 64")
+
+    def test_rejected_local_shader_candidate_leaves_installation_unchanged(self):
+        self.prepare("standalone")
+        self.write(self.engine / "out/rejected.tar.xz", "rejected candidate")
+        self.env["MAKO_VKBASALT_LOCAL_ARCHIVE"] = "engine/out/rejected.tar.xz"
+        result = self.deploy(64)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid local candidate", result.stderr)
+        self.assertEqual((self.installed_plugin / "dist/index.js").read_text(), "old frontend")
+        self.assertEqual((self.library_dir("standalone", 64) / paths.LIB_FILENAME).read_text(), "old standalone 64")
 
     def test_experimental_precision_rejects_missing_native_or_flatpak_scope(self):
         for scope in ("--frontend", "--flatpaks", "--e2e"):
@@ -189,6 +246,26 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                 result = self.deploy(64)
                 self.assertNotEqual(result.returncode, 0)
                 self.assertEqual(self.installed_cli.read_bytes(), original_cli)
+                self.assertEqual((self.installed_plugin / "dist/index.js").read_text(), "old frontend")
+                self.assertEqual((self.library_dir("standalone", 64) / paths.LIB_FILENAME).read_text(), "old standalone 64")
+
+    def test_invalid_build_manifest_fails_before_deploy(self):
+        source = self.build_dir(64) / "private-manifest" / paths.JSON_FILENAME
+        valid = source.read_text()
+        for case in ("missing", "malformed", "wrong-architecture", "wrong-identity"):
+            with self.subTest(case=case):
+                self.prepare("standalone")
+                source.write_text(valid)
+                if case == "missing":
+                    source.unlink()
+                elif case == "malformed":
+                    source.write_text("[]")
+                else:
+                    data = json.loads(valid)
+                    data["layer"]["library_arch" if case == "wrong-architecture" else "name"] = "wrong"
+                    source.write_text(json.dumps(data))
+                result = self.deploy(64)
+                self.assertNotEqual(result.returncode, 0)
                 self.assertEqual((self.installed_plugin / "dist/index.js").read_text(), "old frontend")
                 self.assertEqual((self.library_dir("standalone", 64) / paths.LIB_FILENAME).read_text(), "old standalone 64")
 
@@ -225,6 +302,14 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
         with self.assertRaisesRegex(ValueError, "differs from"):
             selection.verify(self.home, 64, built)
         shutil.copyfile(built[0], active)
+        registered = self.home / paths.USER_VULKAN_LAYER_DIR / paths.JSON_FILENAME
+        correct = registered.read_text()
+        stale = json.loads(correct)
+        stale["layer"].pop("instance_extensions")
+        registered.write_text(json.dumps(stale))
+        with self.assertRaisesRegex(ValueError, "manifest differs from the build"):
+            selection.verify(self.home, 64, built)
+        registered.write_text(correct)
         spatial = self.home / paths.SPATIAL_SCALING_LAYER_DIR / paths.SPATIAL_SCALING_JSON_FILENAME
         self.assertEqual(manifest_library(spatial), (self.library_dir("standalone", 64) / paths.SPATIAL_SCALING_LIB_FILENAME).resolve())
         self.manifest(spatial, self.library_dir("decky", 64) / paths.SPATIAL_SCALING_LIB_FILENAME, paths.SPATIAL_SCALING_LAYER_NAME)

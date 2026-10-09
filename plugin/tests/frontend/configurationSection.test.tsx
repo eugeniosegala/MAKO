@@ -959,7 +959,7 @@ describe("Configuration controls", () => {
     expect(
       screen.getByText("Enable Zink for OpenGL Games (Restart)"),
     ).toBeTruthy();
-    expect(screen.queryByText("Disable HDR (Restart)")).toBeNull();
+    expect(screen.getByText("Disable HDR (Restart)")).toBeTruthy();
 
     fireEvent.click(
       container.querySelector<HTMLButtonElement>(
@@ -1083,8 +1083,9 @@ describe("Configuration controls", () => {
     );
     fireEvent.click(collapseButton!);
 
-    expect(screen.getByText("Disable HDR")).toBeTruthy();
-    expect(screen.queryByText("Disable HDR (Restart)")).toBeNull();
+    expect(screen.getByText("Disable HDR (Restart)")).toBeTruthy();
+    fireEvent.click(screen.getByText("Disable HDR (Restart)"));
+    expect(onConfigChange).toHaveBeenCalledWith("disable_hdr_exposure", false);
 
     expect(
       screen

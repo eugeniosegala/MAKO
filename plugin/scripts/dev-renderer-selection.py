@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import json
 from pathlib import Path
 import sys
 
@@ -47,8 +48,32 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def renderer_manifest(home: Path, bits: int, build_directory: Path) -> tuple[dict[str, object], tuple[Path, Path]]:
+    """Retain generated Vulkan metadata, changing only the selected library path."""
+    _, libraries = selected_libraries(home, bits)
+    filename = paths.JSON_FILENAME if bits == 64 else paths.JSON32_FILENAME
+    source = build_directory / "private-manifest" / filename
+    manifest = json.loads(source.read_text(encoding="utf-8"))
+    layer = manifest["layer"]
+    if layer.get("name") != paths.MAKO_LAYER_NAME or layer.get("library_arch") != str(bits):
+        raise ValueError(f"Invalid development Renderer manifest identity or architecture: {source}")
+    layer["library_path"] = str(libraries[0].resolve())
+    return manifest, (home / paths.VULKAN_LAYER_DIR / filename,
+                      home / paths.USER_VULKAN_LAYER_DIR / filename)
+
+
+def prepare_manifest(home: Path, bits: int, build_directory: Path, staged: Path) -> None:
+    manifest, destinations = renderer_manifest(home, bits, build_directory)
+    staged.write_text(json.dumps(manifest, indent=4) + "\n", encoding="utf-8")
+    print(*destinations, sep="\n")
+
+
 def verify(home: Path, bits: int, built: list[Path]) -> None:
     owner, libraries = selected_libraries(home, bits)
+    expected, manifests = renderer_manifest(home, bits, built[0].parent)
+    for manifest in manifests:
+        if json.loads(manifest.read_text(encoding="utf-8")) != expected:
+            raise ValueError(f"Development Renderer manifest differs from the build: {manifest}")
     spatial_name = paths.SPATIAL_SCALING_JSON_FILENAME if bits == 64 else paths.SPATIAL_SCALING_JSON32_FILENAME
     vkbasalt_name = paths.VKBASALT_MANIFEST_FILENAME_64 if bits == 64 else paths.VKBASALT_MANIFEST_FILENAME_32
     for manifest, library, identity in (
@@ -70,16 +95,20 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--home", type=Path, default=Path.home())
     parser.add_argument("--bits", type=int, choices=(64, 32), required=True)
-    parser.add_argument("--verify", type=Path, nargs=3, metavar=("FG", "SPATIAL", "VKBASALT"))
+    operations = parser.add_mutually_exclusive_group()
+    operations.add_argument("--verify", type=Path, nargs=3, metavar=("FG", "SPATIAL", "VKBASALT"))
+    operations.add_argument("--prepare-manifest", type=Path, nargs=2, metavar=("BUILD_DIRECTORY", "STAGED_MANIFEST"))
     args = parser.parse_args()
     try:
         if args.verify:
             verify(args.home, args.bits, args.verify)
+        elif args.prepare_manifest:
+            prepare_manifest(args.home, args.bits, *args.prepare_manifest)
         else:
             owner, libraries = selected_libraries(args.home, args.bits)
             print(*libraries, sep="\n")
             print(f"MAKO Renderer: deploying to the active {args.bits}-bit {owner} installation.", file=sys.stderr)
-    except (OSError, ValueError, TypeError) as error:
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as error:
         parser.exit(1, f"MAKO Renderer: development selection failed: {error}\n")
 
 

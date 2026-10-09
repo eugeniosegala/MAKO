@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ -n "${MAKO_VKBASALT_LOCAL_ARCHIVE:-}" ]]; then
+    echo "Local vkBasalt candidates cannot be published; verify and pin a public dependency first." >&2
+    exit 1
+fi
 
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository_root"

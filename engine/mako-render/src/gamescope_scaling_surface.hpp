@@ -82,11 +82,12 @@ namespace mako::layer {
 
     /// Owns Gamescope's X11-window -> Wayland-buffer association and protocol
     /// timing. Vulkan owns acquisition, synchronization and retirement.
-    /// Ordered private outputs use bounded desired presentation times. No
-    /// Gamescope WSI layer, frame-limiter control or HDR interface is loaded.
+    /// Ordered private outputs use bounded desired presentation times.
+    /// The same surface owner forwards optional HDR colour and metadata. No
+    /// Gamescope WSI layer or frame-limiter interface is loaded.
     class GamescopeScalingSurface {
     public:
-        GamescopeScalingSurface();
+        explicit GamescopeScalingSurface(bool allowHdr = false);
         ~GamescopeScalingSurface();
         GamescopeScalingSurface(const GamescopeScalingSurface&) = delete;
         GamescopeScalingSurface& operator=(const GamescopeScalingSurface&) = delete;
@@ -134,6 +135,17 @@ namespace mako::layer {
             double outputFps = 0.0, uint32_t refreshHz = 0,
             size_t outputBatchSize = 1, bool generationEnabled = false);
         [[nodiscard]] bool owns(VkSurfaceKHR surface) const;
+        [[nodiscard]] bool hdrEnabled() const;
+
+        /// Validate HDR against this surface's compositor and lower image
+        /// formats, then normalize only the driver-facing colour space.
+        [[nodiscard]] VkResult prepareSwapchain(VkPhysicalDevice physicalDevice,
+            VkSwapchainCreateInfoKHR& info,
+            PFN_vkGetPhysicalDeviceSurfaceFormatsKHR lowerFormats) const;
+        /// True means this bridge owns the swapchain, including ignored SDR
+        /// metadata. Unowned swapchains must retain lower extension dispatch.
+        [[nodiscard]] bool setHdrMetadata(VkSurfaceKHR surface,
+            VkSwapchainKHR swapchain, const VkHdrMetadataEXT& metadata);
 
         /// Preserve the application's X11 extent contract at both public
         /// capability-query entrypoints. Internal driver queries still see

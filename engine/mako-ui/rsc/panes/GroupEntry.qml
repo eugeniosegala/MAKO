@@ -5,6 +5,7 @@ import QtQuick.Layouts
 RowLayout {
     property string title
     property string description
+    property string experimentalLabel: ""
     property bool compactRestartMarker: false
     default property alias content: inner.children
 
@@ -45,6 +46,24 @@ RowLayout {
             textFormat: root.compactRestartMarker ? Text.RichText : Text.PlainText
             font.bold: true
             wrapMode: Text.Wrap
+        }
+
+        Label {
+            visible: root.experimentalLabel.length > 0
+            text: root.experimentalLabel
+            textFormat: Text.PlainText
+            font.pixelSize: 10
+            font.bold: true
+            font.capitalization: Font.AllUppercase
+            leftPadding: 6
+            rightPadding: 6
+            topPadding: 2
+            bottomPadding: 2
+            background: Rectangle {
+                radius: height / 2
+                color: Qt.rgba(0.96, 0.64, 0.35, 0.16)
+                border.color: Qt.rgba(0.96, 0.64, 0.35, 0.5)
+            }
         }
 
         Label {

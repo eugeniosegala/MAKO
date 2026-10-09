@@ -58,6 +58,7 @@ namespace mako::ui {
         Q_PROPERTY(bool allow_fp16 READ getAllowFP16 WRITE allowFP16Updated NOTIFY refreshUI)
         Q_PROPERTY(bool enable_zink READ getEnableZink WRITE enableZinkUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool disable_steam_overlay READ getDisableSteamOverlay WRITE disableSteamOverlayUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool disable_hdr_exposure READ getDisableHdrExposure WRITE disableHdrExposureUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool force_alsa_audio READ getForceAlsaAudio WRITE forceAlsaAudioUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool enable_vkbasalt READ getEnableVkBasalt WRITE enableVkBasaltUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString vkbasalt_sharpening READ getVkBasaltSharpening WRITE vkBasaltSharpeningUpdated NOTIFY refreshUI)
@@ -243,6 +244,9 @@ namespace mako::ui {
         }
         [[nodiscard]] bool getDisableSteamOverlay() const {
             return this->m_launch.disable_steam_overlay;
+        }
+        [[nodiscard]] bool getDisableHdrExposure() const {
+            return this->m_launch.disable_hdr_exposure;
         }
         [[nodiscard]] bool getForceAlsaAudio() const {
             return this->m_launch.force_alsa_audio;
@@ -595,6 +599,10 @@ namespace mako::ui {
         }
         void disableSteamOverlayUpdated(bool disabled) {
             this->m_launch.disable_steam_overlay = disabled;
+            MARK_LAUNCH_DIRTY()
+        }
+        void disableHdrExposureUpdated(bool disabled) {
+            this->m_launch.disable_hdr_exposure = disabled;
             MARK_LAUNCH_DIRTY()
         }
         void forceAlsaAudioUpdated(bool force_alsa_audio) {

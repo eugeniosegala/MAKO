@@ -227,6 +227,8 @@ namespace {
 }
 
 int main() {
+    expect(spatialScalingProcessSupported(true, true, false, true),
+        "explicit HDR colour on the isolated bridge must permit scaling");
     const auto declaresHalf = [](const std::span<const uint32_t> words) {
         for (size_t i = 5; i < words.size();) {
             const auto count = words[i] >> 16;

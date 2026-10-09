@@ -82,6 +82,11 @@ struct GamescopeHdrFeedbackReader::Impl {
     }();
 
 #if defined(__linux__)
+    bool readsHdrFeedback() const {
+        return !this->presentationEnvironment.hdrExposureDisabled &&
+            !this->presentationEnvironment.gamescopeWsiDisabled;
+    }
+
     void* library{nullptr};
     Display* display{nullptr};
     Atom feedbackAtom{None};
@@ -394,9 +399,10 @@ struct GamescopeHdrFeedbackReader::Impl {
         } else {
             this->resolverStatus = "current-display-selected";
         }
-        this->feedbackAtom = this->internAtom(
-            this->display, gamescopeHdrProperty, True
-        );
+        if (this->readsHdrFeedback())
+            this->feedbackAtom = this->internAtom(
+                this->display, gamescopeHdrProperty, True
+            );
         return this->root != None;
     }
 
@@ -481,13 +487,6 @@ struct GamescopeHdrFeedbackReader::Impl {
                 )
             );
         }
-        if (const auto outputHdr = this->readCardinal(
-                this->display, this->root, gamescopeHdrOutputProperty)) {
-            sample.outputHdrEnabled = *outputHdr != 0;
-        }
-        sample.appHdrMetadataPresent = this->hasCardinalData(
-            this->display, this->root, gamescopeHdrMetadataProperty
-        );
         if (sample.gamescopeDetected && sample.xwaylandServerId == 0 &&
                 this->applicationId) {
             const auto graphics = this->readCardinal(
@@ -502,18 +501,24 @@ struct GamescopeHdrFeedbackReader::Impl {
                 sample.focus.gameFocused = classifyGamescopeFocus(
                     this->applicationId, input, graphics);
         }
-        if (this->presentationEnvironment.hdrExposureDisabled) {
-            const auto decision = decideGamescopeHdrActivation({
-                .outputHdrEnabled = sample.outputHdrEnabled,
-                .appHdrMetadataPresent = sample.appHdrMetadataPresent,
-                .hdrExposureDisabled = true,
-                .gamescopeDetected = sample.gamescopeDetected,
-            });
-            sample.active = decision.active;
-            sample.activationSource = decision.source;
-            sample.status = "hdr-exposure-disabled";
+        if (!this->readsHdrFeedback()) {
+            // The isolated bridge classifies each original swapchain pair;
+            // compositor-wide colour state cannot change that interpretation.
+            // Retain refresh/focus/VRR monitoring without any HDR atom/query.
+            sample.active = false;
+            sample.activationSource = this->presentationEnvironment.hdrExposureDisabled
+                ? "hdr-exposure-disabled" : "isolated-swapchain-colorspace";
+            sample.status = sample.activationSource;
             return sample;
         }
+
+        if (const auto outputHdr = this->readCardinal(
+                this->display, this->root, gamescopeHdrOutputProperty)) {
+            sample.outputHdrEnabled = *outputHdr != 0;
+        }
+        sample.appHdrMetadataPresent = this->hasCardinalData(
+            this->display, this->root, gamescopeHdrMetadataProperty
+        );
 
         std::optional<bool> appWantsHdr;
         if (this->feedbackAtom == None) {

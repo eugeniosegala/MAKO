@@ -1,5 +1,6 @@
 import { Dropdown, Field, PanelSectionRow, ToggleField } from "@decky/ui";
 import {
+  DISABLE_HDR_EXPOSURE,
   DISABLE_STEAMDECK_MODE,
   DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS,
   DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
@@ -11,6 +12,7 @@ import {
 import { dynamicCadenceRecoveryChanges } from "../../config/fractionalAdaptivePreset";
 import t from "../../i18n/i18n";
 import {
+  MakoExperimentalSettingLabel,
   MakoInlineTip,
   MakoRestartLabel,
   MakoSectionHeader,
@@ -56,14 +58,18 @@ export function CompatibilityConfigurationGroup({
         <>
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR")}
+              label={
+                <MakoExperimentalSettingLabel
+                  label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR (Restart)")}
+                  badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
+                />
+              }
               description={t(
                 "CONFIG_DISABLE_HDR_EXPOSURE_DESC",
-                "HDR is unavailable in this release. This required setting keeps the stable SDR path active.",
+                "Turn off to allow game HDR through MAKO's Gamescope bridge. Requires HDR output and HDR enabled in the game.",
               )}
-              checked={true}
-              disabled={true}
-              onChange={() => undefined}
+              checked={config.disable_hdr_exposure}
+              onChange={(value) => onConfigChange(DISABLE_HDR_EXPOSURE, value)}
             />
           </PanelSectionRow>
 

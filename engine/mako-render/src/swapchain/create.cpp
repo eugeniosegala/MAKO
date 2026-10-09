@@ -171,7 +171,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
     if (this->info.spatialScalingActive) {
         if (!spatialScalingColorSupported(this->colorPipeline))
             throw ls::error(
-                "spatial scaling requires a validated SDR colour pipeline"
+                "spatial scaling requires a supported colour pipeline"
             );
         if (sameExtent(this->info.applicationExtent, this->info.extent))
             throw ls::error(
@@ -190,7 +190,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             this->colorPipeline.exchangeFormat,
             ls::effectiveScalingMethod(this->profile),
             this->profile.scaling_sharpness,
-            scalingShaderDll, this->fp16Requested
+            scalingShaderDll, this->fp16Requested, this->colorPipeline.encoding
         );
         this->spatialScalingPasses.reserve(this->info.images.size());
         for (size_t i = 0; i < this->info.images.size(); ++i) {
@@ -268,7 +268,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
 
     bool applicationPackedHdr10Supported = false;
     bool backendPackedHdr10Supported = false;
-    if (backend) {
+    if (backend && !this->spatialScaler) {
         selectPackedHdr10Transport(
             vk, *backend, this->colorPipeline,
             applicationPackedHdr10Supported, backendPackedHdr10Supported

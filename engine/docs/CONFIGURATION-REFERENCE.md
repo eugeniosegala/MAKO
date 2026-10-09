@@ -127,7 +127,7 @@ Set `MAKO_ENV=1` to build one profile from environment variables instead of TOML
 - Scaling: `MAKO_SCALING_ENABLED`, `MAKO_SCALING_METHOD`, `MAKO_SCALING_FACTOR`, `MAKO_SCALING_SUPERSAMPLING`, `MAKO_SCALING_SHARPNESS`, `MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY`; and
 - resources: `MAKO_ULTRA_PERFORMANCE`, `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`.
 
-`MAKO_DISABLE_HDR_EXPOSURE=1` and `DISABLE_GAMESCOPE_WSI=1` close the unfinished HDR path. Environment-only settings are process-start settings, not live profile controls.
+`MAKO_DISABLE_HDR_EXPOSURE=1` disables HDR exposure by default. The restart-only HDR control exports `MAKO_DISABLE_HDR_EXPOSURE=0` and `DXVK_HDR=1` while retaining `DISABLE_GAMESCOPE_WSI=1`; the isolated bridge carries HDR colour and metadata without full WSI. Environment-only settings are process-start settings, not live profile controls.
 
 ## Presentation acquisition timeout
 

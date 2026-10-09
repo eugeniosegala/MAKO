@@ -304,8 +304,11 @@ int main() {
         "0", "1", "1"
     );
     expect(isolatedWsi.gamescopeWsiDisabled &&
-            isolatedWsi.hdrExposureDisabled,
-        "WSI isolation must also close the unavailable HDR bridge");
+            !isolatedWsi.hdrExposureDisabled,
+        "HDR opt-in must preserve WSI isolation");
+    for (const char* value : {static_cast<const char*>(nullptr), "", "1", "invalid"})
+        expect(resolvePresentationEnvironmentPolicy(value, "1", "1").hdrExposureDisabled,
+            "isolated HDR requires the toggle's explicit zero export");
     expect(gamescopeFeedbackPollInterval(false, false) == 1s,
         "ordinary desktop feedback polling should remain idle");
     expect(gamescopeFeedbackPollInterval(true, false) == 250ms,

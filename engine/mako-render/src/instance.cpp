@@ -351,7 +351,8 @@ void Root::publishSurfaceScalingPolicy() noexcept {
     const bool processSupported = spatialScalingProcessSupported(
         this->gamescopeEnvironmentDetected,
         this->gamescopeDetected,
-        this->presentationEnvironment.hdrExposureDisabled
+        this->presentationEnvironment.hdrExposureDisabled,
+        this->presentationEnvironment.gamescopeWsiDisabled
     );
     const uint64_t packedFactor = static_cast<uint64_t>(
         std::bit_cast<uint32_t>(factor)
@@ -659,7 +660,8 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
         result.hdrFeedbackChanged = true;
         for (auto& [swapchain, context] : this->swapchains) {
             static_cast<void>(swapchain);
-            if (context.updateGamescopeHdrState(
+            if (!this->presentationEnvironment.gamescopeWsiDisabled &&
+                    context.updateGamescopeHdrState(
                     *changed, this->runtimeStateRevision))
                 result.hdrContextsDeferred++;
         }
@@ -1056,7 +1058,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         contextProfile,
         caps.maxImageCount,
         prospectiveCreateInfo,
-        this->gamescopeHdrActive.value_or(false),
+        (!this->presentationEnvironment.gamescopeWsiDisabled &&
+            this->gamescopeHdrActive.value_or(false)),
         this->gamescopeDetected,
         this->presentationEnvironment,
         frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled()),
@@ -1130,10 +1133,12 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         !sameExtent(createInfo.imageExtent, caps.currentExtent);
     const auto colorPipeline = classifySwapchainColor(
         createInfo.imageFormat, createInfo.imageColorSpace,
-        this->gamescopeHdrActive.value_or(false)
+        (!this->presentationEnvironment.gamescopeWsiDisabled &&
+            this->gamescopeHdrActive.value_or(false))
     );
-    const bool sdrScalingEncoding =
-        spatialScalingColorSupported(colorPipeline);
+    const bool supportedScalingEncoding =
+        spatialScalingColorSupported(colorPipeline) &&
+        !(colorPipeline.hdr && this->presentationEnvironment.hdrExposureDisabled);
     VkBool32 queueFamilySupportsPresentation = VK_FALSE;
     const bool queueSurfaceSupportChecked =
         scalingExtents && vk.fi().GetPhysicalDeviceSurfaceSupportKHR;
@@ -1156,7 +1161,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT
     );
     const bool spatialFormatSupported =
-        sdrScalingEncoding &&
+        supportedScalingEncoding &&
         (caps.supportedUsageFlags & (
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -1440,7 +1445,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         contextProfile,
         caps.maxImageCount,
         createInfo,
-        this->gamescopeHdrActive.value_or(false),
+        (!this->presentationEnvironment.gamescopeWsiDisabled &&
+            this->gamescopeHdrActive.value_or(false)),
         this->gamescopeDetected,
         this->presentationEnvironment,
         frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled()),
@@ -1720,7 +1726,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     const bool inserted = this->swapchains.emplace(swapchain,
         Swapchain(vk, frameGenerationBackend, std::move(contextProfile), info,
             std::move(scalingShaderDll), this->fp16AtStartup,
-            this->gamescopeHdrActive,
+            this->presentationEnvironment.gamescopeWsiDisabled
+                ? std::optional<bool>{false} : this->gamescopeHdrActive,
             this->gamescopeDetected,
             this->presentationEnvironment.hdrExposureDisabled,
             this->gamescopeRefreshHz,

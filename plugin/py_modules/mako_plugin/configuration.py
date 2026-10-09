@@ -884,13 +884,7 @@ class ConfigurationService(BaseService):
 
     @staticmethod
     def _hdr_activation_lines(config: Dict[str, Any]) -> list[str]:
-        """Keep the packaged Decky launcher on its proven SDR contract.
-
-        The engine contains HDR colour-pipeline groundwork, but cross-game HDR
-        activation and presentation are unavailable in the current Decky
-        release. Remove inherited DXVK HDR exposure while MAKO enforces its
-        supported SDR processing and presentation boundary.
-        """
+        """Apply the saved restart-only HDR exposure policy."""
         return wrapper_generation.hdr_activation_lines(config)
 
     def _generate_layer_environment_lines(self) -> list[str]:

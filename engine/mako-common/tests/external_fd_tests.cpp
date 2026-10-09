@@ -198,6 +198,39 @@ namespace {
             driver.verify();
         }
     }
+
+    void testTransferOnlyImages(const vk::Vulkan& vk) {
+        // A forbidden view call must never occur, even if the fake driver is
+        // configured to fail it. Export still happens after binding completes.
+        for (const auto usage : {VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+                VkImageUsageFlagBits(VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT)}) {
+            driver = {.failure = Failure::View};
+            int fd = -1;
+            {
+                ls::FileDescriptorScope exportScope({&fd, 1});
+                const vk::Image image(vk, {32, 32}, VK_FORMAT_R16G16B16A16_SFLOAT,
+                    usage, std::nullopt, &fd);
+                require(image.handle() != VK_NULL_HANDLE && image.imageview() == VK_NULL_HANDLE,
+                    "transfer-only image must have no view");
+                require(driver.views == 0 && driver.exports == 1 && isOpen(fd),
+                    "transfer-only image must retain its export ownership contract");
+            }
+            require(!isOpen(fd), "transfer-only export leaked its descriptor");
+            driver.verify();
+        }
+        for (const auto extra : {VK_IMAGE_USAGE_SAMPLED_BIT, VK_IMAGE_USAGE_STORAGE_BIT,
+                VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT}) {
+            driver = {};
+            {
+                const vk::Image image(vk, {32, 32}, VK_FORMAT_R16G16B16A16_SFLOAT,
+                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT | extra);
+                require(image.imageview() != VK_NULL_HANDLE && driver.views == 1,
+                    "sampled/storage/attachment images must retain their views");
+            }
+            driver.verify();
+        }
+    }
 }
 
 int main() {
@@ -207,6 +240,7 @@ int main() {
         testPartialImport(vk);
         testScopeHandoffAndRejection();
         testBinarySemaphore(vk);
+        testTransferOnlyImages(vk);
     } catch (const std::exception& error) {
         std::cerr << "External FD ownership test failed: " << error.what() << '\n';
         return 1;

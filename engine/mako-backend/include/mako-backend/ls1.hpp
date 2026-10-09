@@ -36,7 +36,8 @@ namespace mako::backend {
     [[nodiscard]] Ls1ShaderSet loadLs1ShaderSet(
         const std::filesystem::path& shaderDllPath,
         Ls1Mode mode,
-        float sharpness
+        float sharpness,
+        bool highPrecision = false
     );
 
 }

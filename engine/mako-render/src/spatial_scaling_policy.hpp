@@ -388,14 +388,14 @@ namespace mako::layer {
     [[nodiscard]] constexpr bool spatialScalingProcessSupported(
             const bool gamescopeEnvironmentHint,
             const bool gamescopeFeedbackDetected,
-            const bool hdrExposureDisabled) noexcept {
+            const bool hdrExposureDisabled,
+            const bool isolatedColorSpace = false) noexcept {
         return !(gamescopeEnvironmentHint || gamescopeFeedbackDetected) ||
-            hdrExposureDisabled;
+            hdrExposureDisabled || isolatedColorSpace;
     }
 
-    /// A scaled swapchain is admitted only on the immutable SDR boundary.
-    /// Gamescope feedback may continue to change for other swapchains, but it
-    /// must never reclassify an existing scaler into an HDR colour pipeline.
+    /// A scaled swapchain keeps its explicit creation-time encoding. Global
+    /// Gamescope feedback must never reclassify existing scaler resources.
     [[nodiscard]] constexpr bool liveGamescopeHdrReclassificationAllowed(
             const bool spatialScalingActive) noexcept {
         return !spatialScalingActive;

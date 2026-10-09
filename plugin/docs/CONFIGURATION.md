@@ -112,7 +112,7 @@ Keep defaults unless a game needs a change.
 | **Force ALSA** | Audio or Zink compatibility problems. |
 | **MangoHud (Restart)** | Host games only; requires installed MangoHud and cannot run alongside MAKO Shaders for the same profile. |
 
-Frame Generation and Scaling are SDR-only. **Disable HDR** stays enabled and read-only.
+**Disable HDR (Restart)** is enabled by default. Turn it off to opt into HDR through the isolated Gamescope bridge, then restart the game. See [HDR through the isolated Gamescope bridge](#hdr-through-the-isolated-gamescope-bridge) for setup.
 
 ## When changes apply
 
@@ -127,3 +127,7 @@ Frame Generation and Scaling are SDR-only. **Disable HDR** stays enabled and rea
 MAKO Decky follows Steam's interface language. Press **R1** or **Hide info** to hide explanations; repeat to show them. **Advanced Details** shows installation information with copyable values.
 
 For help, see [troubleshooting](TROUBLESHOOTING.md) or [collect diagnostics](COLLECT_DIAGNOSTICS.md). The [Renderer configuration reference](../../engine/docs/CONFIGURATION-REFERENCE.md) covers advanced settings.
+
+## HDR through the isolated Gamescope bridge
+
+Keep **Gamescope WSI** off, turn **Disable HDR (Restart)** off, restart the game, then enable HDR in the game. Use Gaming Mode with the Steam Deck OLED’s built-in screen or an HDR-capable external display, with HDR allowed in Gamescope. Both use the same bridge and toggle; no dock or charger is required. The Steam Deck LCD’s built-in screen remains SDR. Restart the game after switching between HDR and SDR displays so the bridge detects the new output. Decky stores the toggle in the game profile; Qt’s standalone launch control stores it globally in `launcher.conf`. Turning **Disable HDR** on restores the SDR launch on the next restart. Its setting does not depend on the Scaling, Frame Generation, or Shaders switches. The same bridge serves all combinations; HDR disabled means no HDR capability query, format exposure, or metadata forwarding from that bridge. See [HDR pipeline](../../engine/docs/HDR-PIPELINE.md) for colour handling and the testing boundary.

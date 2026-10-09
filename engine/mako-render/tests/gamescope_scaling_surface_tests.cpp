@@ -25,6 +25,13 @@ extern "C" {
     int mako_test_surface_objects();
     int mako_test_surface_associations();
     int mako_test_surface_feedbacks();
+    void mako_test_surface_hdr_output(uint32_t);
+    void mako_test_surface_external_output(bool);
+    int mako_test_surface_hdr_queries();
+    uint32_t mako_test_surface_feedback_color();
+    int mako_test_surface_hdr_metadata_calls();
+    uint32_t mako_test_surface_hdr_metadata(unsigned);
+
     int mako_test_surface_present_modes();
     int mako_test_surface_present_times();
     uint32_t mako_test_surface_present_id();
@@ -53,6 +60,7 @@ namespace {
     bool failVulkan{};
     bool failNativeSurface{};
     int nativeSurfacesDestroyed{};
+    int formatQueries{};
     const VkAllocationCallbacks* lastAllocator{};
     VkSurfaceKHR testSurface(const uint64_t value) {
         VkSurfaceKHR surface{};
@@ -96,11 +104,13 @@ namespace {
     }
     VkResult VKAPI_PTR surfaceFormats(VkPhysicalDevice, VkSurfaceKHR surface,
             uint32_t* count, VkSurfaceFormatKHR* formats) {
+        ++formatQueries;
         const VkSurfaceFormatKHR native[]{
             {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
             {VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
         };
         const VkSurfaceFormatKHR wayland[]{
+            {VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
             {VK_FORMAT_R16G16B16A16_SFLOAT, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
             {VK_FORMAT_R8G8B8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
             {VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR},
@@ -108,7 +118,7 @@ namespace {
         const bool nativeQuery = surface == testSurface(9001) ||
             surface == testSurface(9002);
         const auto& selected = nativeQuery ? native : wayland;
-        const uint32_t available = nativeQuery ? 2 : 3;
+        const uint32_t available = nativeQuery ? 2 : 4;
         if (!formats) {
             *count = available;
             return VK_SUCCESS;
@@ -455,6 +465,126 @@ int main() {
         .sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
         .connection = reinterpret_cast<xcb_connection_t*>(1), .window = 71,
     };
+    // The OLED panel and an external HDR monitor share the same capability
+    // contract. A Deck-sized SDR panel must not gain HDR from its resolution.
+    const struct DisplayCase {
+        VkExtent2D extent;
+        bool external;
+        uint32_t hdr;
+    } displays[]{
+        {{1280, 800}, false, 0}, {{1280, 800}, false, 1}, {{1280, 800}, false, 2},
+        {{1920, 1080}, true, 0}, {{1920, 1080}, true, 1}, {{1920, 1080}, true, 2},
+    };
+    for (const bool allowHdr : {false, true}) {
+        for (const auto& display : displays) {
+            const bool enabled = allowHdr && display.hdr == 1;
+            mako_test_surface_resize(display.extent.width, display.extent.height);
+            mako_test_surface_external_output(display.external);
+            mako_test_surface_hdr_output(display.hdr);
+            const auto queries = mako_test_surface_hdr_queries();
+            GamescopeScalingSurface bridge(allowHdr);
+            VkSurfaceKHR surface{};
+            expect(bridge.connect() &&
+                bridge.create(VK_NULL_HANDLE, next, info, nullptr, &surface) == VK_SUCCESS,
+                "HDR policy must preserve ordinary bridge creation");
+            expect(mako_test_surface_hdr_queries() - queries == (allowHdr ? 1 : 0),
+                "disabled HDR must not query output capability");
+            const auto formats = bridge.applicationFormats(VK_NULL_HANDLE, surface, surfaceFormats);
+            expect(formats && formats->size() == (enabled ? 4u : 2u),
+                "HDR formats require explicit opt-in and confirmed output capability");
+            for (const auto colorSpace : {VK_COLOR_SPACE_HDR10_ST2084_EXT,
+                    VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT})
+                expect(std::ranges::any_of(*formats, [colorSpace](const auto& format) {
+                    return format.colorSpace == colorSpace;
+                }) == enabled, "internal and external displays must expose both HDR encodings by capability");
+            VkSwapchainCreateInfoKHR hdrInfo{
+                .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+                .surface = surface, .minImageCount = 3,
+                .imageFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+                .imageColorSpace = VK_COLOR_SPACE_HDR10_ST2084_EXT,
+                .imageExtent = display.extent, .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+            };
+            auto lowerInfo = hdrInfo;
+            const auto queriesBeforeCreate = formatQueries;
+            expect(bridge.prepareSwapchain(VK_NULL_HANDLE, lowerInfo, surfaceFormats) ==
+                (enabled ? VK_SUCCESS : VK_ERROR_FORMAT_NOT_SUPPORTED),
+                "HDR creation must obey the same opt-in as enumeration");
+            expect(enabled || formatQueries == queriesBeforeCreate,
+                "disabled HDR must reject creation without querying HDR storage");
+            if (enabled) {
+                expect(lowerInfo.imageColorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR &&
+                    hdrInfo.imageColorSpace == VK_COLOR_SPACE_HDR10_ST2084_EXT,
+                    "normalize only the lower driver's create info");
+                hdrInfo.imageFormat = VK_FORMAT_R8G8B8A8_UNORM;
+                expect(bridge.prepareSwapchain(VK_NULL_HANDLE, hdrInfo, surfaceFormats) == VK_ERROR_FORMAT_NOT_SUPPORTED,
+                    "invalid HDR format pairs must fail closed");
+                hdrInfo.imageFormat = VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+                const auto swapchain = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(800));
+                expect(bridge.createSwapchain(surface, swapchain, hdrInfo, hdrInfo.imageExtent, 3, "hdr-test", VK_PRESENT_MODE_FIFO_KHR), "HDR protocol creation");
+                expect(mako_test_surface_feedback_color() == VK_COLOR_SPACE_HDR10_ST2084_EXT,
+                    "compositor feedback must preserve the application's original colour space");
+                const VkHdrMetadataEXT metadata{
+                    .sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT,
+                    .displayPrimaryRed = {0.64F, 0.33F}, .displayPrimaryGreen = {0.3F, 0.6F},
+                    .displayPrimaryBlue = {0.15F, 0.06F}, .whitePoint = {0.3127F, 0.329F},
+                    .maxLuminance = 1000, .minLuminance = 0.005F,
+                    .maxContentLightLevel = 2000, .maxFrameAverageLightLevel = 400,
+                };
+                const auto calls = mako_test_surface_hdr_metadata_calls();
+                const auto reads = mako_test_surface_reads();
+                expect(bridge.setHdrMetadata(surface, swapchain, metadata), "owned HDR metadata");
+                expect(mako_test_surface_hdr_metadata_calls() == calls + 1 &&
+                    mako_test_surface_hdr_metadata(0) == 32000 &&
+                    mako_test_surface_hdr_metadata(6) == 15635 &&
+                    mako_test_surface_hdr_metadata(8) == 1000 &&
+                    mako_test_surface_hdr_metadata(9) == 50 &&
+                    mako_test_surface_hdr_metadata(10) == 2000 &&
+                    mako_test_surface_hdr_metadata(11) == 400,
+                    "metadata must use CTA-861 protocol units");
+                expect(mako_test_surface_reads() == reads, "metadata must not roundtrip or poll");
+                for (size_t repeat = 0; repeat < 1024; ++repeat)
+                    expect(bridge.setHdrMetadata(surface, swapchain, metadata), "repeated metadata ownership");
+                auto changed = metadata;
+                changed.maxLuminance += 0.1F;
+                expect(bridge.setHdrMetadata(surface, swapchain, changed) &&
+                    mako_test_surface_hdr_metadata_calls() == calls + 1,
+                    "identical wire metadata must not generate repeated requests");
+                changed.maxLuminance = 1200;
+                expect(bridge.setHdrMetadata(surface, swapchain, changed) &&
+                    mako_test_surface_hdr_metadata_calls() == calls + 2 &&
+                    mako_test_surface_hdr_metadata(8) == 1200,
+                    "changed metadata must reach the compositor");
+                bridge.destroySwapchain(surface, swapchain);
+                expect(bridge.createSwapchain(surface, swapchain, hdrInfo, hdrInfo.imageExtent, 3, "hdr-test", VK_PRESENT_MODE_FIFO_KHR), "HDR replacement protocol creation");
+                expect(bridge.setHdrMetadata(surface, swapchain, changed) &&
+                    mako_test_surface_hdr_metadata_calls() == calls + 3,
+                    "replacement protocol object must receive its own initial metadata");
+                bridge.destroySwapchain(surface, swapchain);
+                hdrInfo.imageFormat = VK_FORMAT_R16G16B16A16_SFLOAT;
+                hdrInfo.imageColorSpace = VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+                lowerInfo = hdrInfo;
+                expect(bridge.prepareSwapchain(VK_NULL_HANDLE, lowerInfo, surfaceFormats) == VK_SUCCESS &&
+                    lowerInfo.imageColorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR &&
+                    lowerInfo.imageExtent.width == display.extent.width &&
+                    lowerInfo.imageExtent.height == display.extent.height,
+                    "scRGB must preserve each display's extent through the same bridge");
+                expect(bridge.createSwapchain(surface, swapchain, hdrInfo, hdrInfo.imageExtent, 3, "hdr-test", VK_PRESENT_MODE_FIFO_KHR) &&
+                    mako_test_surface_feedback_color() == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT,
+                    "internal and external scRGB must retain original compositor colour feedback");
+                bridge.destroySwapchain(surface, swapchain);
+                hdrInfo.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+                expect(bridge.createSwapchain(surface, swapchain, hdrInfo, hdrInfo.imageExtent, 3, "hdr-test", VK_PRESENT_MODE_FIFO_KHR), "SDR replacement protocol creation");
+                expect(bridge.setHdrMetadata(surface, swapchain, metadata) &&
+                    mako_test_surface_hdr_metadata_calls() == calls + 3,
+                    "reused SDR swapchain handle must not inherit HDR metadata");
+                bridge.destroySwapchain(surface, swapchain);
+            }
+            bridge.destroy(surface);
+        }
+    }
+    mako_test_surface_hdr_output(0);
+    mako_test_surface_external_output(false);
+    mako_test_surface_resize(1920, 1080);
     {
         mako_test_surface_mode(18);
         GamescopeScalingSurface bridge;

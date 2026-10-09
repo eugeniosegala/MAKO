@@ -26,6 +26,10 @@ namespace mako::backend {
         Hdr10PqPacked,
     };
 
+    /// Shared colour-conversion shaders for Renderer-owned HDR image stages.
+    /// The returned bytes are copied only during private-resource construction.
+    [[nodiscard]] std::vector<uint8_t> hdrColorConversionShader(bool linearToPq);
+
     class [[gnu::visibility("default")]] ContextImpl;
     class [[gnu::visibility("default")]] InstanceImpl;
 

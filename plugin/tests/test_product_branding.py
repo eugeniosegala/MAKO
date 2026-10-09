@@ -106,12 +106,19 @@ class ProductBrandingTests(unittest.TestCase):
         shared_headings = (
             "## 🎮 In-game considerations",
             "## Installation",
-            "## Known limitation",
             "## Before you play",
         )
         for heading in shared_headings:
             self.assertIn(heading, decky_publisher)
             self.assertIn(heading, renderer_publisher)
+
+        for component, publisher in (("plugin", decky_publisher), ("engine", renderer_publisher)):
+            self.assertNotIn("HDR frame generation and scaling are", publisher)
+            notes = (REPOSITORY_ROOT / component / "RELEASE_NOTES.md").read_text(encoding="utf-8")
+            first_highlight = next(line for line in notes.splitlines() if line.startswith("- **"))
+            self.assertIn("HDR", first_highlight)
+            self.assertIn("experimental", first_highlight.lower())
+            self.assertIn("disabled by default", first_highlight.lower())
 
         self.assertIn(
             "https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/LAUNCHERS.md",

@@ -46,6 +46,12 @@ if(BUILD_TESTING)
     target_link_libraries(mako-external-fd-tests PRIVATE mako-common)
     add_test(NAME external-fd-ownership COMMAND mako-external-fd-tests)
 
+    add_executable(mako-descriptor-pool-tests "tests/descriptor_pool_tests.cpp")
+    target_link_libraries(mako-descriptor-pool-tests PRIVATE mako-common)
+    add_test(NAME descriptor-pool-capacity COMMAND mako-descriptor-pool-tests)
+    set_tests_properties(external-fd-ownership descriptor-pool-capacity PROPERTIES
+        LABELS "portable-policy")
+
     add_executable(mako-dll-paths-tests "tests/paths_tests.cpp")
     target_link_libraries(mako-dll-paths-tests PRIVATE mako-common)
     add_test(NAME lossless-dll-discovery COMMAND mako-dll-paths-tests)

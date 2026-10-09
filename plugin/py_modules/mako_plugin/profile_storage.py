@@ -54,7 +54,6 @@ from .config_schema import (
 )
 from .config_schema_generated import (
     ConfigurationData,
-    DISABLE_HDR_EXPOSURE,
     WrapperSettingsData,
 )
 from .types import CustomShaderEffect, ProfileDetails
@@ -164,9 +163,6 @@ def normalize_wrapper_settings(
         if field_name in migrated_settings
     })
     validated = ConfigurationManager.validate_config(candidate)
-    # HDR remains an engine foundation in this release, not a supported Decky
-    # launch mode. Override both old opt-ins and new UI writes.
-    validated[DISABLE_HDR_EXPOSURE] = True
     return cast(WrapperSettingsData, {
         field_name: validated[field_name]
         for field_name in SCRIPT_ONLY_FIELDS

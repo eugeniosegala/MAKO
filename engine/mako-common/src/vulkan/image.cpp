@@ -195,7 +195,15 @@ Image::Image(const vk::Vulkan& vk,
         this->memory = allocateMemory(vk, *this->image, importFd,
             exportFd.has_value(), imported);
     }
-    this->view = createImageView(vk, *this->image, format);
+    // Transfer-only images (for example Native Resolution scratch) are never
+    // sampled or bound as attachments. Vulkan forbids creating views for this
+    // usage, and copy/blit commands need only the image handle.
+    constexpr VkImageUsageFlags transferUsage =
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    if ((usage & ~transferUsage) != 0)
+        this->view = createImageView(vk, *this->image, format);
+    else
+        this->view = ls::owned_ptr<VkImageView>(new VkImageView(VK_NULL_HANDLE));
     if (exportFd)
         exportMemory(vk, *this->memory, **exportFd);
 }

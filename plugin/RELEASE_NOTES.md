@@ -1,4 +1,4 @@
-## What's new in MAKO Decky v4.1.0
+## What's new in MAKO Decky v4.5.0
 
 <img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/maelstrom.png" alt="Maelstrom release artwork: a colossal mako draws a storm-torn sea into the glowing whirlpool inside its jaws" width="100%">
 
@@ -10,8 +10,9 @@
 
 ---
 
-Maelstrom adds AC/battery settings, display-aware Adaptive targets, custom shaders and native Steam Remote Play, with new Steam Overlay controls and broader Flatpak support.
+Maelstrom adds experimental HDR, AC/battery settings, display-aware Adaptive targets, custom shaders and native Steam Remote Play, with new Steam Overlay controls and broader Flatpak support.
 
+- **Experimental HDR (disabled by default):** Turn off **Disable HDR (Restart)** in the game's profile to use HDR10/PQ or linear scRGB with Scaling, Frame Generation and Shaders. Restart the game after changing the toggle, then enable its HDR setting. Requires an HDR-capable display and HDR enabled in Gamescope.
 - **AC and battery settings:** Enable separate Handheld and Docked settings for each profile, then edit either set or Base settings. The matching Renderer follows battery or AC power automatically while playing, even with the panel closed. Switching sets preserves shared shader edits and keeps native settings separate; normal restart requirements still apply.
 - **Match Display Refresh Rate:** Let Adaptive follow Gamescope's current refresh rate instead of a fixed target. Your manual target is kept as the fallback; turn matching off to edit it. Live Status shows the effective target. The option can differ between AC and battery settings.
 - **Custom shaders:** Add compatible ReShade `.fx` files, then select and order them alongside bundled effects. Selection, ordering and deletion apply live while Shaders is active; **Refresh** reloads edited files and dependencies. Failed edits keep the previous chain running. The picker has more reliable paging, scrolling and controller focus. Flatpak games need access to the original files and dependencies.

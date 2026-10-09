@@ -266,7 +266,7 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
         const ls::GameConf& resourceProfile) {
     bool applicationPackedHdr10Supported = false;
     bool backendPackedHdr10Supported = false;
-    if (this->instance) {
+    if (this->instance && !this->spatialScaler) {
         selectPackedHdr10Transport(
             vk, *this->instance, pipeline,
             applicationPackedHdr10Supported, backendPackedHdr10Supported
@@ -567,7 +567,7 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
             this->preparedSpatialScaler.emplace(
                 vk, this->info.applicationExtent, this->info.extent,
                 this->colorPipeline.exchangeFormat, requested.method,
-                requested.sharpness, this->scalingShaderDll, this->fp16Requested
+                requested.sharpness, this->scalingShaderDll, this->fp16Requested, this->colorPipeline.encoding
             );
             this->configureDirectSpatialFrameGenerationOutputs(
                 vk, *this->preparedSpatialScaler, this->sourceImages,

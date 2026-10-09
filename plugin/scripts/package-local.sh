@@ -309,6 +309,11 @@ if [[ -n "$local_engine_repo" ]]; then
     local_engine_builder_label="portable"
   fi
   local_engine_label="$local_engine_label.$local_engine_builder_label"
+  if [[ -n "${MAKO_VKBASALT_LOCAL_ARCHIVE:-}" ]]; then
+    local_vkbasalt_checksum="$("${checksum_command[@]}" "$repository_root/$MAKO_VKBASALT_LOCAL_ARCHIVE" | awk '{print $1}')"
+    local_engine_label="$local_engine_label.shaders.${local_vkbasalt_checksum:0:12}"
+    local_engine_dirty=true
+  fi
 
   # A local Decky build must have a plugin version distinct from the previous
   # package, otherwise Decky can keep the already-loaded Python backend and
