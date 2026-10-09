@@ -17,15 +17,15 @@ Detection finds the executable; MAKO activates on the next launch. The configura
 
 ## Profiles
 
-**Create New Profile** copies the selected profile's settings, matches, power modes, and shaders. **Default** cannot be renamed or deleted.
+**Create New Profile** copies the selected profile's settings, matches, power modes, and shaders. Use **Rename Profile** or **Delete Profile** to manage copies; **Default** is protected.
 
 The dropdown selects the profile you edit; local games use their executable matches. If detection fails, use **Show all applications** or add the executable manually. Match the game, not its launcher, Steam title, or ROM filename.
 
 ### AC and battery settings
 
-Under **Power Profiles**, enable **Separate power settings** and choose **Editing settings for** to configure Handheld, Docked, or Base.
+Under **Power Profiles**, enable **Separate power settings**, then choose Handheld, Docked, or Base under **Editing settings for**.
 
-Battery selects Handheld; connecting a charger selects Docked, even without a dock. An external display alone does not. Base applies when power detection is unavailable at startup or separate settings are disabled. DLL, FP16, Shaders, and launcher settings stay shared; power changes follow normal live/restart rules.
+Battery selects Handheld; charging selects Docked without requiring a dock. An external display alone does not switch sets. Base applies if startup power detection fails or separate settings are off. DLL, FP16, Shaders, and launcher settings stay shared; normal live/restart rules apply.
 
 ### Launcher exclusions
 
@@ -33,21 +33,22 @@ Known launchers and helpers are excluded so their child games can match normally
 
 ## Native Steam Remote Play
 
-On the receiving device, close streams and select **Override Remote Play**. Choose a saved profile before streaming. See the [Remote Play guide](../../plugin/docs/REMOTE-PLAY.md) for setup and restoration.
+On the receiving device, close streams and select **Override Remote Play**. Choose a saved profile before streaming. **Restore Steam Client** removes the override; **Refresh** checks its status. See the [Remote Play guide](../../plugin/docs/REMOTE-PLAY.md) for setup and limits.
 
 ## Profile settings
 
 ### Frame Generation
 
-Enable Frame Generation before launching. **Real FPS** counts game frames; output FPS includes generated frames. Targets depend on the game, GPU, and display.
+Turn on **Enable Frame-gen (Restart)** before launching. **Real FPS** counts game frames; output FPS includes generated frames. In Fixed or Adaptive mode, `0x` pauses generation and its FPS caps live; selecting 2x–5x resumes it.
 
 | Control | What it does |
 | --- | --- |
-| **Fixed Multiplier** | Requests 2x–5x output. Start at 2x; `0x` pauses generation. |
-| **Adaptive Frame Generation** | Varies generation toward **Target FPS**, up to **Max Adaptive Multiplier**. |
-| **Match Display Refresh Rate** | Uses Gamescope's refresh as the Adaptive target; **Fallback Target FPS** applies when feedback is unavailable. |
+| **Fixed Multiplier** | Requests 2x–5x output. Start at 2x. |
+| **Adaptive Frame Generation** | Varies generation toward **Target FPS** (10–1000), up to **Maximum Adaptive Multiplier** (2x–5x). |
+| **Match Display Refresh Rate** | Uses Gamescope's refresh as the Adaptive target; **Fallback Target FPS** applies without feedback. Turn matching off to edit the target. |
 | **Steady Base Cap** | Initially caps real FPS at half the target for even cadence; may reduce responsiveness. |
-| **Fractional Adaptive / Real Frame Priority** | Keeps more real frames; higher priority allows more real FPS, but delivery may feel less even. |
+| **Fractional Adaptive** | Keeps more real frames, but delivery may feel less even. |
+| **Real Frame Priority** | Low–Very High select a Fractional real-FPS cap; higher priority allows more real FPS. **Automatic** adds no priority cap. |
 | **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. |
 | **Smooth Cadence** | Favours consistent delivery; compare on/off for responsiveness. |
 | **Gamescope VRR** | Follows Steam, or temporarily requests VRR on/off on a supported display during play. |
@@ -63,29 +64,36 @@ Enable Scaling before launching. Set Steam's **Game Resolution** to the display 
 | **LS1 Quality** | Highest-quality LS1 scaling; requires Lossless Scaling |
 | **LS1 Performance** | Lower-cost LS1 scaling; requires Lossless Scaling |
 
-**Scale Factor** targets 1.0x–2.0x output dimensions; **Sharpness** adjusts sharpening. **Quality Supersampling** can improve quality on supported Gamescope surfaces, with higher GPU and memory use. LS1 failures fall back to MAKO Scaler.
+**Scale Factor** targets 1.0x–2.0x output dimensions, within display limits; **Sharpness** adjusts sharpening except in Native Resolution. **Quality Supersampling** can improve quality on supported Gamescope surfaces, with higher GPU and memory use. LS1 failures fall back to MAKO Scaler.
 
 ### Performance and device selection
 
 | Control | What it does |
 | --- | --- |
 | **Ultra Performance (Restart)** | Uses 70% Flow Scale, the lighter FG model, and LS1 Performance when scaling is enabled. |
-| **Flow Scale** | Lower values reduce GPU cost and motion-estimation quality. |
-| **Lighter FG Model** | Reduces GPU work, with potentially more artifacts. |
-| **Allow FP16 (Restart)** | Uses FP16 for supported Frame Generation models and MAKO Scaler; off uses FP32. LS1 always uses FP32. |
-| **Lossless.dll Path (Restart)** | Optional override; leave empty for automatic detection. |
+| **Flow Scale** | 25–100% motion-estimation resolution; lower saves GPU work at a quality cost. Ultra Performance fixes it at 70%. |
+| **Lighter FG Model** | Reduces GPU work, with potentially more artifacts; forced on by Ultra Performance. |
+| **Allow FP16 (Restart)** | Global precision: FP16 for supported Frame Generation models and MAKO Scaler; off uses FP32. LS1 always uses FP32. |
+| **Lossless.dll Path (Restart)** | Global override; leave empty for automatic detection. |
 | **GPU (Restart)** | Selects a GPU; multi-GPU Frame Generation is unsupported. |
 
 ### Qt Shaders and compatibility controls
 
-Enable **Shaders** before launching to use bundled vkBasalt. Select **Effects** in the desired order; more effects cost more GPU time. **Sharpening** offers CAS or DLS; **Anti-aliasing** offers FXAA or SMAA. **HDR Look (SDR)** changes appearance without enabling HDR.
+Enable **Shaders** before launching to use bundled vkBasalt; more effects cost more GPU time.
 
-**Add Custom Shader** registers a vkBasalt-compatible ReShade `.fx` file; select its entry in **Effects** to enable it. Keep includes and textures accessible, including inside Flatpak sandboxes. **Delete selected custom shaders** removes registrations from this profile; original files remain. Use **Refresh** after external edits. Failed shader loads keep the previous chain active.
+- **Effects:** select effects in order; uncheck and recheck to move one last. **Off** clears the effect list. **HDR Look (SDR)** changes appearance without enabling HDR.
+- **Sharpening:** Off, CAS, or DLS, with adjustable **Sharpness**. **DLS Denoise** limits sharpening of grain and noise.
+- **Anti-aliasing:** Off, FXAA, or SMAA.
+
+Edit advanced shader parameters in the file shown below these controls. MAKO keeps other settings; restart after manual edits.
+
+**Add Custom Shader** registers a vkBasalt-compatible ReShade `.fx` file; enable it in **Effects**. Keep includes and textures accessible to Flatpak games. **Delete selected custom shaders** removes profile registrations, preserving original files. **Refresh** reloads external edits; failed loads keep the previous chain active.
 
 Under **Compatibility**, keep defaults unless a game needs a change:
 
-- **Auto-disable Frame Generation by Refresh Rate:** pauses generation and Adaptive caps at or below a confirmed Gamescope threshold; a manual Base FPS Cap remains.
-- **Dynamic Cadence Recovery:** checks games that change frame rate between scenes or menus; clears real-frame caps while enabled.
+- **Auto-disable Frame Generation by Refresh Rate / Refresh Rate Threshold:** pauses generation and Adaptive caps at or below the chosen Gamescope refresh; a manual Base FPS Cap remains.
+- **Dynamic Cadence Recovery:** rechecks games that change native FPS; clears base caps and resets Real Frame Priority. Enabling a cap or changing priority turns Recovery off.
+- **Cadence Probe Interval:** 0.1–3 seconds between recovery checks; default 2 seconds. Shorter intervals react sooner but can hitch more often.
 - **Game Swapchain Images (Restart):** may help games that fail to start, with less generated-frame headroom.
 
 ### Desktop scaling and resolution
@@ -102,6 +110,8 @@ For 1920×1080 output at 1.5x, aim for a 1280×720 input. Raising the factor wit
 
 Some live changes rebuild resources and may briefly hitch. See [Runtime transitions](RUNTIME-TRANSITIONS.md) for details.
 
+**Interface Settings > Language** changes the Qt interface language. The first launch follows your system language, with English as the fallback.
+
 ## Standalone launcher
 
 For native Steam and Proton games, copy the UI's complete launch option. Without shaders or an explicit profile, the user-local archive uses:
@@ -112,9 +122,9 @@ For native Steam and Proton games, copy the UI's complete launch option. Without
 
 The Arch package uses `/usr/bin/mako-launch`. For a terminal launch, replace `%command%` with the executable and arguments. Flatpak applications need [Flatpak preparation](FLATPAK-GUIDE.md).
 
-**Disable Steam Overlay (Restart)** is on by default and may reduce stutter. It disables the in-game Steam overlay and FPS counter and may affect Steam Input; Gaming Mode menus and its performance overlay remain available. Turn it off and restart to restore normal Steam integration.
+Launcher settings apply globally to `mako-launch` games. **Disable Steam Overlay (Restart)** is on by default; it may reduce stutter but disables Steam's in-game overlay and FPS counter and may affect Steam Input. Gaming Mode menus and performance overlay remain available.
 
-**Zink** runs OpenGL through Vulkan. **Force ALSA** changes the audio path for compatibility problems. Both require a restart. Steam Deck mode, Gamescope WSI, and MangoHud controls are available in MAKO Decky.
+**Zink** runs OpenGL through Vulkan. **Force ALSA** changes the audio path for compatibility problems. Steam Deck mode, Gamescope WSI, and MangoHud controls are available in MAKO Decky.
 
 ## Advanced configuration
 

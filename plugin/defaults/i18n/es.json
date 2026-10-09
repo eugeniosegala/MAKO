@@ -106,7 +106,7 @@
   "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduce la carga de la GPU de MAKO en dispositivos de bajo consumo. Usa una escala de flujo del 70 %, el modelo de FG ligero y LS1 Performance cuando el escalado está habilitado. Sacrifica calidad de imagen para mejorar el rendimiento de las funciones activas de MAKO. Respeta el ajuste global de FP16.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Activar o desactivar Ultra Performance requiere reiniciar el juego. Los demás controles de perfil compatibles siguen disponibles después del inicio.",
   "CONFIG_DISABLE_STEAM_OVERLAY": "Desactivar la superposición de Steam (Reiniciar)",
-  "CONFIG_DISABLE_STEAM_OVERLAY_DESC": "Impide que la superposición de Steam se cargue en el juego, lo que puede mejorar el rendimiento y reducir los tirones. En el modo Escritorio o Big Picture, desactiva la superposición en el juego, su chat y navegador, y el contador de FPS de Steam. Algunas funciones de Steam Input también pueden verse afectadas. Los menús y la superposición de rendimiento del modo Juego de SteamOS siguen disponibles. Desactiva esta opción y reinicia el juego para restaurar la integración normal con Steam.",
+  "CONFIG_DISABLE_STEAM_OVERLAY_DESC": "Puede mejorar el rendimiento y reducir los tirones. Desactiva la superposición de Steam, el chat, el navegador y el contador de FPS en modo Escritorio/Big Picture; puede afectar a Steam Input. Los menús y la superposición de rendimiento del modo Juego siguen disponibles.",
   "CONFIG_PERFORMANCE_MODE": "Modelo de FG ligero",
   "CONFIG_PERFORMANCE_MODE_DESC": "El modelo FG ligero reduce la carga de GPU, pero aumenta las imágenes fantasma; Rendimiento ultra lo fuerza.",
   "CONFIG_DISABLE_STEAMDECK_MODE": "Desactivar el modo Steam Deck (Reiniciar)",

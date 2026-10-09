@@ -928,6 +928,47 @@ int main() {
     mako_test_surface_ownership(false);
     expect(mako_test_surface_objects() == 0, "ownership stress connection teardown");
 
+    {
+        GamescopeScalingSurface bridge;
+        VkSurfaceKHR surface{};
+        expect(bridge.connect() &&
+            bridge.create(VK_NULL_HANDLE, next, info, nullptr, &surface) == VK_SUCCESS,
+            "resize matrix surface");
+        const auto feedbackInfo = swapchainInfo(surface);
+        // Repeat the application's acquire -> resize -> present -> replacement
+        // journey, including A -> B -> A reversals and immediate handle reuse.
+        // Geometry invalidates future acquisition, never an acquired image.
+        const int resizeObjects = mako_test_surface_objects();
+        for (int cycle = 0; cycle < 128; ++cycle) {
+            const VkExtent2D source = cycle % 2 ? VkExtent2D{800, 450} : VkExtent2D{640, 360};
+            const VkExtent2D target = cycle % 2 ? VkExtent2D{640, 360} : VkExtent2D{800, 450};
+            const auto handle = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(3010));
+            checkApplicationExtent(bridge, surface, source, 1.5F);
+            auto info = feedbackInfo;
+            info.imageExtent = {source.width * 3 / 2, source.height * 3 / 2};
+            expect(bridge.createSwapchain(surface, handle, info, source, 6,
+                "resize-matrix", VK_PRESENT_MODE_FIFO_KHR), "create resize matrix swapchain");
+            expect(bridge.acquisitionResult(surface, handle) == VK_SUCCESS,
+                "acquire before a mid-frame resize");
+            checkApplicationExtent(bridge, surface, target, 1.5F);
+            if (cycle % 4 == 0)
+                checkApplicationExtent(bridge, surface, source, 1.5F);
+            const int hotPathQueries = mako_test_surface_geometry_queries();
+            expect(bridge.preparePresent(surface, handle) == VK_SUCCESS,
+                "an acquired image must remain presentable across a resize");
+            for (int attempt = 0; attempt < 16; ++attempt)
+                expect(bridge.acquisitionResult(surface, handle) == VK_ERROR_OUT_OF_DATE_KHR,
+                    "resize and rapid reversal must keep future acquisition invalid");
+            expect(mako_test_surface_geometry_queries() == hotPathQueries,
+                "mid-frame resize handling must not add present/acquire geometry queries");
+            bridge.destroySwapchain(surface, handle);
+            expect(mako_test_surface_objects() == resizeObjects,
+                "resize cycles must release their protocol resources");
+        }
+        bridge.destroy(surface);
+    }
+    expect(mako_test_surface_objects() == 0, "resize matrix connection teardown");
+
     // RE4/Proton selects the window's exact 1920x1080 rendering size. A real
     // variable Wayland surface permits a separate 3840x2160 output; never
     // weaken the existing fixed-surface override guard to fabricate that split.
