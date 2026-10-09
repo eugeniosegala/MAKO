@@ -361,6 +361,7 @@
   "LIVE_STATUS_CONNECTED": "MAKO ist aktiv",
   "LIVE_STATUS_WAITING": "Warten auf MAKO",
   "LIVE_STATUS_WAITING_DESC": "Live-Messwerte sind nicht verfügbar; MAKO kann trotzdem funktionieren. Manche Spiele/Emulatoren melden sie möglicherweise nicht. Prüfen Sie Frame Generation oder Skalierung manuell.",
+  "LIVE_STATUS_FEATURES_OFF_DESC": "Frame Generation und Skalierung sind in diesem Profil ausgeschaltet.",
   "LIVE_STATUS_FG_INACTIVE": "In den Einstellungen aktiviert, derzeit werden aber keine Frames generiert.",
   "LIVE_STATUS_FG_MENU_SUSPENDED": "Frame Generation ist deaktiviert, solange ein Steam- oder Decky-Menü geöffnet ist.",
   "LIVE_STATUS_OFF": "Aus",

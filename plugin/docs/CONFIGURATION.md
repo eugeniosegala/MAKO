@@ -2,6 +2,8 @@
 
 MAKO Decky saves automatically. Options marked **Restart** need a game restart; **Live Status** shows what is active and any pending changes.
 
+Without live metrics, **Live Status** shows **Off** when Frame Generation and Scaling are both disabled in the current profile and power settings. Otherwise, it keeps the missing-metrics message. Reported live activity takes priority over saved settings that may still need a restart.
+
 ## Quick start
 
 1. Add `/home/deck/.local/bin/mako-run %command%` to the game's Steam launch options. For other launchers, follow [launcher setup](LAUNCHERS.md).

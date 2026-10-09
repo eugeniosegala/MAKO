@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   powerSource: "handheld",
   sharpness: 0.5,
   targets: { handheld: 60, docked: 144 },
+  featuresOffModes: [] as string[],
+  loadGate: null as Promise<void> | null,
   saveGate: null as Promise<void> | null,
   getProfileConfig: vi.fn(),
   updateProfileConfigFields: vi.fn(),
@@ -54,7 +56,7 @@ vi.mock("../../src/hooks/useMakoHooks", async (importOriginal) => ({
     engineUpdateRequired: false,
   }),
   useDllDetection: () => ({}),
-  useRuntimeScalingStatus: () => ({}),
+  useRuntimeScalingStatus: () => EMPTY_RUNTIME_SCALING_UI_STATE,
 }));
 vi.mock("../../src/hooks/useProfileManagement", () => ({
   useProfileManagement: () => ({
@@ -72,7 +74,8 @@ vi.mock("../../src/hooks/useInstallationActions", () => ({
 vi.mock("../../src/components/InfoVisibility", () => ({
   InfoVisibility: pass,
 }));
-vi.mock("../../src/components/MakoUi", () => ({
+vi.mock("../../src/components/MakoUi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/components/MakoUi")>()),
   MakoButtonTheme: empty,
   MakoReleaseIdentity: empty,
 }));
@@ -125,9 +128,6 @@ vi.mock("../../src/components/UsageInstructions", () => ({
 }));
 vi.mock("../../src/components/FgmodClipboardButton", () => ({
   FgmodClipboardButton: empty,
-}));
-vi.mock("../../src/components/RuntimeStatusCard", () => ({
-  RuntimeStatusCard: empty,
 }));
 vi.mock("../../src/components/AdvancedDetailsModal", () => ({
   AdvancedDetailsModal: empty,
@@ -188,12 +188,15 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { Content } from "../../src/components/Content";
+import { EMPTY_RUNTIME_SCALING_UI_STATE } from "../../src/utils/runtimeScalingUtils";
 
 function configForMode(mode: string) {
   return {
     ...getDefaults(),
     target_fps: mocks.targets[mode as keyof typeof mocks.targets] ?? 90,
     vkbasalt_sharpness: mocks.sharpness,
+    frame_generation_provisioned: !mocks.featuresOffModes.includes(mode),
+    scaling_enabled: false,
   };
 }
 
@@ -203,6 +206,8 @@ beforeEach(() => {
   mocks.powerSource = "handheld";
   mocks.sharpness = 0.5;
   mocks.saveGate = null;
+  mocks.featuresOffModes = [];
+  mocks.loadGate = null;
   mocks.reloadProfileShaders.mockResolvedValue({ success: true });
   mocks.deleteProfileShaders.mockResolvedValue({ success: true });
   mocks.setCurrentProfile.mockResolvedValue({ success: true });
@@ -216,13 +221,16 @@ beforeEach(() => {
     profile_name: "Streaming",
   });
   mocks.getProfileConfig.mockImplementation(
-    async (_name: string, mode?: string) => ({
-      success: true,
-      config: configForMode(mode || mocks.powerSource),
-      power_mode: mode || mocks.powerSource,
-      separate_power_modes: true,
-      power_source: mocks.powerSource,
-    }),
+    async (_name: string, mode?: string) => {
+      if (mocks.loadGate) await mocks.loadGate;
+      return {
+        success: true,
+        config: configForMode(mode || mocks.powerSource),
+        power_mode: mode || mocks.powerSource,
+        separate_power_modes: true,
+        power_source: mocks.powerSource,
+      };
+    },
   );
   mocks.updateProfileConfigFields.mockImplementation(
     async (_name: string, changes: ConfigurationPatch, mode: string) => {
@@ -247,6 +255,55 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+test("editing an inactive power set cannot hide missing telemetry for the running game", async () => {
+  mocks.featuresOffModes = ["docked"];
+  render(<Content />);
+  await act(async () => {});
+  expect(screen.getByText("Waiting for MAKO")).toBeTruthy();
+
+  fireEvent.change(screen.getByLabelText("Power set"), {
+    target: { value: "docked" },
+  });
+  await act(async () => {});
+  expect(screen.getByText("Waiting for MAKO")).toBeTruthy();
+  expect(
+    screen.queryByText("Frame Generation and Scaling are off in this profile."),
+  ).toBeNull();
+
+  mocks.powerSource = "docked";
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(2000);
+  });
+  expect(
+    screen.getByText("Frame Generation and Scaling are off in this profile."),
+  ).toBeTruthy();
+});
+
+test("stale disabled settings cannot replace missing telemetry during a profile load", async () => {
+  mocks.featuresOffModes = ["handheld"];
+  render(<Content />);
+  await act(async () => {});
+  expect(
+    screen.getByText("Frame Generation and Scaling are off in this profile."),
+  ).toBeTruthy();
+
+  let finishLoad!: () => void;
+  mocks.loadGate = new Promise<void>((resolve) => {
+    finishLoad = resolve;
+  });
+  fireEvent.change(screen.getByLabelText("Power set"), {
+    target: { value: "docked" },
+  });
+  await act(async () => {});
+  expect(screen.getByText("Waiting for MAKO")).toBeTruthy();
+  expect(
+    screen.queryByText("Frame Generation and Scaling are off in this profile."),
+  ).toBeNull();
+  await act(async () => {
+    finishLoad();
+  });
 });
 
 test("profile selection drains queued edits before persisting the stream selection", async () => {

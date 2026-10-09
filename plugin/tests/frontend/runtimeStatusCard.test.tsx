@@ -20,15 +20,24 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { RuntimeStatusCard } from "../../src/components/RuntimeStatusCard";
+import {
+  getDefaults,
+  type ConfigurationData,
+} from "../../src/config/configSchema";
 import { EMPTY_RUNTIME_SCALING_UI_STATE } from "../../src/utils/runtimeScalingUtils";
 
 afterEach(cleanup);
 
 describe("authoritative live status", () => {
-  test("shows applied Frame Generation and scaling geometry", () => {
+  test("shows applied Frame Generation and scaling despite disabled saved settings", () => {
     window.SP_REACT = React;
     const { container } = render(
       <RuntimeStatusCard
+        activeConfig={{
+          frame_generation_provisioned: false,
+          frame_generation_enabled: false,
+          scaling_enabled: false,
+        }}
         runtimeState={{
           ...EMPTY_RUNTIME_SCALING_UI_STATE,
           hasContext: true,
@@ -177,9 +186,7 @@ describe("authoritative live status", () => {
     const menuNotice = screen.getByText(
       "Frame Generation is disabled while a Steam or Decky menu is open.",
     );
-    const footer = menuNotice.closest(
-      '[data-mako-live-status-footer="true"]',
-    );
+    const footer = menuNotice.closest('[data-mako-live-status-footer="true"]');
     expect(footer).toBeTruthy();
     expect(
       container
@@ -291,14 +298,98 @@ describe("authoritative live status", () => {
 
     expect(screen.getByText("Waiting for MAKO")).toBeTruthy();
     expect(
-      screen.getByText(
-        /Live metrics unavailable; MAKO may still work/,
-      ),
+      screen.getByText(/Live metrics unavailable; MAKO may still work/),
     ).toBeTruthy();
     expect(
       screen.getByText(/Check Frame Generation or Scaling manually/),
     ).toBeTruthy();
   });
+
+  test.each([
+    {
+      frame_generation_provisioned: false,
+      frame_generation_enabled: true,
+      external_vulkan_layer: "vkbasalt",
+    },
+    {
+      frame_generation_provisioned: false,
+      frame_generation_enabled: true,
+      external_vulkan_layer: "none",
+    },
+    {
+      frame_generation_provisioned: true,
+      frame_generation_enabled: false,
+      external_vulkan_layer: "vkbasalt",
+    },
+    {
+      frame_generation_provisioned: true,
+      frame_generation_enabled: false,
+      external_vulkan_layer: "none",
+    },
+  ])(
+    "shows explicitly disabled features without waiting, regardless of shaders: %j",
+    (settings) => {
+      window.SP_REACT = React;
+      const config: ConfigurationData = {
+        ...getDefaults(),
+        ...settings,
+        scaling_enabled: false,
+      };
+      render(
+        <RuntimeStatusCard
+          runtimeState={EMPTY_RUNTIME_SCALING_UI_STATE}
+          activeConfig={config}
+        />,
+      );
+
+      expect(screen.getByText("Off")).toBeTruthy();
+      expect(
+        screen.getByText(
+          "Frame Generation and Scaling are off in this profile.",
+        ),
+      ).toBeTruthy();
+      expect(screen.queryByText("Waiting for MAKO")).toBeNull();
+      expect(screen.queryByText(/Live metrics unavailable/)).toBeNull();
+      expect(screen.queryByText(/shaders/i)).toBeNull();
+    },
+  );
+
+  test.each([
+    {
+      frame_generation_provisioned: true,
+      frame_generation_enabled: true,
+      scaling_enabled: false,
+    },
+    {
+      frame_generation_provisioned: false,
+      frame_generation_enabled: true,
+      scaling_enabled: true,
+    },
+    {
+      frame_generation_provisioned: true,
+      frame_generation_enabled: false,
+      scaling_enabled: true,
+    },
+  ])(
+    "preserves the missing-telemetry message when a feature is enabled: %j",
+    (config) => {
+      window.SP_REACT = React;
+      render(
+        <RuntimeStatusCard
+          runtimeState={EMPTY_RUNTIME_SCALING_UI_STATE}
+          activeConfig={config}
+        />,
+      );
+
+      expect(screen.getByText("Waiting for MAKO")).toBeTruthy();
+      expect(
+        screen.getByText(/Live metrics unavailable; MAKO may still work/),
+      ).toBeTruthy();
+      expect(
+        screen.getByText(/Check Frame Generation or Scaling manually/),
+      ).toBeTruthy();
+    },
+  );
 
   test("states when scaling is unavailable for the running surface", () => {
     window.SP_REACT = React;

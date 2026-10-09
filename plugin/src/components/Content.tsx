@@ -288,7 +288,16 @@ export function Content() {
               loadProfileConfig={loadEditorConfig}
             />
             {(mainRunningApp || remotePlayRunning) && (
-              <RuntimeStatusCard runtimeState={scalingRuntimeState} />
+              <RuntimeStatusCard
+                runtimeState={scalingRuntimeState}
+                activeConfig={
+                  !isConfigLoading &&
+                  (!separatePowerModes ||
+                    powerMode === (currentPowerSource ?? powerSource))
+                    ? config
+                    : undefined
+                }
+              />
             )}
             {isConfigLoading && (
               <PanelSectionRow>

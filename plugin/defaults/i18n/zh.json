@@ -361,6 +361,7 @@
   "LIVE_STATUS_CONNECTED": "MAKO is active",
   "LIVE_STATUS_WAITING": "Waiting for MAKO",
   "LIVE_STATUS_WAITING_DESC": "实时指标不可用，但 MAKO 可能仍在运行。部分游戏或模拟器可能不报告指标。请手动检查帧生成或缩放。",
+  "LIVE_STATUS_FEATURES_OFF_DESC": "此配置文件中的帧生成和缩放均已关闭。",
   "LIVE_STATUS_FG_INACTIVE": "On in settings, but not currently generating frames.",
   "LIVE_STATUS_FG_MENU_SUSPENDED": "Frame Generation is disabled while a Steam or Decky menu is open.",
   "LIVE_STATUS_OFF": "Off",

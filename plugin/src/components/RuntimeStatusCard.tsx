@@ -1,4 +1,5 @@
 import { PanelSectionRow } from "@decky/ui";
+import type { ConfigurationData } from "../config/configSchema";
 import type { RuntimeScalingUiState } from "../utils/runtimeScalingUtils";
 import t from "../i18n/i18n";
 import {
@@ -180,9 +181,22 @@ function StatusFooterNotices({ notices }: { notices: StatusNotice[] }) {
 
 export function RuntimeStatusCard({
   runtimeState,
+  activeConfig,
 }: {
   runtimeState: RuntimeScalingUiState;
+  activeConfig?: Pick<
+    ConfigurationData,
+    | "frame_generation_provisioned"
+    | "frame_generation_enabled"
+    | "scaling_enabled"
+  >;
 }) {
+  // Configuration explains absent telemetry; it must not override live reports.
+  const featuresOff =
+    !runtimeState.hasContext &&
+    activeConfig?.scaling_enabled === false &&
+    (activeConfig.frame_generation_provisioned === false ||
+      activeConfig.frame_generation_enabled === false);
   const inactiveNotice =
     runtimeState.scalingEnabled && !runtimeState.scalingActive
       ? scalingInactiveNotice(runtimeState.inactiveReason)
@@ -280,7 +294,9 @@ export function RuntimeStatusCard({
               >
                 {runtimeState.hasContext
                   ? t("LIVE_STATUS_CONNECTED", "MAKO is active")
-                  : t("LIVE_STATUS_WAITING", "Waiting for MAKO")}
+                  : featuresOff
+                    ? t("LIVE_STATUS_OFF", "Off")
+                    : t("LIVE_STATUS_WAITING", "Waiting for MAKO")}
               </span>
             </div>
 
@@ -294,10 +310,15 @@ export function RuntimeStatusCard({
                   lineHeight: 1.4,
                 }}
               >
-                {t(
-                  "LIVE_STATUS_WAITING_DESC",
-                  "Live metrics unavailable; MAKO may still work. Some games/emulators may not report them. Check Frame Generation or Scaling manually.",
-                )}
+                {featuresOff
+                  ? t(
+                      "LIVE_STATUS_FEATURES_OFF_DESC",
+                      "Frame Generation and Scaling are off in this profile.",
+                    )
+                  : t(
+                      "LIVE_STATUS_WAITING_DESC",
+                      "Live metrics unavailable; MAKO may still work. Some games/emulators may not report them. Check Frame Generation or Scaling manually.",
+                    )}
               </div>
             ) : (
               <>
