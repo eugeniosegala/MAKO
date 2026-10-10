@@ -549,6 +549,17 @@ AdaptiveScheduler::observeCadence(
         this->state.cadence.lastRealFrame = now;
         this->state.cadence.dropFrames = 0;
         this->state.outputPlanner.resetTargetClock();
+        auto& nativeProbe = this->state.nativeCadenceProbe;
+        auto& preference = this->state.nearTargetNativePreference;
+        if (nativeProbe.active || preference.nativeBaseFps || preference.nativeSampleFrames) {
+            // The transport now requests one generated image. Native samples
+            // on either side are no longer consecutive native-only evidence.
+            // Preserve accepted policy, but restart this optional measurement.
+            nativeProbe.reset();
+            nativeProbe.nextAt = now + this->config.dynamicCadenceProbeInterval;
+            preference.resetCandidate();
+            preference.resetNativeSample();
+        }
         return {
             .terminalPlan = AdaptiveFramePlan::evenlySpaced(1),
         };
@@ -601,6 +612,22 @@ AdaptiveScheduler::observeCadence(
         ? 1.0 / this->state.cadence.smoothedIntervalSeconds
         : 0.0;
     const double instantaneousBaseFps = 1.0 / rawIntervalSeconds;
+    auto& nativePreference = this->state.nearTargetNativePreference;
+    if (this->state.nativeCadenceProbe.qualifyingNearTarget ||
+            (nativePreference.active &&
+             (nativePreference.nativeBaseFps || nativePreference.nativeSampleFrames))) {
+        nativePreference.nativeSampleSeconds += rawIntervalSeconds;
+        nativePreference.nativeSampleFrames++;
+        if (nativePreference.nativeSampleSeconds >= adaptivePacedLoadWindowSeconds) {
+            nativePreference.nativeBaseFps =
+                static_cast<double>(nativePreference.nativeSampleFrames) /
+                    nativePreference.nativeSampleSeconds;
+            nativePreference.nativeSampleSeconds = 0.0;
+            nativePreference.nativeSampleFrames = 0;
+        }
+    } else if (nativePreference.nativeBaseFps || nativePreference.nativeSampleFrames) {
+        nativePreference.resetNativeSample();
+    }
     const double fastBurstThresholdFps = std::max(
         baselineBaseFps * adaptiveTransientFastBurstCadenceRatio,
         static_cast<double>(this->config.targetFps) *
@@ -1611,7 +1638,8 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         const double instantaneousBaseFps,
         const double desiredOutputsPerRealFrame,
         const size_t maximumGeneratedFrameCount,
-        size_t& generatedFrameCount) {
+        size_t& generatedFrameCount,
+        const std::optional<TimePoint> queuedPresentationDeadline) {
     // Ordered FIFO work makes a genuine 30-FPS source observationally
     // identical to a native 60-FPS source held at 30 by MAKO's previous
     // generated-plus-original present. The opt-in probe removes generated
@@ -1623,9 +1651,11 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         // measurement free of sparse generated FIFO work until the existing
         // near-target hold qualifies it. Otherwise that work can hide the
         // recovered source again before the hold has enough evidence.
-        if (baseFps >= this->config.targetFps *
-                adaptiveNearTargetNativeMinimumOutputRatio &&
-                this->state.nearTargetNativePreference.candidateActive.value_or(false)) {
+        const auto& preference = this->state.nearTargetNativePreference;
+        if (!preference.nativeBaseFps ||
+                (*preference.nativeBaseFps >= this->config.targetFps *
+                    adaptiveNearTargetNativeMinimumOutputRatio &&
+                 preference.candidateActive.value_or(false))) {
             this->state.outputPlanner.resetTargetClock();
             generatedFrameCount = 0;
             return {};
@@ -1633,6 +1663,7 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         probe.reset();
         probe.nextAt = now + this->config.dynamicCadenceProbeInterval;
         this->state.nearTargetNativePreference.resetCandidate();
+        this->state.nearTargetNativePreference.resetNativeSample();
         return {.planningReady = true};
     }
 
@@ -1653,6 +1684,16 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
     }
 
     if (probe.active) {
+        if (probe.drainUntil) {
+            // Earlier scheduled outputs can still pace this source interval.
+            // Capture their horizon once, never extend it with the native
+            // frames emitted by the probe, and discard the straddling sample.
+            if (now >= *probe.drainUntil)
+                probe.drainUntil.reset();
+            this->state.outputPlanner.resetTargetClock();
+            generatedFrameCount = 0;
+            return {};
+        }
         const bool fasterCadence = instantaneousBaseFps >=
             probe.baselineBaseFps * adaptiveNativeCadenceMinimumRiseRatio;
         if (!fasterCadence) {
@@ -1711,8 +1752,8 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         );
         probe.qualifyingNearTarget = this->config.nearTargetNativePreference &&
             recoveredBaseFps >= this->config.targetFps *
-                adaptiveNearTargetNativeMinimumOutputRatio &&
-            recoveredBaseFps < this->config.targetFps;
+                adaptiveNearTargetNativeMinimumOutputRatio;
+        this->state.nearTargetNativePreference.resetNativeSample();
         probe.active = probe.qualifyingNearTarget;
         probe.baselineBaseFps = 0.0;
         probe.minimumMeasuredBaseFps = 0.0;
@@ -1730,6 +1771,9 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
 
     probe.active = true;
     probe.nextAt.reset();
+    probe.drainUntil = queuedPresentationDeadline &&
+            *queuedPresentationDeadline > now
+        ? queuedPresentationDeadline : std::nullopt;
     probe.baselineBaseFps = baseFps;
     probe.minimumMeasuredBaseFps = 0.0;
     probe.confirmedSamples = 0;
@@ -1747,18 +1791,22 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
 
 MAKO_ADAPTIVE_STAGE_INLINE bool
 AdaptiveScheduler::advanceNearTargetNativePreference(
-        const TimePoint now, const double baseFps,
+        const TimePoint now, const double schedulerBaseFps,
         const size_t configuredGenerationLimit) {
     auto& preference = this->state.nearTargetNativePreference;
+    const double baseFps = preference.nativeBaseFps.value_or(schedulerBaseFps);
     if (!this->config.nearTargetNativePreference ||
             configuredGenerationLimit == 0) {
         preference.reset();
         return false;
     }
+    if (this->state.nativeCadenceProbe.qualifyingNearTarget &&
+            !preference.nativeBaseFps)
+        return false;
 
     // Recovery, delivery evaluation, and qualified Smooth Cadence retain their
-    // existing ownership. Near-target preference is only an Active Fractional
-    // policy and never changes a transition already being measured.
+    // existing ownership. Near-target preference cannot override a qualified
+    // cadence or change a transition already being measured.
     if (this->state.discontinuityRecovery.deadline ||
             this->state.rescue.until || this->state.rescue.verificationUntil ||
             this->state.rearm.required ||
@@ -1798,11 +1846,13 @@ AdaptiveScheduler::advanceNearTargetNativePreference(
                 quality.nativeIntervalRmsMilliseconds();
         }
     } else if (baseFps >= targetFps &&
-            preference.candidateActive.value_or(false)) {
+            (preference.candidateActive.value_or(false) ||
+             this->state.nativeCadenceProbe.qualifyingNearTarget)) {
         // Preserve an already-started near-target qualification through a
-        // noisy sample that briefly crosses the target. Do not start the state
-        // from a genuinely above-target stream, where native output is already
-        // mandatory and no preference transition is needed.
+        // noisy sample that briefly crosses the target. A confirmed native
+        // recovery starts that same hold even just above target: one sparse
+        // generated output on the next dip could hide the recovered rate
+        // behind FIFO again. Ordinary above-target streams need no transition.
         requestedActive = true;
     } else if (quality.valid) {
         // The output-retention floor has already rejected material target
@@ -1898,7 +1948,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
         const std::chrono::steady_clock::time_point now,
         const bool generatedImageAcquireBackoff,
         const std::optional<size_t> orderedFifoGenerationLimit,
-        const std::optional<size_t> integerBaseCapGenerationLimit) {
+        const std::optional<size_t> integerBaseCapGenerationLimit,
+        const std::optional<TimePoint> queuedPresentationDeadline) {
     this->state.ramp.pacedLoadRollbackLimit.reset();
     // Wall time alone cannot qualify a lower workload. An intentional native
     // probe pauses the delivered-work clock; any other missing observation
@@ -2009,7 +2060,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
             cadence.instantaneousBaseFps,
             desiredOutputsPerRealFrame,
             maximumGeneratedFrameCount,
-            generatedFrameCount
+            generatedFrameCount,
+            queuedPresentationDeadline
         );
         if (!nativeCadenceProbe.planningReady)
             return nativeCadenceProbe.terminalPlan;
@@ -2162,6 +2214,7 @@ void AdaptiveScheduler::resetTiming(
     this->state.outputPlanner.resetTargetClock();
     this->state.nativeCadenceProbe.reset();
     this->state.nearTargetNativePreference.resetCandidate();
+    this->state.nearTargetNativePreference.resetNativeSample();
     // Fresh timing/history does not prove that a rejected lower workload now
     // reaches the target. Keep its original deadline through stalls and
     // warm-up; a new scheduler or confirmed native recovery clears it.

@@ -466,6 +466,9 @@ namespace mako::layer {
         // Actual scheduled batch, including the real image; never the user's
         // unproven maximum multiplier. Reset before native/history fallbacks.
         size_t bridgeOutputBatchSize{1};
+        // Last deadline scheduled by an owned output timeline. Recovery may
+        // sample native cadence only after this earlier queue has cleared.
+        std::optional<std::chrono::steady_clock::time_point> orderedPresentationDeadline;
         OrderedPresentTimeline wsiPresentTimeline;
         PFN_vkGetPastPresentationTimingGOOGLE wsiPresentTimingQuery{nullptr};
         uint32_t wsiTimingPresentsSinceDrain{0};

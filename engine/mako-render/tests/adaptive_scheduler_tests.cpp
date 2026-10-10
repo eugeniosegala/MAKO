@@ -289,6 +289,7 @@ namespace {
         RecordingDiagnostics diagnostics;
         AdaptiveScheduler scheduler;
         TimePoint now{};
+        std::optional<TimePoint> queuedPresentationDeadline;
 
         Harness(const uint32_t targetFps, const size_t maximumMultiplier,
                 const bool stableCadence = false,
@@ -337,7 +338,8 @@ namespace {
                 const bool acquireBackoff = false,
                 const bool reportDelivery = true) {
             this->now += interval;
-            const auto plan = this->scheduler.planFrame(this->now, acquireBackoff);
+            const auto plan = this->scheduler.planFrame(this->now, acquireBackoff,
+                std::nullopt, std::nullopt, this->queuedPresentationDeadline);
             // Ordinary workload simulations deliver their plan. Fault tests
             // opt out before supplying their own missing/partial observation.
             if (reportDelivery)
@@ -364,7 +366,8 @@ namespace {
                 this->scheduler.consumeHistoryWarmupFrame(this->now);
                 return {};
             }
-            auto plan = this->scheduler.planFrame(this->now, false);
+            auto plan = this->scheduler.planFrame(this->now, false,
+                std::nullopt, std::nullopt, this->queuedPresentationDeadline);
             if (delivered)
                 this->scheduler.reportGeneratedFrameDelivery({
                     plan.size(), *delivered ? plan.size() : 0,
@@ -4491,6 +4494,171 @@ namespace {
         }
     }
 
+    void testDynamicCadenceQualifiesAcrossTargetBoundary() {
+        for (const bool steady : {false, true}) {
+            for (const size_t multiplier : {2U, 3U, 4U, 5U}) {
+                Harness harness(120, multiplier, steady,
+                    AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms);
+                harness.start();
+                auto previous = harness.runAtFps(120.0 / multiplier, 22s);
+                require(harness.scheduler.snapshot().validatedGenerationLimit == multiplier - 1,
+                    "precondition failed: higher workload was not validated");
+                const auto recoveredAt = harness.now;
+                size_t nativeFrames = 0;
+                while (harness.now - recoveredAt < 5s) {
+                    // Queue turnover first measures just above target. The same
+                    // recovered source then settles just below it. Any generated
+                    // output hides that native rate behind ordered FIFO again.
+                    const double nativeFps = nativeFrames < 6 ? 120.1 : 119.0;
+                    const double fps = previous.empty() ? nativeFps :
+                        120.0 / static_cast<double>(previous.size() + 1);
+                    nativeFrames = previous.empty() ? nativeFrames + 1 : 0;
+                    previous = harness.deliveredFrameAtFps(fps);
+                }
+                require(harness.scheduler.snapshot().nearTargetNativePreference &&
+                        previous.empty(),
+                    "recovered cadence crossing the target fell back into FIFO generation");
+                harness.runAtFps(120.0 / multiplier, 22s);
+                require(!harness.scheduler.snapshot().nearTargetNativePreference &&
+                        harness.scheduler.snapshot().validatedGenerationLimit == multiplier - 1,
+                    "native recovery suppressed a later genuine GPU-load increase");
+            }
+        }
+    }
+
+    void testDynamicCadenceQualificationSurvivesQueueTurnover() {
+        for (const bool steady : {false, true}) {
+            for (const bool bursty : {false, true}) {
+                Harness harness(120, 3, steady,
+                    AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms);
+                harness.start();
+                auto previous = harness.runAtFps(40.0, 15s);
+                const auto recoveredAt = harness.now;
+                size_t recoveries = 0;
+                size_t nativeFrames = 0;
+                while (harness.now - recoveredAt < 5s) {
+                    const size_t observed = harness.diagnostics.count("dynamic-cadence-recovered");
+                    // One queued two-refresh frame may retire just after the
+                    // three fast native samples. Later 1.25/15.42 ms intervals
+                    // still deliver 120 real FPS; ignoring the fast half must
+                    // not misclassify that native stream as about 65 FPS.
+                    const bool turnover = observed > recoveries;
+                    recoveries = observed;
+                    nativeFrames = previous.empty() ? nativeFrames + 1 : 0;
+                    const double nativeFps = bursty && nativeFrames > 6
+                        ? 120.0 / (nativeFrames % 2 ? 0.15 : 1.85) : 119.0;
+                    const double fps = !previous.empty()
+                        ? 120.0 / static_cast<double>(previous.size() + 1)
+                        : turnover ? 60.0 : nativeFps;
+                    previous = harness.deliveredFrameAtFps(fps);
+                }
+                require(harness.scheduler.snapshot().nearTargetNativePreference && previous.empty(),
+                    "queue-turnover intervals aborted proven native recovery");
+                const auto deficitAt = harness.now;
+                size_t frames = 0;
+                size_t generated = 0;
+                while (harness.now - deficitAt < 3s) {
+                    const double fps = bursty
+                        ? 100.0 / (++frames % 2 ? 0.15 : 1.85) : 100.0;
+                    generated += harness.deliveredFrameAtFps(fps).size();
+                }
+                require(!harness.scheduler.snapshot().nearTargetNativePreference && generated > 0,
+                    "native measurement concealed a real below-target source rate");
+            }
+        }
+    }
+
+    void testDynamicCadenceDrainsPreviouslyQueuedOutput() {
+        for (const bool steady : {false, true}) {
+            for (const uint32_t target : {60U, 120U, 240U}) {
+                for (const size_t queuedRefreshes : {2U, 3U, 4U}) {
+                    Harness harness(target, 3, steady,
+                        AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms);
+                    harness.start();
+                    auto previous = harness.runAtFps(target / 3.0, 15s);
+                    const auto recoveredAt = harness.now;
+                    const auto queueLead = std::chrono::duration_cast<AdaptiveScheduler::Clock::duration>(
+                        std::chrono::duration<double>(
+                            static_cast<double>(queuedRefreshes) / target));
+                    auto generatedTail = harness.now + queueLead;
+                    while (harness.now - recoveredAt < 5s) {
+                        if (!previous.empty())
+                            generatedTail = harness.now + queueLead;
+                        // New real-only presents also advance the transport
+                        // clock. They must not extend a probe's captured drain.
+                        harness.queuedPresentationDeadline = harness.now + queueLead;
+                        const double fps = harness.now < generatedTail
+                            ? target / 2.0 : target * .99;
+                        previous = harness.deliveredFrameAtFps(fps);
+                    }
+                    require(harness.scheduler.snapshot().nearTargetNativePreference &&
+                            previous.empty(),
+                        "native probe rejected queued bridge intervals before native cadence was observable");
+                }
+            }
+        }
+    }
+
+    void testDynamicCadenceQueuedDrainRejectsTrueLowRate() {
+        for (const bool steady : {false, true}) {
+            Harness harness(120, 2, steady,
+                AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms);
+            harness.start();
+            harness.runAtFps(60.0, 8s);
+            size_t nativeFrames = 0;
+            size_t maximumNativeFrames = 0;
+            for (size_t frame = 0; frame < 600; ++frame) {
+                harness.queuedPresentationDeadline = harness.now + 34ms;
+                const auto plan = harness.deliveredFrameAtFps(60.0);
+                nativeFrames = plan.empty() ? nativeFrames + 1 : 0;
+                maximumNativeFrames = std::max(maximumNativeFrames, nativeFrames);
+            }
+            require(maximumNativeFrames >= 2 && maximumNativeFrames <= 4,
+                "queued-output drain was absent or extended by new real-only output");
+            require(!harness.diagnostics.contains("dynamic-cadence-recovered") &&
+                    harness.scheduler.snapshot().validatedGenerationLimit == 1,
+                "queue drain falsely qualified a genuinely slower source or lost accepted work");
+        }
+    }
+
+    void testDynamicCadenceProbeCannotSpanGeneratedAcquireBackoff() {
+        for (const bool steady : {false, true}) {
+            for (const uint32_t target : {30U, 60U, 90U, 120U, 240U}) {
+                Harness harness(target, 2, steady,
+                    AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms);
+                harness.start();
+                harness.runAtFps(target / 2.0, 8s);
+                const auto started = harness.now;
+                while (!harness.scheduler.snapshot().nativeCadenceProbeActive) {
+                    harness.deliveredFrameAtFps(target / 2.0);
+                    require(harness.now - started < 1s, "native probe never started");
+                }
+                harness.deliveredFrameAtFps(target);
+                const auto recovered = harness.diagnostics.count("dynamic-cadence-recovered");
+                const auto validated = harness.scheduler.snapshot().validatedGenerationLimit;
+                harness.frameAtFps(target / 2.0, true);
+                harness.deliveredFrameAtFps(target);
+                harness.deliveredFrameAtFps(target);
+                require(harness.diagnostics.count("dynamic-cadence-recovered") == recovered,
+                    "native recovery combined samples across an intervening generated-image probe");
+                require(harness.scheduler.snapshot().validatedGenerationLimit == validated,
+                    "discarding interrupted native evidence lost the accepted generated workload");
+
+                // Cancellation must allow a later fresh probe, rather than
+                // leaving the source trapped behind the previous FIFO batch.
+                auto previous = harness.deliveredFrameAtFps(target / 2.0);
+                const auto resumedAt = harness.now;
+                while (harness.now - resumedAt < 5s) {
+                    previous = harness.deliveredFrameAtFps(
+                        previous.empty() ? target * .99 : target / 2.0);
+                }
+                require(harness.diagnostics.count("dynamic-cadence-recovered") > recovered &&
+                        harness.scheduler.snapshot().nearTargetNativePreference && previous.empty(),
+                    "native recovery did not resume after generated-acquire pressure cleared");
+            }
+        }
+    }
+
     void testDynamicCadenceAbortsUnqualifiedNearTargetRise() {
         Harness harness(120, 2, false,
             AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms);
@@ -5729,6 +5897,11 @@ int main() {
         {"persistent loss rejects Smooth Cadence", testPersistentDeliveryLossRejectsSmoothCadenceProbe},
         {"Smooth Cadence exits after native recovery", testSmoothCadenceReturnsToTargetAfterBaseRecovery},
         {"dynamic cadence recovers a self-hidden native rate", testDynamicCadenceRecoversSelfHiddenNativeRateIncrease},
+        {"dynamic cadence discards interrupted native samples", testDynamicCadenceProbeCannotSpanGeneratedAcquireBackoff},
+        {"dynamic cadence drains only previously queued output", testDynamicCadenceDrainsPreviouslyQueuedOutput},
+        {"dynamic cadence queued drain rejects true low rates", testDynamicCadenceQueuedDrainRejectsTrueLowRate},
+        {"dynamic cadence tolerates native qualification turnover", testDynamicCadenceQualificationSurvivesQueueTurnover},
+        {"dynamic cadence qualifies across the target boundary", testDynamicCadenceQualifiesAcrossTargetBoundary},
         {"dynamic cadence aborts unqualified near-target rise", testDynamicCadenceAbortsUnqualifiedNearTargetRise},
         {"dynamic cadence qualifies near-target without generated feedback", testDynamicCadenceQualifiesNearTargetWithoutGeneratedFeedback},
         {"dynamic cadence bounds self-hidden recovery latency", testDynamicCadenceBoundsSelfHiddenRecoveryLatency},

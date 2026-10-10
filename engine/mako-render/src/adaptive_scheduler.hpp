@@ -196,10 +196,13 @@ namespace mako::layer {
         explicit AdaptiveScheduler(AdaptiveSchedulerConfig config,
             AdaptiveSchedulerDiagnostics* diagnostics = nullptr);
 
+        // The presentation owner supplies its existing queue horizon. Native
+        // probes capture it once; the scheduler never queries the transport.
         [[nodiscard]] AdaptiveFramePlan planFrame(TimePoint now,
             bool generatedImageAcquireBackoff,
             std::optional<size_t> orderedFifoGenerationLimit = std::nullopt,
-            std::optional<size_t> integerBaseCapGenerationLimit = std::nullopt);
+            std::optional<size_t> integerBaseCapGenerationLimit = std::nullopt,
+            std::optional<TimePoint> queuedPresentationDeadline = std::nullopt);
 
         void resetTiming(TimePoint now);
         void updateDynamicCadenceProbeInterval(
@@ -322,7 +325,8 @@ namespace mako::layer {
             TimePoint now, double baseFps, double instantaneousBaseFps,
             double desiredOutputsPerRealFrame,
             size_t maximumGeneratedFrameCount,
-            size_t& generatedFrameCount);
+            size_t& generatedFrameCount,
+            std::optional<TimePoint> queuedPresentationDeadline);
         [[nodiscard]] inline bool advanceNearTargetNativePreference(
             TimePoint now, double baseFps, size_t configuredGenerationLimit);
         void suppressAutomaticBaseCap(size_t generationLimit,
@@ -576,6 +580,7 @@ namespace mako::layer {
 
             struct NativeCadenceProbe {
                 std::optional<TimePoint> nextAt;
+                std::optional<TimePoint> drainUntil;
                 bool active{false};
                 bool qualifyingNearTarget{false};
                 double baselineBaseFps{0.0};
@@ -584,6 +589,7 @@ namespace mako::layer {
 
                 void reset() {
                     this->nextAt.reset();
+                    this->drainUntil.reset();
                     this->active = false;
                     this->qualifyingNearTarget = false;
                     this->baselineBaseFps = 0.0;
@@ -597,6 +603,18 @@ namespace mako::layer {
                 std::optional<bool> candidateActive;
                 Clock::duration candidateEvidence{};
                 std::optional<TimePoint> lastEvaluationAt;
+                // Only confirmed Dynamic Cadence Recovery owns this native
+                // measurement. Count every source interval, including bursts,
+                // so queue turnover cannot bias it toward the slower frames.
+                double nativeSampleSeconds{0.0};
+                size_t nativeSampleFrames{0};
+                std::optional<double> nativeBaseFps;
+
+                void resetNativeSample() {
+                    this->nativeSampleSeconds = 0.0;
+                    this->nativeSampleFrames = 0;
+                    this->nativeBaseFps.reset();
+                }
 
                 void resetCandidate() {
                     this->candidateActive.reset();
@@ -607,6 +625,7 @@ namespace mako::layer {
                 void reset() {
                     this->active = false;
                     this->resetCandidate();
+                    this->resetNativeSample();
                 }
             } nearTargetNativePreference;
 

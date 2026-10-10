@@ -61,6 +61,7 @@ VkResult Swapchain::queuePresentWithRetirementFence(
             *this->gamescopeRefreshHz, this->bridgeOutputBatchSize,
             generationEnabled);
         if (slot) {
+            this->orderedPresentationDeadline = slot->presentAt;
             // Google timing creates feedback even when diagnostics are off.
             // Drain our namespace in bounded batches so old WSI versions
             // cannot retain a history proportional to session length.
@@ -97,7 +98,8 @@ VkResult Swapchain::queuePresentWithRetirementFence(
                         this->gamescopeRefreshHz.value_or(0)),
                     this->gamescopeRefreshHz.value_or(0),
                     this->bridgeOutputBatchSize, generationEnabled,
-                    this->frameState.realFrameIndex);
+                    this->frameState.realFrameIndex,
+                    &this->orderedPresentationDeadline);
             if (prepared != VK_SUCCESS)
                 return completeRejectedPresent(vk.df().QueueSubmit,
                     queue, presentInfo, prepared);

@@ -120,7 +120,8 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
                 : std::nullopt,
             this->profile.adaptive && !this->smoothCadencePacerHandoff.active()
                 ? this->smoothCadenceBaseCap.activeGenerationLimit()
-                : std::nullopt
+                : std::nullopt,
+            this->orderedPresentationDeadline
         )
         : AdaptiveFramePlan{};
     const bool fixedSmoothCadenceFullMultiplier = !schedulerEnabled &&

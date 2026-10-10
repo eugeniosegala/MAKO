@@ -4,6 +4,7 @@
 
 #include "pnext_chain.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <functional>
 #include <memory>
@@ -130,11 +131,14 @@ namespace mako::layer {
         /// Callers must complete rejected-present queue operations on failure.
         /// Managed outputs share their source frame serial so GPU readiness
         /// observes one source batch, including all generated/real outputs.
+        /// scheduledDeadline reports the owned timeline's last scheduled slot
+        /// without a query or wait; nullopt means no owned output clock.
         [[nodiscard]] VkResult preparePresent(
             VkSurfaceKHR surface, VkSwapchainKHR swapchain,
             double outputFps = 0.0, uint32_t refreshHz = 0,
             size_t outputBatchSize = 1, bool generationEnabled = false,
-            std::optional<uint64_t> sourceFrameSerial = std::nullopt);
+            std::optional<uint64_t> sourceFrameSerial = std::nullopt,
+            std::optional<std::chrono::steady_clock::time_point>* scheduledDeadline = nullptr);
         [[nodiscard]] bool owns(VkSurfaceKHR surface) const;
         [[nodiscard]] bool hdrEnabled() const;
 

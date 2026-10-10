@@ -1073,7 +1073,8 @@ VkResult GamescopeScalingSurface::preparePresent(
         const VkSurfaceKHR surface, const VkSwapchainKHR swapchain,
         const double outputFps, const uint32_t refreshHz,
         const size_t outputBatchSize, const bool generationEnabled,
-        const std::optional<uint64_t> sourceFrameSerial) {
+        const std::optional<uint64_t> sourceFrameSerial,
+        std::optional<std::chrono::steady_clock::time_point>* const scheduledDeadline) {
     std::unique_lock lock(impl->mutex);
     auto found = impl->surfaces.find(surface);
     if (found == impl->surfaces.end())
@@ -1158,5 +1159,8 @@ VkResult GamescopeScalingSurface::preparePresent(
     if (impl->displayFlush(impl->display) < 0 && errno != EAGAIN)
         return impl->failure(*found->second, content->second.get(), surface, swapchain,
             VK_ERROR_SURFACE_LOST_KHR, "flush-failed", "present", errno);
+    if (scheduledDeadline)
+        *scheduledDeadline = slot
+            ? std::optional{slot->presentAt} : std::nullopt;
     return VK_SUCCESS;
 }
