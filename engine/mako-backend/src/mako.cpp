@@ -61,7 +61,9 @@ using namespace mako::backend;
 namespace mako::backend {
     struct FrameProfilingState {
         FrameProfilingState(const vk::Vulkan& vk, const size_t outputs) :
-            queries(vk, static_cast<uint32_t>(2 + outputs * 2)) {}
+            // The shared pool is pair-sized. Round up when three boundaries
+            // per stage leave an odd count; readback excludes that spare slot.
+            queries(vk, static_cast<uint32_t>(((3 + outputs * 3 + 1) / 2) * 2)) {}
         vk::TimestampQueryPool queries;
         FrameProfile timings;
         size_t generatedCount{};
@@ -860,12 +862,24 @@ FrameProfile Context::readFrameProfile() const {
     if (!this->profiling || !this->workScheduled || this->profiling->generatedCount == 0)
         throw backend::error("No generated batch is available for frame profiling");
     const auto& state = *this->profiling;
-    const auto ticks = state.queries.timestamps(static_cast<uint32_t>(2 + state.generatedCount * 2));
+    const auto ticks = state.queries.timestamps(static_cast<uint32_t>(3 + state.generatedCount * 3));
     auto result = state.timings;
-    result.gpuPrepassUs = state.queries.elapsedMicroseconds(ticks.at(0), ticks.at(1));
+    result.gpuPrepassUs = state.queries.elapsedMicroseconds(ticks.at(0), ticks.at(2));
+    result.gpuInputConversionUs = this->sourceColorConversion
+        ? state.queries.elapsedMicroseconds(ticks.at(0), ticks.at(1)) : 0.0;
+    result.gpuMotionEstimationUs = state.queries.elapsedMicroseconds(
+        ticks.at(this->sourceColorConversion ? 1 : 0), ticks.at(2));
     result.gpuGeneratedUs.reserve(state.generatedCount);
-    for (size_t i = 0; i < state.generatedCount; ++i)
-        result.gpuGeneratedUs.push_back(state.queries.elapsedMicroseconds(ticks.at(2 + i * 2), ticks.at(3 + i * 2)));
+    result.gpuSynthesisUs.reserve(state.generatedCount);
+    result.gpuOutputConversionUs.reserve(state.generatedCount);
+    for (size_t i = 0; i < state.generatedCount; ++i) {
+        const size_t begin = 3 + i * 3;
+        result.gpuGeneratedUs.push_back(state.queries.elapsedMicroseconds(ticks.at(begin), ticks.at(begin + 2)));
+        result.gpuSynthesisUs.push_back(state.queries.elapsedMicroseconds(
+            ticks.at(begin), ticks.at(begin + (this->destColorConversion ? 1 : 2))));
+        result.gpuOutputConversionUs.push_back(this->destColorConversion
+            ? state.queries.elapsedMicroseconds(ticks.at(begin + 1), ticks.at(begin + 2)) : 0.0);
+    }
     result.gpuSpanUs = state.queries.elapsedMicroseconds(ticks.front(), ticks.back());
     result.timestampValidBits = state.queries.timestampValidBits();
     result.timestampPeriodNs = state.queries.timestampPeriodNanoseconds();
@@ -934,6 +948,8 @@ void Context::schedulePrepass(const VkFence completionFence) {
 
         if (this->sourceColorConversion)
             this->sourceColorConversion->render(ctx.vk, cmdbuf, this->fidx);
+        if (this->profiling)
+            this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
         this->mipmaps.render(ctx.vk, cmdbuf, this->fidx);
         for (size_t i = 0; i < 7; ++i) {
             this->alpha0.at(6 - i).render(ctx.vk, cmdbuf);
@@ -943,7 +959,7 @@ void Context::schedulePrepass(const VkFence completionFence) {
         this->beta1.render(ctx.vk, cmdbuf);
 
         if (this->profiling)
-            this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 1);
+            this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 2);
 
         cmdbuf.end(ctx.vk);
         recorded.emplace(std::move(cmdbuf));
@@ -1022,7 +1038,7 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
             cmdbuf.begin(ctx.vk, 0);
 
             if (this->profiling)
-                this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, static_cast<uint32_t>(2 + i * 2));
+                this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, static_cast<uint32_t>(3 + i * 3));
 
             const auto& pass = this->passes.at(i);
             for (size_t j = 0; j < 7; j++) {
@@ -1034,11 +1050,13 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
                 pass.delta1.at(j - 4).render(ctx.vk, cmdbuf);
             }
             pass.generate->render(ctx.vk, cmdbuf, this->fidx);
+            if (this->profiling)
+                this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, static_cast<uint32_t>(4 + i * 3));
             if (this->destColorConversion)
                 this->destColorConversion->render(ctx.vk, cmdbuf, i);
 
             if (this->profiling)
-                this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, static_cast<uint32_t>(3 + i * 2));
+                this->profiling->queries.write(cmdbuf.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, static_cast<uint32_t>(5 + i * 3));
 
             cmdbuf.end(ctx.vk);
             recorded.emplace(std::move(cmdbuf));

@@ -407,6 +407,14 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "script"
     },
 
+    # Native per-profile experiment; private resources can change live.
+    "hdr_reduced_precision": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "experimental live compact 10-bit PQ buffers for HDR shader chains and HDR10 scaling inputs; linear frame generation retains floating-point precision",
+        "location": "toml"
+    },
+
     # Restart-only opt-in. Keep existing profiles on SDR by default.
     "disable_hdr_exposure": {
         "fieldType": ConfigFieldType.BOOLEAN,

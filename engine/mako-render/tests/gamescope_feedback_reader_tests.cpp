@@ -11,6 +11,9 @@ extern "C" {
     unsigned mako_test_feedback_hdr_atoms();
     unsigned mako_test_feedback_hdr_reads();
     void mako_test_feedback_refresh(unsigned);
+    void mako_test_feedback_identity(unsigned, unsigned);
+    void mako_test_feedback_hdr_output(int);
+    void mako_test_feedback_change_pid_on_hdr_read();
 }
 namespace {
     void expect(bool value, const char* message) {
@@ -51,6 +54,36 @@ int main() {
                     (disabled ? "hdr-exposure-disabled" : "isolated-swapchain-colorspace"),
                     "diagnostic source must distinguish disabled HDR from per-swapchain HDR");
             }
+        }
+        for (bool disabled : {false, true}) {
+            mako_test_feedback_reset();
+            mako::layer::GamescopeHdrFeedbackReader reader({
+                .gamescopeWsiDisabled = true, .hdrExposureDisabled = disabled,
+            });
+            expect(!reader.queryOutputHdrEnabled(0) && !reader.queryOutputHdrEnabled(88),
+                "missing or foreign compositor identity must reject capability");
+            expect(mako_test_feedback_hdr_reads() == 0, "rejected identity must not read HDR");
+            expect(reader.queryOutputHdrEnabled(77) ==
+                (disabled ? std::optional<bool>{} : std::optional<bool>{true}),
+                "allowed bridge may query same-compositor root output on demand");
+            mako_test_feedback_hdr_output(0);
+            expect(reader.queryOutputHdrEnabled(77) ==
+                (disabled ? std::optional<bool>{} : std::optional<bool>{false}),
+                "root SDR must not become HDR");
+            for (int invalid : {-1, 2}) {
+                mako_test_feedback_hdr_output(invalid);
+                expect(!reader.queryOutputHdrEnabled(77), "missing or malformed root capability is unknown");
+            }
+            mako_test_feedback_hdr_output(1);
+            mako_test_feedback_identity(77, 4);
+            expect(!reader.queryOutputHdrEnabled(77), "a non-root display cannot supply fallback capability");
+            mako_test_feedback_identity(77, 0);
+            mako_test_feedback_change_pid_on_hdr_read();
+            expect(!reader.queryOutputHdrEnabled(77), "identity change during query must reject capability");
+            expect(!disabled || (mako_test_feedback_hdr_atoms() == 0 && mako_test_feedback_hdr_reads() == 0),
+                "HDR off must skip all on-demand HDR access");
+            expect(!reader.diagnosticSample().active.value_or(true),
+                "on-demand capability must never activate the application's HDR pipeline");
         }
     } catch (const std::exception& error) {
         std::cerr << error.what() << '\n'; return 1;

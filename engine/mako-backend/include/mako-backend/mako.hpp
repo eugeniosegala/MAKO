@@ -42,7 +42,11 @@ namespace mako::backend {
         double cpuPrepassSubmitUs{};
         double cpuGenerationSubmitUs{};
         double gpuPrepassUs{};
+        double gpuInputConversionUs{};
+        double gpuMotionEstimationUs{};
         std::vector<double> gpuGeneratedUs;
+        std::vector<double> gpuSynthesisUs;
+        std::vector<double> gpuOutputConversionUs;
         double gpuSpanUs{};
         uint32_t timestampValidBits{};
         float timestampPeriodNs{};

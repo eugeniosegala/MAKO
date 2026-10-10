@@ -112,7 +112,7 @@ Some live changes rebuild resources and may briefly hitch. See [Runtime transiti
 
 **Interface Settings > Language** changes the Qt interface language. The first launch follows your system language, with English as the fallback.
 
-## Standalone launcher
+## Launch Settings
 
 For native Steam and Proton games, copy the UI's complete launch option. Without shaders or an explicit profile, the user-local archive uses:
 
@@ -122,7 +122,7 @@ For native Steam and Proton games, copy the UI's complete launch option. Without
 
 The Arch package uses `/usr/bin/mako-launch`. For a terminal launch, replace `%command%` with the executable and arguments. Flatpak applications need [Flatpak preparation](FLATPAK-GUIDE.md).
 
-Launcher settings apply globally to `mako-launch` games. **Disable Steam Overlay (Restart)** is on by default; it may reduce stutter but disables Steam's in-game overlay and FPS counter and may affect Steam Input. Gaming Mode menus and performance overlay remain available.
+The controls under **Launch Settings** apply globally to `mako-launch` games. **Disable Steam Overlay (Restart)** is on by default; it may reduce stutter but disables Steam's in-game overlay and FPS counter and may affect Steam Input. Gaming Mode menus and performance overlay remain available.
 
 **Zink** runs OpenGL through Vulkan. **Force ALSA** changes the audio path for compatibility problems. Steam Deck mode, Gamescope WSI, and MangoHud controls are available in MAKO Decky.
 
@@ -133,3 +133,5 @@ For manual TOML fields, defaults, and environment variables, see the [advanced r
 ## HDR through the isolated Gamescope bridge
 
 Keep **Gamescope WSI** off, turn **Disable HDR (Restart)** off, restart the game, then enable HDR in the game. Use Gaming Mode with the Steam Deck OLED’s built-in screen or an HDR-capable external display, with HDR allowed in Gamescope. Both use the same bridge and toggle; no dock or charger is required. The Steam Deck LCD’s built-in screen remains SDR. Restart the game after switching between HDR and SDR displays so the bridge detects the new output. Decky stores the toggle in the game profile; Qt’s standalone launch control stores it globally in `launcher.conf`. Turning **Disable HDR** on restores the SDR launch on the next restart. Its setting does not depend on the Scaling, Frame Generation, or Shaders switches. The same bridge serves all combinations; HDR disabled means no HDR capability query, format exposure, or metadata forwarding from that bridge. See [HDR pipeline](HDR-PIPELINE.md) for colour handling and the testing boundary.
+
+**Reduced HDR Precision** appears below the HDR switch while HDR is allowed. It is experimental and off by default. It switches live between full-precision buffers and compact 10-bit PQ buffers for shader intermediates and HDR10 scaling inputs. Changing it can briefly hitch. Frame Generation keeps its linear floating-point processing; CAS alone in HDR10 already works directly between packed images, so this option may have no benefit there. Compare the same scene with the same effects: smaller buffers do not guarantee higher FPS, and chains can show banding or altered colours. Unsupported devices retain full precision. SDR stays unchanged.

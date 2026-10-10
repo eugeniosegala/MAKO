@@ -2487,6 +2487,11 @@ void AdaptiveScheduler::resumeAfterExternalInterruption(
     // the last proven level, abandon interrupted experiments and remeasure
     // source cadence without retaining their elapsed timers or stale history.
     const auto retainedLimit = this->validatedGenerationLimit();
+    const auto rejectedLoadRetryAt = this->state.ramp.consecutiveFailures > 0
+        ? this->state.ramp.nextAt : std::nullopt;
+    auto rejectedFirstProbe = retainedLimit == 0 &&
+            this->state.rearm.consecutiveProbeFailures > 0
+        ? std::make_optional(this->state.rearm) : std::nullopt;
     const double retainedBaseFps = this->state.stableCadence.limit &&
             *this->state.stableCadence.limit == retainedLimit &&
             this->state.stableCadence.baselineBaseFps > 0.0
@@ -2521,7 +2526,29 @@ void AdaptiveScheduler::resumeAfterExternalInterruption(
         ? std::max<Clock::duration>(Clock::duration::zero(),
             remainingStabilization)
         : adaptiveStabilizationDuration);
-    this->restoreGenerationLimit(now, retainedLimit, "gamescope-focus-return");
+    // Menu timing is not evidence that a rejected higher workload became
+    // cheaper. Stabilization replaces nextAt, so restore the failed trial's
+    // deadline before retaining its failure count and lower-load baseline.
+    // An expired deadline still observes the ordinary post-return probe delay.
+    if (rejectedLoadRetryAt) {
+        this->state.ramp.nextAt = std::max(*rejectedLoadRetryAt,
+            this->state.stabilization.until.value_or(now) +
+                adaptiveRecoveryHigherProbeDelay);
+    }
+    this->restoreGenerationLimit(now, retainedLimit, "gamescope-focus-return",
+        std::nullopt, 0.0, true);
+    if (rejectedFirstProbe) {
+        // Native fallback has its own rejection cooldown. Preserve both its
+        // deadline and escalation, but never count menu time as stable source
+        // evidence or turn an interrupted trial into a throughput failure.
+        this->state.rearm.consecutiveProbeFailures =
+            rejectedFirstProbe->consecutiveProbeFailures;
+        if (rejectedFirstProbe->required &&
+                rejectedFirstProbe->reason == "ramp-rejected") {
+            this->state.rearm = std::move(*rejectedFirstProbe);
+            this->state.rearm.stableSince.reset();
+        }
+    }
     // A second menu may interrupt the first warm-up after only one frame.
     // Every return needs fresh history, not the remainder of the old gap.
     this->beginHistoryWarmup(historyWarmupFrameCount(), true);

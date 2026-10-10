@@ -110,6 +110,9 @@ def _profile(value: object, field: str) -> RuntimeProfileSnapshot:
         "scaling_sharpness": _number(
             value.get("scaling_sharpness"), f"{field}.scaling_sharpness"
         ),
+        "hdr_reduced_precision": _boolean(
+            value.get("hdr_reduced_precision", False), f"{field}.hdr_reduced_precision"
+        ),
         "frame_generation_refresh_threshold": _integer(
             value.get("frame_generation_refresh_threshold"),
             f"{field}.frame_generation_refresh_threshold",

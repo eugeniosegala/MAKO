@@ -91,6 +91,7 @@ if(BUILD_TESTING)
     add_executable(mako-backend-dll-inspection-tests
         "tests/dll_inspection_tests.cpp")
     add_library(mako-test-dxbc-translator SHARED "tests/dxbc_translator_fixture.cpp")
+    target_include_directories(mako-test-dxbc-translator PRIVATE src)
     add_dependencies(mako-backend-dll-inspection-tests mako-test-dxbc-translator)
     target_compile_definitions(mako-backend-dll-inspection-tests PRIVATE
         MAKO_TEST_TRANSLATOR_PATH="$<TARGET_FILE:mako-test-dxbc-translator>")

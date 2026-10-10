@@ -95,6 +95,7 @@ void test_installed_launcher_selection() {
 }
 
 void test_scaling_properties() {
+    require_property("hdr_reduced_precision", "bool", true, false);
     require_property("running_games", "QVariantList", false, false);
     require_property("scanning_games", "bool", false, false);
     require_property("capture_failed", "bool", false, false);

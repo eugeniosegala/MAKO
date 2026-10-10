@@ -13,8 +13,13 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <sstream>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
 
 extern "C" {
     void mako_test_surface_mode(int);
@@ -26,6 +31,9 @@ extern "C" {
     int mako_test_surface_associations();
     int mako_test_surface_feedbacks();
     void mako_test_surface_hdr_output(uint32_t);
+    void mako_test_surface_hdr_output_present(bool);
+    void mako_test_surface_hdr_property_fault(int);
+    void mako_test_surface_server_id(uint32_t);
     void mako_test_surface_external_output(bool);
     int mako_test_surface_hdr_queries();
     uint32_t mako_test_surface_feedback_color();
@@ -56,6 +64,63 @@ namespace {
             std::cerr << "FAIL: " << message << '\n';
             std::exit(1);
         }
+    }
+    void testSocketSessions() {
+        char directoryTemplate[] = "/tmp/mako-surface-sockets-XXXXXX";
+        const char* directory = mkdtemp(directoryTemplate);
+        expect(directory != nullptr, "create socket test directory");
+        const std::filesystem::path root(directory);
+        const auto createSocket = [&root](const char* name) {
+            const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
+            expect(fd >= 0, "create session socket");
+            sockaddr_un address{};
+            address.sun_family = AF_UNIX;
+            const auto path = (root / name).string();
+            expect(path.size() < sizeof(address.sun_path), "bounded socket path");
+            std::memcpy(address.sun_path, path.c_str(), path.size() + 1);
+            expect(bind(fd, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) == 0,
+                "bind session socket");
+            close(fd);
+        };
+        createSocket("gamescope-0");
+        createSocket("wayland-unrelated");
+        std::filesystem::create_symlink(root / "gamescope-0", root / "alias");
+        std::filesystem::create_hard_link(root / "gamescope-0", root / "same-inode");
+        std::filesystem::create_symlink(root / "loop", root / "loop");
+        std::ofstream(root / "regular") << "not a socket";
+        const auto admitted = [&root](const std::string_view game,
+                const std::string_view wayland, const bool inherited = false) {
+            return needsGamescopeScalingSurface(true, true, false, false,
+                game, wayland, root.string(), inherited);
+        };
+        expect(admitted("gamescope-0", "alias"), "relative alias shares the Gamescope socket");
+        expect(admitted("gamescope-0", "same-inode"), "alternate path with same inode is accepted");
+        expect(admitted("gamescope-0", (root / "gamescope-0").string()),
+            "absolute and relative names identify the same socket");
+        expect(needsGamescopeScalingSurface(true, true, false, false,
+            (root / "gamescope-0").string(), (root / "alias").string()),
+            "absolute socket paths need no runtime directory");
+        expect(admitted("gamescope-0", "wayland-0"), "missing container default retains Gamescope");
+        expect(admitted("gamescope-0", "regular/wayland-0"), "ENOTDIR default retains Gamescope");
+        expect(!admitted("gamescope-0", "wayland-unrelated"), "unrelated compositor stays isolated");
+        expect(!admitted("gamescope-0", "regular"), "existing non-socket display is rejected");
+        expect(!admitted("gamescope-0", root.string()), "directory is not a display socket");
+        expect(!admitted("gamescope-0", "loop"), "other lookup failures do not prove a missing default");
+        expect(!admitted("missing", "wayland-0"), "missing Gamescope socket cannot authorize fallback");
+        expect(!admitted("regular", "wayland-0"), "non-socket Gamescope path cannot authorize fallback");
+        expect(!admitted("gamescope-0", "alias", true), "inherited connection overrides alias evidence");
+        expect(!admitted("gamescope-0", "wayland-0", true), "inherited connection overrides missing default");
+        expect(!needsGamescopeScalingSurface(true, true, false, false,
+            "gamescope-0", "alias"), "relative paths need a runtime directory");
+        expect(!needsGamescopeScalingSurface(false, true, false, false,
+            "gamescope-0", "alias", root.string()), "alias cannot provision a disabled bridge");
+        expect(!needsGamescopeScalingSurface(true, false, false, false,
+            "gamescope-0", "alias", root.string()), "alias cannot override full WSI ownership");
+        expect(!needsGamescopeScalingSurface(true, true, true, false,
+            "gamescope-0", "alias", root.string()), "alias cannot activate the lower role");
+        expect(!needsGamescopeScalingSurface(true, true, false, true,
+            "gamescope-0", "alias", root.string()), "alias cannot override split-chain ownership");
+        std::filesystem::remove_all(root);
     }
     bool failVulkan{};
     bool failNativeSurface{};
@@ -430,6 +495,7 @@ int main() {
     extensions[1] = "VK_KHR_wayland_surface";
     expect(!requestsGamescopeScalingSurface(instanceInfo), "native Wayland instance needs no X11 adapter");
 
+    testSocketSessions();
     for (bool scaling : {false, true}) {
         for (bool wsi : {false, true}) {
             expect(needsGamescopeScalingSurface(scaling, !wsi, false, false,
@@ -582,6 +648,60 @@ int main() {
             bridge.destroy(surface);
         }
     }
+    // Gamescope can create a game server after publishing output capability.
+    // Only missing game-server capability may use the same-PID root query.
+    for (bool allowed : {false, true}) {
+        for (uint32_t server : {0u, 9u}) {
+            for (bool present : {false, true}) {
+                for (uint32_t local : {0u, 1u, 2u}) {
+                    for (const std::optional<bool> root :
+                            {std::optional<bool>{}, std::optional<bool>{false}, std::optional<bool>{true}}) {
+                        mako_test_surface_server_id(server);
+                        mako_test_surface_hdr_output_present(present);
+                        mako_test_surface_hdr_output(local);
+                        unsigned rootQueries{};
+                        GamescopeScalingSurface bridge(allowed, [&](uint32_t pid) {
+                            expect(pid == static_cast<uint32_t>(getpid()),
+                                "root query must receive the validated compositor identity");
+                            ++rootQueries;
+                            return root;
+                        });
+                        VkSurfaceKHR surface{};
+                        expect(bridge.connect() && bridge.create(VK_NULL_HANDLE, next,
+                            info, nullptr, &surface) == VK_SUCCESS, "dynamic server surface");
+                        const bool fallback = allowed && !present && server != 0;
+                        const bool hdr = allowed && (present ? local == 1 : fallback && root.value_or(false));
+                        const auto formats = bridge.applicationFormats(VK_NULL_HANDLE, surface, surfaceFormats);
+                        expect(rootQueries == (fallback ? 1u : 0u),
+                            "query root only for missing capability on an HDR-enabled game server");
+                        expect(formats && formats->size() == (hdr ? 4u : 2u),
+                            "missing capability may use root, but explicit SDR/invalid/off must remain SDR");
+                        bridge.destroy(surface);
+                    }
+                }
+            }
+        }
+    }
+    mako_test_surface_server_id(9);
+    mako_test_surface_hdr_output_present(true);
+    for (int fault = 1; fault <= 7; ++fault) {
+        mako_test_surface_hdr_property_fault(fault);
+        unsigned rootQueries{};
+        GamescopeScalingSurface bridge(true, [&](uint32_t) {
+            ++rootQueries;
+            return true;
+        });
+        VkSurfaceKHR surface{};
+        expect(bridge.connect() && bridge.create(VK_NULL_HANDLE, next,
+            info, nullptr, &surface) == VK_SUCCESS, "malformed capability surface");
+        const auto formats = bridge.applicationFormats(VK_NULL_HANDLE, surface, surfaceFormats);
+        expect(rootQueries == (fault == 7 ? 1u : 0u),
+            "only absent atoms/properties authorize fallback; malformed or failed reads do not");
+        expect(formats && formats->size() == (fault == 7 ? 4u : 2u),
+            "failed capability proof cannot expose HDR formats");
+        bridge.destroy(surface);
+    }
+    mako_test_surface_hdr_property_fault(0);
     mako_test_surface_hdr_output(0);
     mako_test_surface_external_output(false);
     mako_test_surface_resize(1920, 1080);

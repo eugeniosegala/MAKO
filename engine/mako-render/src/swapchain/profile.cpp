@@ -194,7 +194,9 @@ ProfileUpdateDecision Swapchain::updateProfile(
         this->info.spatialScalingActivationSupported,
         spatialScalingEffectiveExtentUnchanged,
         spatialSupersamplingEffectiveExtentUnchanged,
-        this->gamescopeRefreshHz
+        this->gamescopeRefreshHz,
+        this->colorPipeline.encoding == backend::FrameEncoding::Hdr10Pq ||
+            this->colorPipeline.encoding == backend::FrameEncoding::Hdr10PqPacked
     );
     auto decision = plan.decision;
     if (decision.frameGenerationPrivateRebuild) {
@@ -247,6 +249,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
         const SpatialResourceRequest request{
             .method = ls::effectiveScalingMethod(nextProfile),
             .sharpness = nextProfile.scaling_sharpness,
+            .hdrReducedPrecision = nextProfile.hdr_reduced_precision,
         };
         if (this->spatialTransition.pendingRequest() &&
                 !(this->spatialTransition.value() == request)) {
@@ -272,7 +275,8 @@ ProfileUpdateDecision Swapchain::updateProfile(
     } else if (ls::effectiveScalingMethod(nextProfile) ==
                 ls::effectiveScalingMethod(this->profile) &&
             nextProfile.scaling_sharpness ==
-                this->profile.scaling_sharpness) {
+                this->profile.scaling_sharpness &&
+            nextProfile.hdr_reduced_precision == this->profile.hdr_reduced_precision) {
         this->spatialTransition.cancel();
         this->preparedSpatialScaler.reset();
     }

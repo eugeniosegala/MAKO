@@ -85,6 +85,7 @@ namespace mako::ui {
         Q_PROPERTY(float scaling_factor READ getScalingFactor WRITE scalingFactorUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool scaling_supersampling READ getScalingSupersampling WRITE scalingSupersamplingUpdated NOTIFY refreshUI)
         Q_PROPERTY(float scaling_sharpness READ getScalingSharpness WRITE scalingSharpnessUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool hdr_reduced_precision READ getHdrReducedPrecision WRITE hdrReducedPrecisionUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint frame_generation_refresh_threshold READ getFrameGenerationRefreshThreshold WRITE frameGenerationRefreshThresholdUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint base_fps_cap READ getBaseFPSCap WRITE baseFPSCapUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive READ getAdaptive WRITE adaptiveUpdated NOTIFY refreshUI)
@@ -371,6 +372,10 @@ namespace mako::ui {
         [[nodiscard]] bool getScalingSupersampling() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingSupersampling)
             return conf.scaling_supersampling;
+        }
+        bool getHdrReducedPrecision() const {
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::hdrReducedPrecision)
+            return conf.hdr_reduced_precision;
         }
         [[nodiscard]] float getScalingSharpness() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingSharpness)
@@ -729,6 +734,11 @@ namespace mako::ui {
         void scalingEnabledUpdated(bool scaling_enabled) {
             VALIDATE_AND_GET_PROFILE()
             conf.scaling_enabled = scaling_enabled;
+            MARK_DIRTY()
+        }
+        void hdrReducedPrecisionUpdated(bool enabled) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.hdr_reduced_precision = enabled;
             MARK_DIRTY()
         }
         void swapchainImageCountCompatibilityUpdated(bool enabled) {

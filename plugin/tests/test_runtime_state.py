@@ -221,6 +221,21 @@ class RuntimeStateTests(unittest.TestCase):
         self.assertEqual(90, contexts[2]["requested"]["target_fps"])
         self.assertEqual(60, contexts[2]["applied"]["target_fps"])
 
+    def test_hdr_precision_defaults_for_older_records_and_preserves_pending_choice(self):
+        self._write("old-hdr.json", self._record(context=1))
+        pending = self._record(context=2)
+        pending["requested"]["hdr_reduced_precision"] = True
+        pending["applied"]["hdr_reduced_precision"] = False
+        self._write("pending-hdr.json", pending)
+        invalid = self._record(context=3)
+        invalid["applied"]["hdr_reduced_precision"] = "true"
+        self._write("invalid-hdr.json", invalid)
+        contexts = {entry["context"]: entry for entry in self.service.get_status()["contexts"]}
+        self.assertEqual({1, 2}, contexts.keys())
+        self.assertFalse(contexts[1]["applied"]["hdr_reduced_precision"])
+        self.assertTrue(contexts[2]["requested"]["hdr_reduced_precision"])
+        self.assertFalse(contexts[2]["applied"]["hdr_reduced_precision"])
+
     def test_stale_pid_identity_is_ignored_without_mutating_files(self):
         path = self._write(
             "stale.json",

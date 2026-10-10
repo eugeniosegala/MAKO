@@ -222,6 +222,7 @@ class RuntimeProfileSnapshot(TypedDict):
     scaling_factor: float
     scaling_supersampling: bool
     scaling_sharpness: float
+    hdr_reduced_precision: bool
     frame_generation_refresh_threshold: int
     base_fps_cap: int
     adaptive: bool

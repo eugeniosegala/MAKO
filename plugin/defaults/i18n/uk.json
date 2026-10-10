@@ -279,6 +279,8 @@
   "CONFIG_DLL_PATH_DESC": "Необов’язковий повний шлях до Lossless.dll. Залиште порожнім, щоб MAKO Renderer виконав автоматичний пошук. Після зміни перезапустіть гру.",
   "CONFIG_DISABLE_MAKO_NEXT_LAUNCH": "Вимкнути MAKO Renderer під час наступного запуску",
   "CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC": "Для діагностики: пропускає MAKO Renderer під час наступного запуску. Для вмикання чи вимикання лише генерації використовуйте налаштування вище.",
+  "HDR_REDUCED_PRECISION": "Reduced HDR Precision",
+  "HDR_REDUCED_PRECISION_DESC": "Uses 10-bit buffers for HDR shaders and HDR10 scaling inputs. May cause banding or change some effects. Applies live with a brief hitch; Frame Generation keeps floating-point precision.",
   "CONFIG_DISABLE_HDR_EXPOSURE": "Вимкнути HDR (перезапуск)",
   "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "Вимкніть, щоб дозволити HDR через міст Gamescope від MAKO. Потрібні HDR-вивід і ввімкнений HDR у грі.",
   "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (перезапуск)",

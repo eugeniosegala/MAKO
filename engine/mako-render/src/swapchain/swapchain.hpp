@@ -345,12 +345,14 @@ namespace mako::layer {
         struct SpatialResourceRequest {
             ls::ScalingMethod method{ls::ScalingMethod::Native};
             float sharpness{0.5F};
+            bool hdrReducedPrecision{false};
 
             friend bool operator==(
                     const SpatialResourceRequest& left,
                     const SpatialResourceRequest& right) {
                 return left.method == right.method &&
-                    left.sharpness == right.sharpness;
+                    left.sharpness == right.sharpness &&
+                    left.hdrReducedPrecision == right.hdrReducedPrecision;
             }
         };
 
@@ -406,6 +408,7 @@ namespace mako::layer {
             bool completionInFlight{false};
         };
         std::optional<SpatialScaler> spatialScaler;
+        std::optional<bool> shaderHdrReducedPrecision;
         std::vector<SpatialScalingPass> spatialScalingPasses;
         SpatialFramePipelinePlacement spatialFramePipelinePlacement{
             SpatialFramePipelinePlacement::PreFrameGeneration
@@ -468,6 +471,7 @@ namespace mako::layer {
         bool replacementWsiPrimePending{false};
 
         SwapchainColorPipeline colorPipeline;
+        bool hdrExposureDisabled{true};
         std::optional<std::filesystem::path> scalingShaderDll;
         bool fp16Requested{true};
         ls::GameConf profile;

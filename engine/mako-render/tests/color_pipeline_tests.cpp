@@ -19,6 +19,42 @@ namespace {
 }
 
 int main() {
+    for (const auto encoding : {backend::FrameEncoding::Sdr8,
+            backend::FrameEncoding::SdrHighPrecision, backend::FrameEncoding::ScRgbLinear,
+            backend::FrameEncoding::Hdr10Pq, backend::FrameEncoding::Hdr10PqPacked}) {
+        const auto full = encoding == backend::FrameEncoding::Sdr8
+            ? VK_FORMAT_R8G8B8A8_UNORM : VK_FORMAT_R16G16B16A16_SFLOAT;
+        const bool pq = encoding == backend::FrameEncoding::Hdr10Pq ||
+            encoding == backend::FrameEncoding::Hdr10PqPacked;
+        expect(layer::hdrScalingInputFormat(encoding, full, false, true) == full &&
+                layer::hdrScalingInputFormat(encoding, full, true, false) == full,
+            "HDR compact storage requires both opt-in and device support");
+        expect(layer::hdrScalingInputFormat(encoding, full, true, true) ==
+                (pq ? VK_FORMAT_A2B10G10R10_UNORM_PACK32 : full),
+            "Only bounded HDR PQ inputs may use compact storage; SDR and linear HDR stay unchanged");
+    }
+    for (auto encoding : {backend::FrameEncoding::Sdr8,
+            backend::FrameEncoding::SdrHighPrecision,
+            backend::FrameEncoding::Hdr10Pq,
+            backend::FrameEncoding::Hdr10PqPacked,
+            backend::FrameEncoding::ScRgbLinear}) {
+        const bool hdr = encoding == backend::FrameEncoding::Hdr10Pq ||
+            encoding == backend::FrameEncoding::Hdr10PqPacked ||
+            encoding == backend::FrameEncoding::ScRgbLinear;
+        for (bool backendAvailable : {false, true}) {
+            const layer::SwapchainColorPipeline pipeline{
+                .encoding = encoding,
+                .generationSupported = backendAvailable,
+                .hdr = hdr,
+            };
+            expect(layer::hdrShaderPrecisionSupported(pipeline, false) == hdr,
+                "HDR shader precision must work with no FG backend");
+            expect(!layer::hdrShaderPrecisionSupported(pipeline, true),
+                "Disabled HDR must never request compact shader storage");
+        }
+    }
+    expect(!layer::hdrShaderPrecisionSupported({.hdr = true}, false),
+        "Unclassified HDR must not request a precision transition");
     // Native 8-bit and 10-bit sRGB are both SDR. This guards against treating
     // "more bits" as HDR and producing the washed-out transfer-function bug.
     const auto sdr = layer::classifySwapchainColor(

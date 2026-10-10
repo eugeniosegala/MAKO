@@ -103,6 +103,15 @@ namespace mako::layer {
             return !this->presentationEnvironment.hdrExposureDisabled;
         }
 
+        [[nodiscard]] bool hdrReducedPrecision() const {
+            return hdrExposureEnabled() && this->active_profile &&
+                this->active_profile->hdr_reduced_precision;
+        }
+
+        [[nodiscard]] std::optional<bool> queryGamescopeOutputHdr(uint32_t gamescopePid) {
+            return this->hdrFeedbackReader.queryOutputHdrEnabled(gamescopePid);
+        }
+
         [[nodiscard]] bool gamescopeWsiTimingProvisioned() const {
             return this->frameGenerationInteropProvisioned() &&
                 this->gamescopeDetected &&

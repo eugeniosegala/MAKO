@@ -2,7 +2,7 @@
 
 ## MAKO does not load
 
-1. Use Vulkan, including DXVK/VKD3D-Proton for Windows games. Select Vulkan in emulators; OpenGL games may need [Zink](CONFIGURATION.md#standalone-launcher).
+1. Use Vulkan, including DXVK/VKD3D-Proton for Windows games. Select Vulkan in emulators; OpenGL games may need [Zink](CONFIGURATION.md#launch-settings).
 2. Copy the complete launch option from **MAKO Renderer Configuration** into Steam and restart. The basic native/Proton option is:
 
     ```text

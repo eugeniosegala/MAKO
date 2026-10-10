@@ -17,6 +17,7 @@
 #include <mutex>
 #include <poll.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <thread>
 #include <unistd.h>
 #include <unordered_map>
@@ -117,6 +118,7 @@ struct GamescopeScalingSurface::Impl {
     wl_proxy* factory{};
     bool ready{};
     bool allowHdr{};
+    HdrOutputQuery rootHdrOutput;
     pid_t peerPid{};
 
     wl_display* (*displayConnect)(const char*){};
@@ -467,15 +469,26 @@ struct GamescopeScalingSurface::Impl {
     }
 
     std::optional<uint32_t> cardinal(xcb_connection_t* connection,
-            const xcb_window_t root, const std::string_view name) {
+            const xcb_window_t root, const std::string_view name,
+            bool* missing = nullptr) {
+        if (missing)
+            *missing = false;
         Reply<xcb_intern_atom_reply_t> atom(atomReply(connection,
             internAtom(connection, 1, static_cast<uint16_t>(name.size()), name.data()),
             nullptr), &std::free);
-        if (!atom || atom->atom == XCB_ATOM_NONE)
+        if (!atom)
             return std::nullopt;
+        if (atom->atom == XCB_ATOM_NONE) {
+            if (missing)
+                *missing = true;
+            return std::nullopt;
+        }
         Reply<xcb_get_property_reply_t> value(propertyReply(connection,
             getProperty(connection, 0, root, atom->atom, XCB_ATOM_CARDINAL, 0, 1),
             nullptr), &std::free);
+        if (missing && value && value->type == XCB_ATOM_NONE &&
+                value->format == 0 && value->value_len == 0 && value->bytes_after == 0)
+            *missing = true;
         if (!value || value->type != XCB_ATOM_CARDINAL || value->format != 32 ||
                 value->value_len != 1 || value->bytes_after != 0)
             return std::nullopt;
@@ -531,10 +544,17 @@ struct GamescopeScalingSurface::Impl {
         state->xlibDisplay = xlibDisplay;
         state->server = *server;
         state->window = window;
-        // Gamescope publishes this capability for both internal OLED panels
-        // and external HDR displays, even when the current content is SDR.
-        state->hdrOutput = allowHdr && cardinal(connection, geometry->root,
-            "GAMESCOPE_HDR_OUTPUT_FEEDBACK").value_or(0) == 1;
+        // A game server created after Gamescope's output mode was established
+        // can lack this property until the next output change. Reuse the
+        // validated server-zero resolver only for missing capability; an
+        // explicit local SDR value must remain authoritative.
+        if (allowHdr) {
+            bool missing{};
+            const auto localHdr = cardinal(connection, geometry->root,
+                "GAMESCOPE_HDR_OUTPUT_FEEDBACK", &missing);
+            state->hdrOutput = localHdr ? *localHdr == 1 :
+                (missing && *server != 0 && rootHdrOutput && rootHdrOutput(*pid).value_or(false));
+        }
         state->connection = connection;
         wl_argument newId{.o = nullptr};
         state->surface = marshal(compositor, 0, surfaceInterface, 1, 0, &newId);
@@ -582,8 +602,50 @@ struct GamescopeScalingSurface::Impl {
     }
 };
 
-GamescopeScalingSurface::GamescopeScalingSurface(const bool allowHdr) : impl(std::make_unique<Impl>()) {
+bool mako::layer::needsGamescopeScalingSurface(
+        const bool scalingProvisioned, const bool wsiIsolated,
+        const bool spatialRole, const bool splitChain,
+        const std::string_view gamescopeDisplay, const std::string_view waylandDisplay,
+        const std::string_view runtimeDirectory, const bool inheritedSocket) {
+    if (!scalingProvisioned || !wsiIsolated || spatialRole || splitChain ||
+            gamescopeDisplay.empty())
+        return false;
+    if (waylandDisplay.empty() || waylandDisplay == gamescopeDisplay)
+        return true;
+    if (inheritedSocket)
+        return false;
+
+    const auto socketPath = [runtimeDirectory](const std::string_view display) {
+        if (display.front() == '/')
+            return std::string(display);
+        if (runtimeDirectory.empty())
+            return std::string{};
+        return std::string(runtimeDirectory) + '/' + std::string(display);
+    };
+    const auto gamescopePath = socketPath(gamescopeDisplay);
+    const auto waylandPath = socketPath(waylandDisplay);
+    if (gamescopePath.empty() || waylandPath.empty())
+        return false;
+    struct stat gamescopeInfo{};
+    if (stat(gamescopePath.c_str(), &gamescopeInfo) != 0 ||
+            !S_ISSOCK(gamescopeInfo.st_mode))
+        return false;
+    struct stat waylandInfo{};
+    if (stat(waylandPath.c_str(), &waylandInfo) != 0) {
+        // Pressure Vessel can supply a missing default WAYLAND_DISPLAY even
+        // when Gamescope's separate socket is available. The subsequent peer
+        // and X11 server checks still have to prove this compositor owns us.
+        return errno == ENOENT || errno == ENOTDIR;
+    }
+    return S_ISSOCK(waylandInfo.st_mode) &&
+        gamescopeInfo.st_dev == waylandInfo.st_dev &&
+        gamescopeInfo.st_ino == waylandInfo.st_ino;
+}
+
+GamescopeScalingSurface::GamescopeScalingSurface(const bool allowHdr,
+        HdrOutputQuery rootHdrOutput) : impl(std::make_unique<Impl>()) {
     impl->allowHdr = allowHdr;
+    impl->rootHdrOutput = std::move(rootHdrOutput);
 }
 GamescopeScalingSurface::~GamescopeScalingSurface() = default;
 

@@ -104,6 +104,7 @@ SUBCOMMAND OPTIONS:
             --profile                  Separate CPU/GPU diagnostic mode; ignores duration
             --profile-samples <INT>     Measured iterations, 1-10000 (default 200)
             --profile-warmup <INT>      Warm-up iterations, 6-10000 (default 200)
+            --profile-hdr10             Profile packed HDR10 inputs; requires --profile
 
     debug
         <folder>                        Path to the debug frames
@@ -259,7 +260,7 @@ SUBCOMMAND OPTIONS:
         benchmark::Options opts{};
         bool profileControlsExplicit{false};
 
-        const std::array<option, 14> GETOPT {{
+        const std::array<option, 15> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
             { "no-fp16",          no_argument,       nullptr, 'A' },
@@ -273,6 +274,7 @@ SUBCOMMAND OPTIONS:
             { "profile",          no_argument,       nullptr, 1000 },
             { "profile-samples",  required_argument, nullptr, 1001 },
             { "profile-warmup",   required_argument, nullptr, 1002 },
+            { "profile-hdr10",    no_argument,       nullptr, 1003 },
             { nullptr,                  no_argument, nullptr,  0  }
         }};
 
@@ -320,6 +322,10 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 1002:
                     opts.profile_warmup = numericArgument<int>(optarg, "--profile-warmup");
+                    profileControlsExplicit = true;
+                    break;
+                case 1003:
+                    opts.profile_hdr10 = true;
                     profileControlsExplicit = true;
                     break;
                 case '?':

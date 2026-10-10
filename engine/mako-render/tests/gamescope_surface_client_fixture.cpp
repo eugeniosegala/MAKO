@@ -42,6 +42,9 @@ namespace {
     int associations{};
     int feedbacks{};
     uint32_t hdrOutput{};
+    bool hdrOutputPresent{true};
+    int hdrPropertyFault{};
+    uint32_t serverId{9};
     bool externalOutput{};
     int hdrQueries{};
     uint32_t feedbackColorSpace{};
@@ -132,6 +135,9 @@ extern "C" {
     int mako_test_surface_associations() { return associations; }
     int mako_test_surface_feedbacks() { return feedbacks; }
     void mako_test_surface_hdr_output(uint32_t value) { hdrOutput = value; }
+    void mako_test_surface_hdr_output_present(bool value) { hdrOutputPresent = value; }
+    void mako_test_surface_hdr_property_fault(int value) { hdrPropertyFault = value; }
+    void mako_test_surface_server_id(uint32_t value) { serverId = value; }
     void mako_test_surface_external_output(bool value) { externalOutput = value; }
     int mako_test_surface_hdr_queries() { return hdrQueries; }
     uint32_t mako_test_surface_feedback_color() { return feedbackColorSpace; }
@@ -323,19 +329,32 @@ extern "C" {
         return {std::string_view(name, size) == "GAMESCOPE_PID" ? 100u : 101u};
     }
     xcb_intern_atom_reply_t* xcb_intern_atom_reply(xcb_connection_t*, xcb_intern_atom_cookie_t cookie, xcb_generic_error_t**) {
+        if (cookie.sequence == 102 && hdrPropertyFault == 6)
+            return nullptr;
         auto* reply = static_cast<xcb_intern_atom_reply_t*>(std::calloc(1, sizeof(xcb_intern_atom_reply_t)));
-        reply->atom = mode == 6 ? XCB_ATOM_NONE : cookie.sequence;
+        reply->atom = mode == 6 || (cookie.sequence == 102 && hdrPropertyFault == 7)
+            ? XCB_ATOM_NONE : cookie.sequence;
         return reply;
     }
     xcb_get_property_cookie_t xcb_get_property(xcb_connection_t*, uint8_t, xcb_window_t, xcb_atom_t atom, xcb_atom_t, uint32_t, uint32_t) { return {atom}; }
     xcb_get_property_reply_t* xcb_get_property_reply(xcb_connection_t*, xcb_get_property_cookie_t cookie, xcb_generic_error_t**) {
+        if (cookie.sequence == 102 && hdrPropertyFault == 5)
+            return nullptr;
         auto* reply = static_cast<xcb_get_property_reply_t*>(std::calloc(1, sizeof(xcb_get_property_reply_t) + 4));
+        if (cookie.sequence == 102 && !hdrOutputPresent)
+            return reply; // A missing property has None type and no value.
         reply->type = XCB_ATOM_CARDINAL;
         reply->format = mode == 9 ? 8 : 32;
         reply->value_len = 1;
+        if (cookie.sequence == 102) {
+            if (hdrPropertyFault == 1) reply->type = XCB_ATOM_STRING;
+            if (hdrPropertyFault == 2) reply->format = 8;
+            if (hdrPropertyFault == 3) reply->value_len = 0;
+            if (hdrPropertyFault == 4) reply->bytes_after = 4;
+        }
         const uint32_t value = cookie.sequence == 100
             ? static_cast<uint32_t>(getpid()) + (mode == 10 ? 1 : 0)
-            : cookie.sequence == 102 ? hdrOutput : cookie.sequence == 103 ? externalOutput : 9;
+            : cookie.sequence == 102 ? hdrOutput : cookie.sequence == 103 ? externalOutput : serverId;
         std::memcpy(reply + 1, &value, 4);
         return reply;
     }

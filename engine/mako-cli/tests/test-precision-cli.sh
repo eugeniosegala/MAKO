@@ -29,9 +29,10 @@ for command in benchmark debug quality-regression combined-quality-regression; d
     expect_precision fp16-allowed "$command" --no-fp16 --allow-fp16 "${arguments[@]}"
 done
 
-expect_precision 'profile samples=200 warmup=200' benchmark --profile
-expect_precision 'profile samples=11 warmup=6' benchmark --profile --profile-samples 11 --profile-warmup 6
-for arguments in '--profile-samples 10' '--profile --profile-samples 0' '--profile --profile-samples 10001' '--profile --profile-warmup 5' '--profile --profile-warmup 10001'; do
+expect_precision 'profile samples=200 warmup=200 hdr10=0' benchmark --profile
+expect_precision 'profile samples=11 warmup=6 hdr10=0' benchmark --profile --profile-samples 11 --profile-warmup 6
+expect_precision 'profile samples=200 warmup=200 hdr10=1' benchmark --profile-hdr10 --profile
+for arguments in '--profile-hdr10' '--profile-samples 10' '--profile --profile-samples 0' '--profile --profile-samples 10001' '--profile --profile-warmup 5' '--profile --profile-warmup 10001'; do
     read -r -a args <<< "$arguments"
     if "$cli" benchmark "${args[@]}" >/dev/null 2>&1; then
         printf 'Invalid frame-profile options accepted: %s\n' "$arguments" >&2

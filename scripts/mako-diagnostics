@@ -250,7 +250,7 @@ for preset in "${presets[@]}"; do
   esac
   case "$preset" in
     hdr)
-      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
+      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|HDR scaling precision|HDR shader precision|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       add_pattern "$renderer_prefix Gamescope application HDR feedback"
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)"
       ;;
@@ -290,14 +290,14 @@ for preset in "${presets[@]}"; do
     lifecycle)
       add_pattern "$renderer_prefix present diagnostics: operation=swapchain-context-(create|destroy)"
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied)"
-      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
+      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|HDR scaling precision|HDR shader precision|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       ;;
     startup)
       add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
       add_pattern "$renderer_prefix present diagnostics: operation=swapchain-context-create"
       add_pattern "$renderer_prefix Gamescope application HDR feedback"
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied)"
-      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
+      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|HDR scaling precision|HDR shader precision|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       ;;
     layers)
       add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'

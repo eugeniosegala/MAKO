@@ -120,6 +120,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             info.format, info.colorSpace, gamescopeHdrActive, gamescopeDetected,
             hdrExposureDisabled
         )),
+        hdrExposureDisabled(hdrExposureDisabled),
         scalingShaderDll(scalingShaderDll),
         fp16Requested(fp16Requested),
         profile(std::move(profile)), info(std::move(info)) {
@@ -190,7 +191,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             this->colorPipeline.exchangeFormat,
             ls::effectiveScalingMethod(this->profile),
             this->profile.scaling_sharpness,
-            scalingShaderDll, this->fp16Requested, this->colorPipeline.encoding
+            scalingShaderDll, this->fp16Requested, this->colorPipeline.encoding,
+            this->profile.hdr_reduced_precision
         );
         this->spatialScalingPasses.reserve(this->info.images.size());
         for (size_t i = 0; i < this->info.images.size(); ++i) {

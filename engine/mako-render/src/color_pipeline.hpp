@@ -11,6 +11,16 @@
 
 namespace mako::layer {
 
+    /// Only bounded PQ may use UNORM storage. Linear HDR must retain its range.
+    [[nodiscard]] constexpr VkFormat hdrScalingInputFormat(
+            backend::FrameEncoding encoding, VkFormat fullPrecision,
+            bool reducedPrecision, bool packedSupported) noexcept {
+        return reducedPrecision && packedSupported &&
+            (encoding == backend::FrameEncoding::Hdr10Pq ||
+             encoding == backend::FrameEncoding::Hdr10PqPacked)
+            ? VK_FORMAT_A2B10G10R10_UNORM_PACK32 : fullPrecision;
+    }
+
     /// Colour handling selected from the complete Vulkan surface-format pair.
     /// `hdr` describes transfer-function semantics, not component bit depth:
     /// a 10-bit UNORM/sRGB pair is still SDR, while the same packed format with
@@ -26,6 +36,16 @@ namespace mako::layer {
         std::string_view name{"sdr-8-bit"};
         std::string_view reason{};
     };
+
+    /// Shader storage is independent of whether an FG backend was provisioned.
+    [[nodiscard]] constexpr bool hdrShaderPrecisionSupported(
+            const SwapchainColorPipeline& pipeline,
+            const bool hdrExposureDisabled) noexcept {
+        return !hdrExposureDisabled && pipeline.hdr &&
+            (pipeline.encoding == backend::FrameEncoding::Hdr10Pq ||
+             pipeline.encoding == backend::FrameEncoding::Hdr10PqPacked ||
+             pipeline.encoding == backend::FrameEncoding::ScRgbLinear);
+    }
 
     /// Scaling preserves the classified encoding in high-precision exchange
     /// images. Unsupported format/colour-space pairs must fail closed.

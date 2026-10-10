@@ -55,3 +55,5 @@ Restore the original launch settings and remove the two temporary diagnostics va
 ## 5. Send the report
 
 Review `MAKO-diagnostics.txt` and remove personal information. Upload it through the [diagnostic form](https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform), choosing **MAKO Renderer (standalone/direct installation)**. Answer **Unknown** when unsure. Do not post the log publicly or attach `Lossless.dll`.
+
+The `hdr` preset also retains Reduced HDR Precision scaler input/output formats and shader-handoff acceptance. Keep the shader graph’s `working_format` record when comparing the experimental setting; a requested toggle alone does not prove compact buffers were created.

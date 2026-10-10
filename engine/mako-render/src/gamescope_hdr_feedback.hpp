@@ -286,6 +286,11 @@ namespace mako::layer {
         /// unavailable feedback path distinguishable from confirmed SDR.
         [[nodiscard]] GamescopeHdrFeedbackSample diagnosticSample() const;
 
+        /// Surface-creation fallback for game Xwayland servers that lack the
+        /// output property. Reuse the root resolver and revalidate identity;
+        /// never infer capability from another compositor or application HDR.
+        [[nodiscard]] std::optional<bool> queryOutputHdrEnabled(uint32_t gamescopePid);
+
     private:
         struct Impl;
         std::unique_ptr<Impl> impl;

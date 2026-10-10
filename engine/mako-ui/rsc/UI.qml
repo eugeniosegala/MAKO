@@ -1103,6 +1103,19 @@ ApplicationWindow {
                         }
                     }
 
+                    GroupEntry {
+                        visible: !backend.disable_hdr_exposure
+                        title: t.hdrReducedPrecision
+                        description: t.hdrReducedPrecisionDesc
+                        experimentalLabel: t.experimentalLabel
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+                            checked: backend.hdr_reduced_precision
+                            onToggled: backend.hdr_reduced_precision = checked
+                        }
+                    }
+
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.Wrap

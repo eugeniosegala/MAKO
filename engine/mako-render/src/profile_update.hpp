@@ -99,7 +99,8 @@ namespace mako::layer {
             const ls::GameConf& current,
             const ls::GameConf& requested) noexcept {
         if (ls::effectiveScalingMethod(current) !=
-                ls::effectiveScalingMethod(requested))
+                ls::effectiveScalingMethod(requested) ||
+                current.hdr_reduced_precision != requested.hdr_reduced_precision)
             return std::chrono::milliseconds::zero();
         return std::chrono::milliseconds(500);
     }
@@ -204,6 +205,7 @@ namespace mako::layer {
         live.scaling_factor = current.scaling_factor;
         live.scaling_supersampling = current.scaling_supersampling;
         live.scaling_sharpness = current.scaling_sharpness;
+        live.hdr_reduced_precision = current.hdr_reduced_precision;
         live.flow_scale = current.flow_scale;
         live.performance_mode = current.performance_mode;
         if (generatedFrameCapacityPending) {
@@ -220,6 +222,7 @@ namespace mako::layer {
         float scalingFactor{1.0F};
         bool scalingSupersampling{false};
         float scalingSharpness{0.5F};
+        bool hdrReducedPrecision{false};
         float effectiveFlowScale{ls::GameConfDefaults::flowScale};
         bool effectivePerformanceMode{false};
         size_t requiredGeneratedFrameCapacity{0};
@@ -242,6 +245,7 @@ namespace mako::layer {
                 ? profile.scaling_supersampling : false,
             .scalingSharpness = scalingActive
                 ? profile.scaling_sharpness : 0.5F,
+            .hdrReducedPrecision = scalingActive && profile.hdr_reduced_precision,
             .effectiveFlowScale = ls::effectiveFlowScale(profile),
             .effectivePerformanceMode = ls::effectivePerformanceMode(profile),
             .requiredGeneratedFrameCapacity =
@@ -261,7 +265,8 @@ namespace mako::layer {
         if (current.scalingEnabled != requested.scalingEnabled ||
                 current.scalingMethod != requested.scalingMethod ||
                 current.scalingSupersampling !=
-                    requested.scalingSupersampling)
+                    requested.scalingSupersampling ||
+                current.hdrReducedPrecision != requested.hdrReducedPrecision)
             return std::chrono::milliseconds::zero();
         return std::chrono::milliseconds(500);
     }
@@ -818,7 +823,8 @@ namespace mako::layer {
             const bool spatialScalingActivationSupported = true,
             const bool spatialScalingEffectiveExtentUnchanged = false,
             const bool spatialSupersamplingEffectiveExtentUnchanged = false,
-            const std::optional<uint32_t> displayRefreshHz = std::nullopt) {
+            const std::optional<uint32_t> displayRefreshHz = std::nullopt,
+            const bool hdrScalingActive = false) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
@@ -876,9 +882,11 @@ namespace mako::layer {
             current.scaling_supersampling != next.scaling_supersampling;
         const bool scalingSharpnessChanged =
             current.scaling_sharpness != next.scaling_sharpness;
+        const bool hdrPrecisionChanged = hdrScalingActive &&
+            current.hdr_reduced_precision != next.hdr_reduced_precision;
         const bool scalerSettingsChanged = scalingMethodChanged ||
             scalingFactorChanged || scalingSupersamplingChanged ||
-            scalingSharpnessChanged;
+            scalingSharpnessChanged || hdrPrecisionChanged;
         const bool spatialScalingResourcesChanged =
             current.scaling_enabled == next.scaling_enabled &&
             (ls::spatialScalingRequested(current) ||
@@ -897,6 +905,7 @@ namespace mako::layer {
              !spatialScalingActivationSupported);
         const bool spatialScalingExtentNoOp =
             spatialScalingResourcesChanged &&
+            !hdrPrecisionChanged &&
             (scalingFactorChanged || scalingSupersamplingChanged) &&
             (!scalingFactorChanged ||
              spatialScalingEffectiveExtentUnchanged) &&
@@ -905,14 +914,24 @@ namespace mako::layer {
         const bool spatialScalingLiveRebuild =
             spatialScalingResourcesChanged &&
             spatialScalerActive &&
-            !scalingFactorChanged && !scalingSupersamplingChanged;
+            (!scalingFactorChanged ||
+                (hdrPrecisionChanged && spatialScalingEffectiveExtentUnchanged)) &&
+            (!scalingSupersamplingChanged ||
+                (hdrPrecisionChanged && spatialSupersamplingEffectiveExtentUnchanged));
         if (spatialScalingResourcesChanged &&
                 !spatialScalingDormantUpdate &&
                 !spatialScalingExtentNoOp) {
             applied.scaling_method = current.scaling_method;
-            applied.scaling_factor = current.scaling_factor;
-            applied.scaling_supersampling = current.scaling_supersampling;
+            // A precision rebuild can accompany extent-neutral profile edits.
+            // Those values need no resource commit: the private scaler owns
+            // only method, sharpness and precision, not the saved geometry.
+            if (!spatialScalingLiveRebuild) {
+                applied.scaling_factor = current.scaling_factor;
+                applied.scaling_supersampling = current.scaling_supersampling;
+            }
             applied.scaling_sharpness = current.scaling_sharpness;
+            if (hdrPrecisionChanged)
+                applied.hdr_reduced_precision = current.hdr_reduced_precision;
             swapchainRecreationDeferred = !spatialScalingLiveRebuild;
         }
         if (ls::effectiveFlowScale(current) !=
@@ -999,6 +1018,7 @@ namespace mako::layer {
                 generationPolicyChanged ||
                 generationModeChanged || fixedMultiplierChanged ||
                 baseFpsCapChanged || dynamicCadenceProbeIntervalChanged ||
+                current.hdr_reduced_precision != applied.hdr_reduced_precision ||
                 spatialScalingLiveRebuild || frameGenerationPrivateRebuild;
 
         ProfileUpdateAction action = ProfileUpdateAction::NoRuntimeChange;

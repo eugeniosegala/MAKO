@@ -13,7 +13,7 @@ Native Remote Play follows the ordinary saved `current_profile` selection throug
 | Process start | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, layer membership and order, Gamescope WSI isolation, HDR exposure, Zink, audio compatibility, and the shared FP16 precision choice | Start a new game process |
 | Process-wide backend | DLL, GPU, and Ultra Performance policy | Construct a new backend, normally by restarting the process |
 | Game-owned swapchain | Spatial extents and pacing shape | Natural recreation, or one eligible maintenance1-backed extent request |
-| Private spatial context | Scaling method and sharpness | Prepare, drain MAKO-owned work, and atomically replace |
+| Private spatial context | Scaling method, sharpness and HDR10 input precision | Prepare, drain MAKO-owned work, and atomically replace |
 | Private FG context | Flow Scale, lighter model, and generated-output capacity | Prepare, drain MAKO-owned work, and atomically replace |
 | Live policy | Frame Generation `0x`/active execution state, refresh guard, Fixed/Adaptive policy, target, caps, and cadence controls | Next successful reload and application present; policy edits received during confirmed Steam UI focus coalesce until gameplay returns |
 | Compositor feedback | Confirmed refresh, explicit VRR/tearing state, and application HDR state | Background sample, independent of profile reload |
@@ -72,6 +72,7 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Game Swapchain Images compatibility | Restart | Existing contexts retain the process-start WSI image-count policy. |
 | Scaling method | Private spatial replacement when active; dormant otherwise | Applies at the next present, retains extents and WSI objects, and keeps the old method on failure. |
 | Scaling sharpness | Private spatial replacement when active; dormant otherwise | Coalesces edits for 500 ms before replacement. |
+| Reduced HDR Precision | Private spatial replacement for active HDR10 scaling; live shader graph replacement | Uses compact PQ inputs/intermediates when supported. Defaults off, stays dormant for SDR, and preserves linear FG precision and WSI formats. Failed candidates retain the previous resources. |
 | Scale Factor | Extent no-op or game-owned recreation | Applies immediately when effective extents stay identical. Otherwise, an eligible spatial owner may request one recreation after a retirement-fenced present; other paths wait for natural recreation. |
 | Quality Supersampling | Extent no-op or game-owned recreation | Uses the same extent boundary as Scale Factor on a variable managed Gamescope surface; fixed and direct geometry are unaffected. |
 | Flow Scale and Lighter FG Model | Private FG replacement | Coalesces for 500 ms, prepares a complete candidate, drains MAKO-owned work, switches atomically, and warms history. |

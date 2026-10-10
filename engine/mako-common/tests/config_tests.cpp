@@ -59,6 +59,7 @@ namespace {
             left.scaling_factor == right.scaling_factor &&
             left.scaling_supersampling == right.scaling_supersampling &&
             left.scaling_sharpness == right.scaling_sharpness &&
+            left.hdr_reduced_precision == right.hdr_reduced_precision &&
             left.frame_generation_refresh_threshold ==
                 right.frame_generation_refresh_threshold &&
             left.base_fps_cap == right.base_fps_cap &&
@@ -253,6 +254,8 @@ performance_mode = false
 
 int main() {
     const ls::GameConf defaults;
+    expect(!defaults.hdr_reduced_precision,
+        "Reduced HDR precision must be opt-in for existing and new profiles");
     expect(defaults.multiplier == ls::GameConfDefaults::multiplier &&
             defaults.frame_generation_provisioned ==
                 ls::GameConfDefaults::frameGenerationProvisioned &&
@@ -367,6 +370,15 @@ int main() {
         "The documented default TOML and in-memory examples must stay equivalent");
 
     const auto precisionPath = directory / "precision.toml";
+    writeText(precisionPath, "version = 2\n[[profile]]\nname = 'hdr'\nhdr_reduced_precision = true\n[profile.handheld]\nhdr_reduced_precision = false\n[profile.docked]\nhdr_reduced_precision = true\n");
+    auto hdrPrecisionConfig = ls::ConfigFile(precisionPath);
+    hdrPrecisionConfig.write(precisionPath);
+    hdrPrecisionConfig = ls::ConfigFile(precisionPath);
+    const auto& hdrPrecisionProfile = hdrPrecisionConfig.profiles().front();
+    expect(hdrPrecisionProfile.hdr_reduced_precision &&
+            !ls::profileForPowerSource(hdrPrecisionProfile, ls::PowerSource::Handheld).hdr_reduced_precision &&
+            ls::profileForPowerSource(hdrPrecisionProfile, ls::PowerSource::Docked).hdr_reduced_precision,
+        "HDR precision must round-trip independently through base and power profiles");
     for (const std::string_view global : {"", "[global]\n", "[global]\nallow_fp16 = true\n"}) {
         writeText(precisionPath, "version = 2\n" + std::string(global) + "[[profile]]\n");
         expect(ls::ConfigFile(precisionPath).global().allow_fp16,

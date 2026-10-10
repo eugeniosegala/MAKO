@@ -40,13 +40,22 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 
 ## ✨ Feature Highlights
 
+<p align="center">
+  <br />
+  <a href="plugin/docs/CONFIGURATION.md#shaders"><img src="assets/features/shaders.webp" width="100" align="middle" alt="Shaders" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#spatial-scaling"><img src="assets/features/scaling.webp" width="100" align="middle" alt="Scaling" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#hdr-through-the-isolated-gamescope-bridge"><img src="assets/features/hdr.webp" width="100" align="middle" alt="Experimental HDR" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#frame-generation"><img src="assets/features/adaptive-frame-generation.webp" width="100" align="middle" alt="Adaptive Frame Generation" /></a>
+  <br /><br />
+</p>
+
 - **Full-quality frame generation:** Lossless Scaling models from your licensed installation, with per-game quality and performance controls.
 - **Reduced ghosting:** Full-quality v2 with Lighter FG Model off can reduce ghosting; supported AMD GPUs gain extra safeguards. Results vary by game.
 - **Spatial scaling:** LS1 Quality, LS1 Performance, or the open MAKO Scaler, used alone or before frame generation.
 - **Per-game shaders:** Live sharpening, anti-aliasing, colour, cinematic, and retro effects through bundled vkBasalt.
 - **Adaptive Frame Generation:** Target 30–240 FPS with a selectable 2x–5x generation ceiling.
 - **Display-aware pacing:** Adapts frame delivery to the presentation plan and Gamescope VRR state.
-- **Experimental HDR (disabled by default):** HDR10/PQ and linear scRGB work with Scaling, Frame Generation, and Shaders through the isolated Gamescope bridge. To try it, turn off **Disable HDR (Restart)** in MAKO Decky or the Qt UI, restart the game, and enable its HDR setting. Requires an HDR-capable display and HDR enabled in Gamescope; display and game qualification remains in progress.
+- **Experimental HDR (disabled by default):** HDR support for Scaling, Frame Generation, and Shaders through Gamescope. See [setup and requirements](engine/docs/CONFIGURATION.md#hdr-through-the-isolated-gamescope-bridge).
 - **64-bit and 32-bit x86 support:** Matching Vulkan layers for native and Flatpak games.
 - **Gamescope recovery:** Preserves real frames during presentation pressure and Steam-menu transitions.
 - **Automatic profiles:** Saves per-game renderer and compatibility settings, matched by Steam app ID or process.

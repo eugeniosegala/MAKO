@@ -198,6 +198,7 @@ export interface RuntimeProfileSnapshot {
   scaling_factor: number;
   scaling_supersampling: boolean;
   scaling_sharpness: number;
+  hdr_reduced_precision: boolean;
   frame_generation_refresh_threshold: number;
   base_fps_cap: number;
   adaptive: boolean;

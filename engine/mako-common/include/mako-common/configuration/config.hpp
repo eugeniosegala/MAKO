@@ -167,6 +167,7 @@ namespace ls {
         static constexpr float scalingFactor = 1.5F;
         static constexpr bool scalingSupersampling = false;
         static constexpr float scalingSharpness = 0.8F;
+        static constexpr bool hdrReducedPrecision = false;
         static constexpr uint32_t frameGenerationRefreshThreshold = 0;
         static constexpr uint32_t baseFpsCap = 0;
         static constexpr bool adaptive = false;
@@ -252,6 +253,8 @@ namespace ls {
         bool scaling_supersampling{GameConfDefaults::scalingSupersampling};
         /// normalized scaler sharpening strength
         float scaling_sharpness{GameConfDefaults::scalingSharpness};
+        /// Use compact PQ buffers where supported; linear HDR stays floating point.
+        bool hdr_reduced_precision{GameConfDefaults::hdrReducedPrecision};
         /// pause synthesis at or below a confirmed refresh rate; zero disables it
         uint32_t frame_generation_refresh_threshold{
             GameConfDefaults::frameGenerationRefreshThreshold

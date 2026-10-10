@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "spatial_scaler.hpp"
+#include "color_pipeline.hpp"
 
 #include "mako-backend/dll_inspection.hpp"
 #include "mako-backend/ls1.hpp"
@@ -19,6 +20,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <iostream>
 #include <memory>
 #include <optional>
 #include <span>
@@ -166,10 +168,10 @@ namespace {
         NativeResolutionPipeline(const vk::Vulkan& vk,
                 const VkExtent2D sourceExtent,
                 const VkExtent2D presentationExtent,
-                const VkFormat workingFormat) :
+                const VkFormat workingFormat, const VkFormat inputFormat) :
             sourceSize(sourceExtent),
             presentationSize(presentationExtent),
-            sourceImage(vk, sourceExtent, workingFormat,
+            sourceImage(vk, sourceExtent, inputFormat,
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT),
             reconstructedImage(vk, presentationExtent, workingFormat,
@@ -275,10 +277,10 @@ namespace {
                 const VkExtent2D sourceExtent,
                 const VkExtent2D presentationExtent,
                 const VkFormat workingFormat,
-                const float sharpness, const bool fp16) :
+                const float sharpness, const bool fp16, const VkFormat inputFormat) :
             sourceSize(sourceExtent),
             presentationSize(presentationExtent),
-            sourceImage(vk, sourceExtent, workingFormat,
+            sourceImage(vk, sourceExtent, inputFormat,
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT),
             reconstructedImage(vk, presentationExtent, workingFormat,
                 VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT),
@@ -469,12 +471,14 @@ namespace {
                 const VkExtent2D sourceExtent,
                 const VkExtent2D presentationExtent,
                 const mako::backend::Ls1ShaderSet& payloads,
-                const VkFormat workingFormat, const bool shaderBoundary = false) :
+                const VkFormat workingFormat, const bool shaderBoundary = false,
+                const VkFormat inputFormat = VK_FORMAT_UNDEFINED) :
             sourceSize(sourceExtent),
             presentationSize(presentationExtent),
             performance(payloads.mode == mako::backend::Ls1Mode::Performance),
             variant(payloads.modelVariant),
-            sourceImage(vk, sourceExtent, workingFormat,
+            sourceImage(vk, sourceExtent,
+                inputFormat == VK_FORMAT_UNDEFINED ? workingFormat : inputFormat,
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
                     (shaderBoundary ? VK_IMAGE_USAGE_STORAGE_BIT : 0U)),
             featureImage(vk, doubledExtent(sourceExtent), VK_FORMAT_R8_SNORM,
@@ -905,11 +909,28 @@ public:
             const ls::ScalingMethod requested,
             const float sharpness,
             const std::optional<std::filesystem::path>& shaderDllPath,
-            const bool fp16Requested, const mako::backend::FrameEncoding encoding) :
+            const bool fp16Requested, const mako::backend::FrameEncoding encoding,
+            const bool hdrReducedPrecision) :
         sourceSize(sourceExtent),
         presentationSize(presentationExtent),
         requested(requested),
         active(requested) {
+        const bool packedSupported = hdrReducedPrecision &&
+            (encoding == mako::backend::FrameEncoding::Hdr10Pq ||
+             encoding == mako::backend::FrameEncoding::Hdr10PqPacked) &&
+            vk.supportsOptimalTilingFormatFeatures(
+                VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+                VK_FORMAT_FEATURE_BLIT_SRC_BIT | VK_FORMAT_FEATURE_BLIT_DST_BIT |
+                    VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                    VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT);
+        const auto inputFormat = hdrScalingInputFormat(
+            encoding, workingFormat, hdrReducedPrecision, packedSupported);
+        if (encoding == mako::backend::FrameEncoding::Hdr10Pq ||
+                encoding == mako::backend::FrameEncoding::Hdr10PqPacked) {
+            std::clog << "MAKO Renderer: HDR scaling precision: input_format="
+                      << inputFormat << "; output_format=" << workingFormat
+                      << "; compact_input=" << (inputFormat != workingFormat) << '\n';
+        }
         // The spatial role is constructed at the scaling-engine startup
         // boundary, while model selection remains live. Prime the immutable
         // DLL archive here so the first later LS1 selection does not place
@@ -926,7 +947,7 @@ public:
         }
         if (requested == ls::ScalingMethod::Native) {
             this->pipeline = std::make_unique<NativeResolutionPipeline>(
-                vk, sourceExtent, presentationExtent, workingFormat
+                vk, sourceExtent, presentationExtent, workingFormat, inputFormat
             );
             return;
         }
@@ -950,7 +971,8 @@ public:
                         vk, sourceExtent, presentationExtent, payloads);
                 } else {
                     this->pipeline = std::make_unique<Ls1Pipeline>(
-                        vk, sourceExtent, presentationExtent, payloads, workingFormat);
+                        vk, sourceExtent, presentationExtent, payloads, workingFormat,
+                        false, inputFormat);
                 }
                 return;
             } catch (const std::exception& error) {
@@ -967,12 +989,12 @@ public:
             // Preserve reconstruction of the source rectangle rather than
             // exposing an incomplete real frame or substituting FP32 compute.
             this->pipeline = std::make_unique<NativeResolutionPipeline>(
-                vk, sourceExtent, presentationExtent, workingFormat);
+                vk, sourceExtent, presentationExtent, workingFormat, inputFormat);
             return;
         }
         this->fp16 = fp16Requested;
         this->pipeline = std::make_unique<MakoPipeline>(
-            vk, sourceExtent, presentationExtent, workingFormat, sharpness, fp16Requested
+            vk, sourceExtent, presentationExtent, workingFormat, sharpness, fp16Requested, inputFormat
         );
     }
 
@@ -995,10 +1017,11 @@ SpatialScaler::SpatialScaler(const vk::Vulkan& vk,
         const ls::ScalingMethod requestedMethod,
         const float sharpness,
         const std::optional<std::filesystem::path>& shaderDllPath,
-        const bool fp16Requested, const mako::backend::FrameEncoding encoding) :
+        const bool fp16Requested, const mako::backend::FrameEncoding encoding,
+        const bool hdrReducedPrecision) :
     implementation(std::make_unique<Implementation>(
         vk, sourceExtent, presentationExtent, workingFormat,
-        requestedMethod, sharpness, shaderDllPath, fp16Requested, encoding
+        requestedMethod, sharpness, shaderDllPath, fp16Requested, encoding, hdrReducedPrecision
     )) {}
 
 SpatialScaler::~SpatialScaler() = default;

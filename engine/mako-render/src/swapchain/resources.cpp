@@ -567,7 +567,8 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
             this->preparedSpatialScaler.emplace(
                 vk, this->info.applicationExtent, this->info.extent,
                 this->colorPipeline.exchangeFormat, requested.method,
-                requested.sharpness, this->scalingShaderDll, this->fp16Requested, this->colorPipeline.encoding
+                requested.sharpness, this->scalingShaderDll, this->fp16Requested,
+                this->colorPipeline.encoding, requested.hdrReducedPrecision
             );
             this->configureDirectSpatialFrameGenerationOutputs(
                 vk, *this->preparedSpatialScaler, this->sourceImages,
@@ -645,6 +646,7 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
     this->preparedSpatialScaler.reset();
     this->profile.scaling_method = requested.method;
     this->profile.scaling_sharpness = requested.sharpness;
+    this->profile.hdr_reduced_precision = requested.hdrReducedPrecision;
     const auto committedRevision = this->spatialTransition.committed();
     this->runtimeStatusState.error.reset();
     this->publishRuntimeStatus("spatial-scaler");

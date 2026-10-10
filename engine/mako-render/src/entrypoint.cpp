@@ -528,7 +528,8 @@ namespace {
                     layer_info->root.scalingSurfaceConnectionProvisioned(),
                     true, spatialScalingLayer, splitLayerChainEnabled(),
                     environment("GAMESCOPE_WAYLAND_DISPLAY"),
-                    environment("WAYLAND_DISPLAY"))) {
+                    environment("WAYLAND_DISPLAY"), environment("XDG_RUNTIME_DIR"),
+                    std::getenv("WAYLAND_SOCKET") != nullptr)) {
                 const auto enumerate = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
                     layer_info->GetInstanceProcAddr(VK_NULL_HANDLE,
                         "vkEnumerateInstanceExtensionProperties"));
@@ -551,7 +552,10 @@ namespace {
                 if (canAttemptGamescopeScalingSurface(
                         enumerationResult, waylandSupported)) {
                     auto candidate = std::make_unique<GamescopeScalingSurface>(
-                        layer_info->root.hdrExposureEnabled());
+                        layer_info->root.hdrExposureEnabled(),
+                        [](uint32_t gamescopePid) {
+                            return layer_info->root.queryGamescopeOutputHdr(gamescopePid);
+                        });
                     if (candidate->connect())
                         scalingSurfaces = std::move(candidate);
                 }
@@ -2418,6 +2422,16 @@ namespace {
                         }
                         createdSwapchain = *swapchain;
                         lowerSwapchainCreated = true;
+                        // Optional private ABI: no change to application or WSI
+                        // formats. Supply the initial shader choice before images.
+                        using SetHdrPrecision = VkBool32 (VKAPI_PTR *)(
+                            VkDevice, VkSwapchainKHR, VkBool32);
+                        const auto setHdrPrecision = reinterpret_cast<SetHdrPrecision>(
+                            instance_info->funcs.GetDeviceProcAddr(device,
+                                "makoSetSwapchainHdrPrecisionV1"));
+                        if (setHdrPrecision)
+                            setHdrPrecision(device, *swapchain,
+                                layer_info->root.hdrReducedPrecision());
                         if (driverInfo.imageColorSpace != newInfo->imageColorSpace) {
                             // vkBasalt sees the driver's SRGB transport pair. Supply
                             // the original colour space before it exposes images or

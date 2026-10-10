@@ -5,6 +5,7 @@
 #include "pnext_chain.hpp"
 
 #include <cstddef>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string>
@@ -58,16 +59,14 @@ namespace mako::layer {
 
     /// The surface-only connection is mutually exclusive with full Gamescope
     /// WSI. Both are process-start choices; a live scaler selection must not
-    /// change the application's surface transport.
-    [[nodiscard]] constexpr bool needsGamescopeScalingSurface(
-            const bool scalingProvisioned, const bool wsiIsolated,
-            const bool spatialRole, const bool splitChain,
-            const std::string_view gamescopeDisplay,
-            const std::string_view waylandDisplay) noexcept {
-        return scalingProvisioned && wsiIsolated && !spatialRole &&
-            !splitChain && !gamescopeDisplay.empty() &&
-            (waylandDisplay.empty() || waylandDisplay == gamescopeDisplay);
-    }
+    /// change the application's surface transport. At startup, differing socket
+    /// names need filesystem identity checks for Steam Runtime aliases and its
+    /// missing default display. Unrelated or inherited connections stay isolated.
+    [[nodiscard]] bool needsGamescopeScalingSurface(
+            bool scalingProvisioned, bool wsiIsolated,
+            bool spatialRole, bool splitChain,
+            std::string_view gamescopeDisplay, std::string_view waylandDisplay,
+            std::string_view runtimeDirectory = {}, bool inheritedSocket = false);
 
     /// An application-facing layer below MAKO may own the global enumeration
     /// entrypoint but report only its layer-specific extensions. In that case
@@ -87,7 +86,9 @@ namespace mako::layer {
     /// Gamescope WSI layer or frame-limiter interface is loaded.
     class GamescopeScalingSurface {
     public:
-        explicit GamescopeScalingSurface(bool allowHdr = false);
+        using HdrOutputQuery = std::function<std::optional<bool>(uint32_t gamescopePid)>;
+        explicit GamescopeScalingSurface(bool allowHdr = false,
+            HdrOutputQuery rootHdrOutput = {});
         ~GamescopeScalingSurface();
         GamescopeScalingSurface(const GamescopeScalingSurface&) = delete;
         GamescopeScalingSurface& operator=(const GamescopeScalingSurface&) = delete;

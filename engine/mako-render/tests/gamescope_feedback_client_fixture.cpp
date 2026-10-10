@@ -16,10 +16,19 @@ namespace {
         "GAMESCOPE_COLOR_APP_WANTS_HDR_FEEDBACK",
     };
     std::atomic<unsigned> hdrAtoms{}, hdrReads{}, refresh{90};
+    std::atomic<unsigned> pid{77}, server{0};
+    std::atomic<int> hdrOutput{1};
+    std::atomic<bool> changePidOnHdrRead{false};
 }
 
 extern "C" {
-    void mako_test_feedback_reset() { hdrAtoms = 0; hdrReads = 0; refresh = 90; }
+    void mako_test_feedback_reset() {
+        hdrAtoms = 0; hdrReads = 0; refresh = 90; pid = 77; server = 0;
+        hdrOutput = 1; changePidOnHdrRead = false;
+    }
+    void mako_test_feedback_identity(unsigned process, unsigned id) { pid = process; server = id; }
+    void mako_test_feedback_hdr_output(int value) { hdrOutput = value; }
+    void mako_test_feedback_change_pid_on_hdr_read() { changePidOnHdrRead = true; }
     unsigned mako_test_feedback_hdr_atoms() { return hdrAtoms.load(); }
     unsigned mako_test_feedback_hdr_reads() { return hdrReads.load(); }
     void mako_test_feedback_refresh(unsigned value) { refresh = value; }
@@ -42,8 +51,14 @@ extern "C" {
             Atom, Atom* type, int* format, unsigned long* count,
             unsigned long* remaining, unsigned char** data) {
         if (atom >= 10) ++hdrReads;
-        const unsigned long value = atom == 1 ? 77 : atom == 2 ? 0 :
-            atom == 3 ? refresh.load() : atom == 8 || atom == 9 ? 730 : 1;
+        if (atom == 10 && changePidOnHdrRead.exchange(false)) pid = 88;
+        if (atom == 10 && hdrOutput < 0) {
+            *type = None; *format = 0; *count = 0; *remaining = 0; *data = nullptr;
+            return Success;
+        }
+        const unsigned long value = atom == 1 ? pid.load() : atom == 2 ? server.load() :
+            atom == 3 ? refresh.load() : atom == 8 || atom == 9 ? 730 :
+            atom == 10 ? static_cast<unsigned>(hdrOutput.load()) : 1;
         auto* result = static_cast<unsigned long*>(std::malloc(sizeof(unsigned long)));
         if (!result) return BadAlloc;
         *result = value; *type = XA_CARDINAL; *format = 32; *count = 1; *remaining = 0;

@@ -61,6 +61,7 @@ struct GamescopeHdrFeedbackReader::Impl {
         presentationEnvironment(presentationEnvironment) {}
 
     const PresentationEnvironmentPolicy presentationEnvironment;
+    std::mutex displayMutex;
     std::mutex sampleMutex;
     GamescopeHdrFeedbackSample latestSample;
     std::jthread monitor;
@@ -588,6 +589,7 @@ struct GamescopeHdrFeedbackReader::Impl {
 #endif
 
     void refresh() {
+        const std::lock_guard displayLock(this->displayMutex);
         auto sample = this->sampleOnce();
         const auto now = std::chrono::steady_clock::now();
         if (this->focusGamescopePid != sample.gamescopePid) {
@@ -665,4 +667,27 @@ GamescopeHdrFeedbackSample
 GamescopeHdrFeedbackReader::diagnosticSample() const {
     std::scoped_lock lock(this->impl->sampleMutex);
     return this->impl->latestSample;
+}
+
+std::optional<bool> GamescopeHdrFeedbackReader::queryOutputHdrEnabled(
+        const uint32_t gamescopePid) {
+    if (this->impl->presentationEnvironment.hdrExposureDisabled || gamescopePid == 0)
+        return std::nullopt;
+#if defined(__linux__)
+    const std::lock_guard lock(this->impl->displayMutex);
+    if (!this->impl->initialize())
+        return std::nullopt;
+    const auto matches = [&] {
+        const auto identity = this->impl->identifyDisplay(
+            this->impl->selectedDisplayName, this->impl->display);
+        return identity.gamescopePid == gamescopePid && identity.serverId == 0;
+    };
+    if (!matches())
+        return std::nullopt;
+    const auto value = gamescopeBooleanFeedback(this->impl->readCardinal(
+        this->impl->display, this->impl->root, gamescopeHdrOutputProperty));
+    return matches() ? value : std::nullopt;
+#else
+    return std::nullopt;
+#endif
 }

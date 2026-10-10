@@ -2,7 +2,7 @@ import { releaseData } from './release-data';
 
 export const siteUrl = 'https://eugeniosegala.github.io/MAKO/';
 export const siteTitle =
-  'MAKO: Frame Generation & Scaling for SteamOS and Linux';
+  'MAKO: Frame Generation, Scaling, and Shaders for SteamOS and Linux';
 export const siteDescription =
   'MAKO brings frame generation, spatial scaling, and per-game shader effects to Steam Deck, SteamOS, and desktop Linux through Decky and Vulkan.';
 export const socialImageUrl = `${siteUrl}og.png`;

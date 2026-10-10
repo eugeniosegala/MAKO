@@ -111,11 +111,13 @@ namespace {
         }
 
         void rearm(std::string_view operation, std::string_view reason,
-                size_t, size_t, std::chrono::steady_clock::duration,
+                size_t failures, size_t, std::chrono::steady_clock::duration retry,
                 double, double, std::string_view) override {
             this->events.push_back({
                 .operation = std::string(operation),
                 .reason = std::string(reason),
+                .previousLimit = failures,
+                .duration = std::chrono::duration_cast<std::chrono::milliseconds>(retry),
             });
         }
 
@@ -2468,6 +2470,61 @@ namespace {
         const auto* result = harness.diagnostics.last("ramp-result");
         require(result && !result->accepted,
             "rejected probe result was not emitted deterministically");
+    }
+
+    void testRejectedFirstProbeBackoffSurvivesFocusReturns() {
+        for (const bool confirmedReturn : {false, true}) {
+            Harness harness(180, 2);
+            harness.start();
+            const auto reachProbe = [&] {
+                for (size_t frame = 0; frame < 6000; ++frame) {
+                    harness.deliveredFrameAtFps(60.0);
+                    if (harness.scheduler.snapshot().rampEvaluationActive)
+                        return true;
+                }
+                return false;
+            };
+            const auto rejectProbe = [&] {
+                require(reachProbe(), "first-rung retry did not become eligible");
+                while (harness.scheduler.snapshot().rampEvaluationActive)
+                    harness.deliveredFrameAtFps(34.0);
+                require(harness.scheduler.snapshot().rearmRequired &&
+                        harness.scheduler.validatedGenerationLimit() == 0,
+                    "harmful first-rung trial was not rejected");
+            };
+
+            rejectProbe();
+            const auto ramps = harness.diagnostics.count("ramp");
+            harness.now += 500ms;
+            harness.scheduler.resumeAfterExternalInterruption(
+                harness.now, confirmedReturn
+            );
+            for (size_t frame = 0; frame < 360; ++frame) {
+                harness.deliveredFrameAtFps(60.0);
+                require(harness.scheduler.snapshot().rearmRequired &&
+                        harness.diagnostics.count("ramp") == ramps,
+                    "menu return bypassed a rejected first-rung cooldown");
+            }
+            rejectProbe();
+            const auto* second = harness.diagnostics.last("adaptive-rearm-scheduled");
+            require(second && second->previousLimit == 2 && second->duration == 30s,
+                "menu return reset first-rung failure escalation");
+
+            harness.now += 120s;
+            harness.scheduler.resumeAfterExternalInterruption(
+                harness.now, confirmedReturn
+            );
+            rejectProbe();
+            const auto* third = harness.diagnostics.last("adaptive-rearm-scheduled");
+            require(third && third->previousLimit == 3 && third->duration == 60s,
+                "elapsed menu cooldown erased first-rung failure history");
+
+            require(reachProbe(), "failed first rung never retried after its cooldown");
+            while (harness.scheduler.snapshot().rampEvaluationActive)
+                harness.deliveredFrameAtFps(58.0);
+            require(harness.scheduler.validatedGenerationLimit() == 1,
+                "first-rung backoff prevented a newly beneficial workload");
+        }
     }
 
     void testInterruptedProbeRearmsWithoutFailurePenalty() {
@@ -5443,6 +5500,89 @@ namespace {
             "cadence refresh reset transport-failure backoff escalation");
     }
 
+    void testHigherLoadBackoffSurvivesFocusReturns() {
+        for (const bool smooth : {false, true}) {
+            for (const bool confirmedReturn : {false, true}) {
+                Harness harness(
+                    120, 3, smooth, AdaptiveRecoveryPolicy::OrderedSdr,
+                    false, 2s, 120, false
+                );
+                harness.start();
+                const auto reachThreeXProbe = [&] {
+                    for (size_t frame = 0; frame < 4500; ++frame) {
+                        harness.deliveredFrameAtFps(50.0);
+                        const auto snapshot = harness.scheduler.snapshot();
+                        if (snapshot.rampEvaluationActive &&
+                                snapshot.generationLimit == 2 &&
+                                snapshot.validatedGenerationLimit == 1)
+                            return true;
+                    }
+                    return false;
+                };
+                const auto rejectThreeXProbe = [&] {
+                    require(reachThreeXProbe(),
+                        "precondition failed: 3x workload was never tested");
+                    while (harness.scheduler.snapshot().rampEvaluationActive)
+                        harness.deliveredFrameAtFps(30.0);
+                    require(harness.scheduler.validatedGenerationLimit() == 1,
+                        "costly 3x trial discarded the proven 2x fallback");
+                };
+
+                rejectThreeXProbe();
+                // A menu must not erase the first failure, even after its
+                // deadline has elapsed. The next rejection still escalates.
+                harness.now += 8s;
+                harness.scheduler.resumeAfterExternalInterruption(
+                    harness.now, confirmedReturn
+                );
+                rejectThreeXProbe();
+                const auto* second = harness.diagnostics.last("ramp-backoff");
+                require(second && second->previousLimit == 2 &&
+                        second->duration == 15s,
+                    "focus return reset higher-load failure escalation");
+                const auto rejectedAt = harness.now;
+                const auto ramps = harness.diagnostics.count("ramp");
+
+                // Repeated short menus neither shorten the original failed
+                // trial's deadline nor invent another failure.
+                for (size_t visit = 0; visit < 2; ++visit) {
+                    harness.now += 500ms;
+                    harness.scheduler.resumeAfterExternalInterruption(
+                        harness.now, confirmedReturn
+                    );
+                    require(harness.scheduler.historyWarmupRemaining() == 3,
+                        "backoff preservation bypassed fresh menu history");
+                    for (size_t frame = 0; frame < 300; ++frame) {
+                        harness.deliveredFrameAtFps(50.0);
+                        require(harness.scheduler.validatedGenerationLimit() == 1 &&
+                                harness.diagnostics.count("ramp") == ramps,
+                            "menu return retried 3x before its failed-load deadline");
+                    }
+                }
+                require(harness.now - rejectedAt < 15s,
+                    "test failed to exercise an unexpired retry deadline");
+                rejectThreeXProbe();
+                const auto* third = harness.diagnostics.last("ramp-backoff");
+                require(third && third->previousLimit == 3 &&
+                        third->duration == 30s,
+                    "repeated menu returns erased or inflated failure history");
+
+                // A long menu cannot permanently suppress useful work in a
+                // changed scene. The next trial can succeed after fresh proof.
+                harness.now += 120s;
+                harness.scheduler.resumeAfterExternalInterruption(
+                    harness.now, confirmedReturn
+                );
+                require(reachThreeXProbe(),
+                    "expired menu backoff prevented a bounded retry");
+                while (harness.scheduler.snapshot().rampEvaluationActive)
+                    harness.deliveredFrameAtFps(43.0);
+                require(harness.scheduler.validatedGenerationLimit() == 2,
+                    "preserved backoff rejected a newly beneficial 3x workload");
+            }
+        }
+    }
+
     void testDeterministicReplay() {
         Harness first(120, 4, true);
         Harness second(120, 4, true);
@@ -5537,6 +5677,7 @@ int main() {
         {"SDR hard stall avoids refresh loop", testSdrSustainedHardStallDoesNotRestartHistoryRefresh},
         {"fast-present burst preserves cadence", testImpossibleFastBurstDoesNotCorruptCadence},
         {"harmful first probe enters rearm", testRejectedFirstProbeEntersBoundedRearm},
+        {"first-probe backoff survives focus returns", testRejectedFirstProbeBackoffSurvivesFocusReturns},
         {"interrupted probe rearms promptly", testInterruptedProbeRearmsWithoutFailurePenalty},
         {"rejected first probe rebases stable native deficit", testRejectedFirstProbeRebasesAfterPersistentNativeDeficit},
         {"counterproductive first step cannot escalate", testCounterproductiveFirstStepNeverEscalates},
@@ -5619,6 +5760,7 @@ int main() {
         {"delivery pressure cannot bridge upward", testDeliveryPressureCannotBridgeToHigherMultiplier},
         {"ordinary transport recovery keeps 3.3 multiplier semantics", testOrdinaryTransportRecoveryDoesNotRejectMultiplierProbe},
         {"transport probe backoff survives cadence refresh", testTransportProbeBackoffSurvivesCadenceRefresh},
+        {"higher-load backoff survives focus returns", testHigherLoadBackoffSurvivesFocusReturns},
         {"cadence replay is deterministic", testDeterministicReplay},
     };
 

@@ -174,6 +174,7 @@ export const PACING = "pacing" as const;
 export const ACTIVE_IN = "active_in" as const;
 export const GPU = "gpu" as const;
 export const DISABLE_MAKO = "disable_mako" as const;
+export const HDR_REDUCED_PRECISION = "hdr_reduced_precision" as const;
 export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
 export const GAMESCOPE_WSI_COMPATIBILITY = "gamescope_wsi_compatibility" as const;
 export const SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY = "swapchain_image_count_compatibility" as const;
@@ -373,6 +374,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: false,
     description: "troubleshooting: prevent MAKO Renderer loading on the next game launch"
   },
+  hdr_reduced_precision: {
+    name: "hdr_reduced_precision",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "experimental live compact 10-bit PQ buffers for HDR shader chains and HDR10 scaling inputs; linear frame generation retains floating-point precision"
+  },
   disable_hdr_exposure: {
     name: "disable_hdr_exposure",
     fieldType: ConfigFieldType.BOOLEAN,
@@ -490,6 +497,7 @@ export interface ConfigurationData {
   active_in: string;
   gpu: string;
   disable_mako: boolean;
+  hdr_reduced_precision: boolean;
   disable_hdr_exposure: boolean;
   gamescope_wsi_compatibility: boolean;
   swapchain_image_count_compatibility: boolean;
@@ -545,6 +553,7 @@ export function getDefaults(): ConfigurationData {
     active_in: "",
     gpu: "",
     disable_mako: false,
+    hdr_reduced_precision: false,
     disable_hdr_exposure: true,
     gamescope_wsi_compatibility: false,
     swapchain_image_count_compatibility: false,
@@ -593,6 +602,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     active_in: ConfigFieldType.STRING,
     gpu: ConfigFieldType.STRING,
     disable_mako: ConfigFieldType.BOOLEAN,
+    hdr_reduced_precision: ConfigFieldType.BOOLEAN,
     disable_hdr_exposure: ConfigFieldType.BOOLEAN,
     gamescope_wsi_compatibility: ConfigFieldType.BOOLEAN,
     swapchain_image_count_compatibility: ConfigFieldType.BOOLEAN,

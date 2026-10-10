@@ -1,6 +1,7 @@
 import { Dropdown, Field, PanelSectionRow, ToggleField } from "@decky/ui";
 import {
   DISABLE_HDR_EXPOSURE,
+  HDR_REDUCED_PRECISION,
   DISABLE_STEAMDECK_MODE,
   DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS,
   DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
@@ -72,6 +73,25 @@ export function CompatibilityConfigurationGroup({
               onChange={(value) => onConfigChange(DISABLE_HDR_EXPOSURE, value)}
             />
           </PanelSectionRow>
+
+          {!config.disable_hdr_exposure && (
+            <PanelSectionRow>
+              <ToggleField
+                label={
+                  <MakoExperimentalSettingLabel
+                    label={t("HDR_REDUCED_PRECISION", "Reduced HDR Precision")}
+                    badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
+                  />
+                }
+                description={t(
+                  "HDR_REDUCED_PRECISION_DESC",
+                  "Uses 10-bit buffers for HDR shaders and HDR10 scaling inputs. May cause banding or change some effects. Applies live with a brief hitch; Frame Generation keeps floating-point precision.",
+                )}
+                checked={config.hdr_reduced_precision}
+                onChange={(value) => onConfigChange(HDR_REDUCED_PRECISION, value)}
+              />
+            </PanelSectionRow>
+          )}
 
           <PanelSectionRow>
             <ToggleField

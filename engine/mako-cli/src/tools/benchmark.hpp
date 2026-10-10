@@ -29,6 +29,7 @@ namespace mako::cli::benchmark {
         bool profile{false};
         int profile_samples{200};
         int profile_warmup{200};
+        bool profile_hdr10{false};
     };
 
     /// run the "benchmark" command

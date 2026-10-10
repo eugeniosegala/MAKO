@@ -1068,6 +1068,30 @@ describe("Configuration controls", () => {
     expect(styles).not.toContain("nth-child");
   });
 
+  test("shows the experimental precision toggle only when HDR is allowed", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const props = {
+      onConfigChange,
+      onConfigUpdate: vi.fn(async () => undefined),
+    };
+    const { container, rerender } = render(
+      <ConfigurationSection {...props} config={getDefaults()} />,
+    );
+    fireEvent.click(container.querySelector<HTMLButtonElement>(
+      ".MAKO_WorkaroundsCollapseButton_Container button",
+    )!);
+    expect(screen.queryByText("Reduced HDR Precision")).toBeNull();
+    const config = { ...getDefaults(), disable_hdr_exposure: false };
+    rerender(<ConfigurationSection {...props} config={config} />);
+    fireEvent.click(screen.getByText("Reduced HDR Precision"));
+    expect(onConfigChange).toHaveBeenCalledWith("hdr_reduced_precision", true);
+    rerender(<ConfigurationSection {...props} config={{ ...config, hdr_reduced_precision: true }} />);
+    fireEvent.click(screen.getByText("Reduced HDR Precision"));
+    expect(onConfigChange).toHaveBeenLastCalledWith("hdr_reduced_precision", false);
+    rerender(<ConfigurationSection {...props} config={{ ...config, disable_hdr_exposure: true }} />);
+    expect(screen.queryByText("Reduced HDR Precision")).toBeNull();
+  });
+
   test("warns when Gamescope WSI is enabled independently", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const { container } = render(

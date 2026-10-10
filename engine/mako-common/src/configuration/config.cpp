@@ -330,6 +330,9 @@ namespace {
             .scaling_sharpness = tbl["scaling_sharpness"].value_or(
                 GameConfDefaults::scalingSharpness
             ),
+            .hdr_reduced_precision = tbl["hdr_reduced_precision"].value_or(
+                GameConfDefaults::hdrReducedPrecision
+            ),
             .frame_generation_refresh_threshold =
                 tbl["frame_generation_refresh_threshold"].value_or(
                     GameConfDefaults::frameGenerationRefreshThreshold
@@ -423,6 +426,7 @@ namespace {
         profile.insert("scaling_factor", conf.scaling_factor);
         profile.insert("scaling_supersampling", conf.scaling_supersampling);
         profile.insert("scaling_sharpness", conf.scaling_sharpness);
+        profile.insert("hdr_reduced_precision", conf.hdr_reduced_precision);
         profile.insert(
             "frame_generation_refresh_threshold",
             static_cast<int64_t>(conf.frame_generation_refresh_threshold)
@@ -549,6 +553,9 @@ namespace {
         const char* scaling_sharpness = std::getenv("MAKO_SCALING_SHARPNESS");
         if (scaling_sharpness)
             conf.scaling_sharpness = std::stof(scaling_sharpness);
+        const char* hdr_reduced_precision = std::getenv("MAKO_HDR_REDUCED_PRECISION");
+        if (hdr_reduced_precision)
+            conf.hdr_reduced_precision = std::string(hdr_reduced_precision) != "0";
         const char* frame_generation_refresh_threshold =
             std::getenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
         if (frame_generation_refresh_threshold) {
