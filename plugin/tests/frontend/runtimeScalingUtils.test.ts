@@ -62,6 +62,104 @@ const status = (contexts: RuntimeContextState[]): RuntimeStatusResult => ({
 });
 
 describe("runtime scaling availability", () => {
+  const hdrResizeContext = {
+    ...context,
+    requested: { ...context.requested, scaling_enabled: false },
+    applied: { ...context.applied, scaling_enabled: false },
+    pending: { ...context.pending, spatial_private: true },
+    spatial_scaling: {
+      ...context.spatial_scaling,
+      active: true,
+      activation_supported: true,
+      inactive_reason: null,
+      source_width: 2560,
+      source_height: 1440,
+      presentation_width: 3840,
+      presentation_height: 2160,
+      active_method: "native",
+      effective_factor: 1.5,
+      pipeline: "post-frame-generation",
+    },
+  } as RuntimeContextState;
+
+  test("keeps Scaling off across HDR window replacements with internal resize telemetry", () => {
+    for (const sourceWidth of [2560, 3840, 2560]) {
+      const resized = {
+        ...hdrResizeContext,
+        spatial_scaling: {
+          ...hdrResizeContext.spatial_scaling,
+          source_width: sourceWidth,
+          active: sourceWidth !== 3840,
+        },
+      };
+      expect(runtimeScalingUiState(status([resized]), "game")).toMatchObject({
+        hasContext: true,
+        frameGenerationActive: true,
+        scalingActive: false,
+        scalingEnabled: false,
+        scalingPending: false,
+        inactiveReason: null,
+        fallbackReason: null,
+      });
+    }
+  });
+
+  test("keeps applied Scaling active until a requested disable takes effect", () => {
+    const pendingDisable = {
+      ...hdrResizeContext,
+      applied: { ...context.applied, scaling_enabled: true },
+      pending: { ...context.pending, process_restart: true },
+    };
+    expect(
+      runtimeScalingUiState(status([pendingDisable]), "game"),
+    ).toMatchObject({
+      scalingActive: true,
+      scalingEnabled: false,
+      scalingPending: true,
+      sourceWidth: 2560,
+      presentationWidth: 3840,
+    });
+  });
+
+  test("does not count HDR resize as Scaling while enable waits for restart", () => {
+    const pendingEnable = {
+      ...hdrResizeContext,
+      requested: { ...context.requested, scaling_enabled: true },
+      pending: { ...context.pending, process_restart: true },
+    };
+    expect(
+      runtimeScalingUiState(status([pendingEnable]), "game"),
+    ).toMatchObject({
+      scalingActive: false,
+      scalingEnabled: true,
+      scalingPending: true,
+    });
+  });
+
+  test("selects the user scaling owner ahead of an internal HDR resize", () => {
+    const userScaling = {
+      ...context,
+      role: "spatial-scaling",
+      spatial_scaling: {
+        ...context.spatial_scaling,
+        active: true,
+        activation_supported: true,
+        inactive_reason: null,
+        active_method: "mako",
+        pipeline: "pre-frame-generation",
+      },
+    } as RuntimeContextState;
+    expect(
+      runtimeScalingUiState(status([hdrResizeContext, userScaling]), "game"),
+    ).toMatchObject({
+      scalingActive: true,
+      sourceWidth: 960,
+      presentationWidth: 1280,
+      activeMethod: "mako",
+      pipeline: "pre-frame-generation",
+    });
+  });
+
   test("live status reports the applied display target instead of the saved fallback", () => {
     const automatic = {
       ...context,

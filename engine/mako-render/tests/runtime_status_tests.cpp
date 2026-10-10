@@ -150,6 +150,33 @@ int main() {
             std::string::npos,
         "spatial scaling display ceiling missing");
 
+    // HDR can resize a smaller window to the display with user Scaling off.
+    // Follow the applied setting across window replacements and restart-pending
+    // toggle edits, while retaining the actual transport dimensions.
+    for (const bool scalingApplied : {false, true}) {
+        for (const bool scalingRequested : {false, true}) {
+            for (const uint32_t sourceWidth : {2560U, 3840U, 2560U}) {
+                auto windowRecord = record;
+                windowRecord.appliedProfile.scaling_enabled = scalingApplied;
+                windowRecord.requestedProfile.scaling_enabled = scalingRequested;
+                windowRecord.spatialScalingActive = sourceWidth != 3840;
+                windowRecord.spatialSourceWidth = sourceWidth;
+                windowRecord.spatialPresentationWidth = 3840;
+                const auto windowJson = mako::layer::runtimeStatusJson(
+                    windowRecord, 123, 321, 456, "frame-generation", 789
+                );
+                const bool featureActive = scalingApplied && sourceWidth != 3840;
+                expect(windowJson.find(featureActive
+                        ? "\"spatial_scaling\":{\"active\":true"
+                        : "\"spatial_scaling\":{\"active\":false") != std::string::npos,
+                    "internal HDR resize or a pending toggle changed Scaling status");
+                expect(windowJson.find("\"presentation_width\":3840") != std::string::npos &&
+                        windowJson.find("\"frame_generation_active\":true") != std::string::npos,
+                    "Scaling status filtering hid transport dimensions or Frame Generation");
+            }
+        }
+    }
+
     const auto previousLocale = std::locale();
     std::locale::global(std::locale(
         std::locale::classic(), new LocalizedNumericPunctuation

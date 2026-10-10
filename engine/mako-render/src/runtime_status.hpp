@@ -56,6 +56,7 @@ namespace mako::layer {
         bool spatialPrivatePending{false};
         bool swapchainRecreationPending{false};
         bool processRestartPending{false};
+        // Private spatial work; publication also requires applied Scaling.
         bool spatialScalingActive{false};
         bool spatialScalingActivationSupported{true};
         std::optional<std::string> spatialScalingInactiveReason;

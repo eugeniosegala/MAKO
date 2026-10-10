@@ -141,6 +141,8 @@ With diagnostics enabled, `runtime-transition-pending`, `runtime-transition-prep
 
 Each context also publishes an atomic schema-5 requested-versus-applied record under the configuration directory's `runtime-state/`. It includes process identity, transition phase, pending boundaries, effective generation and scaling state, extents, method, factor, placement, fallback, and active constraint. Context teardown removes its own record and lock.
 
+`spatial_scaling.active` requires both private spatial work and Scaling enabled in the applied profile. HDR's internal display-size resize does not activate the user-facing Scaling feature, including across window-mode replacements. A requested toggle waiting for restart does not change the applied state. Extents and pipeline details retain the actual transport geometry even when the Scaling feature is off.
+
 Before the first primary context publishes, one process-wide pass removes only unlocked stale MAKO runtime files from that exact directory. It is non-recursive and best-effort; held locks, unrelated names, symlinks, ownership uncertainty, and failures are preserved and never block startup. Status I/O is observational and cannot change presentation.
 
 Use the `config`, `startup`, `recovery`, or `performance` presets in [Collect diagnostics](COLLECT_DIAGNOSTICS.md).

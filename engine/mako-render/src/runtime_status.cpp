@@ -310,6 +310,11 @@ std::string mako::layer::runtimeStatusJson(
         const uint64_t processStartTicks, const uint64_t contextId,
         const std::string_view role,
         const int64_t updatedUnixMilliseconds) {
+    // The private spatial graph also serves HDR display-size presentation.
+    // That work must not enable the user-facing Scaling feature; a saved
+    // toggle waiting for restart must not override the applied setting either.
+    const bool scalingActive = status.spatialScalingActive &&
+        status.appliedProfile.scaling_enabled;
     std::ostringstream stream;
     // Applications such as Dolphin install a process-wide locale with digit
     // grouping. JSON numbers never permit locale separators, so keep this
@@ -340,7 +345,7 @@ std::string mako::layer::runtimeStatusJson(
            << ",\"frame_generation_active\":"
            << status.frameGenerationActive
            << ",\"spatial_scaling\":{"
-           << "\"active\":" << status.spatialScalingActive
+           << "\"active\":" << scalingActive
            << ",\"activation_supported\":"
            << status.spatialScalingActivationSupported
            << ",\"inactive_reason\":";

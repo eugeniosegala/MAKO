@@ -124,12 +124,16 @@ export function runtimeScalingUiState(
     (candidate) => candidate.requested.scaling_enabled,
   );
   const spatialContext =
-    newestContext(contexts, (candidate) => candidate.spatial_scaling.active) ??
-    scalingRequestedContext ??
+    // HDR display-size presentation can have a private spatial graph with
+    // Scaling off. Use the applied feature flag, including restart-pending
+    // edits, when selecting its user-visible owner.
     newestContext(
       contexts,
-      (candidate) => candidate.role === "spatial-scaling",
-    );
+      (candidate) =>
+        candidate.applied.scaling_enabled && candidate.spatial_scaling.active,
+    ) ??
+    scalingRequestedContext ??
+    newestContext(contexts, (candidate) => candidate.applied.scaling_enabled);
   const appliedFrameProfile = frameContext?.applied;
   const frameGenerationEnabled = Boolean(
     appliedFrameProfile?.frame_generation_enabled,
@@ -163,7 +167,10 @@ export function runtimeScalingUiState(
       (frameContext.pending.frame_generation_private ||
         frameContext.pending.process_restart),
     ),
-    scalingActive: Boolean(spatialContext?.spatial_scaling.active),
+    scalingActive: Boolean(
+      spatialContext?.applied.scaling_enabled &&
+      spatialContext.spatial_scaling.active,
+    ),
     scalingEnabled: Boolean(scalingRequestedContext?.requested.scaling_enabled),
     scalingActivationSupported: spatialContext
       ? spatialContext.spatial_scaling.activation_supported
