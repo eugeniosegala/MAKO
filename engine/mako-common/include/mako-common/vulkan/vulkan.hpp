@@ -50,6 +50,11 @@ namespace vk {
     VulkanInstanceFuncs initVulkanInstanceFuncs(VkInstance instance, PFN_vkGetInstanceProcAddr mpa,
         bool graphical);
 
+    /// Global loader query for layers whose pre-instance entrypoint only
+    /// enumerates their own extensions. This does not create an instance.
+    VkResult VKAPI_CALL enumerateLoaderInstanceExtensionProperties(
+        const char* layerName, uint32_t* count, VkExtensionProperties* properties);
+
     using PhysicalDeviceSelector = const std::function<
         VkPhysicalDevice(
             const VulkanInstanceFuncs&,

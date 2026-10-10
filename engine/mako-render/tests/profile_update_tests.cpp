@@ -43,6 +43,48 @@ namespace {
 int main() {
     {
         ls::GameConf full;
+        full.scaling_enabled = false;
+        full.scaling_method = ls::ScalingMethod::Mako;
+        full.hdr_reduced_precision = false;
+        auto compact = full;
+        compact.hdr_reduced_precision = true;
+        compact.scaling_method = ls::ScalingMethod::Ls1;
+        compact.scaling_factor = 1.5F;
+        compact.scaling_sharpness = 0.7F;
+        compact.scaling_supersampling = true;
+        compact.base_fps_cap = 40;
+        auto update = planProfileUpdate(full, compact, 4, true, true,
+            true, true, false, false, 120, true, true, true);
+        expect(update.decision.spatialScalingLiveRebuild &&
+                update.decision.frameGenerationPrivateRebuild &&
+                !update.decision.swapchainRecreationDeferred &&
+                !update.appliedProfile.hdr_reduced_precision &&
+                update.appliedProfile.base_fps_cap == 40 &&
+                update.appliedProfile.scaling_method == compact.scaling_method &&
+                update.appliedProfile.scaling_factor == compact.scaling_factor &&
+                update.appliedProfile.scaling_supersampling &&
+                update.appliedProfile.scaling_sharpness == compact.scaling_sharpness,
+            "Internal HDR resize rebuilds precision while retaining dormant scaler choices and live caps");
+        for (const bool hdr : {false, true}) {
+            update = planProfileUpdate(full, compact, 4, false, false,
+                false, true, false, false, 120, hdr, false, true);
+            expect(!update.decision.spatialScalingLiveRebuild &&
+                    update.appliedProfile.hdr_reduced_precision,
+                "An inactive internal resize cannot allocate resources for a precision edit");
+        }
+        update = planProfileUpdate(compact, full, 4, true, true,
+            true, true, false, false, 120, true, true, true);
+        expect(update.decision.spatialScalingLiveRebuild &&
+                update.appliedProfile.hdr_reduced_precision,
+            "Internal HDR resize can return to full precision through the same drain");
+        update = planProfileUpdate(compact, compact, 4, true, true,
+            true, true, false, false, 120, true, false, true);
+        expect(!update.decision.spatialScalingLiveRebuild &&
+                !update.decision.frameGenerationPrivateRebuild,
+            "Settled internal precision performs no resource rebuild");
+    }
+    {
+        ls::GameConf full;
         full.hdr_reduced_precision = false;
         full.scaling_enabled = true;
         auto compact = full;

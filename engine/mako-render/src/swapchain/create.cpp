@@ -148,7 +148,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
     }
     const VkExtent2D extent = this->info.extent;
 
-    if (swapchainMaintenance1Enabled && this->profile.scaling_enabled) {
+    if (swapchainMaintenance1Enabled && presentationRetirementRequired(
+            frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled()),
+            this->profile.scaling_enabled || this->info.spatialScalingActive,
+            this->info.gamescopeScalingSurface != nullptr)) {
         try {
             this->presentRetirementFences.reserve(this->info.images.size());
             for (size_t index = 0; index < this->info.images.size(); ++index) {
@@ -182,14 +185,16 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         this->spatialFramePipelinePlacement =
             combinedSpatialFramePipelineOwnedByLayer()
             ? selectSpatialFramePipelinePlacement(
-                this->info.applicationExtent, this->info.extent
+                this->info.applicationExtent, this->info.extent,
+                this->info.hdrDisplayResize
             )
             : SpatialFramePipelinePlacement::PostFrameGeneration;
 
         this->spatialScaler.emplace(
             vk, this->info.applicationExtent, this->info.extent,
             this->colorPipeline.exchangeFormat,
-            ls::effectiveScalingMethod(this->profile),
+            this->info.hdrDisplayResize ? ls::ScalingMethod::Native
+                : ls::effectiveScalingMethod(this->profile),
             this->profile.scaling_sharpness,
             scalingShaderDll, this->fp16Requested, this->colorPipeline.encoding,
             this->profile.hdr_reduced_precision

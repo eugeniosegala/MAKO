@@ -382,6 +382,17 @@ namespace {
     }
 }
 
+VkResult VKAPI_CALL vk::enumerateLoaderInstanceExtensionProperties(
+        const char* layerName, uint32_t* count, VkExtensionProperties* properties) {
+    try {
+        const auto enumerate = ipa<PFN_vkEnumerateInstanceExtensionProperties>(
+            get_mpa(), VK_NULL_HANDLE, "vkEnumerateInstanceExtensionProperties");
+        return enumerate(layerName, count, properties);
+    } catch (const std::exception&) {
+        return VK_ERROR_INITIALIZATION_FAILED;
+    }
+}
+
 /// initialize vulkan instance function pointers
 VulkanInstanceFuncs vk::initVulkanInstanceFuncs(VkInstance i, PFN_vkGetInstanceProcAddr mpa,
         bool graphical) {

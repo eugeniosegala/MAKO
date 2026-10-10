@@ -651,8 +651,10 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
     const auto requested = this->spatialTransition.value();
     *this->spatialScaler = std::move(*this->preparedSpatialScaler);
     this->preparedSpatialScaler.reset();
-    this->profile.scaling_method = requested.method;
-    this->profile.scaling_sharpness = requested.sharpness;
+    if (!this->info.hdrDisplayResize) {
+        this->profile.scaling_method = requested.method;
+        this->profile.scaling_sharpness = requested.sharpness;
+    }
     this->profile.hdr_reduced_precision = requested.hdrReducedPrecision;
     const auto committedRevision = this->spatialTransition.committed();
     this->runtimeStatusState.error.reset();

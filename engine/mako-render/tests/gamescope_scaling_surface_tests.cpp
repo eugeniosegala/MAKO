@@ -511,8 +511,8 @@ int main() {
         "advertised Wayland surface support must permit the bridge");
     expect(!canAttemptGamescopeScalingSurface(VK_SUCCESS, false),
         "a complete extension list without Wayland must reject the bridge");
-    expect(canAttemptGamescopeScalingSurface(VK_ERROR_LAYER_NOT_PRESENT, false),
-        "an opaque chained-layer extension list must permit the bridge attempt");
+    expect(!canAttemptGamescopeScalingSurface(VK_ERROR_LAYER_NOT_PRESENT, false),
+        "an opaque layer query must be resolved by the loader before bridge admission");
     expect(!canAttemptGamescopeScalingSurface(VK_ERROR_INITIALIZATION_FAILED, false),
         "unrelated enumeration failures must reject the bridge");
 
@@ -1178,8 +1178,9 @@ int main() {
     mako_test_surface_ownership(false);
     expect(mako_test_surface_objects() == 0, "ownership stress connection teardown");
 
-    {
-        GamescopeScalingSurface bridge;
+    for (const bool allowHdr : {false, true}) {
+        mako_test_surface_hdr_output(1);
+        GamescopeScalingSurface bridge(allowHdr);
         VkSurfaceKHR surface{};
         expect(bridge.connect() &&
             bridge.create(VK_NULL_HANDLE, next, info, nullptr, &surface) == VK_SUCCESS,
@@ -1195,9 +1196,26 @@ int main() {
             const auto handle = reinterpret_cast<VkSwapchainKHR>(static_cast<uintptr_t>(3010));
             checkApplicationExtent(bridge, surface, source, 1.5F);
             auto info = feedbackInfo;
-            info.imageExtent = {source.width * 3 / 2, source.height * 3 / 2};
-            expect(bridge.createSwapchain(surface, handle, info, source, 6,
+            const bool scaled = (cycle & 2) != 0;
+            const bool generated = (cycle & 4) != 0;
+            info.imageExtent = scaled ? VkExtent2D{source.width * 3 / 2, source.height * 3 / 2} : source;
+            const unsigned encoding = allowHdr ? (cycle / 8) % 3 : 0;
+            info.imageColorSpace = encoding == 1 ? VK_COLOR_SPACE_HDR10_ST2084_EXT
+                : encoding == 2 ? VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT
+                : VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+            info.imageFormat = encoding == 1 ? VK_FORMAT_A2B10G10R10_UNORM_PACK32
+                : encoding == 2 ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_B8G8R8A8_UNORM;
+            expect(bridge.createSwapchain(surface, handle, info, source, generated ? 6 : 3,
                 "resize-matrix", VK_PRESENT_MODE_FIFO_KHR), "create resize matrix swapchain");
+            expect(mako_test_surface_feedback_color() == info.imageColorSpace,
+                "resize replacement must advertise its own SDR/HDR colour space");
+            const VkHdrMetadataEXT metadata{.sType = VK_STRUCTURE_TYPE_HDR_METADATA_EXT,
+                .maxLuminance = 1000, .maxContentLightLevel = 1000};
+            const auto metadataCalls = mako_test_surface_hdr_metadata_calls();
+            expect(bridge.setHdrMetadata(surface, handle, metadata) &&
+                bridge.setHdrMetadata(surface, handle, metadata), "replacement metadata owner");
+            expect(mako_test_surface_hdr_metadata_calls() == metadataCalls + (encoding != 0),
+                "HDR must initialize metadata once per replacement; SDR must not inherit or send it");
             expect(bridge.acquisitionResult(surface, handle) == VK_SUCCESS,
                 "acquire before a mid-frame resize");
             checkApplicationExtent(bridge, surface, target, 1.5F);
@@ -1217,6 +1235,7 @@ int main() {
         }
         bridge.destroy(surface);
     }
+    mako_test_surface_hdr_output(0);
     expect(mako_test_surface_objects() == 0, "resize matrix connection teardown");
 
     // RE4/Proton selects the window's exact 1920x1080 rendering size. A real

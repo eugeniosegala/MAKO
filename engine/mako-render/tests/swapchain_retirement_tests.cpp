@@ -14,6 +14,28 @@
 using namespace mako::layer;
 
 namespace {
+    VkResult extensionQueryResult = VK_SUCCESS;
+    VkResult extensionListResult = VK_SUCCESS;
+    uint32_t loaderEnumerationCalls{};
+    VkResult VKAPI_CALL enumerateLayerExtensions(const char*, uint32_t* count,
+            VkExtensionProperties* properties) {
+        if (extensionQueryResult != VK_SUCCESS)
+            return extensionQueryResult;
+        *count = 1;
+        if (properties) {
+            std::strcpy(properties[0].extensionName, "VK_KHR_surface");
+            return extensionListResult;
+        }
+        return VK_SUCCESS;
+    }
+    VkResult VKAPI_CALL enumerateLoaderExtensions(const char*, uint32_t* count,
+            VkExtensionProperties* properties) {
+        ++loaderEnumerationCalls;
+        *count = 1;
+        if (properties)
+            std::strcpy(properties[0].extensionName, "VK_KHR_surface");
+        return VK_SUCCESS;
+    }
     void expect(const bool condition, const std::string& message) {
         if (!condition) {
             std::cerr << "FAIL: " << message << '\n';
@@ -137,6 +159,67 @@ namespace {
 }
 
 int main() {
+    {
+        auto query = queryPresentationInstanceExtensions(
+            enumerateLayerExtensions, enumerateLoaderExtensions);
+        expect(query.result == VK_SUCCESS && query.properties.size() == 1 &&
+                loaderEnumerationCalls == 0,
+            "A complete next-layer query needs no loader fallback");
+        extensionQueryResult = VK_ERROR_LAYER_NOT_PRESENT;
+        query = queryPresentationInstanceExtensions(enumerateLayerExtensions, enumerateLoaderExtensions);
+        expect(query.result == VK_SUCCESS && query.properties.size() == 1 &&
+                loaderEnumerationCalls == 2,
+            "A layer-specific query uses real loader count and property results");
+        extensionQueryResult = VK_ERROR_INITIALIZATION_FAILED;
+        query = queryPresentationInstanceExtensions(enumerateLayerExtensions, enumerateLoaderExtensions);
+        expect(query.result == VK_ERROR_INITIALIZATION_FAILED && query.properties.empty() &&
+                loaderEnumerationCalls == 2,
+            "Other driver errors cannot trigger speculative extension support");
+        extensionQueryResult = VK_SUCCESS;
+        extensionListResult = VK_INCOMPLETE;
+        query = queryPresentationInstanceExtensions(enumerateLayerExtensions, enumerateLoaderExtensions);
+        expect(query.result == VK_INCOMPLETE && query.properties.empty(),
+            "Incomplete extension lists cannot authorize optional device features");
+        query = queryPresentationInstanceExtensions(nullptr, enumerateLoaderExtensions);
+        expect(query.result == VK_SUCCESS && query.properties.size() == 1 &&
+                loaderEnumerationCalls == 4,
+            "A layer without global enumeration uses verified loader capabilities");
+        expect(queryPresentationInstanceExtensions(nullptr, nullptr).properties.empty(),
+            "Missing both enumeration entrypoints preserves the unsupported fallback");
+    }
+    {
+        const auto extensions = [](std::initializer_list<const char*> names) {
+            std::vector<VkExtensionProperties> result;
+            for (const auto* name : names) {
+                VkExtensionProperties extension{};
+                std::strncpy(extension.extensionName, name, VK_MAX_EXTENSION_NAME_SIZE - 1);
+                result.push_back(extension);
+            }
+            return result;
+        };
+        auto support = surfaceMaintenance1Support(extensions({"VK_KHR_surface",
+            "VK_KHR_get_surface_capabilities2", "VK_KHR_surface_maintenance1",
+            "VK_EXT_surface_maintenance1"}));
+        expect(support.khr && support.ext, "Both surface maintenance spellings have complete dependencies");
+        support = surfaceMaintenance1Support(extensions({"VK_KHR_surface",
+            "VK_KHR_get_surface_capabilities2", "VK_EXT_surface_maintenance1"}));
+        expect(!support.khr && support.ext, "Older EXT-only drivers retain retirement support");
+        for (const auto* dependency : {"VK_KHR_surface", "VK_KHR_get_surface_capabilities2"}) {
+            support = surfaceMaintenance1Support(extensions({dependency,
+                "VK_KHR_surface_maintenance1", "VK_EXT_surface_maintenance1"}));
+            expect(!support.khr && !support.ext, "A missing instance dependency disables optional fences");
+        }
+        support = surfaceMaintenance1Support({});
+        expect(!support.khr && !support.ext, "Failed enumeration keeps natural retirement");
+    }
+    expect(presentationRetirementRequired(true, false, false),
+        "FG-only contexts need presentation retirement independently of Scaling");
+    expect(presentationRetirementRequired(false, true, false),
+        "Scaling-only contexts need presentation retirement independently of FG");
+    expect(presentationRetirementRequired(false, false, true),
+        "Shader-only HDR bridge contexts need protocol lifetime protection");
+    expect(!presentationRetirementRequired(false, false, false),
+        "An inactive Renderer must not provision presentation fences");
     rejectedPresentTests();
     expect(std::string_view(
             selectSwapchainMaintenance1Extension(true, true, true)

@@ -78,6 +78,9 @@ namespace mako::layer {
         // reinterpreted without replacing the game-owned swapchain.
         bool privateOrderedTransport{false};
         bool spatialScalingActive{false};
+        // Requested internal native output resize, including a memory-rejected
+        // candidate eligible for retry; the saved Scaling toggle stays off.
+        bool hdrDisplayResize{false};
         // Variable WSI surfaces retain the source extent and select a larger
         // lower presentation envelope. Factor edits which remain above an
         // already active ceiling can therefore be applied without replacing

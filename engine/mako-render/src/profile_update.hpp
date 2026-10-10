@@ -826,7 +826,8 @@ namespace mako::layer {
             const bool spatialSupersamplingEffectiveExtentUnchanged = false,
             const std::optional<uint32_t> displayRefreshHz = std::nullopt,
             const bool hdrScalingActive = false,
-            const bool hdrFrameGenerationPrecisionChanged = false) {
+            const bool hdrFrameGenerationPrecisionChanged = false,
+            const bool internalNativeSpatialResize = false) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
@@ -879,9 +880,9 @@ namespace mako::layer {
             ls::effectiveScalingMethod(current) !=
                 ls::effectiveScalingMethod(applied);
         const bool scalingFactorChanged =
-            current.scaling_factor != next.scaling_factor;
+            !internalNativeSpatialResize && current.scaling_factor != next.scaling_factor;
         const bool scalingSupersamplingChanged =
-            current.scaling_supersampling != next.scaling_supersampling;
+            !internalNativeSpatialResize && current.scaling_supersampling != next.scaling_supersampling;
         const bool scalingSharpnessChanged =
             current.scaling_sharpness != next.scaling_sharpness;
         const bool hdrPrecisionChanged = hdrScalingActive &&
@@ -890,6 +891,9 @@ namespace mako::layer {
             scalingFactorChanged || scalingSupersamplingChanged ||
             scalingSharpnessChanged || hdrPrecisionChanged;
         const bool spatialScalingResourcesChanged =
+            // The internal Native output resize owns only precision. Saved
+            // scaler choices remain dormant while the Scaling toggle is off.
+            internalNativeSpatialResize ? spatialScalerActive && hdrPrecisionChanged :
             current.scaling_enabled == next.scaling_enabled &&
             (ls::spatialScalingRequested(current) ||
              ls::spatialScalingRequested(next)) &&
@@ -923,7 +927,8 @@ namespace mako::layer {
         if (spatialScalingResourcesChanged &&
                 !spatialScalingDormantUpdate &&
                 !spatialScalingExtentNoOp) {
-            applied.scaling_method = current.scaling_method;
+            if (!internalNativeSpatialResize)
+                applied.scaling_method = current.scaling_method;
             // A precision rebuild can accompany extent-neutral profile edits.
             // Those values need no resource commit: the private scaler owns
             // only method, sharpness and precision, not the saved geometry.
@@ -931,7 +936,8 @@ namespace mako::layer {
                 applied.scaling_factor = current.scaling_factor;
                 applied.scaling_supersampling = current.scaling_supersampling;
             }
-            applied.scaling_sharpness = current.scaling_sharpness;
+            if (!internalNativeSpatialResize)
+                applied.scaling_sharpness = current.scaling_sharpness;
             if (hdrPrecisionChanged)
                 applied.hdr_reduced_precision = current.hdr_reduced_precision;
             swapchainRecreationDeferred = !spatialScalingLiveRebuild;

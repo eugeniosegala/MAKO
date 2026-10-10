@@ -92,6 +92,10 @@ With Scaling off, HDR10 can use `A2B10G10R10_UNORM_PACK32` when both devices sup
 
 ## Presentation transport and transitions
 
+The isolated HDR display-size path uses the existing Native Resolution resize after Frame Generation when actual HDR runs on the isolated variable-surface bridge with Scaling disabled and FG resources provisioned. It retains the game/FG source size and requests the proven display size, without changing saved scaling settings. Equal aspect ratio, a target within the existing 2× limit, surface/format support and ordinary memory admission are required; a rejected or partial fit keeps the current native geometry. As with explicit SDR/HDR scaling, a successfully allocated split remains recorded on the same surface across a window-mode hop to that exact native display extent, so returning to the original source can reuse the existing memory envelope while driver budget accounting settles. Native-only launches create no such proof; unrelated extents clear it, and source growth still requires live headroom. Explicit user scaling, SDR, disabled HDR and full Gamescope WSI retain their existing paths. This preserves source-resolution Frame Generation at every display size; admission uses that same post-FG resource graph. Window-mode recovery remains game-owned and cannot waive memory admission.
+
+The internal Native output resize follows the same private-resource drain for live Reduced HDR Precision changes as explicit Scaling. Saved scaler method, factor and sharpness remain dormant while Scaling is off; a precision update cannot activate those saved choices or replace them with Native.
+
 `selectPresentationTransport()` makes one create-time choice:
 
 - `OrderedSdr` owns FIFO ordering and filters Gamescope's dynamic MAILBOX override. This is the supported release transport.

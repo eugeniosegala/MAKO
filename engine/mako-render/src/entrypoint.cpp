@@ -62,6 +62,7 @@ namespace {
         vk::VulkanInstanceFuncs funcs;
         std::string engineName;
         std::unique_ptr<GamescopeScalingSurface> scalingSurfaces;
+        SurfaceMaintenance1Support surfaceMaintenance1;
         std::atomic_bool presentWaitFallbackLogged{false};
 
         std::unordered_map<VkDevice, vk::Vulkan> devices;
@@ -376,8 +377,8 @@ namespace {
 
     std::optional<const char*> supportedSwapchainMaintenance1Extension(
             const VkPhysicalDevice physicalDevice,
-            const bool scalingEngineProvisioned) {
-        if (!scalingEngineProvisioned ||
+            const bool presentationResourcesProvisioned) {
+        if (!presentationResourcesProvisioned ||
                 !instance_info->funcs.GetPhysicalDeviceFeatures2) {
             return std::nullopt;
         }
@@ -405,10 +406,10 @@ namespace {
         };
         const bool hasKhr = hasExtension(
             khrSwapchainMaintenance1ExtensionName
-        );
+        ) && instance_info->surfaceMaintenance1.khr;
         const bool hasExt = hasExtension(
             VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
-        );
+        ) && instance_info->surfaceMaintenance1.ext;
         if (!hasKhr && !hasExt)
             return std::nullopt;
 
@@ -523,6 +524,19 @@ namespace {
                 return value ? value : "";
             };
             const bool needsX11Adapter = requestsGamescopeScalingSurface(*info);
+            const bool retirementRequested = presentationRetirementRequired(
+                layer_info->root.frameGenerationInteropProvisioned(),
+                layer_info->root.scalingEngineProvisioned(),
+                layer_info->root.scalingSurfaceConnectionProvisioned());
+            InstanceExtensionQuery extensionQuery;
+            if (retirementRequested) {
+                const auto enumerate = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
+                    layer_info->GetInstanceProcAddr(VK_NULL_HANDLE,
+                        "vkEnumerateInstanceExtensionProperties"));
+                extensionQuery = queryPresentationInstanceExtensions(
+                    enumerate, vk::enumerateLoaderInstanceExtensionProperties);
+            }
+            const auto& available = extensionQuery.properties;
             if (needsX11Adapter && !(instance_info && instance_info->scalingSurfaces) &&
                     needsGamescopeScalingSurface(
                     layer_info->root.scalingSurfaceConnectionProvisioned(),
@@ -530,27 +544,13 @@ namespace {
                     environment("GAMESCOPE_WAYLAND_DISPLAY"),
                     environment("WAYLAND_DISPLAY"), environment("XDG_RUNTIME_DIR"),
                     std::getenv("WAYLAND_SOCKET") != nullptr)) {
-                const auto enumerate = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
-                    layer_info->GetInstanceProcAddr(VK_NULL_HANDLE,
-                        "vkEnumerateInstanceExtensionProperties"));
-                uint32_t count{};
-                std::vector<VkExtensionProperties> extensions;
-                VkResult enumerationResult = VK_ERROR_INITIALIZATION_FAILED;
-                if (enumerate)
-                    enumerationResult = enumerate(nullptr, &count, nullptr);
-                if (enumerationResult == VK_SUCCESS) {
-                    extensions.resize(count);
-                    enumerationResult = enumerate(nullptr, &count, extensions.data());
-                    if (enumerationResult != VK_SUCCESS)
-                        extensions.clear();
-                }
-                const bool waylandSupported = std::ranges::any_of(extensions,
+                const bool waylandSupported = std::ranges::any_of(available,
                     [](const VkExtensionProperties& extension) {
                         return std::strcmp(extension.extensionName,
                             "VK_KHR_wayland_surface") == 0;
                     });
                 if (canAttemptGamescopeScalingSurface(
-                        enumerationResult, waylandSupported)) {
+                        extensionQuery.result, waylandSupported)) {
                     auto candidate = std::make_unique<GamescopeScalingSurface>(
                         layer_info->root.hdrExposureEnabled(),
                         [](uint32_t gamescopePid) {
@@ -565,20 +565,34 @@ namespace {
             }
             VkInstanceCreateInfo newInfo = *info;
             std::vector<const char*> extensions;
+            if (info->enabledExtensionCount)
+                extensions.assign(info->ppEnabledExtensionNames,
+                    info->ppEnabledExtensionNames + info->enabledExtensionCount);
+            const auto appendExtension = [&](const char* name) {
+                if (!std::ranges::any_of(extensions, [name](const char* existing) {
+                        return std::strcmp(existing, name) == 0;
+                    }))
+                    extensions.push_back(name);
+            };
+            const auto maintenance1 = surfaceMaintenance1Support(available);
+            if (retirementRequested) {
+                if (maintenance1.khr || maintenance1.ext) {
+                    appendExtension("VK_KHR_surface");
+                    appendExtension("VK_KHR_get_surface_capabilities2");
+                    if (maintenance1.khr)
+                        appendExtension(khrSurfaceMaintenance1ExtensionName);
+                    if (maintenance1.ext)
+                        appendExtension(extSurfaceMaintenance1ExtensionName);
+                }
+            }
             // Wine may keep several Vulkan instances alive. Every instance
             // using the shared surface connection needs the driver extension.
             if (needsX11Adapter && (scalingSurfaces ||
                     (instance_info && instance_info->scalingSurfaces))) {
-                if (info->enabledExtensionCount)
-                    extensions.assign(info->ppEnabledExtensionNames,
-                        info->ppEnabledExtensionNames + info->enabledExtensionCount);
-                if (!std::ranges::any_of(extensions, [](const char* name) {
-                        return std::strcmp(name, "VK_KHR_wayland_surface") == 0;
-                    }))
-                    extensions.push_back("VK_KHR_wayland_surface");
-                newInfo.ppEnabledExtensionNames = extensions.data();
-                newInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+                appendExtension("VK_KHR_wayland_surface");
             }
+            newInfo.ppEnabledExtensionNames = extensions.data();
+            newInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
             layer_info->root.modifyInstanceCreateInfo(newInfo,
                 [&, newInfo = &newInfo]() {
                     auto res = vkCreateInstance(newInfo, alloc, instance);
@@ -596,8 +610,13 @@ namespace {
                             info->pApplicationInfo->pEngineName
                         ? info->pApplicationInfo->pEngineName : "",
                     .scalingSurfaces = std::move(scalingSurfaces),
+                    .surfaceMaintenance1 = maintenance1,
                 };
             else {
+                // Shared dispatch may serve several Wine instances. Only use
+                // a spelling whose prerequisites were enabled on every one.
+                instance_info->surfaceMaintenance1.khr &= maintenance1.khr;
+                instance_info->surfaceMaintenance1.ext &= maintenance1.ext;
                 if (instance_info->engineName.empty() &&
                         info->pApplicationInfo &&
                         info->pApplicationInfo->pEngineName) {
@@ -775,7 +794,9 @@ namespace {
             layer_info->root.scalingEngineProvisioned();
         const auto swapchainMaintenance1Extension =
             supportedSwapchainMaintenance1Extension(
-                physdev, scalingEngineProvisioned
+                physdev, presentationDevice && presentationRetirementRequired(
+                    frameGenerationInteropEnabled, scalingEngineProvisioned,
+                    layer_info->root.scalingSurfaceConnectionProvisioned())
             );
         const auto layerQueueFamily = presentationDevice
             ? selectLayerQueueFamily(
@@ -2600,7 +2621,8 @@ namespace {
                         modification.variableFeedbackSuppressed,
                         modification.retainVariableSurfaceProof,
                         modification.applicationExtent,
-                        modification.presentationExtent
+                        modification.presentationExtent,
+                        modification.retainVariableSurfacePresentationProof
                     );
                 if (committed) {
                     instance_info->variableSurfaceScalingExtents.insert_or_assign(
@@ -2702,6 +2724,7 @@ namespace {
                     modification.privateOrderedTransport,
                 .spatialScalingActive =
                     modification.spatialScalingActive,
+                .hdrDisplayResize = modification.hdrDisplayResize,
                 .variableSurface = modification.variableSurface,
                 .spatialScalingMemoryConstrained =
                     modification.spatialScalingMemoryConstrained,

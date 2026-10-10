@@ -46,9 +46,11 @@ namespace mako::layer {
         uint32_t gamescopePresentRefreshHz{0};
         bool swapchainImageCountCompatibility{false};
         bool spatialScalingActive{false};
+        bool hdrDisplayResize{false};
         bool variableSurface{false};
         bool variableFeedbackSuppressed{false};
         bool retainVariableSurfaceProof{false};
+        bool retainVariableSurfacePresentationProof{false};
         bool spatialScalingMemoryConstrained{false};
         bool spatialScalingAdmissionRetryEligible{false};
         uint64_t spatialScalingPolicyRevision{0};

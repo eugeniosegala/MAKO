@@ -18,6 +18,15 @@
 
 namespace mako::layer {
 
+    /// Lifetime protection follows the resources/transport provisioned by
+    /// MAKO, independently of which user-facing feature enabled them.
+    [[nodiscard]] constexpr bool presentationRetirementRequired(
+            const bool frameGenerationProvisioned,
+            const bool scalingProvisioned,
+            const bool bridgeProvisioned) noexcept {
+        return frameGenerationProvisioned || scalingProvisioned || bridgeProvisioned;
+    }
+
     [[nodiscard]] inline bool rendererOwnsDisplayTiming(
             const VkDeviceCreateInfo& createInfo,
             const bool gamescopeWsiEligible, const bool extensionSupported) {
@@ -62,6 +71,65 @@ namespace mako::layer {
     // the EXT names while still negotiating the promoted runtime name.
     inline constexpr char khrSwapchainMaintenance1ExtensionName[] =
         "VK_KHR_swapchain_maintenance1";
+    inline constexpr char khrSurfaceMaintenance1ExtensionName[] =
+        "VK_KHR_surface_maintenance1";
+    inline constexpr char extSurfaceMaintenance1ExtensionName[] =
+        "VK_EXT_surface_maintenance1";
+
+    struct SurfaceMaintenance1Support {
+        bool khr{false};
+        bool ext{false};
+    };
+
+    struct InstanceExtensionQuery {
+        VkResult result{VK_ERROR_INITIALIZATION_FAILED};
+        std::vector<VkExtensionProperties> properties;
+    };
+
+    [[nodiscard]] inline InstanceExtensionQuery queryPresentationInstanceExtensions(
+            PFN_vkEnumerateInstanceExtensionProperties enumerate,
+            const PFN_vkEnumerateInstanceExtensionProperties loaderEnumerate) {
+        InstanceExtensionQuery query;
+        // Some layers (including Gamescope WSI) do not expose global
+        // enumeration at all. The loader owns driver enumeration before
+        // an instance exists, so use it when the layer has no entrypoint.
+        if (!enumerate)
+            enumerate = loaderEnumerate;
+        if (!enumerate)
+            return query;
+        uint32_t count{};
+        query.result = enumerate(nullptr, &count, nullptr);
+        // vkBasalt and other layers can expose only layer-specific global
+        // enumeration. Ask the loader for driver capabilities in that case;
+        // never infer optional support from a rejected layer-name query.
+        if (query.result == VK_ERROR_LAYER_NOT_PRESENT && loaderEnumerate) {
+            enumerate = loaderEnumerate;
+            count = 0;
+            query.result = enumerate(nullptr, &count, nullptr);
+        }
+        if (query.result == VK_SUCCESS) {
+            query.properties.resize(count);
+            query.result = enumerate(nullptr, &count, query.properties.data());
+            if (query.result == VK_SUCCESS)
+                query.properties.resize(count);
+            else
+                query.properties.clear();
+        }
+        return query;
+    }
+
+    [[nodiscard]] inline SurfaceMaintenance1Support surfaceMaintenance1Support(
+            const std::vector<VkExtensionProperties>& extensions) {
+        const auto has = [&](const char* name) {
+            return std::ranges::any_of(extensions, [&](const auto& extension) {
+                return std::strcmp(extension.extensionName, name) == 0;
+            });
+        };
+        if (!has("VK_KHR_surface") || !has("VK_KHR_get_surface_capabilities2"))
+            return {};
+        return {has(khrSurfaceMaintenance1ExtensionName),
+            has(extSurfaceMaintenance1ExtensionName)};
+    }
 
 #ifdef VK_KHR_swapchain_maintenance1
     static_assert(

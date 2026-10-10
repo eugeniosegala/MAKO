@@ -227,6 +227,152 @@ namespace {
 }
 
 int main() {
+    {
+        ls::GameConf profile{};
+        profile.scaling_enabled = false;
+        const VkExtent2D source{2560, 1440};
+        const VkExtent2D display{3840, 2160};
+        for (unsigned gates = 0; gates < 16; ++gates) {
+            const auto resize = hdrBridgeDisplayResizePolicy(profile,
+                (gates & 1) != 0, (gates & 2) != 0,
+                (gates & 4) != 0, (gates & 8) != 0, source, display);
+            expect(resize.has_value() == (gates == 15),
+                "Display resize requires the private bridge, actual HDR, HDR opt-in and FG provisioning");
+        }
+        const auto resize = hdrBridgeDisplayResizePolicy(
+            profile, true, true, true, true, source, display);
+        expect(resize && resize->enabled && !resize->supersampling &&
+                !profile.scaling_enabled,
+            "HDR display resize must preserve the saved Scaling choice and cap output at the display");
+        profile.scaling_enabled = true;
+        expect(!hdrBridgeDisplayResizePolicy(
+                profile, true, true, true, true, source, display),
+            "Explicit user scaling must retain its own geometry and method");
+        profile.scaling_enabled = false;
+        for (const VkExtent2D target : {source, VkExtent2D{1920, 1080},
+                VkExtent2D{3840, 2400}, VkExtent2D{7680, 4320}, VkExtent2D{0, 0}}) {
+            expect(!hdrBridgeDisplayResizePolicy(
+                    profile, true, true, true, true, source, target),
+                "HDR display resize must reject no-op, downscale, aspect mismatch and oversized targets");
+        }
+        expect(!hdrBridgeDisplayResizePolicy(profile, true, true, true, true,
+                source, std::nullopt) &&
+            !hdrBridgeDisplayResizePolicy(profile, true, true, true, true,
+                {0, 0}, display),
+            "Unknown geometry must keep ordinary presentation");
+        auto caps = fixedCapabilities(8192, 8192);
+        caps.currentExtent = {UINT32_MAX, UINT32_MAX};
+        const auto accepted = scalingDecisionForCreate(*resize, true, 1,
+            caps, source, std::nullopt, std::nullopt,
+            uniformPresentationBudgets(10'000'000), display, true);
+        expect(accepted.extents && sameExtent(accepted.extents->source, source) &&
+                sameExtent(accepted.extents->presentation, display),
+            "HDR display resize must preserve the 1440p game source and select exact 4K output");
+        const auto denied = scalingDecisionForCreate(*resize, true, 1,
+            caps, source, std::nullopt, std::nullopt,
+            uniformPresentationBudgets(0), display, true);
+        expect(!denied.extents,
+            "HDR display resize must obey the existing memory-admission guard");
+
+        const auto proven = committedVariableSurfaceScalingExtents(
+            std::nullopt, true, true, true, false, false, source, display);
+        auto nativeHop = committedVariableSurfaceScalingExtents(
+            proven, true, true, false, false, false, display, display, true);
+        // Borderless/fullscreen transitions can create more than one native
+        // swapchain before returning to the game's original render size.
+        nativeHop = committedVariableSurfaceScalingExtents(
+            nativeHop, true, true, false, false, false, display, display, true);
+        expect(nativeHop && sameExtent(nativeHop->source, source) &&
+                sameExtent(nativeHop->presentation, display),
+            "Native display-sized HDR window-mode hops must retain the original split proof");
+        const auto restored = scalingDecisionForCreate(*resize, true, 1,
+            caps, source, nativeHop, std::nullopt,
+            uniformPresentationBudgets(0), display, true, 10'000'000);
+        expect(restored.extents && restored.reusedPreviousPresentationBudget &&
+                sameExtent(restored.extents->source, source) &&
+                sameExtent(restored.extents->presentation, display),
+            "Returning from native 4K to 1440p must recover proven 4K output despite delayed live budget accounting");
+        expect(!committedVariableSurfaceScalingExtents(
+                proven, true, true, false, false, false, display, display),
+            "Other presentation paths must keep clearing proof on native source changes");
+        expect(!committedVariableSurfaceScalingExtents(
+                std::nullopt, true, true, false, false, false, display, display, true),
+            "A native-only launch cannot invent a previous HDR resize allocation");
+        expect(!committedVariableSurfaceScalingExtents(
+                SpatialScalingExtents{display, display}, true, true, false,
+                false, false, display, display, true),
+            "A native-only allocation cannot become split-extent proof");
+        for (const VkExtent2D changed : {VkExtent2D{1920, 1080},
+                VkExtent2D{4096, 2160}, VkExtent2D{7680, 4320}}) {
+            expect(!committedVariableSurfaceScalingExtents(
+                    proven, true, true, false, false, false, changed, changed, true),
+                "Unrelated window/display extents must discard the old HDR allocation proof");
+        }
+        expect(!committedVariableSurfaceScalingExtents(
+                proven, false, true, false, false, false, display, display, true) &&
+            !committedVariableSurfaceScalingExtents(
+                proven, true, false, false, false, false, display, display, true),
+            "Inactive profiles and fixed surfaces cannot retain HDR bridge proof");
+        const VkExtent2D largerSource{2880, 1620};
+        const auto sourceGrowth = scalingDecisionForCreate(*resize, true, 1,
+            caps, largerSource, nativeHop, std::nullopt,
+            uniformPresentationBudgets(0), display, true, 10'000'000);
+        expect(!sourceGrowth.extents && !sourceGrowth.reusedPreviousPresentationBudget,
+            "Retained HDR output proof cannot fund source growth without live headroom");
+        expect(spatialScalingAdmissionRetryEligible(
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+                proven, largerSource, 2.0F, display, true),
+            "Display-clamped HDR source growth must permit the bounded admission retry");
+        expect(!spatialScalingAdmissionRetryEligible(
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+                proven, largerSource, 2.0F, VkExtent2D{7680, 4320}, true),
+            "An admission retry cannot expand beyond the proven output envelope");
+
+        // Small HDR display targets also interpolate at source resolution.
+        // Their admission must price the same graph that construction uses.
+        const VkExtent2D smallSource{640, 360};
+        const VkExtent2D smallDisplay{1280, 720};
+        const auto smallPolicy = hdrBridgeDisplayResizePolicy(
+            profile, true, true, true, true, smallSource, smallDisplay);
+        const VariablePresentationPixelBudgets postOnlyBudget{0, 1'000'000, 0};
+        const auto small = scalingDecisionForCreate(*smallPolicy, true, 1,
+            caps, smallSource, std::nullopt, std::nullopt,
+            postOnlyBudget, smallDisplay, true);
+        expect(small.extents && sameExtent(small.extents->presentation, smallDisplay) &&
+                small.memoryAdmissionPlacement == SpatialFramePipelinePlacement::PostFrameGeneration,
+            "Small HDR display resize must use the source-resolution FG memory estimate");
+        auto ordinary = *smallPolicy;
+        ordinary.preserveFrameGenerationSource = false;
+        const auto ordinaryDenied = scalingDecisionForCreate(ordinary, true, 1,
+            caps, smallSource, std::nullopt, std::nullopt,
+            postOnlyBudget, smallDisplay, true);
+        expect(!ordinaryDenied.extents,
+            "Ordinary low-resolution scaling must not borrow the cheaper post-FG budget");
+
+        // The extent lifecycle is shared by explicit SDR/HDR scaling and
+        // automatic HDR display resizing, independently of FG execution.
+        for (const bool hdr : {false, true}) {
+            for (const bool fg : {false, true}) {
+                profile.scaling_enabled = true;
+                profile.frame_generation_enabled = fg;
+                profile.scaling_factor = 1.5F;
+                const auto scaled = scalingDecisionForCreate(profile, true, 1,
+                    caps, source, std::nullopt, std::nullopt,
+                    uniformPresentationBudgets(10'000'000), display, true);
+                expect(scaled.extents && sameExtent(scaled.extents->presentation, display),
+                    "Explicit scaling must retain its requested output with or without FG");
+                const auto retained = committedVariableSurfaceScalingExtents(
+                    scaled.extents, true, true, false, false, false, display, display, true);
+                const auto returned = scalingDecisionForCreate(profile, true, 1,
+                    caps, source, retained, std::nullopt,
+                    uniformPresentationBudgets(0), display, true, 10'000'000);
+                expect(returned.extents && sameExtent(returned.extents->presentation, display),
+                    "Explicit scaling must reuse its output after a native window-mode hop");
+                expect(!hdrBridgeDisplayResizePolicy(profile, true, hdr, true, fg, source, display),
+                    "Automatic HDR geometry cannot replace explicit user scaling");
+            }
+        }
+    }
     expect(spatialScalingProcessSupported(true, true, false, true),
         "explicit HDR colour on the isolated bridge must permit scaling");
     const auto declaresHalf = [](const std::span<const uint32_t> words) {

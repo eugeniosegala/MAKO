@@ -68,15 +68,12 @@ namespace mako::layer {
             std::string_view gamescopeDisplay, std::string_view waylandDisplay,
             std::string_view runtimeDirectory = {}, bool inheritedSocket = false);
 
-    /// An application-facing layer below MAKO may own the global enumeration
-    /// entrypoint but report only its layer-specific extensions. In that case
-    /// VK_ERROR_LAYER_NOT_PRESENT means driver support is opaque, not absent.
-    /// The bridge remains fail-closed for every other enumeration failure.
+    /// Admission requires a complete global extension query. Layer-specific
+    /// enumeration is resolved through the loader before reaching this gate.
     [[nodiscard]] constexpr bool canAttemptGamescopeScalingSurface(
             const VkResult enumerationResult,
             const bool waylandSurfaceAdvertised) noexcept {
-        return waylandSurfaceAdvertised ||
-            enumerationResult == VK_ERROR_LAYER_NOT_PRESENT;
+        return enumerationResult == VK_SUCCESS && waylandSurfaceAdvertised;
     }
 
     /// Owns Gamescope's X11-window -> Wayland-buffer association and protocol

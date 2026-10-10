@@ -883,7 +883,8 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
 
 void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
         const std::function<void(void)>& finish) const {
-    if (!this->frameGenerationInteropProvisioned() && !this->scalingEngineProvisioned()) {
+    if (!this->frameGenerationInteropProvisioned() && !this->scalingEngineProvisioned() &&
+            !this->scalingSurfaceConnectionProvisioned()) {
         finish();
         return;
     }
@@ -908,18 +909,23 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
         const char* const swapchainMaintenance1Extension,
         const bool gamescopeDisplayTiming,
         const std::function<void(void)>& finish) const {
-    if (!this->frameGenerationInteropProvisioned()) {
+    const bool frameGenerationInterop = this->frameGenerationInteropProvisioned();
+    if (!frameGenerationInterop && !swapchainMaintenance1Extension &&
+            !gamescopeDisplayTiming) {
         finish();
         return;
     }
 
-    std::vector<const char*> requiredExtensions{
-        "VK_KHR_external_memory",
-        "VK_KHR_external_memory_fd",
-        "VK_KHR_external_semaphore",
-        "VK_KHR_external_semaphore_fd",
-        "VK_KHR_timeline_semaphore"
-    };
+    std::vector<const char*> requiredExtensions;
+    if (frameGenerationInterop) {
+        requiredExtensions = {
+            "VK_KHR_external_memory",
+            "VK_KHR_external_memory_fd",
+            "VK_KHR_external_semaphore",
+            "VK_KHR_external_semaphore_fd",
+            "VK_KHR_timeline_semaphore"
+        };
+    }
     if (swapchainMaintenance1Extension)
         requiredExtensions.push_back(swapchainMaintenance1Extension);
     if (gamescopeDisplayTiming)
@@ -939,13 +945,15 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
         if (featureInfo->sType ==
                     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES) {
             auto* features = reinterpret_cast<VkPhysicalDeviceVulkan12Features*>(featureInfo);
-            features->timelineSemaphore = VK_TRUE;
-            timelineFeatureEnabled = true;
+            if (frameGenerationInterop)
+                features->timelineSemaphore = VK_TRUE;
+            timelineFeatureEnabled = features->timelineSemaphore == VK_TRUE;
         } else if (featureInfo->sType ==
                     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES) {
             auto* features = reinterpret_cast<VkPhysicalDeviceTimelineSemaphoreFeatures*>(featureInfo);
-            features->timelineSemaphore = VK_TRUE;
-            timelineFeatureEnabled = true;
+            if (frameGenerationInterop)
+                features->timelineSemaphore = VK_TRUE;
+            timelineFeatureEnabled = features->timelineSemaphore == VK_TRUE;
         } else if (featureInfo->sType ==
                 VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT) {
             auto* features = reinterpret_cast<
@@ -966,7 +974,7 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
         .pNext = const_cast<void*>(createInfo.pNext),
         .timelineSemaphore = VK_TRUE
     };
-    if (!timelineFeatureEnabled)
+    if (frameGenerationInterop && !timelineFeatureEnabled)
         createInfo.pNext = &timelineFeatures;
 
     VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT maintenance1Features{
@@ -1050,7 +1058,36 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         memoryProperties2.memoryProperties,
         liveMemoryBudgetAvailable ? &liveMemoryBudget : nullptr
     );
+    const auto colorPipeline = classifySwapchainColor(
+        createInfo.imageFormat, createInfo.imageColorSpace,
+        (!this->presentationEnvironment.gamescopeWsiDisabled &&
+            this->gamescopeHdrActive.value_or(false))
+    );
     const auto contextProfile = profileForLayerContext(*this->active_profile);
+    const auto hdrResizePolicyForSource = [&](const VkExtent2D source) {
+        return hdrBridgeDisplayResizePolicy(
+            contextProfile,
+            gamescopeScalingSurface && modification.variableSurface &&
+                spatialScalingOwnedByLayer() && spatialScalingCapabilityOwnedByLayer(),
+            colorPipeline.hdr, !this->presentationEnvironment.hdrExposureDisabled,
+            frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled()),
+            source, this->gamescopePresentationTarget
+        );
+    };
+    const auto hdrResizePolicy = hdrResizePolicyForSource(createInfo.imageExtent);
+    // Window-mode changes can briefly request the display's native extent.
+    // Keep the smaller, already allocated split across that exact-output
+    // hop so returning to it is not priced as a cold allocation. Never invent
+    // proof from a native-only launch or retain it across a display change.
+    modification.retainVariableSurfacePresentationProof =
+        spatialSurfaceScalingSupported && modification.variableSurface &&
+        previousVariableExtents && this->gamescopePresentationTarget &&
+        ((ls::spatialScalingRequested(contextProfile) &&
+            !contextProfile.scaling_supersampling) ||
+            hdrResizePolicyForSource(previousVariableExtents->source).has_value()) &&
+        sameExtent(previousVariableExtents->presentation,
+            *this->gamescopePresentationTarget) &&
+        sameExtent(createInfo.imageExtent, *this->gamescopePresentationTarget);
     modification.swapchainImageCountCompatibility =
         contextProfile.swapchain_image_count_compatibility;
     auto prospectiveCreateInfo = createInfo;
@@ -1063,9 +1100,11 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         this->gamescopeDetected,
         this->presentationEnvironment,
         frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled()),
-        false
+        hdrResizePolicy.has_value()
     ));
     auto policySnapshot = this->surfaceScalingPolicySnapshot();
+    if (hdrResizePolicy)
+        policySnapshot.policy = *hdrResizePolicy;
     const auto postFrameGenerationAdmission =
         variablePresentationResourceAdmission(
             memoryAdmission,
@@ -1103,7 +1142,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         // the lower swapchain nor allocates reconstruction resources.
         policySnapshot.policy.enabled = false;
     }
-    const auto scalingDecision = spatialSurfaceScalingSupported
+    auto scalingDecision = spatialSurfaceScalingSupported
         ? scalingDecisionForCreate(
             policySnapshot.policy,
             policySnapshot.processSupported,
@@ -1122,6 +1161,13 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             .inactiveReason = SpatialScalingInactiveReason::
                 GamescopeWsiSurfaceUnproven,
         };
+    if (hdrResizePolicy && scalingDecision.extents && !sameExtent(
+            scalingDecision.extents->presentation, *this->gamescopePresentationTarget)) {
+        // Do not substitute a partial resize when the display-sized request
+        // exceeds the existing surface or memory envelope.
+        scalingDecision.extents.reset();
+        scalingDecision.inactiveReason = SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
+    }
     const auto& scalingExtents = scalingDecision.extents;
     modification.variableFeedbackSuppressed =
         scalingDecision.inactiveReason ==
@@ -1131,11 +1177,6 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     const bool fixedVirtualSourceRequest =
         fixedSurfaceExtent(caps.currentExtent) &&
         !sameExtent(createInfo.imageExtent, caps.currentExtent);
-    const auto colorPipeline = classifySwapchainColor(
-        createInfo.imageFormat, createInfo.imageColorSpace,
-        (!this->presentationEnvironment.gamescopeWsiDisabled &&
-            this->gamescopeHdrActive.value_or(false))
-    );
     const bool supportedScalingEncoding =
         spatialScalingColorSupported(colorPipeline) &&
         !(colorPipeline.hdr && this->presentationEnvironment.hdrExposureDisabled);
@@ -1206,13 +1247,17 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                     ? SpatialScalingInactiveReason::QueueCommandsUnsupported
                     : SpatialScalingInactiveReason::SwapchainFormatUnsupported));
     }
+    modification.hdrDisplayResize = hdrResizePolicy.has_value();
     modification.spatialScalingInactiveReason = inactiveReason;
     modification.spatialScalingAdmissionRetryEligible =
         spatialScalingAdmissionRetryEligible(
             inactiveReason,
             previousVariableExtents,
             createInfo.imageExtent,
-            policySnapshot.policy.factor
+            policySnapshot.policy.factor,
+            policySnapshot.policy.supersampling ? std::nullopt
+                : this->gamescopePresentationTarget,
+            policySnapshot.policy.preserveFrameGenerationSource
         );
     modification.spatialScalingPolicyRevision = policySnapshot.revision;
     modification.retainVariableSurfaceProof =
@@ -1248,13 +1293,14 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         scalingExtents.has_value(),
         fixedSurfaceExtent(caps.currentExtent)
     );
-    if (this->active_profile->scaling_enabled &&
+    if ((this->active_profile->scaling_enabled || hdrResizePolicy) &&
             (spatialResourceOwner || spatialExtentOwner) &&
             !awaitingLowerCreateRelay) {
         const auto advertised = scalingDecision.fixedContract;
         const auto admissionPlacement = scalingDecision.memoryAdmissionPlacement.
             value_or(selectSpatialFramePipelinePlacement(
-                modification.applicationExtent, modification.presentationExtent
+                modification.applicationExtent, modification.presentationExtent,
+                policySnapshot.policy.preserveFrameGenerationSource
             ));
         const auto& resourceAdmission = admissionPlacement ==
                 SpatialFramePipelinePlacement::PreFrameGeneration
@@ -1601,7 +1647,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     const auto& global = this->config.get().global();
 
     std::optional<std::filesystem::path> scalingShaderDll;
-    if (info.spatialScalingActive) {
+    if (info.spatialScalingActive && !info.hdrDisplayResize) {
         try {
             scalingShaderDll = global.dll.has_value()
                 ? std::filesystem::path(*global.dll)

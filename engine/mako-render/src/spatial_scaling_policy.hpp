@@ -48,7 +48,10 @@ namespace mako::layer {
     [[nodiscard]] constexpr SpatialFramePipelinePlacement
     selectSpatialFramePipelinePlacement(
             const VkExtent2D source,
-            const VkExtent2D presentation) noexcept {
+            const VkExtent2D presentation,
+            const bool preserveFrameGenerationSource = false) noexcept {
+        if (preserveFrameGenerationSource)
+            return SpatialFramePipelinePlacement::PostFrameGeneration;
         if (source.width == 0 || source.height == 0 ||
                 presentation.width == 0 || presentation.height == 0 ||
                 extentPixelCount(presentation) <=
@@ -121,7 +124,36 @@ namespace mako::layer {
         bool enabled{false};
         float factor{1.0F};
         bool supersampling{false};
+        bool preserveFrameGenerationSource{false};
     };
+
+    /// Reuse native post-FG resizing for isolated HDR presentation to
+    /// fill a proven display target without changing the saved scaling choice.
+    /// Geometry, format and memory admission still belong to the ordinary
+    /// scaling create policy. Unequal aspect ratios remain on the native path.
+    [[nodiscard]] inline std::optional<SpatialScalingPolicy>
+    hdrBridgeDisplayResizePolicy(const ls::GameConf& profile,
+            const bool isolatedVariableBridge, const bool hdr,
+            const bool hdrAllowed, const bool frameGenerationProvisioned,
+            const VkExtent2D source, const std::optional<VkExtent2D> target) {
+        if (profile.scaling_enabled || !isolatedVariableBridge || !hdr ||
+                !hdrAllowed || !frameGenerationProvisioned || !target ||
+                source.width == 0 || source.height == 0 ||
+                target->width <= source.width || target->height <= source.height ||
+                uint64_t{target->width} * source.height !=
+                    uint64_t{target->height} * source.width ||
+                static_cast<double>(target->width) / source.width >
+                    ls::GameConfLimits::maximumScalingFactor)
+            return std::nullopt;
+        // The existing display-target clamp selects the exact fit; using the
+        // maximum avoids rounding a fractional fit down before that clamp.
+        return SpatialScalingPolicy{
+            .enabled = true,
+            .factor = ls::GameConfLimits::maximumScalingFactor,
+            .supersampling = false,
+            .preserveFrameGenerationSource = true,
+        };
+    }
 
     /// One coherent policy snapshot used for a fixed-surface capability query.
     /// The revision changes only when scaler activity, process support, or the
@@ -626,24 +658,33 @@ namespace mako::layer {
             const SpatialScalingInactiveReason inactiveReason,
             const std::optional<SpatialScalingExtents>& previous,
             const VkExtent2D requestedSource,
-            const float requestedFactor) noexcept {
+            const float requestedFactor,
+            const std::optional<VkExtent2D> presentationTarget = std::nullopt,
+            const bool preserveFrameGenerationSource = false) noexcept {
         if (inactiveReason !=
                 SpatialScalingInactiveReason::VariableSurfaceMemoryBudget ||
                 !previous || !validSpatialScalingFactor(requestedFactor) ||
                 requestedFactor <= 1.0F ||
                 sameExtent(previous->source, requestedSource) ||
-                sameExtent(previous->source, previous->presentation)) {
+                sameExtent(previous->source, previous->presentation) ||
+                requestedSource.width == 0 || requestedSource.height == 0) {
             return false;
         }
 
+        double effectiveFactor = requestedFactor;
+        if (presentationTarget) {
+            effectiveFactor = std::min({effectiveFactor,
+                static_cast<double>(presentationTarget->width) / requestedSource.width,
+                static_cast<double>(presentationTarget->height) / requestedSource.height});
+        }
         VkExtent2D requestedPresentation{
             .width = static_cast<uint32_t>(std::floor(
                 static_cast<double>(requestedSource.width) *
-                    requestedFactor
+                    effectiveFactor
             )),
             .height = static_cast<uint32_t>(std::floor(
                 static_cast<double>(requestedSource.height) *
-                    requestedFactor
+                    effectiveFactor
             )),
         };
         if (requestedPresentation.width > 1)
@@ -658,9 +699,9 @@ namespace mako::layer {
             return false;
         }
         return selectSpatialFramePipelinePlacement(
-            previous->source, previous->presentation
+            previous->source, previous->presentation, preserveFrameGenerationSource
         ) == selectSpatialFramePipelinePlacement(
-            requestedSource, requestedPresentation
+            requestedSource, requestedPresentation, preserveFrameGenerationSource
         );
     }
 
@@ -731,8 +772,9 @@ namespace mako::layer {
         uint64_t sourceGrowth{0};
 
         [[nodiscard]] constexpr uint64_t forPresentation(
-                const uint64_t pixels) const noexcept {
-            return pixels <= preFrameGenerationPresentationPixelBudget
+                const uint64_t pixels,
+                const bool preserveFrameGenerationSource = false) const noexcept {
+            return !preserveFrameGenerationSource && pixels <= preFrameGenerationPresentationPixelBudget
                 ? preFrameGeneration : postFrameGeneration;
         }
     };
@@ -1256,14 +1298,14 @@ namespace mako::layer {
         }
         const VkExtent2D requestedPresentation = presentation;
         decision.memoryAdmissionPlacement = selectSpatialFramePipelinePlacement(
-            requestedExtent, presentation
+            requestedExtent, presentation, policy.preserveFrameGenerationSource
         );
         const uint64_t presentationPixels =
             static_cast<uint64_t>(presentation.width) *
             static_cast<uint64_t>(presentation.height);
         if (variablePresentationBudgets &&
                 presentationPixels > variablePresentationBudgets->
-                    forPresentation(presentationPixels)) {
+                    forPresentation(presentationPixels, policy.preserveFrameGenerationSource)) {
             // VK_EXT_memory_budget can lag immediately released WSI and
             // private allocations. When a split extent was already running
             // on this surface, it is safe to retain that proven envelope or
@@ -1275,7 +1317,7 @@ namespace mako::layer {
             const bool liveBudgetTightenedStaticCeiling =
                 variablePresentationStaticPixels &&
                 variablePresentationBudgets->
-                    forPresentation(presentationPixels) <
+                    forPresentation(presentationPixels, policy.preserveFrameGenerationSource) <
                     *variablePresentationStaticPixels;
             // A deliberate same-source factor downshift may be followed by
             // an immediate return to the larger extent which was already
@@ -1327,10 +1369,11 @@ namespace mako::layer {
                             retainedPresentation.height >
                                 requestedExtent.height &&
                             selectSpatialFramePipelinePlacement(
-                                requestedExtent, retainedPresentation
+                                requestedExtent, retainedPresentation, policy.preserveFrameGenerationSource
                             ) == selectSpatialFramePipelinePlacement(
                                 variableSurfaceRollbackExtents->source,
-                                variableSurfaceRollbackExtents->presentation
+                                variableSurfaceRollbackExtents->presentation,
+                                policy.preserveFrameGenerationSource
                             )) {
                         presentation = retainedPresentation;
                         decision.reusedPreviousPresentationBudget = true;
@@ -1418,10 +1461,11 @@ namespace mako::layer {
                             retainedPresentation.height >
                                 requestedExtent.height &&
                             selectSpatialFramePipelinePlacement(
-                                requestedExtent, retainedPresentation
+                                requestedExtent, retainedPresentation, policy.preserveFrameGenerationSource
                             ) == selectSpatialFramePipelinePlacement(
                                 previousVariableExtents->source,
-                                previousVariableExtents->presentation
+                                previousVariableExtents->presentation,
+                                policy.preserveFrameGenerationSource
                             )) {
                         presentation = retainedPresentation;
                         decision.reusedPreviousPresentationBudget = true;
@@ -1480,7 +1524,7 @@ namespace mako::layer {
                     if (baselineFit.width > requestedExtent.width &&
                             baselineFit.height > requestedExtent.height &&
                             baselinePixels <= variablePresentationBudgets->
-                                forPresentation(baselinePixels)) {
+                                forPresentation(baselinePixels, policy.preserveFrameGenerationSource)) {
                         presentation = baselineFit;
                         decision.usedBaselinePresentationBudget = true;
                         decision.memoryBudgetConstrained = !sameExtent(
@@ -1502,7 +1546,7 @@ namespace mako::layer {
             .presentation = presentation,
         };
         decision.memoryAdmissionPlacement = selectSpatialFramePipelinePlacement(
-            requestedExtent, presentation
+            requestedExtent, presentation, policy.preserveFrameGenerationSource
         );
         return decision;
     }
@@ -1588,8 +1632,9 @@ namespace mako::layer {
     /// Commit the surface-scoped feedback state only after the replacement
     /// swapchain and its MAKO context have both been created successfully.
     /// A compositor echo retains the previous pair so repeated recreations
-    /// cannot compound the factor; every other native or fixed-surface result
-    /// clears stale variable state.
+    /// cannot compound the factor. The shared display-resize owner may also
+    /// retain a proven split across a native hop to that exact presentation
+    /// extent. Every other native or fixed-surface result clears stale state.
     [[nodiscard]] inline std::optional<SpatialScalingExtents>
     committedVariableSurfaceScalingExtents(
             const std::optional<SpatialScalingExtents>& previous,
@@ -1599,7 +1644,8 @@ namespace mako::layer {
             const bool feedbackSuppressed,
             const bool retainInactiveProof,
             const VkExtent2D applicationExtent,
-            const VkExtent2D presentationExtent) noexcept {
+            const VkExtent2D presentationExtent,
+            const bool retainPresentationProof = false) noexcept {
         if (!profileActive || !variableSurface)
             return std::nullopt;
         if (spatialScalingActive) {
@@ -1612,6 +1658,12 @@ namespace mako::layer {
             return previous;
         if (retainInactiveProof && previous &&
                 sameExtent(previous->source, applicationExtent)) {
+            return previous;
+        }
+        if (retainPresentationProof && previous &&
+                !sameExtent(previous->source, previous->presentation) &&
+                sameExtent(applicationExtent, presentationExtent) &&
+                sameExtent(previous->presentation, presentationExtent)) {
             return previous;
         }
         return std::nullopt;
