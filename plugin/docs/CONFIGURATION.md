@@ -112,7 +112,7 @@ Keep defaults unless a game needs a change.
 | **Force ALSA** | Audio or Zink compatibility problems. |
 | **MangoHud (Restart)** | Host games only; requires installed MangoHud and cannot run alongside MAKO Shaders for the same profile. |
 
-**Disable HDR (Restart)** is enabled by default. Turn it off to opt into HDR through the isolated Gamescope bridge, then restart the game. See [HDR through the isolated Gamescope bridge](#hdr-through-the-isolated-gamescope-bridge) for setup.
+**Disable HDR (Restart)** is on by default. See [HDR setup](#hdr) to enable experimental HDR.
 
 ## When changes apply
 
@@ -128,8 +128,10 @@ MAKO Decky follows Steam's interface language. Press **R1** or **Hide info** to 
 
 For help, see [troubleshooting](TROUBLESHOOTING.md) or [collect diagnostics](COLLECT_DIAGNOSTICS.md). The [Renderer configuration reference](../../engine/docs/CONFIGURATION-REFERENCE.md) covers advanced settings.
 
-## HDR through the isolated Gamescope bridge
+## HDR
 
-Keep **Gamescope WSI** off, turn **Disable HDR (Restart)** off, restart the game, then enable HDR in the game. Use Gaming Mode with the Steam Deck OLED’s built-in screen or an HDR-capable external display, with HDR allowed in Gamescope. Both use the same bridge and toggle; no dock or charger is required. The Steam Deck LCD’s built-in screen remains SDR. Restart the game after switching between HDR and SDR displays so the bridge detects the new output. Decky stores the toggle in the game profile; Qt’s standalone launch control stores it globally in `launcher.conf`. Turning **Disable HDR** on restores the SDR launch on the next restart. Its setting does not depend on the Scaling, Frame Generation, or Shaders switches. The same bridge serves all combinations; HDR disabled means no HDR capability query, format exposure, or metadata forwarding from that bridge. See [HDR pipeline](../../engine/docs/HDR-PIPELINE.md) for colour handling and the testing boundary.
+**HDR is experimental and disabled by default.** It works with Scaling, Frame Generation and Shaders in Gaming Mode on Steam Deck OLED or an HDR-capable external display, with HDR allowed in Gamescope. The Steam Deck LCD’s built-in display is SDR.
 
-**Reduced HDR Precision** appears below the HDR switch while HDR is allowed. It is on by default; saved choices are preserved. HDR itself remains experimental and disabled by default. With HDR10, it prioritizes speed by interpolating directly in PQ colour values, removing Frame Generation’s linear colour conversions and full-resolution linear working images. Shader intermediates and scaling inputs also use compact 10-bit buffers where supported. HDR output, game resolution, Flow Scale and model choice stay unchanged. The approximation can add banding or artifacts around moving bright edges and change shader effects. Switching applies live with a brief hitch; off restores the full linear path. Linear scRGB Frame Generation and SDR retain their existing processing. CAS alone in HDR10 already works directly between packed images, so shader-only gains may be small. Compare the same scene and settings; a lower backend GPU cost does not guarantee the same percentage increase in game FPS.
+In the game profile, keep **Gamescope WSI** off and turn off **Disable HDR (Restart)**, restart the game, then enable HDR in its settings. Restart after changing MAKO’s HDR toggle or switching between HDR and SDR displays.
+
+**Reduced HDR Precision** is on by default; saved choices are preserved. It can improve HDR10 performance at the cost of banding, bright-edge artifacts or altered shader effects. Turn it off for full precision. Changes apply live and may briefly hitch. See the [HDR pipeline](../../engine/docs/HDR-PIPELINE.md) for technical details.

@@ -30,7 +30,7 @@ The application-facing device and private backend device can differ. Export/impo
 
 Allocation or binding failure propagates to the owning construction path. A successful allocation call returning a null memory handle is also rejected. The allocator does not evict another context, alias live images, or move a failed device-local request into a different storage policy.
 
-Transfer-only images, including Native Resolution scratch images, have no image view: their copy/blit commands use the image handle directly, and Vulkan does not allow views for transfer-only usage. Sampled, storage, and attachment images retain their views. This avoids unused view construction without widening image usage or changing import/export ownership.
+Transfer-only images, including Native Resolution scratch images, omit image views because Vulkan does not permit them for transfer-only usage. Sampled, storage and attachment images retain their views; import/export ownership is unchanged.
 
 ### Internal image pooling
 

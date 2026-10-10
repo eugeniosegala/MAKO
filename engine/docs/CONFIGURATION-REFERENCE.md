@@ -94,7 +94,7 @@ See [Adaptive validation](ADAPTIVE-VALIDATION.md) for scheduling details.
 | `scaling_factor` | `1.5` | Target output-to-source ratio per dimension from 1.0–2.0; the surface, display target, and resource limits may reduce the effective ratio. |
 | `scaling_supersampling` | `false` | Allows supported variable Gamescope surfaces to render beyond the display target before downsampling. |
 | `scaling_sharpness` | `0.8` | Sharpening strength from 0.0–1.0. |
-| `hdr_reduced_precision` | `true` | Approximate PQ-domain HDR10 Frame Generation without linear conversion images/passes, plus compact 10-bit PQ shader intermediates and HDR10 scaling inputs. Applies live through private resource replacement; may add banding, bright-edge artifacts or altered effects. Off restores full linear HDR10 generation. scRGB Frame Generation, scaler outputs, and application/WSI formats retain their precision. Inert for SDR. |
+| `hdr_reduced_precision` | `true` | Trades HDR accuracy for speed using approximate HDR10 interpolation and compact shader/scaling buffers. May add banding, bright-edge artifacts or altered effects. Applies live; off restores full precision. Inert for SDR. See [precision details](HDR-PIPELINE.md#reduced-precision). |
 | `swapchain_image_count_compatibility` | `false` | Preserves the game's requested swapchain image minimum. Use only for games that otherwise fail to start. Requires restart. |
 
 ### Performance and device selection
@@ -129,7 +129,7 @@ Set `MAKO_ENV=1` to build one profile from environment variables instead of TOML
 - Scaling: `MAKO_SCALING_ENABLED`, `MAKO_SCALING_METHOD`, `MAKO_SCALING_FACTOR`, `MAKO_SCALING_SUPERSAMPLING`, `MAKO_SCALING_SHARPNESS`, `MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY`; and
 - resources: `MAKO_ULTRA_PERFORMANCE`, `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`.
 
-`MAKO_DISABLE_HDR_EXPOSURE=1` disables HDR exposure by default. The restart-only HDR control exports `MAKO_DISABLE_HDR_EXPOSURE=0` and `DXVK_HDR=1` while retaining `DISABLE_GAMESCOPE_WSI=1`; the isolated bridge carries HDR colour and metadata without full WSI. Environment-only settings are process-start settings, not live profile controls.
+`MAKO_DISABLE_HDR_EXPOSURE=1` disables HDR exposure by default. The restart-only HDR control exports `MAKO_DISABLE_HDR_EXPOSURE=0` and `DXVK_HDR=1` while retaining `DISABLE_GAMESCOPE_WSI=1`; see the [HDR launch contract](HDR-PIPELINE.md#toggle-and-launch-contract). Environment-only settings are process-start settings, not live profile controls.
 
 ## Presentation acquisition timeout
 

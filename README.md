@@ -49,7 +49,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
   <a href="plugin/docs/CONFIGURATION.md#frame-generation"><img src="assets/features/adaptive-frame-generation.webp" width="100" align="middle" alt="Adaptive Frame Generation" /></a>
   <a href="plugin/docs/CONFIGURATION.md#spatial-scaling"><img src="assets/features/scaling.webp" width="100" align="middle" alt="Scaling" /></a>
   <a href="plugin/docs/CONFIGURATION.md#shaders"><img src="assets/features/shaders.webp" width="100" align="middle" alt="Shaders" /></a>
-  <a href="plugin/docs/CONFIGURATION.md#hdr-through-the-isolated-gamescope-bridge"><img src="assets/features/hdr.webp" width="100" align="middle" alt="Experimental HDR" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#hdr"><img src="assets/features/hdr.webp" width="100" align="middle" alt="Experimental HDR" /></a>
   <br /><br />
 </p>
 
@@ -59,7 +59,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 - **Per-game shaders:** Live sharpening, anti-aliasing, colour, cinematic, and retro effects through bundled vkBasalt.
 - **Adaptive Frame Generation:** Target 30–240 FPS with a selectable 2x–5x generation ceiling.
 - **Display-aware pacing:** Adapts frame delivery to the presentation plan and Gamescope VRR state.
-- **Experimental HDR (disabled by default):** HDR support for Scaling, Frame Generation, and Shaders through Gamescope. See [setup and requirements](engine/docs/CONFIGURATION.md#hdr-through-the-isolated-gamescope-bridge).
+- **Experimental HDR (disabled by default):** HDR support for Scaling, Frame Generation, and Shaders through Gamescope.
 - **64-bit and 32-bit x86 support:** Matching Vulkan layers for native and Flatpak games.
 - **Gamescope recovery:** Preserves real frames during presentation pressure and Steam-menu transitions.
 - **Automatic profiles:** Saves per-game renderer and compatibility settings, matched by Steam app ID or process.
