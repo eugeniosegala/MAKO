@@ -47,6 +47,8 @@ If the command is missing, select **Install MAKO Renderer** in Decky and retry. 
 
 For a slowdown after a long session, replace `--lines 5000` with `--lines 200000`. Collect before starting another game.
 
+For HDR comparisons, the report retains `HDR generation precision` records with requested Flow Scale and actual motion dimensions. These show whether Reduced HDR Precision changed HDR10 motion processing.
+
 ## 4. Restore your settings
 
 Restore the saved Launch Options and any changed Target, or remove the two diagnostics environment variables from Heroic/Lutris.

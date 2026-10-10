@@ -94,7 +94,7 @@ See [Adaptive validation](ADAPTIVE-VALIDATION.md) for scheduling details.
 | `scaling_factor` | `1.5` | Target output-to-source ratio per dimension from 1.0–2.0; the surface, display target, and resource limits may reduce the effective ratio. |
 | `scaling_supersampling` | `false` | Allows supported variable Gamescope surfaces to render beyond the display target before downsampling. |
 | `scaling_sharpness` | `0.8` | Sharpening strength from 0.0–1.0. |
-| `hdr_reduced_precision` | `true` | Trades HDR accuracy for speed using approximate HDR10 interpolation and compact shader/scaling buffers. May add banding, bright-edge artifacts or altered effects. Applies live; off restores full precision. Inert for SDR. See [precision details](HDR-PIPELINE.md#reduced-precision). |
+| `hdr_reduced_precision` | `true` | Trades HDR accuracy for speed using coarser HDR10 motion analysis, approximate interpolation and compact shader/scaling buffers. The HDR10 motion Flow Scale is halved, with a 0.25 floor; source/output resolution and saved Flow Scale are preserved. May add banding, bright-edge artifacts or altered effects. Applies live; off restores full precision. Inert for SDR. See [precision details](HDR-PIPELINE.md#reduced-precision). |
 | `swapchain_image_count_compatibility` | `false` | Preserves the game's requested swapchain image minimum. Use only for games that otherwise fail to start. Requires restart. |
 
 ### Performance and device selection

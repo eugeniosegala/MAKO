@@ -37,7 +37,7 @@ MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0; 
 MAKO Renderer: present diagnostics: operation=launch-environment pid=4242 steam_overlay_preload_filter_requested=1 steam_overlay_preload_removed=2
 MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executable=game.exe wine_executable=game.exe process_name=GameThread profile=mako identification=fallback build=1.0.0 fingerprint=abc123.dirty.12345678 steam_overlay_hook_loaded=0 steam_overlay_vulkan_loaded=0
 MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
-MAKO Renderer: HDR generation precision: reduced_requested=1; model_space=pq-code-values; pq_conversion=0
+MAKO Renderer: HDR generation precision: reduced_requested=1; model_space=pq-code-values; pq_conversion=0; requested_flow_scale=0.8; motion_flow_scale=0.4; motion_width=1024; motion_height=576
 MAKO Renderer: HDR scaling precision: input_format=64; output_format=97; compact_input=1
 MAKO Renderer: HDR shader precision: reduced=1; request_accepted=1
 MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
@@ -353,6 +353,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("HDR scaling precision: input_format=64", result.stdout)
         self.assertIn("HDR shader precision: reduced=1", result.stdout)
         self.assertIn("HDR generation precision: reduced_requested=1", result.stdout)
+        self.assertIn("motion_flow_scale=0.4; motion_width=1024; motion_height=576", result.stdout)
         self.assertIn("nominal_bytes_saved=16384000", result.stdout)
         self.assertIn("initialization failed", result.stdout)
         self.assertIn("render layer active", result.stdout)
@@ -655,6 +656,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("HDR scaling precision: input_format=64", result.stdout)
         self.assertIn("HDR shader precision: reduced=1", result.stdout)
         self.assertIn("HDR generation precision: reduced_requested=1", result.stdout)
+        self.assertIn("motion_flow_scale=0.4; motion_width=1024; motion_height=576", result.stdout)
 
     def test_private_log_is_selected_from_home(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

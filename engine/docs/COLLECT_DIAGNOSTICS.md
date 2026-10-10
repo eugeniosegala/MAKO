@@ -48,6 +48,8 @@ The file appears on your Desktop; Konsole normally prints nothing. If no log is 
 
 For a slowdown after a long session, replace `--lines 5000` with `--lines 200000`. Collect before starting another game.
 
+For HDR comparisons, the report retains `HDR generation precision` records with requested Flow Scale and actual motion dimensions. These show whether Reduced HDR Precision changed HDR10 motion processing.
+
 ## 4. Restore your settings
 
 Restore the original launch settings and remove the two temporary diagnostics variables.

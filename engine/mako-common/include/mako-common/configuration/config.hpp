@@ -253,7 +253,8 @@ namespace ls {
         bool scaling_supersampling{GameConfDefaults::scalingSupersampling};
         /// normalized scaler sharpening strength
         float scaling_sharpness{GameConfDefaults::scalingSharpness};
-        /// Use compact PQ buffers where supported; linear HDR stays floating point.
+        /// Approximate HDR10 interpolation/coarser motion and compact PQ buffers;
+        /// linear HDR generation stays unchanged.
         bool hdr_reduced_precision{GameConfDefaults::hdrReducedPrecision};
         /// pause synthesis at or below a confirmed refresh rate; zero disables it
         uint32_t frame_generation_refresh_threshold{

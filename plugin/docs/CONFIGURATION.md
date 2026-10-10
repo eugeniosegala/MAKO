@@ -134,4 +134,4 @@ For help, see [troubleshooting](TROUBLESHOOTING.md) or [collect diagnostics](COL
 
 In the game profile, keep **Gamescope WSI** off and turn off **Disable HDR (Restart)**, restart the game, then enable HDR in its settings. Restart after changing MAKO’s HDR toggle or switching between HDR and SDR displays.
 
-**Reduced HDR Precision** is on by default; saved choices are preserved. It can improve HDR10 performance at the cost of banding, bright-edge artifacts or altered shader effects. Turn it off for full precision. Changes apply live and may briefly hitch. See the [HDR pipeline](../../engine/docs/HDR-PIPELINE.md) for technical details.
+**Reduced HDR Precision** is on by default; saved choices are preserved. It uses coarser HDR10 motion analysis and approximate interpolation for speed, while retaining full output resolution. It can add moving-edge artifacts, banding or altered shader effects. Turn it off for full precision. Changes apply live and may briefly hitch. See the [HDR pipeline](../../engine/docs/HDR-PIPELINE.md) for technical details.

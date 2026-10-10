@@ -132,9 +132,11 @@ namespace mako::backend {
         /// @param width Width of the images.
         /// @param height Height of the images.
         /// @param encoding Colour encoding of the exchanged images.
-        /// @param flow Motion flow factor.
+        /// @param flow Inverse motion Flow Scale after profile presets (1..4).
         /// @param perf Whether to enable performance mode.
-        /// @param reducedHdrPrecision Approximate HDR10 interpolation in PQ code values.
+        /// @param reducedHdrPrecision Approximate HDR10 interpolation in PQ code values
+        ///        with half-size motion analysis, bounded at quarter Flow Scale.
+        ///        Source/output extents and the selected model/arithmetic stay unchanged.
         ///        scRGB and SDR retain their existing model path.
         ///
         /// @throws backend::error on failure

@@ -280,7 +280,7 @@
   "CONFIG_DISABLE_MAKO_NEXT_LAUNCH": "Desativar o MAKO Renderer no próximo arranque",
   "CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC": "Para diagnóstico: ignora o MAKO Renderer no próximo arranque. Use a Geração de fotogramas acima para ligar ou desligar a geração.",
   "HDR_REDUCED_PRECISION": "Reduced HDR Precision",
-  "HDR_REDUCED_PRECISION_DESC": "Prioritizes speed with approximate HDR10 Frame Generation and compact shader/scaling buffers. May add banding or bright-edge artifacts. Applies live with a brief hitch. Off restores full precision; linear scRGB Frame Generation is unchanged.",
+  "HDR_REDUCED_PRECISION_DESC": "Prioritizes speed with lower-detail HDR10 motion analysis, approximate interpolation and compact shader/scaling buffers. Keeps full output resolution but may add moving-edge artifacts or banding. Applies live with a brief hitch. Off restores full precision; scRGB Frame Generation is unchanged.",
   "CONFIG_DISABLE_HDR_EXPOSURE": "Desativar HDR (Reiniciar)",
   "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "Desative para permitir HDR através da ponte Gamescope do MAKO. Requer saída HDR e HDR ativado no jogo.",
   "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (Reiniciar)",

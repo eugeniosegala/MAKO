@@ -394,16 +394,22 @@ Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<
     const VkExtent2D extent{ width, height };
     const auto& vulkan = this->m_impl->getVulkan();
     const auto before = vulkan.deviceMemorySnapshot();
+    const float modelFlow = generationFlowFactor(encoding, reducedHdrPrecision, flow);
     auto context = std::make_unique<ContextImpl>(*this->m_impl,
         sourceScope, destinationScope, syncScope,
-        extent, encoding, flow, perf, reducedHdrPrecision
+        extent, encoding, modelFlow, perf, reducedHdrPrecision
     );
     if (encoding == FrameEncoding::Hdr10Pq || encoding == FrameEncoding::Hdr10PqPacked ||
             encoding == FrameEncoding::ScRgbLinear) {
         std::clog << "MAKO Renderer: HDR generation precision: reduced_requested="
             << reducedHdrPrecision << "; model_space="
             << (usesReducedHdrGeneration(encoding, reducedHdrPrecision) ? "pq-code-values" : "linear-scrgb")
-            << "; pq_conversion=" << requiresPqConversion(encoding, reducedHdrPrecision) << '\n';
+            << "; pq_conversion=" << requiresPqConversion(encoding, reducedHdrPrecision)
+            << "; requested_flow_scale=" << 1.0F / flow
+            << "; motion_flow_scale=" << 1.0F / modelFlow
+            << "; motion_width=" << static_cast<uint32_t>(static_cast<float>(width) / modelFlow)
+            << "; motion_height=" << static_cast<uint32_t>(static_cast<float>(height) / modelFlow)
+            << '\n';
     }
     const auto after = vulkan.deviceMemorySnapshot();
     const auto contextInternal = memoryDelta(after.internal, before.internal);
