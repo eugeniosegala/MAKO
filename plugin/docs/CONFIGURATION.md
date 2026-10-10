@@ -2,6 +2,8 @@
 
 MAKO Decky saves automatically. Options marked **Restart** need a game restart; **Live Status** shows what is active and any pending changes.
 
+Feature settings require an installed MAKO Renderer. An update notice keeps Frame Generation, Scaling, and Shaders editable; install the bundled update before relying on its new features. Checked toggles show saved settings; **Live Status** reports the running Renderer.
+
 Without live metrics, **Live Status** shows **Off** when Frame Generation and Scaling are both disabled in the current profile and power settings. Otherwise, it keeps the missing-metrics message. Reported live activity takes priority over saved settings that may still need a restart.
 
 ## Quick start
@@ -102,7 +104,7 @@ Keep defaults unless a game needs a change.
 
 | Control | Use it for |
 | --- | --- |
-| **Dynamic Cadence Recovery** | Rechecks games that change native FPS; clears base caps and resets Real Frame Priority. Changing a cap or priority turns Recovery off. |
+| **Dynamic Cadence Recovery** | Off by default. Rechecks games that change native FPS by briefly reducing generated work; these checks can lower output FPS or cause hitches under sustained GPU load. Clears base caps and resets Real Frame Priority. Changing a cap or priority turns Recovery off. |
 | **Cadence Probe Interval** | 0.1–3 seconds between recovery checks; default 2 seconds. Shorter intervals react sooner but can hitch more often. |
 | **Gamescope WSI (Restart)** | Coloured or pixelated motion artifacts in supported 64-bit host Gamescope games. |
 | **Game Swapchain Images (Restart)** | Games that fail to start with MAKO; may reduce generated-frame availability. |

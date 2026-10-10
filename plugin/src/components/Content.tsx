@@ -307,7 +307,6 @@ export function Content() {
             <div hidden={isConfigLoading}>
               <FeatureSettings
                 config={config}
-                disabled={engineUpdateRequired}
                 runtimeState={scalingRuntimeState}
                 profileName={editingProfile}
                 vkBasaltConfigPath={vkBasaltConfigPath}

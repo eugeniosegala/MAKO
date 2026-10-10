@@ -2,8 +2,13 @@ import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { getDefaults } from "../../src/config/configSchema";
+import { EMPTY_RUNTIME_SCALING_UI_STATE } from "../../src/utils/runtimeScalingUtils";
 
-const state = vi.hoisted(() => ({ installed: true, save: vi.fn() }));
+const state = vi.hoisted(() => ({
+  installed: true,
+  updateRequired: false,
+  save: vi.fn(),
+}));
 function pass({ children }: { children: React.ReactNode }) {
   return <div>{children}</div>;
 }
@@ -12,11 +17,92 @@ vi.mock("@decky/ui", () => ({
   PanelSectionRow: pass,
   ButtonItem: pass,
   showModal: vi.fn(),
+  Field: ({
+    label,
+    children,
+  }: {
+    label: React.ReactNode;
+    children: React.ReactNode;
+  }) => (
+    <div>
+      {label}
+      {children}
+    </div>
+  ),
+  ToggleField: ({
+    label,
+    checked,
+    disabled,
+    onChange,
+  }: {
+    label: React.ReactNode;
+    checked: boolean;
+    disabled?: boolean;
+    onChange: (value: boolean) => void;
+  }) => (
+    <button
+      aria-pressed={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    >
+      {label}
+    </button>
+  ),
+  Dropdown: ({
+    rgOptions,
+    selectedOption,
+    disabled,
+    onChange,
+  }: {
+    rgOptions: { data: string | number; label: React.ReactNode }[];
+    selectedOption: string | number;
+    disabled?: boolean;
+    onChange: (option: {
+      data: string | number;
+      label: React.ReactNode;
+    }) => void;
+  }) => (
+    <select
+      value={selectedOption}
+      disabled={disabled}
+      onChange={(event) => {
+        const option = rgOptions.find(
+          (item) => String(item.data) === event.target.value,
+        );
+        if (option) onChange(option);
+      }}
+    >
+      {rgOptions.map((option) => (
+        <option key={option.data} value={option.data}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ),
+  SliderField: ({
+    label,
+    value,
+    disabled,
+    onChange,
+  }: {
+    label: string;
+    value: number;
+    disabled?: boolean;
+    onChange: (value: number) => void;
+  }) => (
+    <input
+      type="range"
+      aria-label={label}
+      value={value}
+      disabled={disabled}
+      onChange={(event) => onChange(Number(event.target.value))}
+    />
+  ),
 }));
 vi.mock("../../src/hooks/useMakoHooks", () => ({
   useInstallationStatus: () => ({
     isInstalled: state.installed,
-    engineUpdateRequired: false,
+    engineUpdateRequired: state.updateRequired,
   }),
   useDllDetection: () => ({
     dllDetected: false,
@@ -24,7 +110,7 @@ vi.mock("../../src/hooks/useMakoHooks", () => ({
     dllDetectionStatus: "missing",
   }),
   useMakoConfig: () => ({ config: getDefaults(), isConfigLoading: false }),
-  useRuntimeScalingStatus: () => ({}),
+  useRuntimeScalingStatus: () => EMPTY_RUNTIME_SCALING_UI_STATE,
 }));
 vi.mock("../../src/hooks/useModelStatus", () => ({
   useModelStatus: () => ({}),
@@ -44,35 +130,39 @@ vi.mock("../../src/hooks/useProfileConfigWriter", () => ({
 vi.mock("../../src/components/InfoVisibility", () => ({
   InfoVisibility: pass,
 }));
-vi.mock("../../src/components/MakoUi", () => ({
+vi.mock("../../src/components/MakoUi", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../src/components/MakoUi")>()),
   MakoButtonTheme: () => null,
   MakoReleaseIdentity: () => null,
+  MakoFocusable: ({
+    children,
+    onActivate: _onActivate,
+    onGamepadFocus: _onGamepadFocus,
+    onGamepadBlur: _onGamepadBlur,
+    noFocusRing: _noFocusRing,
+    "flow-children": _flowChildren,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement> & {
+    onActivate?: () => void;
+    onGamepadFocus?: () => void;
+    onGamepadBlur?: () => void;
+    noFocusRing?: boolean;
+    "flow-children"?: string;
+  }) => <div {...props}>{children}</div>,
 }));
 vi.mock("../../src/components/ContentNotices", () => ({
   ContentNotices: ({
     modelStatus,
+    engineUpdateRequired,
   }: {
     modelStatus: { dllMissing: boolean };
-  }) =>
-    modelStatus.dllMissing ? (
-      <div role="alert">MAKO Scaler and Shaders are still available</div>
-    ) : null,
-}));
-vi.mock("../../src/components/FeatureSettings", () => ({
-  FeatureSettings: ({
-    onConfigChange,
-  }: {
-    onConfigChange: (name: string, value: boolean | string) => void;
+    engineUpdateRequired: boolean;
   }) => (
     <>
-      <button onClick={() => onConfigChange("scaling_enabled", true)}>
-        Enable Scaling
-      </button>
-      <button
-        onClick={() => onConfigChange("external_vulkan_layer", "vkbasalt")}
-      >
-        Enable Shaders
-      </button>
+      {modelStatus.dllMissing && (
+        <div role="alert">MAKO Scaler and Shaders are still available</div>
+      )}
+      {engineUpdateRequired && <div>MAKO Renderer update required</div>}
     </>
   ),
 }));
@@ -93,6 +183,7 @@ vi.mock("../../src/components/RemotePlaySection", () => ({
 }));
 vi.mock("../../src/components/ConfigurationSection", () => ({
   ConfigurationSection: () => null,
+  FrameGenerationConfigurationSection: () => null,
 }));
 vi.mock("../../src/components/UsageInstructions", () => ({
   UsageInstructions: () => null,
@@ -110,6 +201,10 @@ vi.mock("../../src/components/FlatpaksModal", () => ({
   FlatpaksModal: () => null,
 }));
 vi.mock("../../src/api/makoApi", () => ({ addProfileShader: vi.fn() }));
+vi.mock("@decky/api", () => ({
+  FileSelectionType: { FILE: 0 },
+  openFilePicker: vi.fn(),
+}));
 vi.mock("../../src/i18n/i18n", () => ({
   default: (_key: string, fallback: string) => fallback,
 }));
@@ -124,22 +219,59 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   state.installed = true;
+  state.updateRequired = false;
   state.save.mockClear();
 });
 
-test("missing Lossless Scaling keeps installed Renderer profiles and feature edits accessible", () => {
-  render(<Content />);
-  expect(screen.getByRole("alert")).toBeTruthy();
-  expect(screen.getByText("Profile editor")).toBeTruthy();
-  fireEvent.click(screen.getByText("Enable Scaling"));
-  fireEvent.click(screen.getByText("Enable Shaders"));
-  expect(state.save).toHaveBeenCalledWith("scaling_enabled", true);
-  expect(state.save).toHaveBeenCalledWith("external_vulkan_layer", "vkbasalt");
-});
+test.each([false, true])(
+  "installed Renderer keeps all feature edits accessible with update required=%s and missing Lossless Scaling",
+  (updateRequired) => {
+    state.updateRequired = updateRequired;
+    render(<Content />);
+    expect(screen.getByRole("alert")).toBeTruthy();
+    expect(screen.getByText("Profile editor")).toBeTruthy();
+    expect(Boolean(screen.queryByText("MAKO Renderer update required"))).toBe(
+      updateRequired,
+    );
+    const frameGeneration = screen.getByRole("button", {
+      name: "Enable Frame-gen (Restart)",
+    });
+    expect((frameGeneration as HTMLButtonElement).disabled).toBe(false);
+    expect(frameGeneration.getAttribute("aria-pressed")).toBe("true");
+    expect(state.save).not.toHaveBeenCalled();
+    fireEvent.click(frameGeneration);
+    expect(state.save).toHaveBeenCalledWith(
+      "frame_generation_provisioned",
+      false,
+    );
+
+    fireEvent.click(screen.getByRole("tab", { name: "Scaling" }));
+    const scaling = screen.getByRole("button", {
+      name: "Enable Scaling (Restart) Experimental",
+    });
+    expect((scaling as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(scaling);
+    expect(state.save).toHaveBeenCalledWith("scaling_enabled", true);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Shaders" }));
+    const shaders = screen.getByRole("button", {
+      name: "Enable Shaders (Restart) Experimental",
+    });
+    expect((shaders as HTMLButtonElement).disabled).toBe(false);
+    fireEvent.click(shaders);
+    expect(state.save).toHaveBeenCalledWith(
+      "external_vulkan_layer",
+      "vkbasalt",
+    );
+  },
+);
 
 test("the profile gate still requires MAKO Renderer itself", () => {
   state.installed = false;
   render(<Content />);
   expect(screen.queryByText("Profile editor")).toBeNull();
-  expect(screen.queryByText("Enable Scaling")).toBeNull();
+  expect(
+    screen.queryByRole("tablist", { name: "Image Processing" }),
+  ).toBeNull();
+  expect(state.save).not.toHaveBeenCalled();
 });

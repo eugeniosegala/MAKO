@@ -497,7 +497,7 @@ describe("Scaling controls", () => {
     );
   });
 
-  test("locks the full group until the installed Renderer is current", () => {
+  test("honours an explicit control lock without reporting a surface limitation", () => {
     window.SP_REACT = React;
 
     const { container } = render(

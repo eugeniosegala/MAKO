@@ -14,7 +14,6 @@ import { DEFAULT_PROFILE_NAME } from "../config/configSchema";
 import { ModalityTabs, type ModalityId } from "./ModalityTabs";
 
 interface FeatureSettingsProps extends ConfigurationEditorProps {
-  disabled?: boolean;
   runtimeState: RuntimeScalingUiState;
   profileName: string;
   vkBasaltConfigPath: string;
@@ -26,7 +25,6 @@ interface FeatureSettingsProps extends ConfigurationEditorProps {
 
 export function FeatureSettings({
   config,
-  disabled = false,
   runtimeState,
   profileName,
   vkBasaltConfigPath,
@@ -88,7 +86,6 @@ export function FeatureSettings({
         {activeModality === "spatial" && (
           <ScalingControl
             config={config}
-            disabled={disabled}
             runtimeActivationSupported={runtimeState.scalingActivationSupported}
             runtimeInactiveReason={runtimeState.inactiveReason}
             runtimeFactorCeiling={runtimeState.nonSupersamplingFactorCeiling}

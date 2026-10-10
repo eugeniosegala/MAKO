@@ -92,7 +92,7 @@ Edit advanced shader parameters in the file shown below these controls. MAKO kee
 Under **Compatibility**, keep defaults unless a game needs a change:
 
 - **Auto-disable Frame Generation by Refresh Rate / Refresh Rate Threshold:** pauses generation and Adaptive caps at or below the chosen Gamescope refresh; a manual Base FPS Cap remains.
-- **Dynamic Cadence Recovery:** rechecks games that change native FPS; clears base caps and resets Real Frame Priority. Enabling a cap or changing priority turns Recovery off.
+- **Dynamic Cadence Recovery:** off by default. Rechecks games that change native FPS by briefly reducing generated work; these checks can lower output FPS or cause hitches under sustained GPU load. Clears base caps and resets Real Frame Priority. Enabling a cap or changing priority turns Recovery off.
 - **Cadence Probe Interval:** 0.1–3 seconds between recovery checks; default 2 seconds. Shorter intervals react sooner but can hitch more often.
 - **Game Swapchain Images (Restart):** may help games that fail to start, with less generated-frame headroom.
 
