@@ -31,7 +31,7 @@
 <p align="center">
   <br />
   <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat-square&amp;label=total%20downloads&amp;color=0f766e" width="200" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
-  <br /><br />
+  <br />
 </p>
 
 ## Community
