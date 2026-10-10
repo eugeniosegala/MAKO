@@ -36,6 +36,9 @@ describe("i18n runtime", () => {
     expect(normalizeLanguage("de_DE")).toBe("de");
     expect(normalizeLanguage("de-AT")).toBe("de");
     expect(normalizeLanguage("de-CH")).toBe("de");
+    expect(normalizeLanguage(" Russian ")).toBe("ru");
+    expect(normalizeLanguage("ru_RU")).toBe("ru");
+    expect(normalizeLanguage("ru-BY")).toBe("ru");
   });
 
   it("reports localized language names with a normalized fallback", () => {
@@ -44,6 +47,7 @@ describe("i18n runtime", () => {
     expect(getLanguageName("brazilian")).toBe("Português (Brasil)");
     expect(getLanguageName("ukrainian")).toBe("Українська");
     expect(getLanguageName("german")).toBe("Deutsch");
+    expect(getLanguageName("russian")).toBe("Русский");
   });
 
   it("uses the selected dictionary and replaces named placeholders", () => {
@@ -102,6 +106,39 @@ describe("i18n runtime", () => {
         ),
       ).toBe(
         "Angefordert: 2×; durch die Speichersicherheitsgrenze dieser GPU auf 1.5× begrenzt.",
+      );
+      expect(t("NOT_A_REAL_KEY", "Safe fallback")).toBe("Safe fallback");
+    },
+  );
+
+  it.each(["russian", "ru", "ru_RU", "ru-BY"])(
+    "uses Russian translations and placeholders for %s",
+    (locale) => {
+      setSteamLanguage(locale);
+      expect(getCurrentLanguage()).toBe("ru");
+      expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
+        "Генерация кадров",
+      );
+      expect(t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR (Restart)")).toBe(
+        "Отключить HDR (требуется перезапуск)",
+      );
+      expect(
+        t(
+          "FLATPAK_STATUS_EXTENSION_READY",
+          "Prepared — MAKO {version} extension installed",
+          {
+            version: "26.08",
+          },
+        ),
+      ).toBe("Подготовлено — расширение MAKO 26.08 установлено");
+      expect(
+        t(
+          "LIVE_STATUS_SCALING_MEMORY_CONSTRAINED",
+          "Requested {requested}×; limited to {effective}× by this GPU's memory safety limit.",
+          { requested: 2, effective: 1.5 },
+        ),
+      ).toBe(
+        "Запрошено 2×; ограничено до 1.5× из соображений безопасности памяти GPU.",
       );
       expect(t("NOT_A_REAL_KEY", "Safe fallback")).toBe("Safe fallback");
     },

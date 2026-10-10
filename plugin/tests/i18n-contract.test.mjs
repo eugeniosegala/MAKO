@@ -178,6 +178,7 @@ test("uses localized restart markers only for process-start controls", async () 
     es: "(Reiniciar)",
     ja: "（再起動）",
     ko: "(재시작)",
+    ru: "(требуется перезапуск)",
     "pt-BR": "(Reiniciar)",
     "pt-PT": "(Reiniciar)",
     uk: "(перезапуск)",

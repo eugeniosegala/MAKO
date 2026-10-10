@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+import re
 import unittest
 
 
@@ -69,6 +70,12 @@ class LocalizationLanguageContractTests(unittest.TestCase):
                         for value in catalog.values()
                     )
                 )
+                for key, value in catalog.items():
+                    self.assertEqual(
+                        sorted(re.findall(r"\{[a-z][a-z0-9_]*\}", value)),
+                        sorted(re.findall(r"\{[a-z][a-z0-9_]*\}", renderer["catalogs"]["en"][key])),
+                        f"{language}.{key} changed named placeholders",
+                    )
 
     def test_steam_aliases_resolve_only_to_advertised_languages(self):
         decky_metadata = json.loads(
@@ -86,6 +93,7 @@ class LocalizationLanguageContractTests(unittest.TestCase):
         self.assertEqual(steam_aliases["brazilian"], "pt-BR")
         self.assertEqual(steam_aliases["portuguese"], "pt-PT")
         self.assertEqual(steam_aliases["german"], "de")
+        self.assertEqual(steam_aliases["russian"], "ru")
 
     def test_shared_control_names_agree_across_independent_catalogs(self):
         renderer = json.loads(
@@ -101,7 +109,7 @@ class LocalizationLanguageContractTests(unittest.TestCase):
             "SCALING_SUPERSAMPLING": "scalingSupersampling",
         }
 
-        for language in ("ja", "de"):
+        for language in ("ja", "de", "ru"):
             decky = json.loads(
                 (DECKY_I18N_ROOT / f"{language}.json").read_text(encoding="utf-8")
             )

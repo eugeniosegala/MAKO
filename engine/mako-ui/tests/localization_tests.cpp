@@ -28,7 +28,7 @@ QByteArray catalog_data() {
 void test_locale_selection(const QByteArray& catalog, const QString& temporary_path) {
     mako::ui::Localization brazil(catalog, temporary_path + "/brazil.ini", QLocale("pt_BR"));
     require(brazil.language() == QStringLiteral("pt-BR"), "Brazilian Portuguese was not detected");
-    require(brazil.language_names().size() == 9, "expected nine selectable languages");
+    require(brazil.language_names().size() == 10, "expected ten selectable languages");
     require(brazil.strings().value(QStringLiteral("language")).toString() == QStringLiteral("Idioma"),
             "Brazilian Portuguese catalog was not selected");
 
@@ -57,6 +57,13 @@ void test_locale_selection(const QByteArray& catalog, const QString& temporary_p
     require(german.strings().value(QStringLiteral("language")).toString() == QStringLiteral("Sprache"),
             "German catalog was not selected");
 
+    for (const QString& locale : {QStringLiteral("ru_RU"), QStringLiteral("ru_BY")}) {
+        mako::ui::Localization russian(catalog, temporary_path + "/" + locale + ".ini", QLocale(locale));
+        require(russian.language() == QStringLiteral("ru"), "Russian was not detected");
+        require(russian.strings().value(QStringLiteral("language")).toString() == QStringLiteral("Язык"),
+                "Russian catalog was not selected");
+    }
+
     mako::ui::Localization fallback(catalog, temporary_path + "/fallback.ini", QLocale("fi_FI"));
     require(fallback.language() == QStringLiteral("en"), "unsupported locales must use English");
 }
@@ -73,6 +80,14 @@ void test_persistence(const QByteArray& catalog, const QString& settings_file) {
 
     mako::ui::Localization restored(catalog, settings_file, QLocale("en_US"));
     require(restored.language() == QStringLiteral("es"), "language selection was not persisted");
+
+    restored.set_language_index(restored.language_names().indexOf(QStringLiteral("Русский")));
+    require(restored.language() == QStringLiteral("ru"), "language selector did not select Russian");
+    mako::ui::Localization russian(catalog, settings_file, QLocale("en_US"));
+    require(russian.language() == QStringLiteral("ru"), "Russian selection was not persisted");
+    require(russian.strings().value(QStringLiteral("realFramePriorityOption")).toString() ==
+            QStringLiteral("{priority} — до {cap} реальных FPS ({percent}% от цели)"),
+            "Russian priority placeholders were lost");
 }
 
 void test_invalid_persisted_language(const QByteArray& catalog, const QString& settings_file) {
@@ -116,6 +131,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("uk"),
         QStringLiteral("zh"),
         QStringLiteral("de"),
+        QStringLiteral("ru"),
     };
     const QStringList restart_markers{
         QStringLiteral("(Restart)"),
@@ -127,6 +143,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("(перезапуск)"),
         QStringLiteral("（重启）"),
         QStringLiteral("(Neustart)"),
+        QStringLiteral("(требуется перезапуск)"),
     };
     const QStringList scaling_keys{
         QStringLiteral("scalingSettings"),

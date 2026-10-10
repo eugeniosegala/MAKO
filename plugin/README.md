@@ -51,7 +51,7 @@ When updating, follow the [update guide](../README.md#updating-mako-decky) to re
 
 ## Panel display
 
-MAKO Decky follows Steam's interface language, including German, and falls back to English for unsupported languages.
+MAKO Decky follows Steam's interface language, including German and Russian, and falls back to English for unsupported languages.
 
 Press **R1** or select **Hide info** to hide explanations while keeping controls, status, warnings, recovery errors, and version information visible. Press **R1** again or select **Show info** to restore them. MAKO Decky remembers this preference independently of game profiles and collapsed settings sections.
 

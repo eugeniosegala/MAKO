@@ -108,6 +108,9 @@ QString Localization::language_for_locale(const QLocale& locale) {
     if (locale.language() == QLocale::German) {
         return QStringLiteral("de");
     }
+    if (locale.language() == QLocale::Russian) {
+        return QStringLiteral("ru");
+    }
     return QString::fromLatin1(DEFAULT_LANGUAGE);
 }
 

@@ -110,7 +110,7 @@ For 1920×1080 output at 1.5x, aim for a 1280×720 input. Raising the factor wit
 
 Some live changes rebuild resources and may briefly hitch. See [Runtime transitions](RUNTIME-TRANSITIONS.md) for details.
 
-**Interface Settings > Language** changes the Qt interface language. The first launch follows your system language, with English as the fallback.
+**Interface Settings > Language** changes the Qt interface language, including German and Russian. The first launch follows your system language, with English as the fallback. Your selected language is saved for later launches.
 
 ## Launch Settings
 
