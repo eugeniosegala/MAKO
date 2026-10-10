@@ -23,16 +23,14 @@
 
 ## Downloads
 
+<p align="center">
+  <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat-square&amp;label=total%20downloads&amp;color=0f766e" width="200" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
+</p>
+
 | Component | Recommended for | Releases |
 | --- | --- | --- |
 | **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users (bundles MAKO Renderer) | <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">Latest MAKO Decky release (ZIP under Assets)</a> |
 | **MAKO Renderer** | Direct Vulkan-layer installation without Decky | <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v4.0.0" target="_blank" rel="noopener noreferrer">Latest MAKO Renderer release (Linux archive under Assets)</a> |
-
-<p align="center">
-  <br />
-  <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat-square&amp;label=total%20downloads&amp;color=0f766e" width="200" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
-  <br />
-</p>
 
 ## Community
 
