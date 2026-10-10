@@ -245,7 +245,8 @@ namespace mako::layer {
                 ? profile.scaling_supersampling : false,
             .scalingSharpness = scalingActive
                 ? profile.scaling_sharpness : 0.5F,
-            .hdrReducedPrecision = scalingActive && profile.hdr_reduced_precision,
+            .hdrReducedPrecision = (scalingActive || profile.frame_generation_provisioned) &&
+                profile.hdr_reduced_precision,
             .effectiveFlowScale = ls::effectiveFlowScale(profile),
             .effectivePerformanceMode = ls::effectivePerformanceMode(profile),
             .requiredGeneratedFrameCapacity =
@@ -824,7 +825,8 @@ namespace mako::layer {
             const bool spatialScalingEffectiveExtentUnchanged = false,
             const bool spatialSupersamplingEffectiveExtentUnchanged = false,
             const std::optional<uint32_t> displayRefreshHz = std::nullopt,
-            const bool hdrScalingActive = false) {
+            const bool hdrScalingActive = false,
+            const bool hdrFrameGenerationPrecisionChanged = false) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
@@ -855,11 +857,11 @@ namespace mako::layer {
             processRestartDeferred = true;
         }
 
-        const bool frameGenerationBackendChanged =
-            current.ultra_performance == next.ultra_performance && (
+        const bool frameGenerationBackendChanged = hdrFrameGenerationPrecisionChanged ||
+            (current.ultra_performance == next.ultra_performance && (
             ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||
             ls::effectivePerformanceMode(current) !=
-                ls::effectivePerformanceMode(next));
+                ls::effectivePerformanceMode(next)));
         const bool generatedCapacityExceeded =
             generatedFrameCapacityForActivePolicy(next) >
                 generatedFrameCapacity;
@@ -942,6 +944,10 @@ namespace mako::layer {
         if (ls::effectivePerformanceMode(current) !=
                 ls::effectivePerformanceMode(applied)) {
             applied.performance_mode = current.performance_mode;
+            swapchainRecreationDeferred |= !frameGenerationPrivateRebuild;
+        }
+        if (hdrFrameGenerationPrecisionChanged) {
+            applied.hdr_reduced_precision = current.hdr_reduced_precision;
             swapchainRecreationDeferred |= !frameGenerationPrivateRebuild;
         }
         if (current.pacing != next.pacing) {

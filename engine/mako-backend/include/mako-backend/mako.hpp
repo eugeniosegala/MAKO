@@ -134,6 +134,8 @@ namespace mako::backend {
         /// @param encoding Colour encoding of the exchanged images.
         /// @param flow Motion flow factor.
         /// @param perf Whether to enable performance mode.
+        /// @param reducedHdrPrecision Approximate HDR10 interpolation in PQ code values.
+        ///        scRGB and SDR retain their existing model path.
         ///
         /// @throws backend::error on failure
         ///
@@ -142,7 +144,8 @@ namespace mako::backend {
             const std::vector<int>& destFds,
             int syncFd,
             uint32_t width, uint32_t height,
-            FrameEncoding encoding, float flow, bool perf
+            FrameEncoding encoding, float flow, bool perf,
+            bool reducedHdrPrecision = false
         );
 
         /// Return whether the backend device can import and write the packed

@@ -131,10 +131,13 @@ namespace mako::layer {
         /// Steam UI mapping changes; the protocol mode covers one commit only.
         /// Retirement requests swapchain recreation, not surface destruction.
         /// Callers must complete rejected-present queue operations on failure.
+        /// Managed outputs share their source frame serial so GPU readiness
+        /// observes one source batch, including all generated/real outputs.
         [[nodiscard]] VkResult preparePresent(
             VkSurfaceKHR surface, VkSwapchainKHR swapchain,
             double outputFps = 0.0, uint32_t refreshHz = 0,
-            size_t outputBatchSize = 1, bool generationEnabled = false);
+            size_t outputBatchSize = 1, bool generationEnabled = false,
+            std::optional<uint64_t> sourceFrameSerial = std::nullopt);
         [[nodiscard]] bool owns(VkSurfaceKHR surface) const;
         [[nodiscard]] bool hdrEnabled() const;
 

@@ -98,6 +98,43 @@ int main() {
                 !update.appliedProfile.hdr_reduced_precision,
             "Precision cannot bypass a real extent change that needs recreation");
     }
+    {
+        ls::GameConf full;
+        auto compact = full;
+        compact.hdr_reduced_precision = true;
+        auto plan = planProfileUpdate(full, compact, 4, true, false,
+            true, true, false, false, 120, true, true);
+        expect(plan.decision.frameGenerationPrivateRebuild &&
+                !plan.appliedProfile.hdr_reduced_precision &&
+                !plan.decision.swapchainRecreationDeferred,
+            "HDR10 FG precision waits for private resources without recreating WSI");
+        plan = planProfileUpdate(full, compact, 4, true, false,
+            false, true, false, false, 120, true, true);
+        expect(plan.decision.swapchainRecreationDeferred &&
+                !plan.appliedProfile.hdr_reduced_precision,
+            "Unavailable private replacement must not pretend precision applied");
+        full.scaling_enabled = compact.scaling_enabled = true;
+        plan = planProfileUpdate(full, compact, 4, true, true,
+            true, true, false, false, 120, true, true);
+        expect(plan.decision.spatialScalingLiveRebuild && plan.decision.frameGenerationPrivateRebuild,
+            "Both HDR10 resource owners must prepare their precision change");
+        // The scaler may finish first. Track FG against its committed resource
+        // setting, not the profile value already applied by the scaler.
+        compact.base_fps_cap = 40;
+        plan = planProfileUpdate(compact, compact, 4, true, true,
+            true, true, false, false, 120, true, true);
+        expect(plan.decision.frameGenerationPrivateRebuild &&
+                !plan.decision.spatialScalingLiveRebuild && plan.appliedProfile.base_fps_cap == 40,
+            "An independent edit cannot cancel FG precision after the scaler commits");
+        plan = planProfileUpdate(full, full, 4, true, true,
+            true, true, false, false, 120, true, true);
+        expect(plan.decision.frameGenerationPrivateRebuild,
+            "Reverting after FG commits must restore FG even if scaler never committed");
+        plan = planProfileUpdate(compact, compact, 4, true, true,
+            true, true, false, false, 120, true, false);
+        expect(!plan.decision.frameGenerationPrivateRebuild && !plan.decision.spatialScalingLiveRebuild,
+            "Repeated settled HDR precision requests must allocate nothing");
+    }
     const auto resolveDisplayTarget = [](const ls::GameConf& applied,
             const ls::GameConf& requested, std::optional<uint32_t> refresh) {
         return planProfileUpdate(applied, requested, 3, true, false,

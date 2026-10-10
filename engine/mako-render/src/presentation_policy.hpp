@@ -887,6 +887,10 @@ namespace mako::layer {
     /// Spaces the private bridge's compositor commits without waiting for a
     /// lower Wayland FIFO callback. Allow at least two refresh periods or one
     /// admitted output batch for asynchronous generated work to become ready.
+    /// Isolated-bridge source observations extend this to at least three
+    /// refreshes, or the recent source-batch interval plus one refresh. A
+    /// GPU-bound source also reserves its output-budget overrun, capped at
+    /// one extra refresh; on-time sources need no additional allowance.
     /// A future deadline alone is not GPU-readiness proof: shortening this
     /// lead can let both outputs become ready after their deadlines and be
     /// coalesced by the compositor, even with healthy present-call counts.
@@ -909,6 +913,31 @@ namespace mako::layer {
             return std::isfinite(fps) && fps >= 1.0 && fps <= 1000.0;
         }
 
+        /// The isolated bridge can enqueue outputs before asynchronous GPU
+        /// work finishes. Observe each source batch once, not each generated
+        /// output. The shorter of the last two intervals extends readiness
+        /// without letting a lone CPU hitch inflate an established estimate.
+        /// Loading stalls reset this estimate without discarding queued slots.
+        void observeSourceBatch(const TimePoint now, const uint64_t serial) {
+            if (this->lastBatchSerial == serial)
+                return;
+            this->lastBatchSerial = serial;
+            const auto elapsed = this->lastBatchAt
+                ? now - *this->lastBatchAt : Clock::duration::zero();
+            this->lastBatchAt = now;
+            if (elapsed > Clock::duration::zero() &&
+                    elapsed <= std::chrono::milliseconds(100)) {
+                this->batchInterval = std::min(elapsed,
+                    this->previousBatchInterval.value_or(elapsed));
+                this->previousBatchInterval = elapsed;
+                this->sourceIntervals = std::min(this->sourceIntervals + 1, 3u);
+            } else {
+                this->batchInterval = Clock::duration::zero();
+                this->previousBatchInterval.reset();
+                this->sourceIntervals = 0;
+            }
+        }
+
         [[nodiscard]] std::optional<Slot> schedule(const TimePoint now,
                 const double outputFps, const double refreshFps,
                 const size_t outputBatchSize = 1,
@@ -923,14 +952,32 @@ namespace mako::layer {
             };
             const auto refreshPeriod = period(refreshFps);
             const auto interval = period(std::min(outputFps, refreshFps));
+            const auto batchDuration = interval * static_cast<int64_t>(outputBatchSize);
+            const auto sourceOverrun = std::max(Clock::duration::zero(),
+                this->batchInterval - batchDuration);
+            // The first interval can be optimistic while the GPU queue fills.
+            // Keep one startup refresh until both retained intervals follow
+            // that first interval. The same bounded priming follows stalls
+            // and live re-enabling; it does not delay explicit FG-off output.
+            const auto minimumReadiness =
+                (this->sourceIntervals < 3 ? 4 : 3) * refreshPeriod;
+            const auto readiness = this->lastBatchSerial
+                ? std::max(minimumReadiness, this->batchInterval + refreshPeriod +
+                    std::min(refreshPeriod, sourceOverrun))
+                : 2 * refreshPeriod;
             const auto lead = generationEnabled
-                ? std::max(2 * refreshPeriod,
-                    interval * static_cast<int64_t>(outputBatchSize))
+                ? std::max(readiness, batchDuration)
                 : Clock::duration::zero();
             const auto next = this->lastPresentAt
                 ? *this->lastPresentAt + interval : now;
             const auto presentAt = std::max(now + lead, next);
             this->lastPresentAt = presentAt;
+            if (!generationEnabled) {
+                this->lastBatchAt.reset();
+                this->previousBatchInterval.reset();
+                this->batchInterval = Clock::duration::zero();
+                this->sourceIntervals = 0;
+            }
             return Slot{
                 .submitAt = std::max(now, presentAt - lead - refreshPeriod),
                 .presentAt = presentAt,
@@ -939,6 +986,11 @@ namespace mako::layer {
 
     private:
         std::optional<TimePoint> lastPresentAt;
+        std::optional<uint64_t> lastBatchSerial;
+        std::optional<TimePoint> lastBatchAt;
+        std::optional<Clock::duration> previousBatchInterval;
+        Clock::duration batchInterval{};
+        unsigned sourceIntervals{};
     };
 
     /// Limits application presents before frame-generation policy observes

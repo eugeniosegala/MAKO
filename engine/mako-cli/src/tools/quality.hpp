@@ -11,6 +11,9 @@ namespace mako::cli::quality {
 
     /// options for the "quality-regression" command
     struct Options {
+        bool hdr10{false};
+        bool hdr_reduced_precision{false};
+        float hdr_white_nits{203.0F};
         std::optional<std::string> dll;
         bool allow_fp16{true};
         std::optional<std::string> gpu;

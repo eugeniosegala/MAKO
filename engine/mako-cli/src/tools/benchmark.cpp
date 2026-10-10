@@ -94,7 +94,8 @@ namespace {
         }
         std::cerr << std::fixed << std::setprecision(9)
             << "MAKO Renderer: benchmark-profile operation=summary schema=2 encoding="
-            << (opts.profile_hdr10 ? "hdr10-pq-packed" : "sdr-8-bit") << " samples=" << opts.profile_samples
+            << (opts.profile_hdr_reduced_precision ? "hdr10-pq-approximate" :
+                (opts.profile_hdr10 ? "hdr10-pq-packed" : "sdr-8-bit")) << " samples=" << opts.profile_samples
             << " warmup=" << opts.profile_warmup << " outputs=" << outputs
             << " timestamp_bits=" << result.timestampValidBits
             << " timestamp_period_ns=" << result.timestampPeriodNs << '\n';
@@ -140,6 +141,8 @@ int benchmark::run(const Options& opts, const i18n::Language language) {
         if (opts.profile_samples < 1 || opts.profile_samples > 10000 ||
                 opts.profile_warmup < 6 || opts.profile_warmup > 10000)
             throw ls::error("Invalid frame-profile sample or warm-up count");
+        if (opts.profile_hdr_reduced_precision && !opts.profile_hdr10)
+            throw ls::error("Reduced HDR precision profiling requires --profile-hdr10");
         if (opts.profile_hdr10 && !opts.profile)
             throw ls::error("HDR10 inputs require diagnostic frame profiling");
         const VkExtent2D extent{
@@ -228,7 +231,7 @@ int benchmark::run(const Options& opts, const i18n::Language language) {
             (destinationScope.release(), destfds),
             (syncScope.release(), syncfd), extent.width, extent.height,
             opts.profile_hdr10 ? mako::backend::FrameEncoding::Hdr10PqPacked : mako::backend::FrameEncoding::Sdr8,
-            1.0F / opts.flow, opts.performance_mode
+            1.0F / opts.flow, opts.performance_mode, opts.profile_hdr_reduced_precision
         );
 
         // Defined inputs belong outside the timed capacity loop. This remains a

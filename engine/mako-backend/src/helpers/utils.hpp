@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -37,6 +38,7 @@ namespace mako::backend {
         VkExtent2D sourceExtent;
         VkExtent2D flowExtent;
 
+        std::optional<vk::Shader> packedPqOutputShader; //!< context-only approximate PQ output
         bool highPrecision; //!< model output is backed by an rgba16f image
         bool hdr; //!< model constants select linear HDR/scRGB semantics
         float flow;

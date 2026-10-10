@@ -9,6 +9,10 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat-square&amp;label=total%20downloads&amp;color=0f766e" width="250" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
+</p>
+
+<p align="center">
   <a href="https://discord.gg/NAVkyCq7Rc" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/Discord-join-5865F2?style=flat-square&amp;logo=discord&amp;logoColor=white" alt="Join the MAKO Discord community" /></a>
   <a href="https://github.com/eugeniosegala/MAKO/actions/workflows/tests.yml" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/actions/workflow/status/eugeniosegala/MAKO/tests.yml?branch=main&amp;style=flat-square&amp;label=tests" alt="Tests status" /></a>
   <a href="LICENSE.md" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-0f766e?style=flat-square" alt="GPL-3.0-or-later license" /></a>
@@ -42,10 +46,10 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 
 <p align="center">
   <br />
-  <a href="plugin/docs/CONFIGURATION.md#shaders"><img src="assets/features/shaders.webp" width="100" align="middle" alt="Shaders" /></a>
-  <a href="plugin/docs/CONFIGURATION.md#spatial-scaling"><img src="assets/features/scaling.webp" width="100" align="middle" alt="Scaling" /></a>
-  <a href="plugin/docs/CONFIGURATION.md#hdr-through-the-isolated-gamescope-bridge"><img src="assets/features/hdr.webp" width="100" align="middle" alt="Experimental HDR" /></a>
   <a href="plugin/docs/CONFIGURATION.md#frame-generation"><img src="assets/features/adaptive-frame-generation.webp" width="100" align="middle" alt="Adaptive Frame Generation" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#spatial-scaling"><img src="assets/features/scaling.webp" width="100" align="middle" alt="Scaling" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#shaders"><img src="assets/features/shaders.webp" width="100" align="middle" alt="Shaders" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#hdr-through-the-isolated-gamescope-bridge"><img src="assets/features/hdr.webp" width="100" align="middle" alt="Experimental HDR" /></a>
   <br /><br />
 </p>
 

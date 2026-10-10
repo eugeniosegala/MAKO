@@ -433,7 +433,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                     generationExtent.width, generationExtent.height,
                     this->colorPipeline.encoding,
                     1.0F / ls::effectiveFlowScale(this->profile),
-                    ls::effectivePerformanceMode(this->profile)
+                    ls::effectivePerformanceMode(this->profile),
+                    this->profile.hdr_reduced_precision
                 )),
                 [backend](ls::R<backend::Context>& ctx) {
                     backend->closeContext(ctx);
@@ -444,6 +445,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             // combinations where destroying it during layer unload is unsafe.
             // This is process-lifetime retention, not active GPU work; see the
             // backend API contract before changing the teardown policy.
+            this->frameGenerationHdrReducedPrecision = this->profile.hdr_reduced_precision;
             backend::makeLeaking();
         } catch (const std::exception& e) {
             throw ls::error("failed to create swapchain context", e);

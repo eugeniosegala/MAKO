@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "shader_registry.hpp"
+#include "spirv_image_format.hpp"
 #include "../shaders/color_conversion_spirv.hpp"
 #include "model_resource_validation.hpp"
 #include "lsfg_shader_set.hpp"
@@ -15,6 +16,7 @@
 #include <span>
 #include <string>
 #include <vector>
+#include <utility>
 
 using namespace mako;
 using namespace mako::backend;
@@ -49,48 +51,7 @@ namespace {
             contract.uniformBuffers, contract.samplers
         );
     }
-    /// patch the generate shader
-    void patchGenerateShader(std::vector<uint8_t>& data, bool hdr) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wunknown-warning-option"
-#pragma clang diagnostic ignored "-Wunsafe-buffer-usage-in-container"
-        auto* _ptr = data.data();
-        const std::span<uint32_t> words(
-            reinterpret_cast<uint32_t*>(_ptr),
-            data.size() / sizeof(uint32_t)
-        );
-#pragma clang diagnostic pop
 
-        const uint16_t SpvOpCapability = 17;
-        const uint16_t SpvOpTypeImage = 25;
-        const uint32_t SpvCapabilityStorageImageWriteWithoutFormat = 56;
-        const uint32_t SpvCapabilityShader = 1;
-        const uint32_t SpvImageFormatRgba16f = 2;
-        const uint32_t SpvImageFormatRgba8 = 4;
-
-        for (size_t i = 5; i < words.size();) {
-            const uint32_t& word = words[i]; // NOLINT ([]-usage)
-            const uint16_t wc = (word >> 16);
-            const uint16_t op = word & 0xFFFF;
-
-            // remove write without format capability
-            if (op == SpvOpCapability && wc >= 2) {
-                uint32_t& cap = words[i + 1]; // NOLINT ([]-usage)
-                if (cap == SpvCapabilityStorageImageWriteWithoutFormat)
-                    cap = SpvCapabilityShader;
-            }
-
-            // patch format in image instructions
-            if (op == SpvOpTypeImage && wc >= 9) {
-                const uint32_t sampled = words[i + 7]; // NOLINT ([]-usage)
-                if (sampled == 2)
-                    words[i + 8] = // NOLINT ([]-usage)
-                        hdr ? SpvImageFormatRgba16f : SpvImageFormatRgba8;
-            }
-
-            i += wc ? wc : 1;
-        }
-    }
 }
 
 ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
@@ -102,8 +63,10 @@ ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
     // patch the generate shader
     std::vector<uint8_t> generate_data = getShaderSource(256, false, archive, selection);
     std::vector<uint8_t> generate_data_hdr = generate_data;
-    patchGenerateShader(generate_data, false);
-    patchGenerateShader(generate_data_hdr, true);
+    std::vector<uint8_t> generate_data_packed = generate_data;
+    detail::patchStorageImageFormat(generate_data, 4); // Rgba8
+    detail::patchStorageImageFormat(generate_data_hdr, 2); // Rgba16f
+    detail::patchStorageImageFormat(generate_data_packed, 11); // Rgb10A2
 
     // load all other shaders
 #define SHADER(id) makeShader(vk, id, PERF, archive, selection)
@@ -121,6 +84,7 @@ ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
             shaderSpec(256, PERF).contract.storageImages,
             shaderSpec(256, PERF).contract.uniformBuffers,
             shaderSpec(256, PERF).contract.samplers),
+        .generate_pq_packed_source = std::move(generate_data_packed),
         .hdr10_pq_to_scrgb = vk::Shader(
             vk, embedded::hdr10PqToScRgbSpirv, 1, 1, 0, 1
         ),
@@ -175,4 +139,10 @@ ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
     };
 
 #undef SHADER
+}
+
+vk::Shader ShaderRegistry::packedPqShader(const vk::Vulkan& vk) const {
+    const auto& contract = shaderSpec(256, false).contract;
+    return vk::Shader(vk, this->generate_pq_packed_source, contract.sampledImages,
+        contract.storageImages, contract.uniformBuffers, contract.samplers);
 }

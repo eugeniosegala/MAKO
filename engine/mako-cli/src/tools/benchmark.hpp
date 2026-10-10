@@ -30,6 +30,7 @@ namespace mako::cli::benchmark {
         int profile_samples{200};
         int profile_warmup{200};
         bool profile_hdr10{false};
+        bool profile_hdr_reduced_precision{false};
     };
 
     /// run the "benchmark" command

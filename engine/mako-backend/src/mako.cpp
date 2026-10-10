@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "helpers/temporal_phases.hpp"
+#include "helpers/frame_color_policy.hpp"
 #include "mako-backend/mako.hpp"
 #include "extraction/dll_reader.hpp"
 #include "extraction/shader_registry.hpp"
@@ -121,7 +122,7 @@ namespace mako::backend {
         /// (see mako documentation)
         ContextImpl(const InstanceImpl& instance,
             ls::FileDescriptorScope& sourceFds, ls::FileDescriptorScope& destFds,
-            ls::FileDescriptorScope& syncFd, VkExtent2D extent, FrameEncoding encoding, float flow, bool perf);
+            ls::FileDescriptorScope& syncFd, VkExtent2D extent, FrameEncoding encoding, float flow, bool perf, bool reducedHdrPrecision);
 
         // Borrowed scratch and cached descriptors require stable context owners.
         ContextImpl(const ContextImpl&) = delete;
@@ -376,7 +377,7 @@ InstanceImpl::InstanceImpl(vk::PhysicalDeviceSelector selectPhysicalDevice,
 
 Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<int>& destFds,
         int syncFd, uint32_t width, uint32_t height,
-        const FrameEncoding encoding, float flow, bool perf) {
+        const FrameEncoding encoding, float flow, bool perf, bool reducedHdrPrecision) {
     // Take the complete batch before any operation that can fail. Individual
     // import wrappers consume their descriptor even on failure; unattempted
     // descriptors remain here until construction succeeds or unwinds.
@@ -395,8 +396,15 @@ Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<
     const auto before = vulkan.deviceMemorySnapshot();
     auto context = std::make_unique<ContextImpl>(*this->m_impl,
         sourceScope, destinationScope, syncScope,
-        extent, encoding, flow, perf
+        extent, encoding, flow, perf, reducedHdrPrecision
     );
+    if (encoding == FrameEncoding::Hdr10Pq || encoding == FrameEncoding::Hdr10PqPacked ||
+            encoding == FrameEncoding::ScRgbLinear) {
+        std::clog << "MAKO Renderer: HDR generation precision: reduced_requested="
+            << reducedHdrPrecision << "; model_space="
+            << (usesReducedHdrGeneration(encoding, reducedHdrPrecision) ? "pq-code-values" : "linear-scrgb")
+            << "; pq_conversion=" << requiresPqConversion(encoding, reducedHdrPrecision) << '\n';
+    }
     const auto after = vulkan.deviceMemorySnapshot();
     const auto contextInternal = memoryDelta(after.internal, before.internal);
     const auto contextImported = memoryDelta(after.imported, before.imported);
@@ -499,21 +507,10 @@ namespace {
         return VK_FORMAT_R16G16B16A16_SFLOAT;
     }
 
-    bool usesHdrModel(const FrameEncoding encoding) {
-        return encoding == FrameEncoding::ScRgbLinear ||
-            encoding == FrameEncoding::Hdr10Pq ||
-            encoding == FrameEncoding::Hdr10PqPacked;
-    }
-
-    bool requiresPqConversion(const FrameEncoding encoding) {
-        return encoding == FrameEncoding::Hdr10Pq ||
-            encoding == FrameEncoding::Hdr10PqPacked;
-    }
-
     std::optional<std::pair<vk::Image, vk::Image>> createWorkingSourceImages(
             const vk::Vulkan& vk, const VkExtent2D extent,
-            const FrameEncoding encoding) {
-        if (!requiresPqConversion(encoding))
+            const FrameEncoding encoding, const bool reduced) {
+        if (!requiresPqConversion(encoding, reduced))
             return std::nullopt;
 
         return std::make_optional(std::pair{
@@ -524,8 +521,8 @@ namespace {
 
     std::optional<std::vector<vk::Image>> createWorkingDestImages(
             const vk::Vulkan& vk, const VkExtent2D extent,
-            const FrameEncoding encoding, const size_t count) {
-        if (!requiresPqConversion(encoding))
+            const FrameEncoding encoding, const size_t count, const bool reduced) {
+        if (!requiresPqConversion(encoding, reduced))
             return std::nullopt;
 
         std::vector<vk::Image> images;
@@ -548,10 +545,10 @@ namespace {
     }
 
     std::optional<ColorConversion> createSourceColorConversion(
-            const Ctx& ctx, const FrameEncoding encoding,
+            const Ctx& ctx,
             const std::pair<vk::Image, vk::Image>& transportImages,
             const std::optional<std::pair<vk::Image, vk::Image>>& workingImages) {
-        if (!requiresPqConversion(encoding))
+        if (!workingImages)
             return std::nullopt;
         return std::optional<ColorConversion>(std::in_place,
             ctx, ctx.shaders.get().hdr10_pq_to_scrgb,
@@ -564,7 +561,7 @@ namespace {
             const FrameEncoding encoding,
             const std::optional<std::vector<vk::Image>>& workingImages,
             const std::vector<vk::Image>& transportImages) {
-        if (!requiresPqConversion(encoding))
+        if (!workingImages)
             return std::nullopt;
         return std::optional<ColorConversion>(std::in_place,
             ctx, usesPackedHdr10Transport(encoding)
@@ -575,7 +572,7 @@ namespace {
     }
 
     Ctx createCtx(const InstanceImpl& instance, VkExtent2D extent,
-            const FrameEncoding encoding, float flow, bool perf, size_t count) {
+            const FrameEncoding encoding, float flow, bool perf, size_t count, bool reduced) {
         const auto& vk = instance.getVulkan();
         const auto& shaders = instance.getShaderRegistry();
 
@@ -586,7 +583,7 @@ namespace {
             for (size_t i = 0; i < count; ++i)
                 constantBuffers.emplace_back(vk,
                     backend::getDefaultConstantBuffer(
-                        i, count, usesHdrModel(encoding), flow
+                        i, count, usesHdrModel(encoding, reduced), flow
                     )
                 );
 
@@ -595,10 +592,10 @@ namespace {
                 .shaders = std::ref(shaders),
                 .imageMemoryPool{std::make_shared<vk::ImageMemoryPool>(vk)},
                 .pool{vk, backend::calculateDescriptorPoolLimits(
-                    count, perf, requiresPqConversion(encoding)
+                    count, perf, requiresPqConversion(encoding, reduced)
                 )},
                 .constantBuffer{vk, backend::getDefaultConstantBuffer(
-                    0, 1, usesHdrModel(encoding), flow
+                    0, 1, usesHdrModel(encoding, reduced), flow
                 )},
                 .constantBuffers{std::move(constantBuffers)},
                 .bnbSampler{vk, VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER, VK_COMPARE_OP_NEVER, false},
@@ -609,8 +606,12 @@ namespace {
                     .width = static_cast<uint32_t>(static_cast<float>(extent.width) / flow),
                     .height = static_cast<uint32_t>(static_cast<float>(extent.height) / flow)
                 },
+                .packedPqOutputShader = usesReducedHdrGeneration(encoding, reduced) &&
+                        usesPackedHdr10Transport(encoding)
+                    ? std::optional<vk::Shader>(shaders.packedPqShader(vk))
+                    : std::nullopt,
                 .highPrecision = usesHighPrecisionModel(encoding),
-                .hdr = usesHdrModel(encoding),
+                .hdr = usesHdrModel(encoding, reduced),
                 .flow = flow,
                 .perf = perf,
                 .count = count
@@ -623,25 +624,25 @@ namespace {
 
 ContextImpl::ContextImpl(const InstanceImpl& instance,
             ls::FileDescriptorScope& sourceFds, ls::FileDescriptorScope& destFds,
-            ls::FileDescriptorScope& syncFd, VkExtent2D extent, const FrameEncoding encoding, float flow, bool perf) :
+            ls::FileDescriptorScope& syncFd, VkExtent2D extent, const FrameEncoding encoding, float flow, bool perf, bool reducedHdrPrecision) :
         sourceImages(importSourceImages(instance.getVulkan(), sourceFds,
             extent, transportFormat(encoding))),
         destImages(importDestinationImages(instance.getVulkan(), destFds,
             extent, transportFormat(encoding))),
         workingSourceImages(createWorkingSourceImages(
-            instance.getVulkan(), extent, encoding
+            instance.getVulkan(), extent, encoding, reducedHdrPrecision
         )),
         workingDestImages(createWorkingDestImages(
-            instance.getVulkan(), extent, encoding, destFds.size()
+            instance.getVulkan(), extent, encoding, destFds.size(), reducedHdrPrecision
         )),
         blackImage(createBlackImage(instance.getVulkan())),
         syncSemaphore(importTimelineSemaphore(instance.getVulkan(), syncFd.take())),
         prepassSemaphore(createPrepassSemaphore(instance.getVulkan())),
         cmdbufs(destFds.size() + 1),
         cmdbufFence(instance.getVulkan()),
-        ctx(createCtx(instance, extent, encoding, flow, perf, destFds.size())),
+        ctx(createCtx(instance, extent, encoding, flow, perf, destFds.size(), reducedHdrPrecision)),
         sourceColorConversion(createSourceColorConversion(
-            ctx, encoding, sourceImages, workingSourceImages
+            ctx, sourceImages, workingSourceImages
         )),
         destColorConversion(createDestColorConversion(
             ctx, instance.getShaderRegistry(), encoding,

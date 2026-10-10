@@ -94,7 +94,7 @@ See [Adaptive validation](ADAPTIVE-VALIDATION.md) for scheduling details.
 | `scaling_factor` | `1.5` | Target output-to-source ratio per dimension from 1.0–2.0; the surface, display target, and resource limits may reduce the effective ratio. |
 | `scaling_supersampling` | `false` | Allows supported variable Gamescope surfaces to render beyond the display target before downsampling. |
 | `scaling_sharpness` | `0.8` | Sharpening strength from 0.0–1.0. |
-| `hdr_reduced_precision` | `false` | Experimental compact 10-bit PQ shader intermediates and HDR10 scaling inputs. Applies live through private resource replacement; may cause banding or change effects. Linear Frame Generation, scaler outputs, and application/WSI formats retain their precision. Inert for SDR. |
+| `hdr_reduced_precision` | `false` | Experimental approximate PQ-domain HDR10 Frame Generation without linear conversion images/passes, plus compact 10-bit PQ shader intermediates and HDR10 scaling inputs. Applies live through private resource replacement; may add banding, bright-edge artifacts or altered effects. Off restores full linear HDR10 generation. scRGB Frame Generation, scaler outputs, and application/WSI formats retain their precision. Inert for SDR. |
 | `swapchain_image_count_compatibility` | `false` | Preserves the game's requested swapchain image minimum. Use only for games that otherwise fail to start. Requires restart. |
 
 ### Performance and device selection

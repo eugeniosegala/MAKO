@@ -96,7 +96,8 @@ VkResult Swapchain::queuePresentWithRetirementFence(
                     gamescopeBridgeOutputFps(this->profile,
                         this->gamescopeRefreshHz.value_or(0)),
                     this->gamescopeRefreshHz.value_or(0),
-                    this->bridgeOutputBatchSize, generationEnabled);
+                    this->bridgeOutputBatchSize, generationEnabled,
+                    this->frameState.realFrameIndex);
             if (prepared != VK_SUCCESS)
                 return completeRejectedPresent(vk.df().QueueSubmit,
                     queue, presentInfo, prepared);

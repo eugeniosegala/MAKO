@@ -100,3 +100,5 @@ ctest --test-dir build/quality-policy --output-on-failure -R '^(optional-device-
 ```
 
 A skipped GPU test is not image-quality evidence. Offscreen tests also do not prove WSI presentation, compositor scanout, subjective quality, latency, power, HDR, Proton translation, or another GPU and driver.
+
+For a bounded HDR10 single-pair check, add `--hdr10`, optionally `--hdr-reduced-precision` and `--hdr-white-nits 1000` (203 by default, maximum 10000). The existing scenes are converted to packed PQ BT.2020 at the requested reference white; GPU readback is decoded back to the fixture’s relative sRGB range for the same quality guards and PPM previews. The exact HDR path is logged. This checks corruption and moving-edge quality within those bounded scenes, not physical display output or wide-gamut extrema. HDR temporal-sequence mode is not implemented and fails explicitly. MAKO Gym’s quality runner owns the corresponding bounded options and evidence.

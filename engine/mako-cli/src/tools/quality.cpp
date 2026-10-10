@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "quality.hpp"
+#include "benchmark_input.hpp"
 #include "profile_statistics.hpp"
 #include "mako-common/vulkan/timestamp_query_pool.hpp"
 #include "image_transfer.hpp"
@@ -514,6 +515,10 @@ int quality::run(const Options& opts) {
                 opts.flow_scale < ls::GameConfLimits::minimumFlowScale ||
                 opts.flow_scale > ls::GameConfLimits::maximumFlowScale)
             throw ls::error("quality flow scale must be between 0.25 and 1.0");
+        if ((opts.hdr_reduced_precision && !opts.hdr10) ||
+                (opts.hdr10 && opts.sequence_plan) || !std::isfinite(opts.hdr_white_nits) ||
+                opts.hdr_white_nits <= 0 || opts.hdr_white_nits > 10000)
+            throw ls::error("HDR quality requires explicit HDR10, valid reference white and a single scene");
         if (opts.sequence_plan) return runTemporal(opts);
         if (opts.width || opts.height)
             throw ls::error("quality extents require --sequence-plan");
@@ -525,22 +530,26 @@ int quality::run(const Options& opts) {
         const vk::Vulkan vk = makeVulkan(opts.gpu, "mako-quality-regression");
         const std::string selectedGpu = selectedDeviceName(vk);
 
+        const auto imageFormat = opts.hdr10 ? VK_FORMAT_A2B10G10R10_UNORM_PACK32 : VK_FORMAT_R8G8B8A8_UNORM;
+        const auto input = [&](const std::vector<uint8_t>& rgba) {
+            return opts.hdr10 ? benchmark::hdr10ProfileInput(rgba, opts.hdr_white_nits) : rgba;
+        };
         std::array<int, 2> sourceFds{-1, -1};
         ls::FileDescriptorScope sourceScope{sourceFds};
         const vk::Image previousImage{
-            vk, extent, VK_FORMAT_R8G8B8A8_UNORM,
+            vk, extent, imageFormat,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             std::nullopt, &sourceFds[0]
         };
         const vk::Image currentImage{
-            vk, extent, VK_FORMAT_R8G8B8A8_UNORM,
+            vk, extent, imageFormat,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             std::nullopt, &sourceFds[1]
         };
         std::vector<int> destinationFds(1, -1);
         ls::FileDescriptorScope destinationScope{destinationFds};
         const vk::Image destinationImage{
-            vk, extent, VK_FORMAT_R8G8B8A8_UNORM,
+            vk, extent, imageFormat,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             std::nullopt, &destinationFds[0]
         };
@@ -558,28 +567,31 @@ int quality::run(const Options& opts) {
             },
             dll->string(), opts.allow_fp16
         };
+        if (opts.hdr10 && !backend.supportsPackedHdr10Transport())
+            throw ls::error("Packed HDR10 quality is unsupported on this device");
         mako::backend::Context& context = backend.openContext(
             (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
             (destinationScope.release(), destinationFds),
             (syncScope.release(), syncFd),
             extent.width, extent.height,
-            mako::backend::FrameEncoding::Sdr8,
-            1.0F / opts.flow_scale, opts.performance_mode
+            opts.hdr10 ? mako::backend::FrameEncoding::Hdr10PqPacked : mako::backend::FrameEncoding::Sdr8,
+            1.0F / opts.flow_scale, opts.performance_mode, opts.hdr_reduced_precision
         );
 
-        uploadImage(vk, previousImage, scene.previous);
+        uploadImage(vk, previousImage, input(scene.previous));
+        uploadImage(vk, currentImage, input(scene.previous));
         sync.signal(vk, 1);
         backend.scheduleFrames(context);
         if (!sync.wait(vk, 2))
             throw ls::error("timed out while priming quality-regression history");
 
-        uploadImage(vk, currentImage, scene.current);
+        uploadImage(vk, currentImage, input(scene.current));
         sync.signal(vk, 3);
         backend.scheduleFrames(context, std::array{opts.interpolation});
         if (!sync.wait(vk, 4))
             throw ls::error("timed out while generating the regression frame");
 
-        const auto generated = downloadImage(
+        const auto readback = downloadImage(
             vk,
             destinationImage,
             VK_IMAGE_LAYOUT_GENERAL,
@@ -588,6 +600,11 @@ int quality::run(const Options& opts) {
             sync.handle(),
             4
         );
+        const auto generated = opts.hdr10
+            ? benchmark::hdr10QualityPreview(readback, opts.hdr_white_nits) : readback;
+        if (opts.hdr10)
+            std::cout << "MAKO_HDR_QUALITY encoding=hdr10-pq-packed reduced="
+                << opts.hdr_reduced_precision << " white_nits=" << opts.hdr_white_nits << '\n';
         const auto metrics = mako::quality::evaluateImageQuality(scene, generated);
         const auto thresholds = mako::quality::imageQualityThresholds(kind);
         const bool passed = mako::quality::passesImageQualityRegression(

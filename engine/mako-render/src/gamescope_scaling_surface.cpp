@@ -1072,7 +1072,8 @@ bool GamescopeScalingSurface::setHdrMetadata(const VkSurfaceKHR surface,
 VkResult GamescopeScalingSurface::preparePresent(
         const VkSurfaceKHR surface, const VkSwapchainKHR swapchain,
         const double outputFps, const uint32_t refreshHz,
-        const size_t outputBatchSize, const bool generationEnabled) {
+        const size_t outputBatchSize, const bool generationEnabled,
+        const std::optional<uint64_t> sourceFrameSerial) {
     std::unique_lock lock(impl->mutex);
     auto found = impl->surfaces.find(surface);
     if (found == impl->surfaces.end())
@@ -1094,8 +1095,11 @@ VkResult GamescopeScalingSurface::preparePresent(
             OrderedPresentTimeline::validRate(content->second->refreshHz)) {
         if (OrderedPresentTimeline::validRate(refreshHz))
             content->second->refreshHz = refreshHz;
+        const auto now = OrderedPresentTimeline::Clock::now();
+        if (sourceFrameSerial)
+            content->second->presentTimeline.observeSourceBatch(now, *sourceFrameSerial);
         slot = content->second->presentTimeline.schedule(
-            OrderedPresentTimeline::Clock::now(),
+            now,
             OrderedPresentTimeline::validRate(outputFps)
                 ? outputFps : content->second->refreshHz,
             content->second->refreshHz, outputBatchSize, generationEnabled);

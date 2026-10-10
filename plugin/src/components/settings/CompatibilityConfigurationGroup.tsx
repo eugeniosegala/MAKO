@@ -85,7 +85,7 @@ export function CompatibilityConfigurationGroup({
                 }
                 description={t(
                   "HDR_REDUCED_PRECISION_DESC",
-                  "Uses 10-bit buffers for HDR shaders and HDR10 scaling inputs. May cause banding or change some effects. Applies live with a brief hitch; Frame Generation keeps floating-point precision.",
+                  "Prioritizes speed with approximate HDR10 Frame Generation and compact shader/scaling buffers. May add banding or bright-edge artifacts. Applies live with a brief hitch. Off restores full precision; linear scRGB Frame Generation is unchanged.",
                 )}
                 checked={config.hdr_reduced_precision}
                 onChange={(value) => onConfigChange(HDR_REDUCED_PRECISION, value)}

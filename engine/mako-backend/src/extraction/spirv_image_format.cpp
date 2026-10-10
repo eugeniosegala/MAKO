@@ -15,12 +15,13 @@ namespace {
     constexpr uint32_t capabilityShader = 1;
     constexpr uint32_t capabilityStorageImageExtendedFormats = 49;
     constexpr uint32_t capabilityStorageImageWriteWithoutFormat = 56;
+    constexpr uint32_t imageFormatRgb10A2 = 11;
     constexpr uint32_t imageFormatR8 = 15;
     constexpr uint32_t imageFormatR8Snorm = 20;
 
     [[nodiscard]] uint32_t storageImageCapability(
             const uint32_t imageFormat) {
-        return (imageFormat == imageFormatR8 || imageFormat == imageFormatR8Snorm)
+        return (imageFormat == imageFormatRgb10A2 || imageFormat == imageFormatR8 || imageFormat == imageFormatR8Snorm)
             ? capabilityStorageImageExtendedFormats
             : capabilityShader;
     }

@@ -26,6 +26,16 @@ int main() {
             require((pixel & 1023) >= previous);
             previous = pixel & 1023;
         }
+        for (const double nits : {203.0, 1000.0, 10000.0}) {
+            for (unsigned int i = 0; i < 256; ++i) {
+                const auto v = static_cast<uint8_t>(i);
+                const auto result = mako::cli::benchmark::hdr10QualityPreview(
+                    mako::cli::benchmark::hdr10ProfileInput(std::vector<uint8_t>{v, v, v, 255}, nits), nits);
+                for (size_t c = 0; c < 3; ++c)
+                    require(std::abs(static_cast<int>(result[c]) - static_cast<int>(i)) <= 1);
+                require(result[3] == 255);
+            }
+        }
         bool badInput = false;
         try { static_cast<void>(mako::cli::benchmark::hdr10ProfileInput(std::vector<uint8_t>{1, 2, 3})); }
         catch (const std::invalid_argument&) { badInput = true; }

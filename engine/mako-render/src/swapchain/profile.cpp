@@ -187,6 +187,10 @@ ProfileUpdateDecision Swapchain::updateProfile(
             nextProfile.scaling_supersampling,
             this->info.gamescopePresentationTarget
         );
+    const bool hdrFrameGenerationPrecisionChanged = resourcesAvailable &&
+        (this->colorPipeline.encoding == backend::FrameEncoding::Hdr10Pq ||
+         this->colorPipeline.encoding == backend::FrameEncoding::Hdr10PqPacked) &&
+        this->frameGenerationHdrReducedPrecision != nextProfile.hdr_reduced_precision;
     auto plan = planProfileUpdate(
         this->profile, nextProfile, this->destinationImages.size(),
         resourcesAvailable, this->spatialScaler.has_value(),
@@ -196,7 +200,8 @@ ProfileUpdateDecision Swapchain::updateProfile(
         spatialSupersamplingEffectiveExtentUnchanged,
         this->gamescopeRefreshHz,
         this->colorPipeline.encoding == backend::FrameEncoding::Hdr10Pq ||
-            this->colorPipeline.encoding == backend::FrameEncoding::Hdr10PqPacked
+            this->colorPipeline.encoding == backend::FrameEncoding::Hdr10PqPacked,
+        hdrFrameGenerationPrecisionChanged
     );
     auto decision = plan.decision;
     if (decision.frameGenerationPrivateRebuild) {
@@ -230,7 +235,8 @@ ProfileUpdateDecision Swapchain::updateProfile(
                       << generatedFrameCapacityForProfile(nextProfile)
                       << " action=prepare-private-context\n";
         }
-    } else if (ls::effectiveFlowScale(this->profile) ==
+    } else if (!hdrFrameGenerationPrecisionChanged &&
+            ls::effectiveFlowScale(this->profile) ==
                 ls::effectiveFlowScale(nextProfile) &&
             ls::effectivePerformanceMode(this->profile) ==
                 ls::effectivePerformanceMode(nextProfile) &&

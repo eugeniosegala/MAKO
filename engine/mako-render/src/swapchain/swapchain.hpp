@@ -364,6 +364,7 @@ namespace mako::layer {
                     const FrameGenerationResourceRequest& right) {
                 return ls::effectiveFlowScale(left.profile) ==
                         ls::effectiveFlowScale(right.profile) &&
+                    left.profile.hdr_reduced_precision == right.profile.hdr_reduced_precision &&
                     ls::effectivePerformanceMode(left.profile) ==
                         ls::effectivePerformanceMode(right.profile) &&
                     generatedFrameCapacityForProfile(left.profile) ==
@@ -372,6 +373,7 @@ namespace mako::layer {
         };
 
         struct FrameGenerationResources {
+            bool hdrReducedPrecision{false};
             // Context must be destroyed before the exported Vulkan resources
             // it imports. Members are destroyed in reverse declaration order.
             std::vector<vk::Image> sourceImages;
@@ -388,6 +390,7 @@ namespace mako::layer {
             std::optional<std::string> error;
         };
 
+        bool frameGenerationHdrReducedPrecision{false};
         std::vector<vk::Image> sourceImages;
         std::vector<vk::Image> destinationImages;
         ls::lazy<vk::TimelineSemaphore> syncSemaphore;

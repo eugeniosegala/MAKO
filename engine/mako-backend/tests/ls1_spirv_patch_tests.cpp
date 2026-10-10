@@ -82,12 +82,12 @@ namespace {
     }
 
     void testLsfgFormats() {
-        for (const uint32_t format : {2U, 4U, 15U}) {
+        for (const uint32_t format : {2U, 4U, 11U, 15U}) {
             auto shader = shaderWords();
             mako::backend::detail::patchStorageImageFormat(shader, format);
             require(readWord(shader, 17) == format,
                 "LSFG storage image format did not match its image owner");
-            require(readWord(shader, 8) == (format == 15U ? 49U : 1U),
+            require(readWord(shader, 8) == ((format == 11U || format == 15U) ? 49U : 1U),
                 "LSFG scalar image capability was incorrect");
         }
     }

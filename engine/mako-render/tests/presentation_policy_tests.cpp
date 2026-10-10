@@ -265,6 +265,118 @@ void testOrderedPresentationTimeline() {
     }
 }
 
+void testBridgeSourceBatchReadiness() {
+    using Clock = OrderedPresentTimeline::Clock;
+    const auto start = Clock::time_point{10s};
+    const auto period = std::chrono::duration_cast<Clock::duration>(
+        std::chrono::duration<double>(1.0 / 120.0));
+
+    for (const auto sourceInterval : {19ms, 26ms, 50ms, 100ms}) {
+        OrderedPresentTimeline bridge;
+        auto last = start;
+        for (uint64_t serial = 0; serial < 120; ++serial) {
+            const auto arrival = start + sourceInterval * serial;
+            bridge.observeSourceBatch(arrival, serial);
+            const auto first = bridge.schedule(arrival, 120, 120, 2);
+            // A duplicate lower present belongs to the same source batch;
+            // its short interval must not replace the measured source cost.
+            bridge.observeSourceBatch(arrival + 1ms, serial);
+            const auto second = bridge.schedule(arrival + 1ms, 120, 120, 2);
+            const auto overrun = std::min(period, std::max(Clock::duration::zero(),
+                sourceInterval - 2 * period));
+            const auto minimumLead = (serial < 3 ? 4 : 3) * period;
+            const auto lead = serial == 0 ? minimumLead :
+                std::max(minimumLead, sourceInterval + period + overrun);
+            expect(first && second && first->presentAt > last &&
+                    second->presentAt > first->presentAt,
+                "GPU-bound bridge output overtook an earlier output");
+            expect(first->presentAt >= arrival + lead &&
+                    second->presentAt >= arrival + 1ms + lead,
+                "GPU-bound bridge deadlines can precede asynchronous batch readiness");
+            expect(first->presentAt - first->submitAt <= lead + period &&
+                    second->presentAt - second->submitAt <= lead + period,
+                "GPU-bound readiness accumulated an unbounded output queue");
+            last = second->presentAt;
+        }
+    }
+
+    OrderedPresentTimeline transition;
+    transition.observeSourceBatch(start, 0);
+    transition.observeSourceBatch(start + 16ms, 1);
+    transition.observeSourceBatch(start + 32ms, 2);
+    transition.observeSourceBatch(start + 112ms, 3);
+    const auto hitch = transition.schedule(start + 112ms, 120, 120, 2);
+    expect(hitch->presentAt == start + 112ms + 3 * period,
+        "one CPU hitch inflated bridge readiness");
+    transition.observeSourceBatch(start + 128ms, 4);
+    const auto resumed = transition.schedule(start + 128ms, 120, 120, 2);
+    expect(resumed->presentAt == start + 128ms + 3 * period,
+        "one CPU hitch polluted the next source batch");
+    transition.observeSourceBatch(start + 154ms, 5);
+    transition.observeSourceBatch(start + 180ms, 6);
+    const auto slower = transition.schedule(start + 180ms, 120, 120, 2);
+    expect(slower->presentAt == start + 180ms + 26ms + 2 * period,
+        "sustained GPU saturation did not extend readiness");
+    const auto off = transition.schedule(start + 181ms, 120, 120, 1, false);
+    expect(off->presentAt > slower->presentAt &&
+            off->presentAt - off->submitAt == period,
+        "live FG off lost queued ordering or retained generated readiness");
+    transition.observeSourceBatch(start + 240ms, 7);
+    const auto reenabled = transition.schedule(start + 240ms, 120, 120, 2);
+    expect(reenabled->presentAt == start + 240ms + 4 * period,
+        "live FG re-enabling reused a stale GPU-cost estimate");
+    transition.observeSourceBatch(start + 2s, 8);
+    const auto afterStall = transition.schedule(start + 2s, 120, 120, 2);
+    expect(afterStall->submitAt == start + 2s &&
+            afterStall->presentAt == start + 2s + 4 * period,
+        "loading stall left stale bridge readiness or catch-up debt");
+
+    // A saturated 720p source can need more than the nominal 240 Hz output
+    // budget. Preserve both refreshes of readiness after its asynchronous
+    // source work, including the later output from the same batch.
+    OrderedPresentTimeline fastDisplay;
+    fastDisplay.observeSourceBatch(start, 0);
+    fastDisplay.observeSourceBatch(start + 14500us, 1);
+    fastDisplay.observeSourceBatch(start + 29000us, 2);
+    const auto fastPeriod = std::chrono::duration_cast<Clock::duration>(
+        std::chrono::duration<double>(1.0 / 240.0));
+    const auto saturated = fastDisplay.schedule(start + 29000us, 240, 240, 2);
+    expect(saturated->presentAt == start + 43500us + 2 * fastPeriod,
+        "high-refresh GPU saturation lost its bounded overrun allowance");
+
+    // Healthy sources retain the earlier lead across refresh rates and
+    // multiplier changes: GPU-saturation headroom is not a blanket delay.
+    for (const double refresh : {60., 90., 120., 240.}) {
+        const auto step = std::chrono::duration_cast<Clock::duration>(
+            std::chrono::duration<double>(1.0 / refresh));
+        for (size_t batchSize = 2; batchSize <= 5; ++batchSize) {
+            OrderedPresentTimeline healthy;
+            const auto sourceStep = step * static_cast<int64_t>(batchSize);
+            healthy.observeSourceBatch(start, 0);
+            healthy.observeSourceBatch(start + sourceStep, 1);
+            healthy.observeSourceBatch(start + 2 * sourceStep, 2);
+            healthy.observeSourceBatch(start + 3 * sourceStep, 3);
+            const auto arrival = start + 3 * sourceStep;
+            const auto slot = healthy.schedule(arrival, refresh, refresh, batchSize);
+            expect(slot->presentAt == arrival + sourceStep + step,
+                "on-time source acquired unnecessary GPU-overrun latency");
+        }
+    }
+
+    for (const double refresh : {30., 60., 90., 120., 240.}) {
+        OrderedPresentTimeline disabled;
+        const auto step = std::chrono::duration_cast<Clock::duration>(
+            std::chrono::duration<double>(1.0 / refresh));
+        for (uint64_t serial = 0; serial < 120; ++serial) {
+            const auto now = start + step * serial;
+            disabled.observeSourceBatch(now, serial);
+            const auto slot = disabled.schedule(now, refresh, refresh, 1, false);
+            expect(slot->submitAt == now && slot->presentAt == now,
+                "bridge source observations delayed FG-off completion pacing");
+        }
+    }
+}
+
 void testLongSessionDeadlineBounds() {
     const auto start = RealFramePacer::TimePoint{std::chrono::hours(2400)};
     for (const double fps : {45., 60., 90., 120.}) {
@@ -401,6 +513,7 @@ int main() {
     testFractionalUsesExistingSourceDeadline();
     testSmoothCadenceCapFollowsActivePlan();
     testOrderedPresentationTimeline();
+    testBridgeSourceBatchReadiness();
     testOrderedAcquireUsesExplicitFailureOnly();
     testOrderedAcquireBackoffAndProbeAreFinite();
     testExternalInterruptionDiscardsOldFailure();

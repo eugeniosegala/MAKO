@@ -168,6 +168,7 @@ Swapchain::buildFrameGenerationResources(const vk::Vulkan& vk,
     std::vector<int> destinationFds(generatedFrameCapacityForProfile(resourceProfile), -1);
     ls::FileDescriptorScope destinationScope{destinationFds};
     FrameGenerationResources resources;
+    resources.hdrReducedPrecision = resourceProfile.hdr_reduced_precision;
     resources.sourceImages.reserve(sourceFds.size());
     resources.destinationImages.reserve(destinationFds.size());
     const auto sourceImageUsage = frameGenerationSourceImageUsage(
@@ -201,7 +202,8 @@ Swapchain::buildFrameGenerationResources(const vk::Vulkan& vk,
             (syncScope.release(), syncFd),
             extent.width, extent.height, pipeline.encoding,
             1.0F / ls::effectiveFlowScale(resourceProfile),
-            ls::effectivePerformanceMode(resourceProfile)
+            ls::effectivePerformanceMode(resourceProfile),
+            resourceProfile.hdr_reduced_precision
         )),
         [backend = &backendInstance](ls::R<backend::Context>& context) {
             backend->closeContext(context);
@@ -228,6 +230,11 @@ void Swapchain::commitFrameGenerationResources(
     this->destinationImages = std::move(resources.destinationImages);
     this->syncSemaphore = std::move(resources.syncSemaphore);
     this->ctx = std::move(resources.context);
+    this->frameGenerationHdrReducedPrecision = resources.hdrReducedPrecision;
+    // The scaler and FG prepare independently. A pending scaler still owns
+    // its applied precision; neither transaction may cancel the other.
+    if (!this->spatialTransition.pendingRequest())
+        this->profile.hdr_reduced_precision = resourceProfile.hdr_reduced_precision;
 
     applyFrameGenerationResourceProfile(
         this->profile, resourceProfile,
