@@ -646,6 +646,8 @@ void test_save_lifetime() {
         QByteArray(MAKO_UI_VKBASALT_SHADER_SOURCE_DIR));
     {
         mako::ui::Backend backend;
+        require(backend.getHdrReducedPrecision() && backend.getDisableHdrExposure(),
+            "Qt must default reduced precision on while HDR remains disabled");
         backend.allowFP16Updated(false);
         for (const bool enabled : {true, false}) {
             backend.ultraPerformanceUpdated(enabled);
@@ -877,6 +879,7 @@ void test_save_lifetime() {
         require(std::filesystem::last_write_time(configPath) == timestamp,
             "Idle UI rewrote the configuration");
         backend.targetFPSUpdated(165);
+        backend.hdrReducedPrecisionUpdated(false);
         backend.disableHdrExposureUpdated(true);
         backend.disableSteamOverlayUpdated(true);
         backend.forceAlsaAudioUpdated(true);
@@ -884,6 +887,8 @@ void test_save_lifetime() {
     }
     {
         mako::ui::Backend reopened;
+        require(!reopened.getHdrReducedPrecision(),
+            "Qt must preserve an explicitly saved full precision choice");
         require(reopened.getVkBasaltShader() == QStringLiteral("custom/Customcustomtone:vibrance") &&
                 reopened.getCustomShaderEffects().size() == 1,
             "Qt custom selection and catalog did not survive reopening");

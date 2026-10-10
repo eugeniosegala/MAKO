@@ -103,9 +103,9 @@ Stable SDR/HDR feedback may rebuild private exchange images, backend resources, 
 
 Full-precision HDR scaler boundaries use RGBA16F rather than an 8-bit SDR image. Native Resolution and MAKO Scaler retain the source encoding. LS1 uses a separately cached high-precision reconstruction shader and output; its feature images retain their model-defined formats. Linear-scRGB LS1 inputs are converted to bounded PQ BT.2020 before the network and restored afterwards through the existing colour-conversion shaders. When pre-generation direct output is available, that final conversion writes into the exported Frame Generation input without an additional full-resolution copy. Private output remains available for FG-off and replacement transitions. Only this linear-scRGB LS1 path requests the extra storage/sampling usages for its conversion boundaries. Scaling keeps RGBA16F Frame Generation transport so live scaler changes retain compatible storage bindings; the packed HDR optimization remains FG-only.
 
-### Experimental reduced precision
+### Reduced precision
 
-`hdr_reduced_precision` defaults to false and is a per-profile native setting, including Handheld/Docked sets. Both UIs show **Reduced HDR Precision** only while launch HDR is allowed. It never enables HDR, changes a swapchain's colour space, or changes the bridge/presentation contract. SDR ignores it. The environment-only equivalent is `MAKO_HDR_REDUCED_PRECISION`.
+`hdr_reduced_precision` defaults to true and is a per-profile native setting, including Handheld/Docked sets. Explicit saved choices are preserved. HDR itself remains experimental and disabled by default. Both UIs show **Reduced HDR Precision** only while launch HDR is allowed. It never enables HDR, changes a swapchain's colour space, or changes the bridge/presentation contract. SDR ignores it. The environment-only equivalent is `MAKO_HDR_REDUCED_PRECISION`.
 
 For HDR10 scaling, supported packed RGB10A2 inputs replace RGBA16F source images. MAKO Scaler, Native Resolution, LS1 Quality and LS1 Performance keep their existing output format, direct FG bindings and arithmetic. No new full-resolution copy, conversion or shader variant is introduced. Linear scRGB scaler inputs remain RGBA16F. FG-only HDR10 exchange was already packed where supported.
 

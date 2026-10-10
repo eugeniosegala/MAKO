@@ -77,12 +77,7 @@ export function CompatibilityConfigurationGroup({
           {!config.disable_hdr_exposure && (
             <PanelSectionRow>
               <ToggleField
-                label={
-                  <MakoExperimentalSettingLabel
-                    label={t("HDR_REDUCED_PRECISION", "Reduced HDR Precision")}
-                    badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
-                  />
-                }
+                label={t("HDR_REDUCED_PRECISION", "Reduced HDR Precision")}
                 description={t(
                   "HDR_REDUCED_PRECISION_DESC",
                   "Prioritizes speed with approximate HDR10 Frame Generation and compact shader/scaling buffers. May add banding or bright-edge artifacts. Applies live with a brief hitch. Off restores full precision; linear scRGB Frame Generation is unchanged.",

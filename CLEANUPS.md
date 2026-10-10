@@ -10,7 +10,7 @@ The optional `adaptive_target_refresh_rate` boolean defaults to false for existi
 
 ## Policy
 
-The optional `hdr_reduced_precision` native Boolean defaults to false in existing profiles and older schema-5 runtime records. No migration or wrapper rewrite is needed. The independently deployed shader hook is optional: older shader binaries retain full precision, while matching binaries validate explicit HDR and device format support. Remove the missing-field reader only after the supported Renderer status baseline always emits it; configuration/status tests cover absent, true, false, invalid and requested-versus-applied values.
+The optional `hdr_reduced_precision` native Boolean defaults to true for profiles without a saved choice; explicit saved values are preserved. Older schema-5 runtime records without the field still decode as false, reflecting those Renderers' full-precision path. No migration or wrapper rewrite is needed. The independently deployed shader hook is optional: older shader binaries retain full precision, while matching binaries validate explicit HDR and device format support. Remove the missing-field reader only after the supported Renderer status baseline always emits it; configuration/status tests cover absent, true, false, invalid and requested-versus-applied values.
 
 Generated files and user data have different lifecycles:
 

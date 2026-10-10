@@ -53,6 +53,22 @@ target_fps = 90
             with patch("py_modules.mako_plugin.configuration.detect_power_source", return_value=source):
                 self.assertEqual(target, self.service.get_profile_config("game")["config"]["target_fps"])
 
+    def test_hdr_precision_defaults_and_saved_power_choices(self):
+        config = self.service.get_profile_config("game")["config"]
+        self.assertTrue(config["hdr_reduced_precision"])
+        self.assertTrue(config["disable_hdr_exposure"])
+        self.assertTrue(self.service.set_profile_power_modes("game", True)["success"])
+        self.assertTrue(self.service.update_profile_config_fields("game", {
+            "hdr_reduced_precision": False,
+        }, "docked")["success"])
+        self.assertTrue(self.service.update_profile_config_fields("game", {
+            "hdr_reduced_precision": False,
+        }, "shared")["success"])
+        for mode, expected in (("shared", False), ("handheld", True), ("docked", False)):
+            config = self.service.get_profile_config("game", mode)["config"]
+            self.assertEqual(expected, config["hdr_reduced_precision"])
+            self.assertTrue(config["disable_hdr_exposure"])
+
     def test_refresh_target_defaults_and_power_mode_round_trip(self):
         self.assertFalse(self.service.get_profile_config("game")["config"]["adaptive_target_refresh_rate"])
         self.service.set_profile_power_modes("game", True)

@@ -407,11 +407,11 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "script"
     },
 
-    # Native per-profile experiment; private resources can change live.
+    # Native per-profile precision choice; private resources can change live.
     "hdr_reduced_precision": {
         "fieldType": ConfigFieldType.BOOLEAN,
-        "default": False,
-        "description": "experimental live compact 10-bit PQ buffers for HDR shader chains and HDR10 scaling inputs; linear frame generation retains floating-point precision",
+        "default": True,
+        "description": "live approximate HDR10 frame generation and compact 10-bit PQ shader/scaling buffers; off restores full precision",
         "location": "toml"
     },
 

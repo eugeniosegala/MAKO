@@ -1107,7 +1107,6 @@ ApplicationWindow {
                         visible: !backend.disable_hdr_exposure
                         title: t.hdrReducedPrecision
                         description: t.hdrReducedPrecisionDesc
-                        experimentalLabel: t.experimentalLabel
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight

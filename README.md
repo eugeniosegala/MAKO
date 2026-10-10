@@ -166,7 +166,7 @@ Run the installer again to update. See the <a href="engine/README.md#direct-linu
 
 ## Featured in
 
-Community creators have covered and tested the project on Steam Deck hardware. See <a href="plugin/docs/FEATURED_IN.md" target="_blank" rel="noopener noreferrer">Featured In</a> for video links, channels, and coverage details.
+Community creators and publications have covered and tested MAKO on Steam Deck, Steam Machine, and Linux. See <a href="plugin/docs/FEATURED_IN.md" target="_blank" rel="noopener noreferrer">Featured In</a> for videos, articles, and creator coverage.
 
 ## Credits and project lineage
 

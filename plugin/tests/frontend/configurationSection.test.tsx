@@ -1068,7 +1068,7 @@ describe("Configuration controls", () => {
     expect(styles).not.toContain("nth-child");
   });
 
-  test("shows the experimental precision toggle only when HDR is allowed", () => {
+  test("defaults precision on when HDR is allowed and labels only HDR experimental", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const props = {
       onConfigChange,
@@ -1081,13 +1081,18 @@ describe("Configuration controls", () => {
       ".MAKO_WorkaroundsCollapseButton_Container button",
     )!);
     expect(screen.queryByText("Reduced HDR Precision")).toBeNull();
+    expect(screen.getByText("Disable HDR (Restart)").closest("button")?.textContent)
+      .toContain("Experimental");
     const config = { ...getDefaults(), disable_hdr_exposure: false };
     rerender(<ConfigurationSection {...props} config={config} />);
-    fireEvent.click(screen.getByText("Reduced HDR Precision"));
-    expect(onConfigChange).toHaveBeenCalledWith("hdr_reduced_precision", true);
-    rerender(<ConfigurationSection {...props} config={{ ...config, hdr_reduced_precision: true }} />);
-    fireEvent.click(screen.getByText("Reduced HDR Precision"));
+    const precision = screen.getByRole("button", { name: "Reduced HDR Precision" });
+    expect(precision.getAttribute("data-checked")).toBe("true");
+    expect(precision.textContent).not.toContain("Experimental");
+    fireEvent.click(precision);
     expect(onConfigChange).toHaveBeenLastCalledWith("hdr_reduced_precision", false);
+    rerender(<ConfigurationSection {...props} config={{ ...config, hdr_reduced_precision: false }} />);
+    fireEvent.click(screen.getByText("Reduced HDR Precision"));
+    expect(onConfigChange).toHaveBeenLastCalledWith("hdr_reduced_precision", true);
     rerender(<ConfigurationSection {...props} config={{ ...config, disable_hdr_exposure: true }} />);
     expect(screen.queryByText("Reduced HDR Precision")).toBeNull();
   });

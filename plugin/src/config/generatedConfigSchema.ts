@@ -377,8 +377,8 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   hdr_reduced_precision: {
     name: "hdr_reduced_precision",
     fieldType: ConfigFieldType.BOOLEAN,
-    default: false,
-    description: "experimental live compact 10-bit PQ buffers for HDR shader chains and HDR10 scaling inputs; linear frame generation retains floating-point precision"
+    default: true,
+    description: "live approximate HDR10 frame generation and compact 10-bit PQ shader/scaling buffers; off restores full precision"
   },
   disable_hdr_exposure: {
     name: "disable_hdr_exposure",
@@ -553,7 +553,7 @@ export function getDefaults(): ConfigurationData {
     active_in: "",
     gpu: "",
     disable_mako: false,
-    hdr_reduced_precision: false,
+    hdr_reduced_precision: true,
     disable_hdr_exposure: true,
     gamescope_wsi_compatibility: false,
     swapchain_image_count_compatibility: false,

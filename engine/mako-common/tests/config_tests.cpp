@@ -254,8 +254,8 @@ performance_mode = false
 
 int main() {
     const ls::GameConf defaults;
-    expect(!defaults.hdr_reduced_precision,
-        "Reduced HDR precision must be opt-in for existing and new profiles");
+    expect(defaults.hdr_reduced_precision,
+        "Reduced HDR precision must default on for profiles without an explicit choice");
     expect(defaults.multiplier == ls::GameConfDefaults::multiplier &&
             defaults.frame_generation_provisioned ==
                 ls::GameConfDefaults::frameGenerationProvisioned &&
@@ -370,6 +370,13 @@ int main() {
         "The documented default TOML and in-memory examples must stay equivalent");
 
     const auto precisionPath = directory / "precision.toml";
+    writeText(precisionPath, "version = 2\n[[profile]]\nname = 'hdr'\n");
+    expect(ls::ConfigFile(precisionPath).profiles().front().hdr_reduced_precision,
+        "Profiles without a saved HDR precision choice must default to reduced precision");
+    writeText(precisionPath, "version = 2\n[[profile]]\nname = 'hdr'\nhdr_reduced_precision = false\n");
+    ls::ConfigFile(precisionPath).write(precisionPath);
+    expect(!ls::ConfigFile(precisionPath).profiles().front().hdr_reduced_precision,
+        "An explicit full HDR precision choice must survive saving and reloading");
     writeText(precisionPath, "version = 2\n[[profile]]\nname = 'hdr'\nhdr_reduced_precision = true\n[profile.handheld]\nhdr_reduced_precision = false\n[profile.docked]\nhdr_reduced_precision = true\n");
     auto hdrPrecisionConfig = ls::ConfigFile(precisionPath);
     hdrPrecisionConfig.write(precisionPath);
@@ -826,6 +833,13 @@ scaling_sharpness = 0.5
 
     setenv("MAKO_ENV", "1", 1);
     setenv("MAKO_ADAPTIVE", "0", 1);
+    unsetenv("MAKO_HDR_REDUCED_PRECISION");
+    expect(ls::WatchedConfig{}.get().profiles().front().hdr_reduced_precision,
+        "Environment-only profiles must default to reduced HDR precision");
+    setenv("MAKO_HDR_REDUCED_PRECISION", "0", 1);
+    expect(!ls::WatchedConfig{}.get().profiles().front().hdr_reduced_precision,
+        "MAKO_HDR_REDUCED_PRECISION=0 must preserve the full precision override");
+    unsetenv("MAKO_HDR_REDUCED_PRECISION");
     unsetenv("MAKO_NO_FP16");
     expect(ls::WatchedConfig{}.get().global().allow_fp16,
         "Environment-only configuration must allow FP16 by default");

@@ -43,6 +43,7 @@ namespace {
 int main() {
     {
         ls::GameConf full;
+        full.hdr_reduced_precision = false;
         full.scaling_enabled = true;
         auto compact = full;
         compact.hdr_reduced_precision = true;
@@ -100,6 +101,7 @@ int main() {
     }
     {
         ls::GameConf full;
+        full.hdr_reduced_precision = false;
         auto compact = full;
         compact.hdr_reduced_precision = true;
         auto plan = planProfileUpdate(full, compact, 4, true, false,

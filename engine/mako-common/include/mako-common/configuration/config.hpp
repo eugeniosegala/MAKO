@@ -167,7 +167,7 @@ namespace ls {
         static constexpr float scalingFactor = 1.5F;
         static constexpr bool scalingSupersampling = false;
         static constexpr float scalingSharpness = 0.8F;
-        static constexpr bool hdrReducedPrecision = false;
+        static constexpr bool hdrReducedPrecision = true;
         static constexpr uint32_t frameGenerationRefreshThreshold = 0;
         static constexpr uint32_t baseFpsCap = 0;
         static constexpr bool adaptive = false;

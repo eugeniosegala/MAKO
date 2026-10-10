@@ -46,6 +46,7 @@ int main() {
     applied.name = "game \"profile\"";
     applied.multiplier = 2;
     applied.adaptive = false;
+    applied.hdr_reduced_precision = false;
 
     auto requested = applied;
     requested.multiplier = 5;
