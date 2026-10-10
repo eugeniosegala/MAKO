@@ -24,7 +24,7 @@
 ## Downloads
 
 <p align="center">
-  <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat-square&amp;label=total%20downloads&amp;color=0f766e" width="200" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
+  <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat-square&amp;label=total%20downloads&amp;color=0f766e" width="200" align="top" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
 </p>
 
 | Component | Recommended for | Releases |
@@ -46,10 +46,10 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 
 <p align="center">
   <br />
-  <a href="plugin/docs/CONFIGURATION.md#frame-generation"><img src="assets/features/adaptive-frame-generation.webp" width="100" align="middle" alt="Adaptive Frame Generation" /></a>
-  <a href="plugin/docs/CONFIGURATION.md#spatial-scaling"><img src="assets/features/scaling.webp" width="100" align="middle" alt="Scaling" /></a>
-  <a href="plugin/docs/CONFIGURATION.md#shaders"><img src="assets/features/shaders.webp" width="100" align="middle" alt="Shaders" /></a>
-  <a href="plugin/docs/CONFIGURATION.md#hdr"><img src="assets/features/hdr.webp" width="100" align="middle" alt="Experimental HDR" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#frame-generation"><img src="assets/features/adaptive-frame-generation.webp" width="150" align="middle" alt="Adaptive Frame Generation" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#spatial-scaling"><img src="assets/features/scaling.webp" width="150" align="middle" alt="Scaling" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#shaders"><img src="assets/features/shaders.webp" width="150" align="middle" alt="Shaders" /></a>
+  <a href="plugin/docs/CONFIGURATION.md#hdr"><img src="assets/features/hdr.webp" width="150" align="middle" alt="Experimental HDR" /></a>
   <br /><br />
 </p>
 
