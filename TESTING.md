@@ -12,6 +12,8 @@ MAKO separates deterministic product checks from real-hardware evidence. Portabl
 
 Portable MAKO tests must not require MAKO Gym, `Lossless.dll`, an AMD GPU, Gamescope, or a compositor. MAKO Gym consumes MAKO's public executable and diagnostic boundaries; it must not copy production C++, shaders, thresholds, or configuration owners.
 
+[Ongoing maintenance](MAINTENANCE.md) maps upstream dependencies to their owners, update triggers and validation obligations. Record exact runtime/build identities with hardware evidence and keep them separate from build pins and source reviews. The [Gamescope compatibility record](engine/gamescope-compatibility.json) tracks supported protocol versions and scoped review/validation entries; an empty hardware list means no qualifying evidence has been entered there.
+
 ## Validation cycles
 
 | Cycle | Proves | Does not prove |
@@ -37,6 +39,8 @@ The `Tests` workflow runs on every pull request and push to `main`:
 - Markdown formatting.
 
 The owning component tests remain authoritative for their detailed invariants.
+
+`gamescope-compatibility-record` runs in Renderer CTest and the portable policy suite. It checks the recorded protocol versions against the adapter's interface declarations and negotiation cap, and checks immutable provenance against the third-party notice. Run it directly with `just check-gamescope-compatibility`. Its optional `--upstream-protocol` input also compares the recorded XML hash and every declared request/event name, opcode order and wire signature. This gate uses no network or compositor; existing bridge fixtures and actual Gamescope qualification remain separate evidence.
 
 Decky's wrapper environment tests execute generated launchers to cover the optional shared MangoHud file: 64-bit and 32-bit manifest admission, inherited configuration precedence, preserved inline options, creation/removal after generation, quoted paths, per-game overrides, missing/unreadable/non-regular files, and inactive/Flatpak isolation. Wrapper freshness tests regenerate earlier formats. Native `standalone-mangohud` tests additionally cover read-only availability, relative libraries, private-manifest isolation, malformed gates, concurrent launch staging, unchanged-file reuse, and rejected Shader conflicts. Qt’s `ui-backend-contract` covers asynchronous availability/refresh, unavailable saved choices, mutually exclusive toggles, copied launch commands, persistence, independent profiles, copying, and renaming. These tests do not load MangoHud or establish real-game HUD layout, Steam overlay independence, or whether a counter measures generated frames; verify those in Gaming Mode with a supported host game.
 

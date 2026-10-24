@@ -54,6 +54,10 @@ check-flatpak-runtimes:
     python3 scripts/generate-flatpak-runtimes.py --check
     python3 plugin/scripts/check_generated_config.py
 
+# Check Gamescope protocol provenance and supported versions without network access.
+check-gamescope-compatibility:
+    python3 engine/scripts/check-gamescope-compatibility.py
+
 # Generate Flatpak's build-only Vulkan-Headers module from the shared pin.
 generate-flatpak-headers:
     python3 engine/scripts/generate-flatpak-vulkan-headers.py

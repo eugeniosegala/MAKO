@@ -24,6 +24,8 @@ Copyright in the incorporated portions remains with the respective lsfg-vk copyr
 
 ## Gamescope surface protocol
 
+[`engine/gamescope-compatibility.json`](engine/gamescope-compatibility.json) owns the protocol revision/hash and compatibility review record; [ongoing maintenance](MAINTENANCE.md) describes how to update it alongside this notice.
+
 MAKO Renderer's optional scaling surface adapter declares the association, swapchain feedback, HDR and version-one/version-two presentation timing requests and events from Valve's [Gamescope swapchain protocol at commit `2b5cf191d1047d6895516a834de8a72ac1c342f3`](https://github.com/ValveSoftware/gamescope/blob/2b5cf191d1047d6895516a834de8a72ac1c342f3/protocol/gamescope-swapchain.xml). This protocol material carries the following MIT notice:
 
 Copyright © 2023 Joshua Ashton for Valve Software

@@ -2,6 +2,8 @@
 
 This guide defines MAKO Renderer's Vulkan-layer discovery and presentation ownership. [HDR pipeline architecture](HDR-PIPELINE.md) owns colour policy; [runtime configuration transitions](RUNTIME-TRANSITIONS.md) owns swapchain replacement and retirement.
 
+The [maintenance register](../../MAINTENANCE.md) owns ongoing upstream review and evidence responsibilities. [`gamescope-compatibility.json`](../gamescope-compatibility.json) records protocol provenance, supported wire versions, the last scoped upstream source review, and hardware validations. Wire versions 1 and 2 are independent of Gamescope release numbers; the `_v2` suffix in the factory name is also distinct from its negotiated version. `just check-gamescope-compatibility` checks local agreement, while the register explains the optional upstream XML comparison and actual-runtime qualification.
+
 ## Compositor and Vulkan layer
 
 Gamescope has two separate roles:

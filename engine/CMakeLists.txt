@@ -137,6 +137,12 @@ if(BUILD_TESTING AND UNIX)
     set_tests_properties(gamescope-vrr-lease PROPERTIES
         LABELS "portable-policy")
 
+    add_test(NAME gamescope-compatibility-record
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/check-gamescope-compatibility.py")
+    set_tests_properties(gamescope-compatibility-record PROPERTIES
+        LABELS "portable-policy")
+
     add_test(NAME mako-gym-bridge-contract
         COMMAND bash
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-run-mako-gym.sh"

@@ -161,9 +161,9 @@ struct GamescopeScalingSurface::Impl {
     const wl_interface* surfaceInterface{};
     const wl_interface* callbackInterface{};
 
-    // Minimal wire subset of Gamescope's MIT-licensed swapchain protocol at
-    // 2b5cf191d1047d6895516a834de8a72ac1c342f3. Association plus create-time
-    // swapchain feedback are used. Ordered combined delivery annotates every
+    // Minimal wire subset of Gamescope's MIT-licensed swapchain protocol;
+    // engine/gamescope-compatibility.json owns its revision. Association and
+    // create-time swapchain feedback are used. Ordered delivery annotates every
     // commit with FIFO and its own timestamp. HDR uses only colour feedback
     // and metadata; the limiter interface remains unused.
     // V2 is explicitly negotiated and opted into by its constructor; all

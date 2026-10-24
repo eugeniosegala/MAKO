@@ -58,6 +58,8 @@ Validate both headings with `scripts/read-release-notes.mjs` for the intended ve
 
 ### Qualify the candidate
 
+Review affected rows in [ongoing maintenance](MAINTENANCE.md), including dependency version owners, upstream compatibility changes and unrecorded hardware evidence. Update scoped review and validation records when new evidence is obtained; preserve the distinction between source inspection, portable fixtures and tested runtime builds.
+
 Commit both notes and the artwork with the release changes when authorized. The release builds validate note headings, content, version, and shared codename.
 
 Push the candidate commit and wait for the normal portable `Tests` workflow. Reuse an existing complete portable ZIP from that exact clean commit, or build one on the SteamOS test machine with the same portable builders used by publication. Check that exact ZIP:

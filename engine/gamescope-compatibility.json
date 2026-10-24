@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "repository": "ValveSoftware/gamescope",
+  "protocol": {
+    "path": "protocol/gamescope-swapchain.xml",
+    "source_commit": "2b5cf191d1047d6895516a834de8a72ac1c342f3",
+    "sha256": "3cfe02c69097cff4f6b0c31353800d6a4ac3d35381622ed42e6a00cf291b4bd9",
+    "factory_interface": "gamescope_swapchain_factory_v2",
+    "swapchain_interface": "gamescope_swapchain",
+    "supported_versions": [1, 2]
+  },
+  "last_source_review": {
+    "date": "2026-10-23",
+    "commit": "e6674a98118ca7b098b98a3874b8f195ae1bf750",
+    "files": ["protocol/gamescope-swapchain.xml", "src/steamcompmgr.cpp"],
+    "scope": "Swapchain XML comparison, presence of the identity/refresh/VRR/tearing/focus/root-HDR properties consumed by MAKO, and the VRR/tearing property-change handlers.",
+    "result": "Swapchain XML is byte-identical to the protocol source revision. Reviewed root-property names remain present; VRR and tearing property changes still update the compositor preferences. Scheduling behavior, gamescope_control, full WSI, Steam client behavior, and physical presentation were not qualified by this source review."
+  },
+  "hardware_validations": []
+}
