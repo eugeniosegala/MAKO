@@ -17,6 +17,8 @@ Once cloned, run build and packaging commands from `engine/` unless a section sa
 
 SteamOS image updates can also leave X11, XCB, Wayland, Vulkan loader, and Qt packages registered with Pacman while their development headers or metadata are absent. The installer restores these alongside the compiler, 32-bit headers, shader tools, and Flatpak development tools; its `--check` mode reports missing commands and headers without changing the host.
 
+Already writable roots remain writable. Initially read-only roots are restored after the package transaction, including when it fails. SteamOS 3.9 provides `steamos-readonly` through its `steamos-alias` package, forwarding to `holo-readonly`; the installer accepts the command's `disabled` result with exit status 1.
+
 ## Prerequisites
 
 Install:

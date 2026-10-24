@@ -58,7 +58,7 @@ Validate both headings with `scripts/read-release-notes.mjs` for the intended ve
 
 ### Qualify the candidate
 
-Review affected rows in [ongoing maintenance](MAINTENANCE.md), including dependency version owners, upstream compatibility changes and unrecorded hardware evidence. Update scoped review and validation records when new evidence is obtained; preserve the distinction between source inspection, portable fixtures and tested runtime builds.
+Review affected dependencies and upstream changes using the [maintenance checklist](MAINTENANCE.md). Fix incompatible code or pins and run the relevant checks. Update the owning compatibility records when new evidence is obtained; preserve the distinction between source inspection, portable fixtures and tested runtime builds.
 
 Commit both notes and the artwork with the release changes when authorized. The release builds validate note headings, content, version, and shared codename.
 

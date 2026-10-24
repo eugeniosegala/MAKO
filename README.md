@@ -161,7 +161,7 @@ These guides describe the selected branch. For a published version, select its `
 - <a href="engine/README.md" target="_blank" rel="noopener noreferrer">MAKO Renderer</a>: direct installation, usage, builds, and architecture guides.
 - <a href="plugin/docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">Troubleshooting</a> and <a href="COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">diagnostics</a>: activation, presentation problems, and private reports.
 - <a href="TESTING.md" target="_blank" rel="noopener noreferrer">Testing</a> and <a href="HOW_TO_RELEASE.md" target="_blank" rel="noopener noreferrer">releases</a>: contributor validation and publication.
-- <a href="MAINTENANCE.md" target="_blank" rel="noopener noreferrer">Ongoing maintenance</a>: dependency and version owners, Gamescope compatibility records, upstream update responsibilities, and validation gaps.
+- <a href="MAINTENANCE.md" target="_blank" rel="noopener noreferrer">Ongoing maintenance</a>: dependencies, version owners, upstream review triggers, and required checks.
 
 ## Featured in
 

@@ -10,11 +10,11 @@
     "supported_versions": [1, 2]
   },
   "last_source_review": {
-    "date": "2026-10-23",
-    "commit": "e6674a98118ca7b098b98a3874b8f195ae1bf750",
-    "files": ["protocol/gamescope-swapchain.xml", "src/steamcompmgr.cpp"],
-    "scope": "Swapchain XML comparison, presence of the identity/refresh/VRR/tearing/focus/root-HDR properties consumed by MAKO, and the VRR/tearing property-change handlers.",
-    "result": "Swapchain XML is byte-identical to the protocol source revision. Reviewed root-property names remain present; VRR and tearing property changes still update the compositor preferences. Scheduling behavior, gamescope_control, full WSI, Steam client behavior, and physical presentation were not qualified by this source review."
+    "date": "2026-10-24",
+    "commit": "d93118d95c786702e588973f7c4a400356897f1d",
+    "files": ["protocol/gamescope-swapchain.xml", "src/steamcompmgr.cpp", "src/vblankmanager.cpp"],
+    "scope": "SteamOS jupiter-3.9 repository package gamescope 3.16.30.1-2: its source recipe selects upstream tag 3.16.30.1 at this commit and adds a system-sleep patch. Reviewed the tag's v1 wire contract against MAKO's supported legacy messages, consumed root properties and VRR/tearing handlers, FIFO per-window limiting, and uncapped VRR scheduling. Repository metadata and source inspection do not identify a user's installed image.",
+    "result": "Both swapchain interfaces advertise version 1, matching the v1 subset of MAKO's protocol declarations. MAKO selects the legacy constructor and timing requests on this version. Consumed identity/refresh/VRR/tearing/focus/root-HDR properties remain present and VRR/tearing writes retain their handlers. Reviewed scheduling changes preserve FIFO handling and introduce no identified MAKO API adaptation requirement. This release tag does not include upstream commit 261b9be14c7f2078f49ede261b46544162502a7c's later VRR limiter drift correction. gamescope_control, the complete downstream package, full WSI, Steam client behavior, and physical presentation were not qualified by this source review."
   },
   "hardware_validations": []
 }

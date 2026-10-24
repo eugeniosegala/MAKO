@@ -92,10 +92,12 @@ for keyring in archlinux holo; do
     fi
 done
 
-readonly_state="$(steamos-readonly status)"
-case "$readonly_state" in
-    enabled|disabled) ;;
-    *) echo "Unexpected SteamOS read-only state: $readonly_state" >&2; exit 1 ;;
+# A writable root is reported as "disabled" with status 1, not a query failure.
+readonly_status=0
+readonly_state="$(steamos-readonly status)" || readonly_status=$?
+case "$readonly_status:$readonly_state" in
+    0:enabled|0:disabled|1:disabled) ;;
+    *) echo "Unexpected SteamOS read-only state: $readonly_state (exit $readonly_status)" >&2; exit 1 ;;
 esac
 
 sudo -v

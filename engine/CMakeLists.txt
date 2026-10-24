@@ -143,6 +143,12 @@ if(BUILD_TESTING AND UNIX)
     set_tests_properties(gamescope-compatibility-record PROPERTIES
         LABELS "portable-policy")
 
+    add_test(NAME steamos-build-tools
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-install-steamos-build-tools.py")
+    set_tests_properties(steamos-build-tools PROPERTIES
+        LABELS "portable-policy")
+
     add_test(NAME mako-gym-bridge-contract
         COMMAND bash
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-run-mako-gym.sh"

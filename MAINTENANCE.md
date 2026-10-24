@@ -1,51 +1,16 @@
-# Ongoing maintenance and dependency register
+# Maintenance dependencies and checks
 
-This is MAKO's central index of upstream dependencies, compatibility assumptions, version owners, and recurring maintenance work. Start here when an upstream update lands, a dependency changes, or a release needs qualification. The component guides linked below own implementation details; [TESTING.md](TESTING.md) owns validation selection, [CLEANUPS.md](CLEANUPS.md) owns temporary compatibility removal, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) owns license and source attribution.
+This checklist identifies MAKO's dependencies, external interfaces, version owners, and ongoing maintenance responsibilities. Use it to review upstream changes, determine whether MAKO needs an update, fix affected code or pins, and run the relevant checks.
 
-The maintainer changing a boundary owns updating its record and evidence in the same change. Release preparation checks the affected rows and carries forward explicit gaps. New dependencies, external interfaces, and compatibility workarounds must be added here with their canonical owner, update trigger, validation, and failure behavior. Keep exact package pins in their existing files; this index links those owners so packaging, documentation, and runtime code do not acquire competing version lists.
+Keep this file focused on what to check, when to check it, and who owns the change. Exact versions belong in the linked version files; implementation details belong in component guides; review findings and test results belong in the owning compatibility records or QA evidence. Update this checklist when a dependency or maintenance responsibility changes.
 
-## Version and evidence meanings
+[TESTING.md](TESTING.md) owns validation selection, [CLEANUPS.md](CLEANUPS.md) owns temporary compatibility removal, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) owns license and source attribution.
 
-| Record | What it establishes |
-| --- | --- |
-| Build pin | The source or package selected for a build, including an immutable commit or asset checksum where available. |
-| Source provenance | The upstream revision from which an interface or incorporated source was derived. It does not select the user's installed runtime. |
-| Protocol version | The wire contract negotiated with a running service. It is independent of the service's package/release version. |
-| Last source review | A dated inspection of named files at an exact upstream commit, with its scope and result. It does not establish runtime behavior. |
-| Hardware validation | A dated result for an identified MAKO artifact, installed runtime, hardware, and explicit scenarios. Passing one row does not qualify other runtimes, architectures, or displays. |
-| Unrecorded | No qualifying evidence has been entered in this register. Historical tests may exist elsewhere; neither compatibility nor failure is inferred. |
-
-## Gamescope compatibility record
-
-[`engine/gamescope-compatibility.json`](engine/gamescope-compatibility.json) owns the protocol source revision and SHA-256, supported wire versions, last upstream source review, and recorded hardware validations. It is a compatibility record; MAKO uses the system's Gamescope and does not install or pin the compositor. [WSI isolation](engine/docs/WSI-ISOLATION.md) owns the actual bridge behavior.
-
-The current bridge supports **wire versions 1 and 2** of `gamescope_swapchain_factory_v2` and `gamescope_swapchain`. The `_v2` suffix is part of the interface's name and is not the negotiated version. An advertised version above 2 is clamped to 2. The existing portable fixture also advertises 9 to exercise that clamp; it does not implement or qualify a future version 9 protocol.
-
-| Negotiated version | Constructor and timing | Maintenance obligation |
-| --- | --- | --- |
-| 1 | `create_swapchain`, `set_present_time`, and legacy `past_present_timing` feedback | Preserve the existing timestamp decoding, bounded readiness estimate, dropped-output handling, and old-compositor behavior when adding newer support. |
-| 2 | Explicit `create_swapchain_with_timing`, `set_present_timing`, `present_timing`, and `timing_properties` | Preserve request serial ownership, queue-completion/latch/predicted-display distinctions, all-zero dropped reports, and unknown/variable refresh sentinels. Binding version 2 alone does not opt into these events. |
-
-The initial record uses protocol provenance commit [`2b5cf191d1047d6895516a834de8a72ac1c342f3`](https://github.com/ValveSoftware/gamescope/blob/2b5cf191d1047d6895516a834de8a72ac1c342f3/protocol/gamescope-swapchain.xml). On **2026-10-23**, a source review at [`e6674a98118ca7b098b98a3874b8f195ae1bf750`](https://github.com/ValveSoftware/gamescope/commit/e6674a98118ca7b098b98a3874b8f195ae1bf750) found byte-identical swapchain XML, the consumed identity/refresh/VRR/tearing/focus/root-HDR property names, and the VRR/tearing property-change handlers. The JSON record owns subsequent revisions and describes each review's scope. It does not claim that a reviewed upstream commit is the installed SteamOS build or that its scheduling has been tested.
-
-**Last hardware-tested Gamescope release/build: unrecorded in this register.** No historical session has been promoted to the new record without checking its artifact and environment identities. Exact SteamOS, Steam client, Mesa/driver, Proton, display, and Gamescope combinations remain evidence owned by MAKO Gym and MAKO Traces. Empty `hardware_validations` means that this consolidated record still needs that reconciliation.
-
-### Updating the Gamescope record
-
-1. Resolve the candidate upstream ref to a full commit. Compare the swapchain XML and the relevant compositor, WSI, control, focus, or VRR code against the recorded baseline. Record which files and behaviors were actually reviewed; unchanged message names alone do not establish unchanged scheduling.
-2. If the incorporated wire contract changes, update the adapter declarations, portable fixture, protocol provenance/hash, third-party notice, and owning guide together. Preserve supported older negotiation paths. A source-only review can advance `last_source_review` while leaving the incorporated protocol provenance unchanged.
-3. Run `just check-gamescope-compatibility` and the applicable portable tests in [TESTING.md](TESTING.md). To compare all declared request/event names, opcode order, and wire signatures with a locally downloaded copy of the pinned XML, run `python3 engine/scripts/check-gamescope-compatibility.py --upstream-protocol /path/to/gamescope-swapchain.xml`. The supplied file must match the recorded SHA-256. Both checks are read-only and offline; the default check does not fetch upstream or certify runtime compatibility.
-4. For a compositor update, compare unchanged MAKO on old/new Gamescope first; compare baseline/candidate MAKO on the same compositor separately. Include private bridge and unbridged controls, optional full WSI when affected, Fixed/Adaptive, fixed refresh/physical VRR, scaling/HDR combinations, serialized/threaded application present waits, pause/menu return, resize/recreation, and the affected native/Proton/Flatpak paths. Select focused Gym suites through [TESTING.md](TESTING.md); the relevant boundary determines the required rows.
-5. Append a sanitized summary to `hardware_validations` only after inspecting its evidence. Each entry records `date`, `mako_commit`, `renderer_sha256`, `gamescope_version`, `gamescope_sha256`, `gamescope_commit` (null if unavailable), `steam_os_build`, `steam_client_build`, `gpu`, `driver`, `architecture`, `session`, `display`, `vrr`, `protocol_version`, `proton_version`, `flatpak_runtime`, `scenarios`, `result`, `limitations`, and `evidence_reference`. Use null for unavailable or inapplicable environment values and explain material gaps. Keep private inventories, machine/user identities, licensed inputs, logs, screenshots, and generated evidence in MAKO Gym or MAKO Traces; public entries contain only the approved compatibility summary and an opaque evidence identifier.
-
-A surface admitted at startup cannot always fall back after it is in use. The bridge reports a broken connection as `VK_ERROR_SURFACE_LOST_KHR` and a retired association as `VK_ERROR_OUT_OF_DATE_KHR`; game recovery remains part of qualification. An operational escape path is to relaunch with Scaling and HDR off, which avoids the isolated bridge, then qualify ordinary Frame Generation separately. Full Gamescope WSI is another explicitly selected compatibility path with its own restrictions, not a guaranteed rescue.
-
-## Runtime and behavior responsibilities
-
-Each row identifies the component owner responsible for responding to upstream changes. Runtime versions that MAKO does not select must be recorded with the validation evidence rather than presented as build pins. Except for the scoped Gamescope source review above, this initial register inventories existing contracts and does not assert a newly completed upstream or hardware review.
+## Dependencies and external interfaces
 
 | Boundary and owner | What can change / when to review | Required maintenance and validation |
 | --- | --- | --- |
+| SteamOS platform: Renderer and Decky maintainers; [official release notes](https://www.steamdeck.com/en/news) | Stable releases and relevant Beta/Preview changes to bundled Gamescope, Mesa, kernel, system libraries/tools, display behavior, or installation. Review announcements even before a test machine upgrades. | Check Valve's release notes and package metadata against the affected entries below, including command aliases and installation tools. Fix any incompatible assumptions and run the relevant checks in [TESTING.md](TESTING.md). Check Steam client updates independently. MAKO does not pin the user's OS. |
 | Private Gamescope bridge: [`gamescope_scaling_surface.cpp`](engine/mako-render/src/gamescope_scaling_surface.cpp), [WSI isolation](engine/docs/WSI-ISOLATION.md) | Private wire protocol, X11-to-Wayland association, socket/peer identity, object retirement, compositor timing semantics; Gamescope or SteamOS update. | Maintain the compatibility record and version tests. Exercise startup refusal, active connection loss, resize, competing window mappings, generated/real delivery, and v1/v2 timing. Observe completed/visible frames separately from submitted frames and predicted display times. |
 | FIFO, VRR-aware pacing, and application completion: [`presentation_policy.hpp`](engine/mako-render/src/presentation_policy.hpp), [Adaptive validation](engine/docs/ADAPTIVE-VALIDATION.md) | Gamescope queue/limiter behavior, Mesa/driver presentation, Proton/DXVK/VKD3D-Proton waits, refresh and target changes. | Preserve one pacing owner, real-frame completion semantics, bounded acquisition/recovery, and measured Adaptive qualification. Test source and output cadence, latency, below-refresh targets, Fixed/Adaptive, serialized/concurrent waits, and physical VRR. Standard FIFO support alone cannot qualify these interactions. |
 | Gamescope VRR feedback and per-profile control: [`gamescope_hdr_feedback.cpp`](engine/mako-render/src/gamescope_hdr_feedback.cpp), [`mako-vrr-lease`](engine/scripts/mako-vrr-lease) | `GAMESCOPE_VRR_ENABLED`, `GAMESCOPE_VRR_CAPABLE`, `GAMESCOPE_VRR_FEEDBACK`, `GAMESCOPE_ALLOW_TEARING`, `gamescope_control`/`gamescopectl`, `xprop`, systemd user services; Steam toggles or display changes. | Keep preference, capability, and active scanout distinct. Test missing/malformed/stale reads, session replacement, external changes, and exit restoration. Retaining the last valid individual read avoids flapping but is not proof that feedback remains fresh. The VRR setting is session-wide; same-value external writes are indistinguishable, and failed restoration can require user action. |
@@ -73,6 +38,7 @@ These files supply the current values. Use their exact contents when recording a
 
 | Dependency or contract | Canonical version/provenance owner | Update check |
 | --- | --- | --- |
+| SteamOS platform and bundled runtimes | Valve's [release notes](https://www.steamdeck.com/en/news) and [package repositories](https://steamdeck-packages.steamos.cloud/archlinux-mirror/); system-provided versions | Check the release channel and bundled Gamescope, Mesa, kernel, libraries, and tools against MAKO's assumptions. No build pin. |
 | Gamescope private protocol and reviewed/tested builds | [`engine/gamescope-compatibility.json`](engine/gamescope-compatibility.json) | `just check-gamescope-compatibility`; optional pinned-XML comparison; targeted hardware evidence. |
 | Vulkan-Headers shared native/Flatpak pin | [`engine/vulkan-headers-revision.txt`](engine/vulkan-headers-revision.txt) | `just check-flatpak-headers`; native/package required-header check and generated module tests. |
 | Bundled vkBasalt fork, immutable archive/hash, header provenance and API declaration | [`engine/vkbasalt-release.json`](engine/vkbasalt-release.json) | `just check-vkbasalt-release`; archive verification and fork/Renderer contract tests. |
@@ -102,9 +68,9 @@ These files supply the current values. Use their exact contents when recording a
 | Licensing and provenance | Keep upstream notices and source provenance with shipped material; review new code/assets and dependency upgrades. Preserve licensed-input exclusion and the GPL lineage boundary in [AGENTS.md](AGENTS.md). |
 | Hardware QA and regressions | Maintain targeted scenarios and assertions in MAKO Gym and comparative sessions in MAKO Traces. Record exact tested combinations, regressions and gaps. Include bounded resource-constraint evidence before claiming complete Renderer hardware qualification. |
 
-## When to revisit this register
+## When to check
 
-- **With every relevant code or dependency change:** update the owning contract, version/provenance file, tests, guide and this index when its boundary changes. Add discovered upstream assumptions explicitly.
-- **When SteamOS, Gamescope, Steam client, Decky Loader, Proton/DXVK/VKD3D-Proton, Mesa/vendor drivers, Flatpak runtimes, or Lossless Scaling changes on a supported/test machine:** compare the affected rows and record the observed build identities. Choose source review and targeted hardware checks according to the changed boundary.
-- **Before a release:** review affected dependencies, outstanding regressions and unrecorded evidence; run [candidate qualification](HOW_TO_RELEASE.md#qualify-the-candidate) and report tested and untested combinations. Refresh a source-review date only after a new review, and preserve historical hardware records with their original scope.
-- **When support policy changes:** update runtime catalogues, architecture/ABI minimums, compatibility cleanup gates, install/recovery guidance and package checks together. A newer dependency version alone does not justify removing older protocol support.
+- **When upstream releases change:** review the affected dependency rows, identify changes to the interfaces MAKO uses, and fix code or pins when needed. For SteamOS, review stable releases and relevant Beta/Preview notes even before a test machine upgrades.
+- **Before a MAKO release:** check for relevant upstream changes and run the applicable checks from [TESTING.md](TESTING.md) and [candidate qualification](HOW_TO_RELEASE.md#qualify-the-candidate).
+- **When MAKO changes a dependency or compatibility assumption:** update its canonical owner, code, tests, and component guide together. Update this checklist if the responsibility or review trigger changes.
+- **When support policy changes:** align runtime catalogues, architecture/ABI minimums, compatibility cleanup gates, installation guidance, and package checks. A newer dependency version alone does not justify removing older protocol support.
