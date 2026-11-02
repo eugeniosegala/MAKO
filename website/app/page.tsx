@@ -8,6 +8,30 @@ const { deckyVersion, rendererVersion, links } = releaseData;
 
 const newTabProps = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
+function DonationPanel() {
+  return (
+    <div className="donate-panel">
+      <p><strong>Support MAKO</strong>Help fund development, GPU compute and real-hardware testing.</p>
+      <a href="https://ko-fi.com/eugeniosegala" {...newTabProps}>Ko-fi <span aria-hidden="true">↗</span></a>
+      <a href="https://github.com/sponsors/eugeniosegala" {...newTabProps}>GitHub Sponsors <span aria-hidden="true">↗</span></a>
+    </div>
+  );
+}
+
+function DonateMenu() {
+  return (
+    <details className="donate-menu" onKeyDown={(event) => {
+      if (event.key === 'Escape') {
+        event.currentTarget.open = false;
+        event.currentTarget.querySelector('summary')?.focus();
+      }
+    }}>
+      <summary>Donate <span className="donate-chevron" aria-hidden="true" /></summary>
+      <DonationPanel />
+    </details>
+  );
+}
+
 function tiltCard(event: ReactPointerEvent<HTMLDivElement>) {
   if (event.pointerType === 'touch' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -104,6 +128,7 @@ export default function Home() {
           <a href="#downloads">Downloads</a>
           <a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a>
           <a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a>
+          <DonateMenu />
         </div>
         <a className="nav-download" href={links.deckyDownload} {...newTabProps}>
           Download <span>v{deckyVersion}</span>
@@ -117,6 +142,9 @@ export default function Home() {
             <a href="#downloads">Downloads</a>
             <a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a>
             <a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a>
+            <section className="mobile-donate" aria-label="Donate">
+              <DonationPanel />
+            </section>
           </div>
         </details>
       </nav>
