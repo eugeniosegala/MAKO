@@ -25,7 +25,7 @@
 
 <p align="center">
   <a href="https://ko-fi.com/F0Q429XXET"><img src="assets/kofi-button.svg" align="middle" hspace="4" alt="Support MAKO on Ko-fi" /></a>
-  <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat&amp;label=total%20downloads&amp;color=0f766e" width="200" align="middle" hspace="4" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
+  <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat&amp;label=total%20downloads&amp;color=0f766e" height="30" align="middle" hspace="4" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
 </p>
 
 | Component | Recommended for | Releases |
