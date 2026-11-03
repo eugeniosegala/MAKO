@@ -25,7 +25,7 @@ AI-assisted creation does not guarantee that an output is copyrightable in every
 
 | Location | Material | Treatment |
 | --- | --- | --- |
-| `assets/kofi-button.svg` | Official Ko-fi support button from [Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg), retrieved on 2 November 2026; background corner radius reduced from 8 to 4 pixels, with lettering, logo, colours and the visible 223×30 button preserved. The SVG canvas adds 6 transparent pixels above and below the button for spacing when README badges wrap. | Used to link to the maintainer’s Ko-fi page. Ko-fi artwork and marks remain with their respective owners and are not licensed as MAKO artwork. |
+| `assets/kofi-button.svg` | Official Ko-fi support button from [Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg), retrieved on 2 November 2026; background corner radius reduced from 8 to 4 pixels, with lettering, logo, colours and the visible 223×30 button preserved. The SVG canvas adds 12 transparent pixels above and below the button for spacing when README badges wrap. | Used to link to the maintainer’s Ko-fi page. Ko-fi artwork and marks remain with their respective owners and are not licensed as MAKO artwork. |
 | `plugin/src/` imports from `react-icons` | Game Icons, Font Awesome, Feather, Remix Icon, and Material Design icon data | Attributions and license links are recorded in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and upstream license files are shipped in MAKO Decky packages. |
 | `website/app/social-icons.tsx` | GitHub and Discord service glyphs | Used only to identify outbound links. The marks remain with GitHub and Discord, are not licensed as MAKO artwork, and must be used in accordance with their current brand guidelines. |
 
