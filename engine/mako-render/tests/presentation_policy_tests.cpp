@@ -425,6 +425,201 @@ namespace {
         expect(stale.waitForSlot(0ms) && stale.heldImages() == 0,
             "an expired acquire budget kept a stale image count");
     }
+
+    void testCappedFifoBacklogDrainRetiresZinkQueue() {
+        using Clock = CappedFifoBacklogDrain::Clock;
+        using TimePoint = CappedFifoBacklogDrain::TimePoint;
+        const TimePoint start{};
+        const auto at = [start](const double seconds) {
+            return start + std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(seconds));
+        };
+        const auto duration = [](const double seconds) {
+            return std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(seconds));
+        };
+
+        {
+            RealFramePacer pacer;
+            const auto origin = Clock::time_point{} + std::chrono::hours(100000);
+            static_cast<void>(pacer.schedule(origin, 60));
+            const auto deadline = pacer.schedule(origin + 2ms, 60);
+            const auto held = pacer.hold(deadline, duration(1.0 / 120.0));
+            const auto next = pacer.schedule(held, 60);
+            expect(held - deadline == duration(1.0 / 120.0) &&
+                    next - held == duration(1.0 / 60.0),
+                "a held real frame did not move the following cadence with it");
+        }
+
+        // A source capped at half refresh under 2x. Each hold retires one
+        // queued output; acquires wait for a release until the queue empties.
+        struct Run {
+            size_t holds{0};
+            size_t suspensions{0};
+            double clearedAt{-1.0};
+        };
+        const auto run = [&](const uint32_t refreshHz, const size_t backlog,
+                const double seconds, const double waitedShare = 1.0,
+                const double capFps = 0.0) {
+            CappedFifoBacklogDrain drain;
+            const double period = 1.0 / refreshHz;
+            const double cap = capFps > 0.0 ? capFps : refreshHz / 2.0;
+            size_t queued = backlog;
+            size_t frame = 0;
+            double accrued = 0.0;
+            Run result;
+            for (double now = 0.0; now < seconds; now += 1.0 / cap, ++frame) {
+                accrued += waitedShare;
+                const bool waits = queued > 0 && accrued >= 1.0;
+                if (waits)
+                    accrued -= 1.0;
+                const auto decision = drain.observe(at(now), cap, refreshHz,
+                    duration(waits ? period * 0.6 : 0.00005));
+                if (decision.hold > Clock::duration::zero()) {
+                    expect(decision.hold == duration(period) &&
+                            decision.holds >= 1 &&
+                            decision.holds <= CappedFifoBacklogDrain::maximumHolds(),
+                        "a FIFO backlog hold was not exactly one refresh");
+                    ++result.holds;
+                    if (queued != std::numeric_limits<size_t>::max() && queued > 0)
+                        --queued;
+                    if (queued == 0 && result.clearedAt < 0.0)
+                        result.clearedAt = now;
+                }
+                if (decision.suspended)
+                    ++result.suspensions;
+            }
+            return result;
+        };
+        // Steam Deck LCD 60 Hz, OLED 90 Hz, and 120/144 Hz displays.
+        for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+            expect(run(refreshHz, 0, 120.0).holds == 0,
+                "an unfilled FIFO queue paid a held frame");
+            for (const size_t backlog : {size_t{1}, size_t{2}, size_t{3}}) {
+                const auto drained = run(refreshHz, backlog, 60.0);
+                expect(drained.holds == backlog && drained.clearedAt > 0.0 &&
+                        drained.clearedAt < 0.6 * static_cast<double>(backlog) &&
+                        drained.suspensions == 0,
+                    "a capped FIFO backlog was not retired one refresh at a time");
+            }
+            // A bimodal majority of waiting frames still proves the backlog.
+            expect(run(refreshHz, 2, 60.0, 0.55).holds == 2,
+                "half-waiting windows did not drain a capped FIFO backlog");
+            expect(run(refreshHz, 2, 60.0, 0.4).holds == 0,
+                "a minority of waiting frames held a real frame");
+            // Waits that holds cannot clear stop after a bounded episode.
+            const auto stubborn = run(refreshHz, std::numeric_limits<size_t>::max(), 40.0);
+            expect(stubborn.holds == 2 * CappedFifoBacklogDrain::maximumHolds() &&
+                    stubborn.suspensions == 2,
+                "persistent acquire waits kept holding real frames");
+        }
+        // Below the refresh-limited rate the queue cannot fill; even a
+        // waiting window is evidence of the cap, not missing data.
+        expect(run(120, 2, 60.0, 1.0, 40.0).holds == 2,
+            "a lower cap ignored a proven FIFO backlog");
+
+        CappedFifoBacklogDrain drain;
+        for (double now = 0.0; now < 10.0; now += 1.0 / 60.0) {
+            expect(drain.observe(at(now), 60.0, 120U, std::nullopt).hold ==
+                    Clock::duration::zero(),
+                "a present without a generated acquire was counted as waiting");
+        }
+        const auto partialThen = [&](const double gap, const double cap) {
+            CappedFifoBacklogDrain partial;
+            double now = 0.0;
+            for (; now < 0.45; now += 1.0 / 60.0)
+                static_cast<void>(partial.observe(at(now), 60.0, 120U, 7ms));
+            now += gap;
+            Clock::duration held{};
+            for (const double end = now + 0.2; now < end; now += 1.0 / 60.0)
+                held += partial.observe(at(now), cap, 120U, 7ms).hold;
+            return held;
+        };
+        expect(partialThen(0.0, 60.0) > Clock::duration::zero(),
+            "precondition failed: continuous waits did not complete a window");
+        expect(partialThen(0.3, 60.0) == Clock::duration::zero(),
+            "a source stall kept partial FIFO backlog evidence");
+        expect(partialThen(0.0, 59.0) == Clock::duration::zero(),
+            "a cap change kept partial FIFO backlog evidence");
+        expect(drain.observe(at(20.0), 0.0, 120U, 7ms).hold == Clock::duration::zero() &&
+                drain.observe(at(20.1), 60.0, std::nullopt, 7ms).hold ==
+                    Clock::duration::zero(),
+            "an uncapped or unknown-refresh source held a real frame");
+    }
+
+    void testZinkFifoBacklogEndsHandoff() {
+        using TimePoint = SmoothCadencePacerHandoff::TimePoint;
+        using Clock = SmoothCadencePacerHandoff::Clock;
+        const TimePoint start{};
+        const auto at = [start](const double seconds) {
+            return start + std::chrono::duration_cast<TimePoint::duration>(
+                std::chrono::duration<double>(seconds));
+        };
+        const auto backlogAfter = [&](SmoothCadencePacerHandoff& handoff,
+                const uint32_t refreshHz, const double from, const double seconds,
+                const std::optional<double> waitFraction,
+                const double waitedShare = 1.0) -> std::optional<double> {
+            const double interval = 2.0 / refreshHz;
+            double accrued = 0.0;
+            for (double tick = 0.0; tick < seconds; tick += interval) {
+                std::optional<Clock::duration> wait;
+                if (waitFraction) {
+                    accrued += waitedShare;
+                    const bool waits = accrued >= 1.0;
+                    if (waits)
+                        accrued -= 1.0;
+                    wait = std::chrono::duration_cast<Clock::duration>(
+                        std::chrono::duration<double>(
+                            waits ? *waitFraction / refreshHz : 0.00005));
+                }
+                const auto decision = handoff.update(
+                    at(from + tick), 1, false, refreshHz, wait);
+                expect(!decision.sourceOverrun,
+                    "a FIFO-paced Zink source was treated as a source overrun");
+                if (decision.presentationBacklog) {
+                    expect(!decision.active && decision.changed &&
+                            decision.previousGenerationLimit == 1,
+                        "a Zink FIFO backlog did not restore the rung's normal pacing");
+                    return tick;
+                }
+            }
+            return std::nullopt;
+        };
+        for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+            SmoothCadencePacerHandoff handoff;
+            const auto ended = backlogAfter(handoff, refreshHz, 0.0, 10.0, 0.6);
+            expect(ended && *ended > 3.0 && *ended < 4.5,
+                "a full Zink FIFO queue did not end the handoff after three windows");
+            auto decision = handoff.update(at(300.0), 1, false, refreshHz, 0ms);
+            expect(!decision.active,
+                "a Zink FIFO backlog handoff retried against the same game clock");
+            handoff.reset();
+            decision = handoff.update(at(301.0), 1, false, refreshHz, 0ms);
+            expect(decision.active && decision.changed,
+                "an explicit reset did not re-arm the Zink FIFO handoff");
+        }
+        for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+            // Other engines never supply a wait, however long it would be.
+            SmoothCadencePacerHandoff other;
+            expect(!backlogAfter(other, refreshHz, 0.0, 60.0, std::nullopt) &&
+                    other.active(),
+                "a swapchain without an acquire window ended its handoff on waits");
+            SmoothCadencePacerHandoff unfilled;
+            expect(!backlogAfter(unfilled, refreshHz, 0.0, 60.0, 0.2) &&
+                    unfilled.active(),
+                "sub-threshold Zink acquire waits ended the handoff");
+            SmoothCadencePacerHandoff minority;
+            expect(!backlogAfter(minority, refreshHz, 0.0, 60.0, 0.6, 0.4) &&
+                    minority.active(),
+                "a minority of waiting Zink frames ended the handoff");
+        }
+        SmoothCadencePacerHandoff paused;
+        expect(!backlogAfter(paused, 120, 0.0, 2.6, 0.6),
+            "two backlog windows ended a Zink FIFO handoff");
+        paused.pauseForExternalInterruption();
+        expect(!backlogAfter(paused, 120, 10.0, 2.6, 0.6) && paused.active(),
+            "Steam menu focus retained earlier Zink FIFO backlog evidence");
+    }
 }
 
 void testOrderedPresentationTimeline() {
@@ -1741,6 +1936,8 @@ int main() {
     testExternalInterruptionDiscardsOldFailure();
     testFifoSourceOverrunEndsTwoXHandoff();
     testApplicationAcquireBudgetHoldsZinkToItsRequest();
+    testCappedFifoBacklogDrainRetiresZinkQueue();
+    testZinkFifoBacklogEndsHandoff();
     expect(!shouldRejectManagedMultiSwapchainPresent(1, true) &&
             !shouldRejectManagedMultiSwapchainPresent(2, false) &&
             shouldRejectManagedMultiSwapchainPresent(2, true),

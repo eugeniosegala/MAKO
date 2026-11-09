@@ -3028,6 +3028,10 @@ namespace {
                 .replacement = swapchainCreateIsReplacement(
                     newInfo.oldSwapchain, retiredNullOldReplacement
                 ),
+                .applicationAcquireWindow = applicationAcquireBudgetApplies(
+                    deviceEngineName(device), info->minImageCount,
+                    newInfo.minImageCount, modification.surfaceMinImageCount
+                ),
             }).first->second;
 
             // An enabled implicit layer can run in a process that does not
@@ -3080,9 +3084,7 @@ namespace {
 
             instance_info->swapchains.emplace(*swapchain,
                 ls::R<vk::Vulkan>(it->second));
-            if (applicationAcquireBudgetApplies(deviceEngineName(device),
-                    info->minImageCount, newInfo.minImageCount,
-                    modification.surfaceMinImageCount)) {
+            if (swapchainInfo.applicationAcquireWindow) {
                 auto budget = std::make_shared<ApplicationAcquireBudget>(
                     info->minImageCount, modification.surfaceMinImageCount
                 );

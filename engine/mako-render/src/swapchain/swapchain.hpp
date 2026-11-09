@@ -125,6 +125,10 @@ namespace mako::layer {
         // owner-driven replacement rather than a cold process start, so
         // Adaptive may use its bounded recovery guard.
         bool replacement{false};
+        // Zink receives an application acquire window on this swapchain. Its
+        // worker-thread presents also read private acquire waits as FIFO
+        // backlog evidence; every other engine keeps ordinary pacing.
+        bool applicationAcquireWindow{false};
     };
 
     /// modify the swapchain create info based on the profile pre-swapchain creation
@@ -527,6 +531,10 @@ namespace mako::layer {
         bool wsiPresentTimingLogged{false};
         SmoothCadenceBaseCap smoothCadenceBaseCap;
         SmoothCadencePacerHandoff smoothCadencePacerHandoff;
+        // Private generated-image acquire wait of the last generated present,
+        // consumed by the next present. Read only with an acquire window.
+        std::optional<std::chrono::steady_clock::duration> lastGeneratedAcquireWait;
+        CappedFifoBacklogDrain cappedFifoBacklogDrain;
         // A null-old replacement loses the driver's explicit WSI lineage.
         // Consume this exactly once before any private spatial submission.
         bool replacementWsiPrimePending{false};

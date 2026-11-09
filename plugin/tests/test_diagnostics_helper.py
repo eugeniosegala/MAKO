@@ -49,6 +49,7 @@ MAKO Renderer: offscreen X11 presentation window: window=2560x1440; top_level=1x
 MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 application_width=854 application_height=532 frame_generation_width=1280 frame_generation_height=800 spatial_pipeline=pre-frame-generation images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 live_profile_recreation=guarded-maintenance1-one-shot
 MAKO Renderer: present diagnostics: operation=application-acquire-budget swapchain=1234 engine=zink requested_images=3 provisioned_images=6 surface_min_images=3 window=1
 MAKO Renderer: application acquire budget wait expired; acquiring without it swapchain=1234 window=1
+MAKO Renderer: present diagnostics: operation=fifo-backlog-drain context=1 action=hold hold_ms=8.33333 holds=1 waited_frames=28 frames=31 source_cap_fps=60 refresh_hz=120
 MAKO Renderer: present diagnostics: operation=gamescope-presentation-feedback context=1 vrr_enabled=1 vrr_capable=1 vrr_active=1 allow_tearing=0 pacing_owner=mako-target-clock action=reset-pacer-only scheduler_reset=0 recreation=0
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources spatial_scaling_pending=1 frame_generation_backend_pending=1 flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 available_generated_capacity=1 requested_generated_capacity=3 process_restart_required=0 action=signal-out-of-date-after-successful-present
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=2 state_revision=4 reason=frame-generation-resources flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 active_generated_capacity=1 requested_generated_capacity=4 action=prepare-private-context
@@ -720,6 +721,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("operation=instance-engine engine=mesa zink", result.stdout)
                     self.assertIn("operation=application-acquire-budget", result.stdout)
                     self.assertIn("application acquire budget wait expired", result.stdout)
+                    self.assertIn("operation=fifo-backlog-drain", result.stdout)
                     self.assertIn("Gamescope presentation feedback initialized", result.stdout)
                     self.assertIn("offscreen X11 presentation window: window=2560x1440; top_level=1x1", result.stdout)
                     self.assertIn("operation=gamescope-presentation-feedback", result.stdout)

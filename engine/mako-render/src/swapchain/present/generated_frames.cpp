@@ -43,6 +43,13 @@ VkResult Swapchain::presentGeneratedFrames(
             AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded;
     auto maximumAcquireDuration = plan.preacquireDuration;
     auto totalAcquireDuration = plan.preacquireDuration;
+    // Record this present's private acquire wait on every exit; the next
+    // present reads it as FIFO backlog evidence.
+    struct AcquireWaitRecord {
+        std::optional<DiagnosticsClock::duration>& target;
+        const DiagnosticsClock::duration& total;
+        ~AcquireWaitRecord() { target = total; }
+    } acquireWaitRecord{this->lastGeneratedAcquireWait, totalAcquireDuration};
     auto generatedSubmitDuration = DiagnosticsClock::duration::zero();
     auto generatedPresentDuration = DiagnosticsClock::duration::zero();
     auto originalPresentDuration = DiagnosticsClock::duration::zero();

@@ -271,6 +271,8 @@ void Swapchain::commitFrameGenerationResources(
     this->sourceIntervalSpacing.reset();
     this->smoothCadenceBaseCap.reset();
     this->smoothCadencePacerHandoff.reset();
+    this->cappedFifoBacklogDrain.reset();
+    this->lastGeneratedAcquireWait.reset();
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
     );

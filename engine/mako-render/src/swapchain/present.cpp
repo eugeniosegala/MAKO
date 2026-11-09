@@ -324,9 +324,14 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
         );
     if (this->gpuHeadroomResult.capFps > 0)
         handoffGenerationLimit.reset();
+    // Zink's worker-thread presents expose a full FIFO queue as waits on
+    // MAKO's own generated-image acquires. Other engines never read them.
+    const auto presentationWait = this->info.applicationAcquireWindow
+        ? std::exchange(this->lastGeneratedAcquireWait, std::nullopt)
+        : std::nullopt;
     const auto handoff = this->smoothCadencePacerHandoff.update(
         limiterArrival, handoffGenerationLimit, plannedVrrProbePause,
-        this->gamescopeRefreshHz
+        this->gamescopeRefreshHz, presentationWait
     );
     if (handoff.changed) {
         this->realFramePacer.reset();
@@ -347,9 +352,11 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
                         : "ordered-vrr-full-rung"))
                 : (handoff.sourceOverrun
                     ? "fifo-source-overrun"
-                    : (plannedVrrProbePause
-                        ? "planned-vrr-efficiency-probe"
-                        : "guard-restored-long-retry"))
+                    : (handoff.presentationBacklog
+                        ? "fifo-presentation-backlog"
+                        : (plannedVrrProbePause
+                            ? "planned-vrr-efficiency-probe"
+                            : "guard-restored-long-retry")))
         );
     }
     double baseFpsCap = this->steamMenuSuspended || handoff.active
@@ -363,9 +370,32 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
     if (this->gpuHeadroomResult.capFps > 0)
         baseFpsCap = baseFpsCap > 0 ? std::min(baseFpsCap, this->gpuHeadroomResult.capFps)
             : this->gpuHeadroomResult.capFps;
-    const auto limiterDeadline = this->realFramePacer.schedule(
+    auto limiterDeadline = this->realFramePacer.schedule(
         limiterArrival, baseFpsCap, this->gpuHeadroomResult.capFps > 0
     );
+    if (this->info.applicationAcquireWindow) {
+        const auto drain = this->cappedFifoBacklogDrain.observe(
+            limiterArrival, baseFpsCap, this->gamescopeRefreshHz,
+            presentationWait
+        );
+        if (drain.hold > DiagnosticsClock::duration::zero())
+            limiterDeadline = this->realFramePacer.hold(limiterDeadline, drain.hold);
+        if ((drain.hold > DiagnosticsClock::duration::zero() || drain.suspended) &&
+                presentDiagnosticsEnabled()) {
+            std::ostringstream line;
+            line.imbue(std::locale::classic());
+            line << "MAKO Renderer: present diagnostics: operation=fifo-backlog-drain"
+                 << " context=" << this->diagnosticsState.contextId
+                 << " action=" << (drain.suspended ? "suspend" : "hold")
+                 << " hold_ms=" << std::chrono::duration<double, std::milli>(drain.hold).count()
+                 << " holds=" << drain.holds
+                 << " waited_frames=" << drain.window.waited
+                 << " frames=" << drain.window.frames
+                 << " source_cap_fps=" << baseFpsCap
+                 << " refresh_hz=" << this->gamescopeRefreshHz.value_or(0) << '\n';
+            std::cerr << line.str();
+        }
+    }
     const bool ownedTimingControlsOutput = this->presentTiming.controlsOutput(
         this->gamescopeRefreshHz.value_or(0));
     auto sourceRefreshHz = this->gamescopeRefreshHz;

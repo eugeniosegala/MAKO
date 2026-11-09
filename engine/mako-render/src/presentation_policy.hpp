@@ -1416,6 +1416,17 @@ namespace mako::layer {
             return deadline;
         }
 
+        /// Move this real frame and the following cadence later together.
+        /// A hold never releases an early frame or compresses the next
+        /// interval; the output clock restarts from the held deadline.
+        [[nodiscard]] TimePoint hold(const TimePoint deadline,
+                const Clock::duration delay) {
+            if (this->nextFrameAt)
+                *this->nextFrameAt += delay;
+            this->resetOutputs();
+            return deadline + delay;
+        }
+
         void reset() {
             this->nextFrameAt.reset();
             this->activeFramesPerSecond = 0.0;
@@ -1711,12 +1722,213 @@ namespace mako::layer {
         size_t surplusWindows{0};
     };
 
+    /// Counts real frames whose private generated-image acquire waited
+    /// longer than a quarter refresh. An unfilled FIFO queue returns an image
+    /// at once; a full queue makes most acquires wait for a release.
+    class PresentationWaitWindow {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        struct Counts {
+            size_t frames{0};
+            size_t waited{0};
+        };
+
+        [[nodiscard]] static Clock::duration threshold(const uint32_t refreshHz) {
+            return std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(0.25 / static_cast<double>(refreshHz))
+            );
+        }
+
+        [[nodiscard]] std::optional<Counts> observe(const TimePoint now,
+                const bool waited, const Clock::duration length) {
+            if (!this->start) {
+                this->start = now;
+                this->counts = {};
+                return std::nullopt;
+            }
+            ++this->counts.frames;
+            if (waited)
+                ++this->counts.waited;
+            if (now - *this->start < length)
+                return std::nullopt;
+            const auto completed = this->counts;
+            this->start = now;
+            this->counts = {};
+            return completed;
+        }
+
+        void reset() {
+            this->start.reset();
+            this->counts = {};
+        }
+
+    private:
+        std::optional<TimePoint> start;
+        Counts counts;
+    };
+
+    /// Zink presents from a worker thread, and the application acquire window
+    /// makes the game wait for that worker. A compositor stall can fill FIFO
+    /// behind a source cap at the refresh-limited rate; the cap then runs at
+    /// the display's own rate and never drains the queue, and the worker's
+    /// added delay misses refreshes. While a cap paces such a swapchain, a
+    /// half-second window in which most private acquires waited proves that
+    /// backlog: hold the next real frame one refresh to retire one queued
+    /// output. An episode that does not clear stops after a few holds.
+    class CappedFifoBacklogDrain {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        struct Decision {
+            Clock::duration hold{};
+            bool suspended{false};
+            size_t holds{0};
+            PresentationWaitWindow::Counts window;
+        };
+
+        [[nodiscard]] Decision observe(const TimePoint now, const double capFps,
+                const std::optional<uint32_t> refreshHz,
+                const std::optional<Clock::duration> acquireWait) {
+            if (!std::isfinite(capFps) || capFps <= 0.0 || !refreshHz ||
+                    *refreshHz == 0) {
+                this->reset();
+                return {};
+            }
+            if (this->observedCapFps != capFps ||
+                    this->observedRefreshHz != refreshHz ||
+                    (this->lastArrival && now - *this->lastArrival > gapLimit())) {
+                // A source stall drains the queue, and a new cap or refresh
+                // starts a different pacing episode.
+                this->reset();
+                this->observedCapFps = capFps;
+                this->observedRefreshHz = refreshHz;
+            }
+            this->lastArrival = now;
+            if (this->suspendedUntil) {
+                if (now < *this->suspendedUntil)
+                    return {};
+                this->suspendedUntil.reset();
+                this->window.reset();
+            }
+            if (!acquireWait)
+                return {};
+            const auto counts = this->window.observe(now,
+                *acquireWait > PresentationWaitWindow::threshold(*refreshHz),
+                windowLength());
+            if (!counts)
+                return {};
+            if (counts->waited * 2 < counts->frames) {
+                if (counts->waited * 10 <= counts->frames)
+                    this->holds = 0;
+                return {};
+            }
+            if (this->holds >= maximumHolds()) {
+                // Waits that survive several holds are not a standing backlog.
+                // Stop paying a held frame for them.
+                this->holds = 0;
+                this->suspendedUntil = now + suspension();
+                return {.suspended = true, .holds = maximumHolds(), .window = *counts};
+            }
+            ++this->holds;
+            return {
+                .hold = std::chrono::duration_cast<Clock::duration>(
+                    std::chrono::duration<double>(1.0 / static_cast<double>(*refreshHz))),
+                .holds = this->holds,
+                .window = *counts,
+            };
+        }
+
+        void reset() {
+            *this = {};
+        }
+
+        [[nodiscard]] static constexpr std::chrono::milliseconds gapLimit() {
+            return std::chrono::milliseconds{250};
+        }
+
+        [[nodiscard]] static constexpr std::chrono::milliseconds windowLength() {
+            return std::chrono::milliseconds{500};
+        }
+
+        [[nodiscard]] static constexpr size_t maximumHolds() {
+            return 4;
+        }
+
+        [[nodiscard]] static constexpr std::chrono::seconds suspension() {
+            return std::chrono::seconds{30};
+        }
+
+    private:
+        double observedCapFps{0.0};
+        std::optional<uint32_t> observedRefreshHz;
+        std::optional<TimePoint> lastArrival;
+        std::optional<TimePoint> suspendedUntil;
+        PresentationWaitWindow window;
+        size_t holds{0};
+    };
+
+    /// Zink only: under an ordered-FIFO handoff, a source faster than the
+    /// rung's admission rate waits on presentation and fills FIFO. Its rate
+    /// stays exact, so the surplus count never fires, but Zink's worker-thread
+    /// presents then miss refreshes and pace real frames unevenly. Three
+    /// consecutive one-second windows in which most private acquires waited
+    /// end the handoff.
+    class FifoPresentationBacklogWatch {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        [[nodiscard]] bool observe(const TimePoint now,
+                const std::optional<uint32_t> refreshHz,
+                const Clock::duration acquireWait) {
+            if (!refreshHz || *refreshHz == 0) {
+                this->reset();
+                return false;
+            }
+            if (this->observedRefreshHz != refreshHz ||
+                    (this->lastArrival &&
+                     now - *this->lastArrival > FifoSourceOverrunWatch::settleDelay())) {
+                this->reset();
+                this->observedRefreshHz = refreshHz;
+            }
+            this->lastArrival = now;
+            if (!this->settleSince)
+                this->settleSince = now;
+            if (now - *this->settleSince < FifoSourceOverrunWatch::settleDelay())
+                return false;
+            const auto counts = this->window.observe(now,
+                acquireWait > PresentationWaitWindow::threshold(*refreshHz),
+                std::chrono::seconds{1});
+            if (!counts)
+                return false;
+            this->backlogWindows = counts->waited * 2 >= counts->frames
+                ? this->backlogWindows + 1 : 0;
+            return this->backlogWindows >=
+                FifoSourceOverrunWatch::requiredSurplusWindows();
+        }
+
+        void reset() {
+            *this = {};
+        }
+
+    private:
+        std::optional<uint32_t> observedRefreshHz;
+        std::optional<TimePoint> settleSince;
+        std::optional<TimePoint> lastArrival;
+        PresentationWaitWindow window;
+        size_t backlogWindows{0};
+    };
+
     /// Guards each Adaptive integer-rung handoff from the real-frame pacer to
     /// ordered FIFO. A lost qualification restores any cap and backs off that
     /// rung without delaying a separately validated higher rung. A planned
     /// higher-rung VRR efficiency probe pauses without a failure cooldown.
-    /// A source that outruns a rung's FIFO admission rate keeps that rung's
-    /// normal pacing until an explicit reset.
+    /// A source that outruns a rung's FIFO admission rate, or a Zink source
+    /// that keeps FIFO full, keeps that rung's normal pacing until an
+    /// explicit reset.
     class SmoothCadencePacerHandoff {
     public:
         using Clock = std::chrono::steady_clock;
@@ -1726,6 +1938,7 @@ namespace mako::layer {
             bool active{false};
             bool changed{false};
             bool sourceOverrun{false};
+            bool presentationBacklog{false};
             std::optional<size_t> generationLimit;
             std::optional<size_t> previousGenerationLimit;
         };
@@ -1733,7 +1946,8 @@ namespace mako::layer {
         [[nodiscard]] Decision update(const TimePoint now,
                 const std::optional<size_t> eligibleGenerationLimit,
                 const bool plannedProbePause = false,
-                const std::optional<uint32_t> refreshHz = std::nullopt) {
+                const std::optional<uint32_t> refreshHz = std::nullopt,
+                const std::optional<Clock::duration> presentationWait = std::nullopt) {
             const auto previous = this->activeLimit;
             // Higher VRR rungs may enter above their admission rate, but FIFO
             // pulls a source that waits on presentation down within the
@@ -1744,7 +1958,14 @@ namespace mako::layer {
                 *this->activeLimit <= this->retryAt.size() &&
                 this->overrunWatch.observe(now, refreshHz,
                     *this->activeLimit + 1);
-            if (sourceOverrun) {
+            // Only a Zink swapchain supplies its private acquire wait.
+            const bool presentationBacklog = !sourceOverrun &&
+                presentationWait && this->activeLimit &&
+                eligibleGenerationLimit == this->activeLimit &&
+                *this->activeLimit >= 1 &&
+                *this->activeLimit <= this->retryAt.size() &&
+                this->backlogWatch.observe(now, refreshHz, *presentationWait);
+            if (sourceOverrun || presentationBacklog) {
                 // An independent game clock does not change while it runs.
                 // Retrying this rung would repeat the same uneven overfill.
                 this->retryAt[*this->activeLimit - 1] = TimePoint::max();
@@ -1768,12 +1989,15 @@ namespace mako::layer {
                     retry.reset();
                 }
             }
-            if (this->activeLimit != previous)
+            if (this->activeLimit != previous) {
                 this->overrunWatch.reset();
+                this->backlogWatch.reset();
+            }
             return {
                 .active = this->activeLimit.has_value(),
                 .changed = previous != this->activeLimit,
                 .sourceOverrun = sourceOverrun,
+                .presentationBacklog = presentationBacklog,
                 .generationLimit = this->activeLimit,
                 .previousGenerationLimit = previous,
             };
@@ -1784,12 +2008,14 @@ namespace mako::layer {
             // any genuine earlier failure's backoff without creating one.
             this->activeLimit.reset();
             this->overrunWatch.reset();
+            this->backlogWatch.reset();
         }
 
         void reset() {
             this->activeLimit.reset();
             this->retryAt.fill(std::nullopt);
             this->overrunWatch.reset();
+            this->backlogWatch.reset();
         }
 
         [[nodiscard]] bool active() const {
@@ -1808,6 +2034,7 @@ namespace mako::layer {
         std::optional<size_t> activeLimit;
         std::array<std::optional<TimePoint>, 4> retryAt{};
         FifoSourceOverrunWatch overrunWatch;
+        FifoPresentationBacklogWatch backlogWatch;
     };
 
     /// Normally suppress synthetic frames that exceed confirmed refresh.

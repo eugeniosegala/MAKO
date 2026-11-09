@@ -106,12 +106,16 @@ void Swapchain::applyGamescopeFocus(const DiagnosticsClock::time_point now) {
         this->realFramePacer.reset();
         this->smoothCadenceBaseCap.reset();
         this->smoothCadencePacerHandoff.pauseForExternalInterruption();
+        this->cappedFifoBacklogDrain.reset();
+        this->lastGeneratedAcquireWait.reset();
         if (returned)
             this->recoveryState.orderedAcquireRecovery
                 .armTransitionRecreation();
     }
     if (suspended && !this->steamMenuSuspended) {
         this->smoothCadencePacerHandoff.pauseForExternalInterruption();
+        this->cappedFifoBacklogDrain.reset();
+        this->lastGeneratedAcquireWait.reset();
         // Likewise, an incomplete generated-image guard or native drain
         // belongs to the pre-menu transport. The return must qualify any
         // renewed acquire pressure from fresh gameplay presents.
@@ -476,6 +480,8 @@ ProfileUpdateDecision Swapchain::updateProfile(
         this->realFramePacer.reset();
         this->smoothCadenceBaseCap.reset();
         this->smoothCadencePacerHandoff.reset();
+        this->cappedFifoBacklogDrain.reset();
+        this->lastGeneratedAcquireWait.reset();
     }
 
     if (profileUpdateInvalidatesTransientGenerationRecovery(decision)) {
@@ -754,6 +760,8 @@ void Swapchain::updateGamescopeRefreshRate(
     this->realFramePacer.reset();
     this->smoothCadenceBaseCap.reset();
     this->smoothCadencePacerHandoff.reset();
+    this->cappedFifoBacklogDrain.reset();
+    this->lastGeneratedAcquireWait.reset();
     const bool generationIsEnabled = effectiveFrameGenerationEnabled(
         this->profile, this->gamescopeRefreshHz
     );
@@ -865,6 +873,8 @@ void Swapchain::updateGamescopePresentationFeedback(
         this->realFramePacer.reset();
         this->smoothCadenceBaseCap.reset();
         this->smoothCadencePacerHandoff.reset();
+        this->cappedFifoBacklogDrain.reset();
+        this->lastGeneratedAcquireWait.reset();
     }
 
     if (present_diagnostics::enabled()) {
@@ -903,6 +913,8 @@ void Swapchain::disableFrameGeneration() {
     this->realFramePacer.reset();
     this->smoothCadenceBaseCap.reset();
     this->smoothCadencePacerHandoff.reset();
+    this->cappedFifoBacklogDrain.reset();
+    this->lastGeneratedAcquireWait.reset();
     this->recoveryState.historyWarmupRemaining = 0;
     this->recoveryState.orderedAcquireRecovery.reset();
     if (this->adaptiveScheduler)
