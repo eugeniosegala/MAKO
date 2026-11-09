@@ -325,7 +325,8 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
     if (this->gpuHeadroomResult.capFps > 0)
         handoffGenerationLimit.reset();
     const auto handoff = this->smoothCadencePacerHandoff.update(
-        limiterArrival, handoffGenerationLimit, plannedVrrProbePause
+        limiterArrival, handoffGenerationLimit, plannedVrrProbePause,
+        this->gamescopeRefreshHz
     );
     if (handoff.changed) {
         this->realFramePacer.reset();
@@ -344,9 +345,11 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
                     : (handoff.generationLimit == 1
                         ? "ordered-fifo-target-match"
                         : "ordered-vrr-full-rung"))
-                : (plannedVrrProbePause
-                    ? "planned-vrr-efficiency-probe"
-                    : "guard-restored-long-retry")
+                : (handoff.sourceOverrun
+                    ? "fifo-source-overrun"
+                    : (plannedVrrProbePause
+                        ? "planned-vrr-efficiency-probe"
+                        : "guard-restored-long-retry"))
         );
     }
     double baseFpsCap = this->steamMenuSuspended || handoff.active

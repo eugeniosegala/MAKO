@@ -2,14 +2,18 @@
 
 #include "presentation_policy.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace mako::layer;
@@ -146,6 +150,214 @@ namespace {
                 !decision.bypassGeneration &&
                 !decision.preacquireGeneratedFrame,
             "menu interruption resumed stale acquire recovery evidence");
+    }
+
+    void testFifoSourceOverrunEndsTwoXHandoff() {
+        using TimePoint = SmoothCadencePacerHandoff::TimePoint;
+        const TimePoint start{};
+        const auto at = [start](const double seconds) {
+            return start + std::chrono::duration_cast<TimePoint::duration>(
+                std::chrono::duration<double>(seconds)
+            );
+        };
+        // Deterministic arrival jitter keeps every sample repeatable.
+        uint32_t seed = 1;
+        const auto jitter = [&seed](const double maximum) {
+            seed = seed * 1664525U + 1013904223U;
+            return maximum * static_cast<double>(seed >> 8) /
+                static_cast<double>(1U << 24);
+        };
+
+        // A source that waits on presentation blocks while the 2x FIFO queue
+        // holds `queuedFrames` real frames; the display drains one every
+        // multiplier refreshes. Hitches and loading stalls drain the queue,
+        // after which the game refills it as fast as its frame work allows.
+        // The handoff starts from a nearly empty queue, and work below one
+        // admitted interval models a higher rung entering above that rate.
+        const auto pacedSourceRetainsHandoff = [&](const uint32_t reportedHz,
+                const double actualHz, const double workFraction,
+                const size_t queuedFrames, const size_t generationLimit = 1) {
+            SmoothCadencePacerHandoff handoff;
+            const double admitted =
+                static_cast<double>(generationLimit + 1) / actualHz;
+            double nextSlot = admitted;
+            double returned = 0.0;
+            size_t queued = 1;
+            for (size_t frame = 0; returned < 60.0; ++frame) {
+                double work = admitted * workFraction + jitter(admitted * 0.3);
+                if (frame % 47 == 0)
+                    work += admitted * 3.5;
+                if (frame % 997 == 500)
+                    work += 0.3;
+                const double arrival = returned + work;
+                for (; nextSlot <= arrival; nextSlot += admitted) {
+                    if (queued > 0)
+                        --queued;
+                }
+                const auto decision = handoff.update(
+                    at(arrival), generationLimit, false, reportedHz
+                );
+                if (!decision.active || decision.sourceOverrun)
+                    return false;
+                returned = arrival;
+                for (; queued >= queuedFrames; nextSlot += admitted) {
+                    returned = nextSlot;
+                    --queued;
+                }
+                ++queued;
+            }
+            return true;
+        };
+        // Steam Deck LCD 40-60 Hz, OLED 45-90 Hz, and desktop 120/144 Hz.
+        // Gamescope rounds the panel's millihertz refresh to the nearest
+        // hertz, so its report is at most 0.5 Hz slow; 2 Hz keeps a 4x margin.
+        for (const uint32_t refreshHz : {40U, 45U, 50U, 60U, 72U, 90U, 120U, 144U}) {
+            for (const double workFraction : {0.2, 0.7, 0.95}) {
+                for (const size_t queuedFrames : {size_t{2}, size_t{3}}) {
+                    expect(pacedSourceRetainsHandoff(
+                            refreshHz, refreshHz, workFraction, queuedFrames),
+                        "a FIFO-paced 2x source was treated as a source overrun");
+                    for (const double slowReportHz : {0.5, 2.0}) {
+                        expect(pacedSourceRetainsHandoff(refreshHz,
+                                refreshHz + slowReportHz, workFraction, queuedFrames),
+                            "a slow refresh report was treated as a source overrun");
+                    }
+                }
+            }
+        }
+        // VRR 3x-5x rungs, including sources entering up to 25% above their
+        // admission rate before FIFO pulls them down. Six output images hold
+        // at most two real frames at 3x.
+        for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+            for (const size_t generationLimit : {size_t{2}, size_t{3}, size_t{4}}) {
+                for (const double workFraction : {0.2, 0.8, 0.95}) {
+                    for (const size_t queuedFrames : {size_t{1}, size_t{2}}) {
+                        for (const double slowReportHz : {0.5, 3.0}) {
+                            expect(pacedSourceRetainsHandoff(refreshHz,
+                                    refreshHz + slowReportHz, workFraction,
+                                    queuedFrames, generationLimit),
+                                "a FIFO-paced higher rung was treated as a source overrun");
+                        }
+                    }
+                }
+            }
+        }
+
+        // A game with its own clock keeps delivering at that rate on average.
+        const auto overrunAfter = [&](SmoothCadencePacerHandoff& handoff,
+                const double sourceHz,
+                const std::optional<uint32_t> refreshHz,
+                const double from, const double seconds,
+                const size_t generationLimit = 1,
+                const double jitterFraction = 0.5) -> std::optional<double> {
+            const double interval = 1.0 / sourceHz;
+            double previous = from - interval;
+            for (double tick = 0.0; tick < seconds; tick += interval) {
+                const double arrival = std::max(
+                    from + tick + jitter(interval * jitterFraction),
+                    previous + 0.0005
+                );
+                previous = arrival;
+                const auto decision = handoff.update(
+                    at(arrival), generationLimit, false, refreshHz
+                );
+                if (decision.sourceOverrun) {
+                    expect(!decision.active && decision.changed &&
+                            decision.previousGenerationLimit == generationLimit,
+                        "a source overrun did not restore the rung's normal pacing");
+                    return arrival - from;
+                }
+            }
+            return std::nullopt;
+        };
+        // In-game limiters at half refresh whose timers round slightly fast,
+        // such as 33 ms at 60 Hz, 22 ms at 90 Hz, and 16.5 ms at 120 Hz.
+        for (const auto& [sourceHz, refreshHz] : std::array{
+                std::pair{1.0 / 0.033, 60U}, std::pair{1.0 / 0.022, 90U},
+                std::pair{1.0 / 0.0165, 120U}, std::pair{30.0, 60U},
+                std::pair{45.0, 90U}}) {
+            SmoothCadencePacerHandoff handoff;
+            expect(!overrunAfter(handoff, sourceHz, refreshHz, 0.0, 60.0) &&
+                    !overrunAfter(handoff, sourceHz, refreshHz, 60.0, 60.0, 1, 0.9) &&
+                    handoff.active(),
+                "a half-refresh in-game limiter was treated as a source overrun");
+        }
+
+        // Independent clocks that overfill 2x FIFO: id Tech 4's 62.5 Hz tick,
+        // a 30 ms tick at 60 Hz, and a 20 ms tick at 90 Hz.
+        for (const auto& [sourceHz, refreshHz] : std::array{
+                std::pair{62.5, 60U}, std::pair{62.5, 90U},
+                std::pair{62.5, 120U}, std::pair{1.0 / 0.030, 60U},
+                std::pair{50.0, 90U}}) {
+            for (const double jitterFraction : {0.5, 1.2}) {
+                SmoothCadencePacerHandoff handoff;
+                const auto overrun = overrunAfter(
+                    handoff, sourceHz, refreshHz, 0.0, 10.0, 1, jitterFraction
+                );
+                expect(overrun && *overrun > 3.0 && *overrun < 4.5,
+                    "an independent game clock did not end its 2x FIFO handoff after three windows");
+            }
+        }
+        for (const uint32_t refreshHz : {60U, 90U, 120U}) {
+            SmoothCadencePacerHandoff handoff;
+            const auto overrun = overrunAfter(handoff, 62.5, refreshHz, 0.0, 10.0);
+            expect(overrun && *overrun > 3.0 && *overrun < 4.0,
+                "a 62.5 Hz game clock did not end its 2x FIFO handoff after three windows");
+            auto decision = handoff.update(at(300.0), 1, false, refreshHz);
+            expect(!decision.active,
+                "an overrun 2x FIFO handoff retried against the same game clock");
+            decision = handoff.update(at(300.0), 2, false, refreshHz);
+            expect(decision.active && decision.generationLimit == 2,
+                "a 2x source overrun blocked a separately validated 3x rung");
+            handoff.reset();
+            decision = handoff.update(at(301.0), 1, false, refreshHz);
+            expect(decision.active && decision.changed,
+                "an explicit reset did not re-arm the 2x FIFO handoff");
+        }
+
+        // Higher VRR rungs use their own admission rate: refresh divided by
+        // outputs per real frame. A limiter exactly at that rate is retained.
+        for (const auto& [sourceHz, generationLimit] : std::array{
+                std::pair{40.0, size_t{2}}, std::pair{30.0, size_t{3}},
+                std::pair{24.0, size_t{4}}}) {
+            SmoothCadencePacerHandoff handoff;
+            expect(!overrunAfter(handoff, sourceHz, 120, 0.0, 60.0,
+                        generationLimit, 0.9) &&
+                    handoff.activeGenerationLimit() == generationLimit,
+                "a limiter at a higher rung's admission rate was treated as a source overrun");
+        }
+        // A 50 FPS clock at 3x, 40 at 4x, and 30 at 5x overfill 120 Hz FIFO.
+        for (const auto& [sourceHz, generationLimit] : std::array{
+                std::pair{50.0, size_t{2}}, std::pair{40.0, size_t{3}},
+                std::pair{30.0, size_t{4}}}) {
+            SmoothCadencePacerHandoff handoff;
+            const auto overrun = overrunAfter(
+                handoff, sourceHz, 120, 0.0, 10.0, generationLimit, 1.2
+            );
+            expect(overrun && *overrun > 3.0 && *overrun < 4.5,
+                "an independent game clock did not end its higher-rung FIFO handoff");
+            auto decision = handoff.update(at(300.0), generationLimit, false, 120);
+            expect(!decision.active,
+                "an overrun higher-rung FIFO handoff retried against the same game clock");
+            decision = handoff.update(at(300.0), 1, false, 120);
+            expect(decision.active && decision.generationLimit == 1,
+                "a higher-rung source overrun blocked the separately eligible 2x handoff");
+        }
+        {
+            SmoothCadencePacerHandoff handoff;
+            expect(!overrunAfter(handoff, 62.5, std::nullopt, 0.0, 10.0) &&
+                    handoff.active(),
+                "an unknown refresh rate ended a 2x FIFO handoff");
+        }
+        {
+            SmoothCadencePacerHandoff handoff;
+            expect(!overrunAfter(handoff, 62.5, 120, 0.0, 2.6),
+                "two surplus windows ended a 2x FIFO handoff");
+            handoff.pauseForExternalInterruption();
+            expect(!overrunAfter(handoff, 62.5, 120, 10.0, 2.6) &&
+                    handoff.active(),
+                "Steam menu focus retained earlier source-overrun evidence");
+        }
     }
 }
 
@@ -1461,6 +1673,7 @@ int main() {
     testOrderedAcquireUsesExplicitFailureOnly();
     testOrderedAcquireBackoffAndProbeAreFinite();
     testExternalInterruptionDiscardsOldFailure();
+    testFifoSourceOverrunEndsTwoXHandoff();
     expect(!shouldRejectManagedMultiSwapchainPresent(1, true) &&
             !shouldRejectManagedMultiSwapchainPresent(2, false) &&
             shouldRejectManagedMultiSwapchainPresent(2, true),

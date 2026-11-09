@@ -1631,10 +1631,92 @@ namespace mako::layer {
         double activeTargetFps{0.0};
     };
 
+    /// Under an ordered-FIFO handoff, a source that waits on presentation
+    /// settles at the refresh rate divided by outputs per real frame; after a
+    /// late frame it can only refill the bounded queue once. A source with its
+    /// own faster clock instead delivers surplus frames in every window,
+    /// overfilling FIFO and pacing unevenly. Counting surplus frames keeps the
+    /// threshold independent of refresh and multiplier.
+    class FifoSourceOverrunWatch {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        [[nodiscard]] bool observe(const TimePoint now,
+                const std::optional<uint32_t> refreshHz,
+                const size_t outputsPerRealFrame) {
+            if (!refreshHz || *refreshHz == 0 || outputsPerRealFrame < 2) {
+                this->reset();
+                return false;
+            }
+            if (this->observedRefreshHz != refreshHz ||
+                    this->observedOutputs != outputsPerRealFrame ||
+                    (this->lastArrival &&
+                     now - *this->lastArrival > settleDelay())) {
+                // A refresh or rung change, or a stall, drains the queue. Its
+                // refill is not evidence of an independent source clock.
+                this->reset();
+                this->observedRefreshHz = refreshHz;
+                this->observedOutputs = outputsPerRealFrame;
+            }
+            this->lastArrival = now;
+            if (!this->settleSince)
+                this->settleSince = now;
+            if (now - *this->settleSince < settleDelay())
+                return false;
+            if (!this->windowStart) {
+                this->windowStart = now;
+                this->windowFrames = 0;
+                return false;
+            }
+            ++this->windowFrames;
+            const double elapsed = std::chrono::duration<double>(
+                now - *this->windowStart
+            ).count();
+            if (elapsed < 1.0)
+                return false;
+            const double surplus = static_cast<double>(this->windowFrames) -
+                elapsed * static_cast<double>(*refreshHz) /
+                    static_cast<double>(outputsPerRealFrame);
+            this->surplusWindows = surplus >= surplusFramesPerWindow()
+                ? this->surplusWindows + 1 : 0;
+            this->windowStart = now;
+            this->windowFrames = 0;
+            return this->surplusWindows >= requiredSurplusWindows();
+        }
+
+        void reset() {
+            *this = {};
+        }
+
+        [[nodiscard]] static constexpr std::chrono::milliseconds settleDelay() {
+            return std::chrono::milliseconds{250};
+        }
+
+        [[nodiscard]] static constexpr double surplusFramesPerWindow() {
+            return 1.5;
+        }
+
+        [[nodiscard]] static constexpr size_t requiredSurplusWindows() {
+            return 3;
+        }
+
+    private:
+        std::optional<uint32_t> observedRefreshHz;
+        size_t observedOutputs{0};
+        std::optional<TimePoint> settleSince;
+        std::optional<TimePoint> windowStart;
+        std::optional<TimePoint> lastArrival;
+        size_t windowFrames{0};
+        size_t surplusWindows{0};
+    };
+
     /// Guards each Adaptive integer-rung handoff from the real-frame pacer to
     /// ordered FIFO. A lost qualification restores any cap and backs off that
     /// rung without delaying a separately validated higher rung. A planned
     /// higher-rung VRR efficiency probe pauses without a failure cooldown.
+    /// A source that outruns a rung's FIFO admission rate keeps that rung's
+    /// normal pacing until an explicit reset.
     class SmoothCadencePacerHandoff {
     public:
         using Clock = std::chrono::steady_clock;
@@ -1643,14 +1725,31 @@ namespace mako::layer {
         struct Decision {
             bool active{false};
             bool changed{false};
+            bool sourceOverrun{false};
             std::optional<size_t> generationLimit;
             std::optional<size_t> previousGenerationLimit;
         };
 
         [[nodiscard]] Decision update(const TimePoint now,
                 const std::optional<size_t> eligibleGenerationLimit,
-                const bool plannedProbePause = false) {
+                const bool plannedProbePause = false,
+                const std::optional<uint32_t> refreshHz = std::nullopt) {
             const auto previous = this->activeLimit;
+            // Higher VRR rungs may enter above their admission rate, but FIFO
+            // pulls a source that waits on presentation down within the
+            // bounded queue. Only an independent clock stays above it.
+            const bool sourceOverrun = this->activeLimit &&
+                eligibleGenerationLimit == this->activeLimit &&
+                *this->activeLimit >= 1 &&
+                *this->activeLimit <= this->retryAt.size() &&
+                this->overrunWatch.observe(now, refreshHz,
+                    *this->activeLimit + 1);
+            if (sourceOverrun) {
+                // An independent game clock does not change while it runs.
+                // Retrying this rung would repeat the same uneven overfill.
+                this->retryAt[*this->activeLimit - 1] = TimePoint::max();
+                this->activeLimit.reset();
+            }
             if (this->activeLimit != eligibleGenerationLimit) {
                 if (!(plannedProbePause && !eligibleGenerationLimit) &&
                         this->activeLimit &&
@@ -1669,9 +1768,12 @@ namespace mako::layer {
                     retry.reset();
                 }
             }
+            if (this->activeLimit != previous)
+                this->overrunWatch.reset();
             return {
                 .active = this->activeLimit.has_value(),
                 .changed = previous != this->activeLimit,
+                .sourceOverrun = sourceOverrun,
                 .generationLimit = this->activeLimit,
                 .previousGenerationLimit = previous,
             };
@@ -1681,11 +1783,13 @@ namespace mako::layer {
             // Losing focus is not a failed FIFO pacing experiment. Preserve
             // any genuine earlier failure's backoff without creating one.
             this->activeLimit.reset();
+            this->overrunWatch.reset();
         }
 
         void reset() {
             this->activeLimit.reset();
             this->retryAt.fill(std::nullopt);
+            this->overrunWatch.reset();
         }
 
         [[nodiscard]] bool active() const {
@@ -1703,6 +1807,7 @@ namespace mako::layer {
     private:
         std::optional<size_t> activeLimit;
         std::array<std::optional<TimePoint>, 4> retryAt{};
+        FifoSourceOverrunWatch overrunWatch;
     };
 
     /// Normally suppress synthetic frames that exceed confirmed refresh.
