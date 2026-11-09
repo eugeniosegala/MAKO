@@ -238,7 +238,9 @@ add_pattern "^($steam_timestamp_prefix)?([[:alpha:]_][[:alnum:]_]*[#@][0-9]+|[[]
 # Interleaved Vulkan processes are common on SteamOS. Keep their identity and
 # swapchain metadata in every focused report so policy and slow-operation
 # records can be attributed without expanding the report to unrelated output.
-add_pattern "$renderer_prefix present diagnostics: operation=(launch-environment|process-identity|swapchain-context-create)"
+add_pattern "$renderer_prefix present diagnostics: operation=(launch-environment|process-identity|swapchain-context-create|instance-engine|application-acquire-budget)"
+# An expired Zink acquire window explains a game that was briefly unthrottled.
+add_pattern "$renderer_prefix application acquire budget wait expired"
 # Gamescope's explicit presentation properties are low-frequency environment
 # metadata. Keep the initial snapshot and any live pacing-owner transition in
 # every report without collecting unrelated compositor output.

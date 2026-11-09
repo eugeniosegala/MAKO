@@ -116,6 +116,12 @@ namespace {
         std::unordered_map<VkSwapchainKHR,
             std::shared_ptr<ApplicationAcquireBudget>> acquireBudgets;
         std::atomic<bool> acquireBudgetsPresent{false};
+        // Wine keeps its own instance alive while a game's renderer, such as
+        // Zink, creates another, so the process-wide engine name can describe
+        // the wrong instance. Devices take the name of their own instance,
+        // found through the dispatch key a physical device shares with it.
+        std::unordered_map<const void*, std::string> instanceEngineNames;
+        std::unordered_map<VkDevice, std::string> deviceEngineNames;
         struct RetiredSwapchain {
             VkDevice device{VK_NULL_HANDLE};
             VkSurfaceKHR surface{VK_NULL_HANDLE};
@@ -133,6 +139,16 @@ namespace {
             std::unordered_map<std::string_view, PFN_vkVoidFunction>>
             lowerInstanceCommands;
     }* instance_info; // NOLINT (global variable)
+
+    const void* dispatchKey(const void* handle) {
+        return *static_cast<const void* const*>(handle);
+    }
+
+    const std::string& deviceEngineName(const VkDevice device) {
+        const auto found = instance_info->deviceEngineNames.find(device);
+        return found == instance_info->deviceEngineNames.end()
+            ? instance_info->engineName : found->second;
+    }
 
     // Loaders before Vulkan-Loader's terminator fix, such as 1.3.239 in
     // Steam's runtime, answer a lookup made after vkCreateInstance returns
@@ -689,7 +705,20 @@ namespace {
             }
             instance_info->lowerInstanceCommands.insert_or_assign(
                 *instance, std::move(lowerCommands));
+            const std::string instanceEngine =
+                info->pApplicationInfo && info->pApplicationInfo->pEngineName
+                    ? info->pApplicationInfo->pEngineName : "";
+            instance_info->instanceEngineNames.insert_or_assign(
+                dispatchKey(*instance), instanceEngine);
             instance_info->handles.push_back(*instance);
+            if (present_diagnostics::enabled()) {
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=instance-engine"
+                          << " engine="
+                          << (instanceEngine.empty() ? "none" : instanceEngine)
+                          << " instances=" << instance_info->handles.size()
+                          << '\n';
+            }
             lowerInstanceCreated = false;
 
             return VK_SUCCESS;
@@ -1095,6 +1124,12 @@ namespace {
             if (!inserted)
                 throw ls::error("duplicate Vulkan device handle");
             layerDeviceInserted = true;
+            if (const auto engine = instance_info->instanceEngineNames.find(
+                    dispatchKey(physdev));
+                    engine != instance_info->instanceEngineNames.end()) {
+                instance_info->deviceEngineNames.insert_or_assign(
+                    *device, engine->second);
+            }
 
             // Queue handles are stable for the device lifetime. Register
             // every ordinary queue the application requested so scaling can
@@ -1183,6 +1218,7 @@ namespace {
             }
         );
         instance_info->nativeDevices.erase(device);
+        instance_info->deviceEngineNames.erase(device);
         instance_info->presentRetirementDevices.erase(device);
         instance_info->gamescopeTimingDevices.erase(device);
         instance_info->presentTimingDevices.erase(device);
@@ -1208,6 +1244,8 @@ namespace {
         if (it != instance_info->handles.end())
             instance_info->handles.erase(it);
         instance_info->lowerInstanceCommands.erase(instance);
+        if (instance)
+            instance_info->instanceEngineNames.erase(dispatchKey(instance));
 
         const bool lastInstance = instance_info->handles.empty();
 
@@ -3042,7 +3080,7 @@ namespace {
 
             instance_info->swapchains.emplace(*swapchain,
                 ls::R<vk::Vulkan>(it->second));
-            if (applicationAcquireBudgetApplies(instance_info->engineName,
+            if (applicationAcquireBudgetApplies(deviceEngineName(device),
                     info->minImageCount, newInfo.minImageCount,
                     modification.surfaceMinImageCount)) {
                 auto budget = std::make_shared<ApplicationAcquireBudget>(
