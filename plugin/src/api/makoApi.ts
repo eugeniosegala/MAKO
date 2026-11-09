@@ -291,17 +291,8 @@ export type RuntimeScalingMethod =
 export type RuntimeScalingPipeline =
   "inactive" | "pre-frame-generation" | "post-frame-generation";
 
-export type RuntimeWineCompatibilityFix =
-  | "unneeded"
-  | "restart-required"
-  | "ineffective"
-  | "not-eligible"
-  | "disabled"
-  | "manual";
-
 export interface RuntimeFrameGenerationUnavailable {
   reason: string;
-  wine_compatibility_fix: RuntimeWineCompatibilityFix;
 }
 
 export interface RuntimeSpatialScalingState {

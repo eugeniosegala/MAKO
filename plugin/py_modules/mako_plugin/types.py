@@ -284,17 +284,10 @@ class RuntimeSpatialScalingState(TypedDict):
     non_supersampling_factor_ceiling: Optional[float]
 
 
-RuntimeWineCompatibilityFix = Literal[
-    "unneeded", "restart-required", "ineffective", "not-eligible", "disabled",
-    "manual",
-]
-
-
 class RuntimeFrameGenerationUnavailable(TypedDict):
-    """Why Frame Generation cannot run for a context, and Wine's switch state."""
+    """Why Frame Generation cannot run for a context."""
 
     reason: str
-    wine_compatibility_fix: RuntimeWineCompatibilityFix
 
 
 class RuntimeContextState(TypedDict):

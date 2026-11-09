@@ -556,13 +556,6 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "default": False,
         "description": "may improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds; restart required",
         "location": "script"
-    },
-
-    "wine_compatibility_fix": {
-        "fieldType": ConfigFieldType.BOOLEAN,
-        "default": True,
-        "description": "let MAKO apply Wine's switch that draws a Proton 9 game directly when its offscreen window would hide generated frames; restart required",
-        "location": "script"
     }
 }
 

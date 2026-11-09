@@ -70,6 +70,8 @@ Restore the original launch settings and remove the two temporary diagnostics va
 
 Review `MAKO-diagnostics.txt` and remove personal information. Upload it through the [diagnostic form](https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform), choosing **MAKO Renderer (standalone/direct installation)**. Answer **Unknown** when unsure. Do not post the log publicly or attach `Lossless.dll`.
 
+An `offscreen X11 presentation window` record includes the presentation window and top-level sizes. A 1×1 top-level means MAKO kept Frame Generation off because generated frames could not reach the screen. The launchers apply the Wine switch before starting the game; this record reports that presentation is still offscreen.
+
 The report alone is enough for most problems. For a visual problem, a short video or photo of the screen can also help. Support can reproduce Frame Generation artifacts offline from [recorded test frames](MAKO-FG.md#record-test-frames), which hold the game's own frames before MAKO processes them; record them only if support asks.
 
 ## GPU Headroom evidence

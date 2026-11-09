@@ -20,7 +20,6 @@ from .types import (
     RuntimeScalingPipeline,
     RuntimeSpatialScalingState,
     RuntimeStatusResponse,
-    RuntimeWineCompatibilityFix,
 )
 
 
@@ -284,29 +283,15 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
     }
 
 
-_WINE_COMPATIBILITY_FIXES = frozenset({
-    "unneeded", "restart-required", "ineffective", "not-eligible", "disabled",
-    "manual",
-})
-
-
 def _frame_generation_unavailable(
         value: object,
 ) -> Optional[RuntimeFrameGenerationUnavailable]:
-    # Renderers before the offscreen-window check omit this field.
     if value is None:
         return None
     if not isinstance(value, dict):
         raise ValueError("frame_generation_unavailable must be an object or null")
-    fix = _string(
-        value.get("wine_compatibility_fix"),
-        "frame_generation_unavailable.wine_compatibility_fix",
-    )
-    if fix not in _WINE_COMPATIBILITY_FIXES:
-        raise ValueError("unsupported Wine compatibility fix state")
     return {
         "reason": _string(value.get("reason"), "frame_generation_unavailable.reason"),
-        "wine_compatibility_fix": cast(RuntimeWineCompatibilityFix, fix),
     }
 
 

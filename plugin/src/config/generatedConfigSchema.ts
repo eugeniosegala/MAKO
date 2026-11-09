@@ -197,7 +197,6 @@ export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const DISABLE_STEAM_OVERLAY = "disable_steam_overlay" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
 export const FORCE_ALSA_AUDIO = "force_alsa_audio" as const;
-export const WINE_COMPATIBILITY_FIX = "wine_compatibility_fix" as const;
 
 // Configuration field definition
 export interface ConfigField {
@@ -503,12 +502,6 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: false,
     description: "may improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds; restart required"
   },
-  wine_compatibility_fix: {
-    name: "wine_compatibility_fix",
-    fieldType: ConfigFieldType.BOOLEAN,
-    default: true,
-    description: "let MAKO apply Wine's switch that draws a Proton 9 game directly when its offscreen window would hide generated frames; restart required"
-  },
 };
 
 // Type-safe configuration data structure
@@ -562,7 +555,6 @@ export interface ConfigurationData {
   disable_steam_overlay: boolean;
   enable_zink: boolean;
   force_alsa_audio: boolean;
-  wine_compatibility_fix: boolean;
 }
 
 // Validated partial profile update sent through Decky's RPC boundary
@@ -624,7 +616,6 @@ export function getDefaults(): ConfigurationData {
     disable_steam_overlay: true,
     enable_zink: false,
     force_alsa_audio: false,
-    wine_compatibility_fix: true,
   };
 }
 
@@ -679,6 +670,5 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     disable_steam_overlay: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,
     force_alsa_audio: ConfigFieldType.BOOLEAN,
-    wine_compatibility_fix: ConfigFieldType.BOOLEAN,
   };
 }

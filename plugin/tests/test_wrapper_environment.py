@@ -101,7 +101,6 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "MESA_ANTI_LAG_DISABLED=%s\\n" "${DISABLE_LAYER_MESA_ANTI_LAG:-}"',
             'printf "PRELOAD=%s\\n" "${LD_PRELOAD:-}"',
             'printf "WINE_SWITCH=%s\\n" "${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK-unset}"',
-            'printf "WINE_FIX=%s\\n" "${MAKO_WINE_COMPATIBILITY_FIX:-}"',
         ])
         environment = {
             "PATH": os.environ.get("PATH", ""),
@@ -363,68 +362,31 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["ENABLE_SCALING"], "")
         self.assertEqual(values["VKBASALT"], "")
 
-    def _wine_marker(self, profile, suffix=".vk-child-window"):
-        directory = self.service.config_dir / "wine-compatibility"
-        directory.mkdir(parents=True, exist_ok=True)
-        marker = directory / (profile.encode().hex() + suffix)
-        marker.write_text("1\n")
-        return marker
-
-    def test_wine_compatibility_marker_exports_the_switch_for_its_profile(self):
+    def test_wine_switch_is_applied_on_first_launch_without_profile(self):
         config = ConfigurationManager.get_defaults()
-        self._wine_marker("Half-Life:-2")
+        for environment in ({}, {"MAKO_PROFILE": "Half-Life:-2"}, {"MAKO_PROFILE": "Other"}):
+            with self.subTest(environment=environment):
+                self.assertEqual(self._evaluate(environment, config)["WINE_SWITCH"], "1")
 
-        values = self._evaluate({"MAKO_PROFILE": "Half-Life:-2"}, config)
-        self.assertEqual(values["WINE_FIX"], "1")
-        self.assertEqual(values["WINE_SWITCH"], "1")
-
-        other = self._evaluate({"MAKO_PROFILE": "Other"}, config)
-        self.assertEqual(other["WINE_SWITCH"], "unset")
-        unnamed = self._evaluate({}, config)
-        self.assertEqual(unnamed["WINE_SWITCH"], "unset")
-
-    def test_wine_compatibility_marker_respects_failure_setting_and_caller(self):
+    def test_wine_switch_preserves_explicit_caller_values(self):
         config = ConfigurationManager.get_defaults()
-        self._wine_marker("Half-Life-2")
-        self._wine_marker("Half-Life-2", ".vk-child-window-ineffective")
-        failed = self._evaluate({"MAKO_PROFILE": "Half-Life-2"}, config)
-        self.assertEqual(failed["WINE_SWITCH"], "unset")
+        for value in ("0", "1", ""):
+            with self.subTest(value=value):
+                values = self._evaluate({
+                    "WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK": value,
+                }, config)
+                self.assertEqual(values["WINE_SWITCH"], value)
 
-        self._wine_marker("Portal")
-        disabled = dict(config, wine_compatibility_fix=False)
-        values = self._evaluate({"MAKO_PROFILE": "Portal"}, disabled)
-        self.assertEqual(values["WINE_FIX"], "0")
-        self.assertEqual(values["WINE_SWITCH"], "unset")
-
-        caller = self._evaluate({
-            "MAKO_PROFILE": "Portal",
-            "WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK": "0",
-        }, config)
-        self.assertEqual(caller["WINE_SWITCH"], "0")
-
-        without_renderer = dict(
-            config, frame_generation_provisioned=False, scaling_enabled=False
-        )
-        inactive = self._evaluate({"MAKO_PROFILE": "Portal"}, without_renderer)
-        self.assertEqual(inactive["WINE_SWITCH"], "unset")
-
-    def test_wine_compatibility_marker_follows_frame_generation_provisioning(self):
+    def test_wine_switch_follows_renderer_activation(self):
         config = ConfigurationManager.get_defaults()
-        self._wine_marker("Half-Life-2")
-
-        # A live 0x toggle can turn Frame Generation back on mid-session.
-        live_off = dict(config, frame_generation_enabled=False)
-        values = self._evaluate({"MAKO_PROFILE": "Half-Life-2"}, live_off)
-        self.assertEqual(values["WINE_FIX"], "1")
-        self.assertEqual(values["WINE_SWITCH"], "1")
-
-        # Scaling still needs the Renderer, but nothing needs Wine's switch.
-        scaling_only = dict(
-            config, frame_generation_provisioned=False, scaling_enabled=True
-        )
-        values = self._evaluate({"MAKO_PROFILE": "Half-Life-2"}, scaling_only)
-        self.assertEqual(values["WINE_FIX"], "0")
-        self.assertEqual(values["WINE_SWITCH"], "unset")
+        for settings, expected in (
+            ({"frame_generation_enabled": False}, "1"),
+            ({"frame_generation_provisioned": False, "scaling_enabled": True}, "1"),
+            ({"frame_generation_provisioned": False, "scaling_enabled": False}, "unset"),
+            ({"disable_mako": True}, "unset"),
+        ):
+            with self.subTest(settings=settings):
+                self.assertEqual(self._evaluate(config=dict(config, **settings))["WINE_SWITCH"], expected)
 
     def test_scaling_only_keeps_combined_renderer_without_fg_provisioning(self):
         config = ConfigurationManager.get_defaults()

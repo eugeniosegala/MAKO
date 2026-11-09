@@ -59,11 +59,7 @@ from .constants import (
     VKBASALT_LAYER_ENABLE_ENV,
     VKBASALT_LAYER_NAME_64,
     WAYLAND_DISPLAY_ENV,
-    WINE_CHILD_WINDOW_INEFFECTIVE_SUFFIX,
-    WINE_CHILD_WINDOW_MARKER_SUFFIX,
     WINE_CHILD_WINDOW_SWITCH_ENV,
-    WINE_COMPATIBILITY_DIRNAME,
-    WINE_COMPATIBILITY_FIX_ENV,
 )
 from .profile_storage import (
     ProfileMetadata,
@@ -76,7 +72,7 @@ from .profile_storage import (
 from .process_detection import is_matchable_process_name
 
 
-WRAPPER_FORMAT_VERSION = 83
+WRAPPER_FORMAT_VERSION = 84
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -93,7 +89,6 @@ REQUIRED_WRAPPER_EXPORTS = (
     *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
     f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
     f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
-    # Older wrappers lack the Wine compatibility marker check.
     f"export {WINE_CHILD_WINDOW_SWITCH_ENV}=1",
     "mako_gamescope_wsi_required=",
     "mako_gamescope_wsi_session=",
@@ -388,27 +383,6 @@ def host_compatibility_guard_lines(
     ]
 
 
-def wine_compatibility_lines(context: WrapperGenerationContext) -> list[str]:
-    """Export Wine's direct-drawing switch for a profile MAKO Renderer marked."""
-    marker_directory = shlex.quote(str(context.config_dir / WINE_COMPATIBILITY_DIRNAME))
-    # The Renderer names markers by the profile name's bytes in lowercase hex.
-    # A caller's own value for the switch, including 0, is left untouched.
-    return [
-        'if [ "${mako_renderer_enabled:-0}" = 1 ] && '
-        f'[ "${{{WINE_COMPATIBILITY_FIX_ENV}:-1}}" != 0 ] && '
-        f'[ -n "${{{MAKO_PROFILE_ENV}:-}}" ] && '
-        f'[ -z "${{{WINE_CHILD_WINDOW_SWITCH_ENV}+set}}" ]; then',
-        f'    mako_wine_compatibility_marker={marker_directory}/'
-        f'"$(printf \'%s\' "${MAKO_PROFILE_ENV}" | od -An -v -tx1 | tr -d \' \\n\')"',
-        f'    if [ -e "$mako_wine_compatibility_marker{WINE_CHILD_WINDOW_MARKER_SUFFIX}" ] && '
-        f'[ ! -e "$mako_wine_compatibility_marker{WINE_CHILD_WINDOW_INEFFECTIVE_SUFFIX}" ]; then',
-        f"        export {WINE_CHILD_WINDOW_SWITCH_ENV}=1",
-        "    fi",
-        "    unset mako_wine_compatibility_marker",
-        "fi",
-    ]
-
-
 def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
     """Activate MAKO through its deterministic Vulkan discovery boundary."""
     if PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT < 1:
@@ -507,7 +481,11 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"    unset {MAKO_LAYER_ENABLE_ENV}",
         f"    export {MAKO_LAYER_DISABLE_ENV}=1",
         "fi",
-        *wine_compatibility_lines(context),
+        # Set before Wine initializes its X11 driver; explicit values win.
+        'if [ "${mako_renderer_enabled:-0}" = 1 ] && '
+        f'[ -z "${{{WINE_CHILD_WINDOW_SWITCH_ENV}+set}}" ]; then',
+        f"    export {WINE_CHILD_WINDOW_SWITCH_ENV}=1",
+        "fi",
         f"unset {MAKO_SPLIT_LAYER_CHAIN_ENV}",
         *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
         f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",

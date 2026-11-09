@@ -103,15 +103,8 @@ ZINK_DRIVER_VALUE = "zink"
 SDL_AUDIO_DRIVER_ENV = "SDL_AUDIODRIVER"
 SDL_AUDIO_DRIVER_ALSA_VALUE = "alsa"
 WINE_DLL_OVERRIDES_ENV = "WINEDLLOVERRIDES"
-# Proton 9 renders a Vulkan window that has child windows offscreen and copies
-# it once per game frame, hiding generated frames. MAKO Renderer records a
-# per-profile marker when Wine's switch can draw the game directly; the wrapper
-# exports the switch on the next launch. Names match wine_compatibility.hpp.
-WINE_COMPATIBILITY_FIX_ENV = "MAKO_WINE_COMPATIBILITY_FIX"
+# Bypass Wine's offscreen child-window copy before starting the game.
 WINE_CHILD_WINDOW_SWITCH_ENV = "WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK"
-WINE_COMPATIBILITY_DIRNAME = "wine-compatibility"
-WINE_CHILD_WINDOW_MARKER_SUFFIX = ".vk-child-window"
-WINE_CHILD_WINDOW_INEFFECTIVE_SUFFIX = ".vk-child-window-ineffective"
 CONFIG_FILENAME = "conf.toml"
 # The engine reads conf.toml directly, so Decky-only launcher settings must be
 # stored separately rather than adding unknown keys to an upstream profile.

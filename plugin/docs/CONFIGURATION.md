@@ -68,11 +68,11 @@ For games switching between 30 FPS cutscenes and 60 FPS gameplay on a 60 Hz disp
 
 ### Proton offscreen windows
 
-Some games on Proton 9, such as Half-Life 2, draw offscreen in a way that hides generated frames. When **Live Status** asks you to restart, leave **Tweaks > Proton Offscreen Window Fix** enabled (the default) and restart the game. MAKO applies the fix to eligible games on their next launch; Frame Generation stays off for the current launch.
+MAKO's game wrapper automatically sets `WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1` before an enabled Renderer launch. On Proton 8 and 9, this bypasses an offscreen-window workaround that can hide generated frames. It applies on the first launch; there is no compatibility toggle or detection-and-restart cycle. Games already running receive the new environment on their next launch.
 
-On Proton 7 or 8, MAKO cannot detect this redirection: **Live Status** can report Frame Generation as active while generated frames remain hidden. Try Proton 10 or newer. Proton 8 also supports the [manual launch-option fix](../../engine/docs/CONFIGURATION.md#proton-offscreen-windows); Proton 7 does not.
+If this causes display problems, set `WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=0` before `mako-run` in the game's launch options, or in the game's environment settings in Heroic or Lutris. The wrapper preserves explicit values. Disabled Renderer launches do not add the variable.
 
-If **Live Status** reports that the fix is unavailable or ineffective, try another Proton version. Turn the setting off if it causes display problems. See [Wine offscreen windows](../../engine/docs/WSI-ISOLATION.md#wine-offscreen-windows) for detection and fallback details.
+If the game still renders under a 1×1 offscreen parent, Frame Generation stays off and **Live Status** explains that generated frames cannot reach the screen. Try another Proton version or window mode. Proton 7 lacks the switch, and other versions can have different offscreen paths; neither the variable nor the geometry guard guarantees visible output on every version. See [Wine offscreen windows](../../engine/docs/WSI-ISOLATION.md#wine-offscreen-windows) for details.
 
 ## GPU Headroom
 
@@ -155,7 +155,6 @@ Keep defaults unless a game needs a change.
 | **Gamescope WSI (Restart)** | Coloured or pixelated motion artifacts in supported 64-bit host Gamescope games. |
 | **Game Swapchain Images (Restart)** | Games that fail to start with MAKO; may reduce generated-frame availability. |
 | **Mailbox Presentation (Restart)** | Games that hang or fail with Frame Generation's FIFO presentation; generated frames can be replaced before they are shown, which may reduce smoothness. |
-| **Proton Offscreen Window Fix (Restart)** | On by default. Applies the [offscreen-window fix](#proton-offscreen-windows) to eligible games after detection and one restart, only while **Enable Frame-gen** is on. Turn off to stop MAKO applying it for this profile. |
 | **Disable MAKO Renderer on Next Launch** | Temporarily bypassing the Renderer for troubleshooting. |
 | **Disable Steam Deck Mode** | Exposing settings hidden by a game's handheld mode. |
 | **Zink** | Running OpenGL through Vulkan. |

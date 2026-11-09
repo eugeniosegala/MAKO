@@ -72,6 +72,23 @@ if [[ "$default_output" != "$expected_default" ]]; then
     fail "default environment or argument forwarding changed:\n$default_output"
 fi
 
+# The switch is available on the first launch and preserves explicit overrides.
+for wine_value in unset 0 1 empty; do
+    wine_environment=(-u WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK)
+    wine_expected=1
+    if [[ "$wine_value" != unset ]]; then
+        wine_expected="$wine_value"
+        [[ "$wine_value" != empty ]] || wine_expected=""
+        wine_environment+=("WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=$wine_expected")
+    fi
+    wine_output="$(env -u DISABLE_MAKO "${wine_environment[@]}" \
+        "$launcher" bash -c 'printf "%s" "${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK-unset}"')"
+    [[ "$wine_output" == "$wine_expected" ]] || fail "Wine override was not preserved: $wine_value"
+done
+wine_disabled="$(env -u WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK DISABLE_MAKO=1 \
+    "$launcher" bash -c 'printf "%s" "${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK-unset}"')"
+[[ "$wine_disabled" == unset ]] || fail "disabled Renderer changed Wine presentation"
+
 steam_overlay_dir="$test_data_home/vulkan/implicit_layer.d"
 mkdir -p "$steam_overlay_dir"
 touch "$steam_overlay_dir/steamoverlay_x86_64.json"

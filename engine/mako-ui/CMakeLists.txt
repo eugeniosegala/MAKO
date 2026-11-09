@@ -89,6 +89,7 @@ if(BUILD_TESTING)
         PRIVATE Qt6::Gui)
     target_compile_definitions(mako-ui-backend-contract-tests PRIVATE
         MAKO_UI_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/UI.qml"
+        MAKO_UI_LAUNCHER="${CMAKE_CURRENT_SOURCE_DIR}/../scripts/mako-launch"
         MAKO_UI_REMOTE_PLAY_HELPER="${CMAKE_CURRENT_SOURCE_DIR}/../scripts/mako-remote-play"
         MAKO_UI_GROUP_ENTRY_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/panes/GroupEntry.qml"
         MAKO_UI_VKBASALT_SHADER_SOURCE_DIR="${MAKO_VKBASALT_SHADER_SOURCE_DIR}")

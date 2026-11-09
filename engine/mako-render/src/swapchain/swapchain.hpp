@@ -22,7 +22,6 @@
 #include "runtime_transition.hpp"
 #include "spatial_scaler.hpp"
 #include "spatial_scaling_policy.hpp"
-#include "wine_compatibility.hpp"
 #include "spatial_command_recording.hpp"
 #include "present_timing.hpp"
 #include "frame_recorder.hpp"
@@ -92,7 +91,6 @@ namespace mako::layer {
         // Frame generation cannot reach the screen through this surface, so
         // it stays off whatever the colour pipeline later allows.
         bool frameGenerationSurfaceUnavailable{false};
-        WineChildWindowFix wineChildWindowFix{WineChildWindowFix::Unneeded};
         bool spatialScalingActive{false};
         // Requested internal native output resize, including a memory-rejected
         // candidate eligible for retry; the saved Scaling toggle stays off.

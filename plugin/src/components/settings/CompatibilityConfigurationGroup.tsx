@@ -10,7 +10,6 @@ import {
   GAMESCOPE_WSI_COMPATIBILITY,
   MAILBOX_PRESENTATION_COMPATIBILITY,
   SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY,
-  WINE_COMPATIBILITY_FIX,
 } from "../../config/configSchema";
 import { dynamicCadenceRecoveryChanges } from "../../config/fractionalAdaptivePreset";
 import t from "../../i18n/i18n";
@@ -253,25 +252,6 @@ export function CompatibilityConfigurationGroup({
               onChange={(value) =>
                 onConfigChange(MAILBOX_PRESENTATION_COMPATIBILITY, value)
               }
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <ToggleField
-              label={
-                <MakoRestartLabel
-                  label={t(
-                    "CONFIG_WINE_COMPATIBILITY_FIX",
-                    "Proton Offscreen Window Fix (Restart)",
-                  )}
-                />
-              }
-              description={t(
-                "CONFIG_WINE_COMPATIBILITY_FIX_DESC",
-                "Some games on Proton 9 are drawn offscreen, which hides generated frames. MAKO fixes this automatically; the game needs one restart.",
-              )}
-              checked={config.wine_compatibility_fix}
-              onChange={(value) => onConfigChange(WINE_COMPATIBILITY_FIX, value)}
             />
           </PanelSectionRow>
 

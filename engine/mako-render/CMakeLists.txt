@@ -16,7 +16,6 @@ set(LAYER_SOURCES
     "src/swapchain/profile.cpp"
     "src/swapchain/resources.cpp"
     "src/swapchain/status.cpp"
-    "src/wine_compatibility.cpp"
     "src/x11_presentation_target.cpp")
 
 set(ADAPTIVE_SOURCE "src/adaptive_scheduler.cpp")
@@ -210,12 +209,6 @@ if(BUILD_TESTING)
     add_test(NAME steam-overlay-library-diagnostics
         COMMAND mako-steam-overlay-diagnostics-tests $<TARGET_FILE:mako-launch-preload-fixture>)
     mako_register_portable_policy_test(mako-steam-overlay-diagnostics-tests steam-overlay-library-diagnostics)
-
-    add_executable(mako-wine-compatibility-tests
-        "tests/wine_compatibility_tests.cpp" "src/wine_compatibility.cpp")
-    target_include_directories(mako-wine-compatibility-tests PRIVATE "src")
-    add_test(NAME wine-compatibility COMMAND mako-wine-compatibility-tests)
-    mako_register_portable_policy_test(mako-wine-compatibility-tests wine-compatibility)
 
     add_executable(mako-runtime-health-tests
         "tests/runtime_health_tests.cpp" "src/runtime_health.cpp")

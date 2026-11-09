@@ -12,7 +12,6 @@
 #include "runtime_health.hpp"
 #include "spatial_scaling_policy.hpp"
 #include "swapchain/swapchain.hpp"
-#include "wine_compatibility.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -41,16 +40,9 @@ namespace mako::layer {
         bool refreshRateChanged{false};
     };
 
-    /// An X11 window that Wine renders offscreen, and whether it has the size
-    /// of the game's own top-level window.
-    struct OffscreenX11Surface {
-        std::optional<bool> drawsMainWindow;
-    };
-
     struct SwapchainCreateModification {
         bool privateOrderedTransport{false};
         bool frameGenerationSurfaceUnavailable{false};
-        WineChildWindowFix wineChildWindowFix{WineChildWindowFix::Unneeded};
         std::optional<VkPresentModeKHR> gamescopeProtocolPresentMode;
         uint32_t gamescopePresentRefreshHz{0};
         bool swapchainImageCountCompatibility{false};
@@ -174,7 +166,7 @@ namespace mako::layer {
                 fixedSurfaceContract,
             bool spatialSurfaceScalingSupported,
             bool gamescopeScalingSurface,
-            std::optional<OffscreenX11Surface> offscreenX11Surface,
+            bool offscreenX11Surface,
             const std::function<void(
                 const FixedSurfaceScalingContract&)>& publishSpatialCreate,
             const std::function<void(void)>& finish) const;

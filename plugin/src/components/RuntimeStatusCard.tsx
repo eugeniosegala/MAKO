@@ -3,7 +3,7 @@ import type { ConfigurationData } from "../config/configSchema";
 import { frameGenerationModelShortLabel } from "../config/frameGenerationModelChoice";
 import {
   type RuntimeScalingUiState,
-  wineCompatibilityFixMessage,
+  frameGenerationUnavailableMessage,
 } from "../utils/runtimeScalingUtils";
 import t from "../i18n/i18n";
 import {
@@ -196,8 +196,8 @@ export function RuntimeStatusCard({
   > &
     Partial<Pick<ConfigurationData, "gpu_headroom_percent">>;
 }) {
-  const wineFixMessage = wineCompatibilityFixMessage(
-    runtimeState.wineCompatibilityFix,
+  const frameGenerationUnavailable = frameGenerationUnavailableMessage(
+    runtimeState.frameGenerationUnavailableReason,
   );
   // Configuration explains absent telemetry; it must not override live reports.
   const featuresOff =
@@ -423,8 +423,8 @@ export function RuntimeStatusCard({
                           />
                         )}
                       </>
-                    ) : wineFixMessage ? (
-                      wineFixMessage
+                    ) : frameGenerationUnavailable ? (
+                      frameGenerationUnavailable
                     ) : runtimeState.frameGenerationEnabled ? (
                       t(
                         "LIVE_STATUS_FG_INACTIVE",

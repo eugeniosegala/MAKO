@@ -21,7 +21,6 @@ from py_modules.mako_plugin.constants import (
     SDL_AUDIO_DRIVER_ALSA_VALUE,
     SDL_AUDIO_DRIVER_ENV,
     STEAM_DECK_MODE_ENV,
-    WINE_COMPATIBILITY_FIX_ENV,
     WINE_DLL_OVERRIDES_ENV,
     ZINK_DRIVER_VALUE,
     ZINK_GALLIUM_DRIVER_ENV,
@@ -51,7 +50,6 @@ def get_env_var_name(field_name: str) -> str:
         "disable_steamdeck_mode": STEAM_DECK_MODE_ENV,
         "enable_zink": ZINK_GLX_VENDOR_ENV,
         "force_alsa_audio": SDL_AUDIO_DRIVER_ENV,
-        "wine_compatibility_fix": WINE_COMPATIBILITY_FIX_ENV,
     }
     return env_map.get(field_name, field_name.upper())
 
@@ -185,14 +183,6 @@ def generate_script_generation() -> str:
                 )
                 lines.append('                "esac",')
                 lines.append('            ])')
-            elif field_name == "wine_compatibility_fix":
-                # The Renderer and the wrapper's marker check both read 0 as
-                # off, so export the value even when it is the default. Wine's
-                # switch only helps Frame Generation, so a profile without it
-                # provisioned never receives the switch, even for scaling.
-                lines.append(f'        lines.append("export {env_var}=" +')
-                lines.append(f'            ("1" if config.get("{field_name}", True) and')
-                lines.append('                config.get("frame_generation_provisioned", True) else "0"))')
             else:
                 lines.append(f'        if config.get("{field_name}", False):')
                 lines.append(f'            lines.append("export {env_var}=1")')

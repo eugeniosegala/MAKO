@@ -222,10 +222,10 @@ performance_mode = true
         defaults = ConfigurationManager.get_defaults()
         content = self.service._generate_script_content(defaults)
 
-        self.assertEqual(len(content.encode("utf-8")), 22879)
+        self.assertEqual(len(content.encode("utf-8")), 22419)
         self.assertEqual(
             _sha256(content),
-            "09e6d594f764bd6328804ee8aa1a765936fd6483538044c8da80aefe671d57c9",
+            "507cad2a610a41e96d23165f8c372b35a72fc319fdddce004ff5bed9351ec7ef",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -292,10 +292,10 @@ performance_mode = true
                 profile_data
             )
 
-        self.assertEqual(len(content.encode("utf-8")), 26016)
+        self.assertEqual(len(content.encode("utf-8")), 25458)
         self.assertEqual(
             _sha256(content),
-            "f1eaf960f853503c3b664e0e184365f875c77be6fa24bda4729eeb5045ad64ae",
+            "7089b44655d0ea1e890315eba3ca1871bf18d8635f9da94b959bcbcdf1d9d7f4",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -391,7 +391,7 @@ performance_mode = true
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "b2798cb368da9fa5f2f282fb3e6358168594555e502adbac43cf1a219d52b48d",
+            "d45bfa6f1e88a3465a5c758fa5231cf0c87c87740de968905e10c6e13376266f",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):
@@ -433,7 +433,7 @@ performance_mode = true
         self.assertFalse(stored_wrapper_settings["mangohud_count_real_frames"])
         self.assertEqual(
             _sha256(wrapper_content),
-            "e0d2578837ed73bbccdb55933787a41f88a67d1471c22a99f298b9d6d9b6ac04",
+            "e21d2a6b5feb674ab6b891edcd4e9d53a86de9b781a07dd9e055bbdd1462bf2b",
         )
         self.assertEqual(
             _sha256(metadata_content),

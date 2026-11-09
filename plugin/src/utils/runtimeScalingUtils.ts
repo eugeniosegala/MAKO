@@ -3,7 +3,6 @@ import type {
   RuntimeContextState,
   RuntimeScalingMethod,
   RuntimeScalingPipeline,
-  RuntimeWineCompatibilityFix,
   RuntimeStatusResult,
 } from "../api/makoApi";
 import type { FrameGenerationModelChoice } from "../config/frameGenerationModelChoice";
@@ -40,7 +39,7 @@ export interface RuntimeScalingUiState {
   frameGenerationTargetFps: number | null;
   frameGenerationMultiplier: number | null;
   frameGenerationPending: boolean;
-  wineCompatibilityFix: RuntimeWineCompatibilityFix | null;
+  frameGenerationUnavailableReason: string | null;
   gpuHeadroomState: string;
   gpuHeadroomPercent: number;
   scalingActive: boolean;
@@ -70,7 +69,7 @@ export const EMPTY_RUNTIME_SCALING_UI_STATE: RuntimeScalingUiState = {
   phase: "inactive",
   frameGenerationActive: false,
   frameGenerationEnabled: false,
-  wineCompatibilityFix: null,
+  frameGenerationUnavailableReason: null,
   frameGenerationModel: null,
   frameGenerationMode: "off",
   frameGenerationAdaptiveStyle: null,
@@ -159,9 +158,8 @@ export function runtimeScalingUiState(
     phase: contexts.length > 0 ? status.phase : "inactive",
     frameGenerationActive: Boolean(frameContext?.frame_generation_active),
     frameGenerationEnabled,
-    wineCompatibilityFix:
-      frameContext?.frame_generation_unavailable?.wine_compatibility_fix ??
-      null,
+    frameGenerationUnavailableReason:
+      frameContext?.frame_generation_unavailable?.reason ?? null,
     gpuHeadroomState: frameContext?.gpu_headroom_state ?? "unavailable",
     gpuHeadroomPercent: appliedFrameProfile?.gpu_headroom_percent ?? 0,
     frameGenerationModel: appliedFrameProfile
@@ -235,38 +233,14 @@ export function runtimeScalingUiState(
   };
 }
 
-/** Explain why Wine's offscreen copy keeps Frame Generation off for a game. */
-export function wineCompatibilityFixMessage(
-  fix: RuntimeScalingUiState["wineCompatibilityFix"],
+/** Explain why generated frames cannot reach the visible window. */
+export function frameGenerationUnavailableMessage(
+  reason: RuntimeScalingUiState["frameGenerationUnavailableReason"],
 ): string | null {
-  switch (fix) {
-    case "restart-required":
-      return t(
-        "LIVE_STATUS_FG_WINE_RESTART",
-        "Off: this game needs the Proton Offscreen Window Fix. MAKO applied it; restart the game to use Frame Generation.",
-      );
-    case "ineffective":
-      return t(
-        "LIVE_STATUS_FG_WINE_INEFFECTIVE",
-        "Unavailable: the Proton Offscreen Window Fix doesn't work with this Proton version. Use Proton 10 or newer.",
-      );
-    case "manual":
-      return t(
-        "LIVE_STATUS_FG_WINE_MANUAL",
-        "Unavailable: this game needs the Proton Offscreen Window Fix. Add WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1 to its launch options.",
-      );
-    case "disabled":
-      return t(
-        "LIVE_STATUS_FG_WINE_DISABLED",
-        "Off: this game needs the Proton Offscreen Window Fix. Turn it on in Tweaks to apply it.",
-      );
-    case "not-eligible":
-    case "unneeded":
-      return t(
-        "LIVE_STATUS_FG_WINE_UNAVAILABLE",
-        "Unavailable: Frame Generation doesn't work with this game on this Proton version. Use Proton 10 or newer.",
-      );
-    default:
-      return null;
-  }
+  return reason === "offscreen-x11-window"
+    ? t(
+        "LIVE_STATUS_FG_OFFSCREEN",
+        "Unavailable: the game renders offscreen, so generated frames cannot reach the screen. Try another Proton version or window mode.",
+      )
+    : null;
 }

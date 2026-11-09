@@ -106,10 +106,9 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
         // Only a profile that asked for Frame Generation needs the reason.
         .frameGenerationUnavailableReason =
             this->info.frameGenerationSurfaceUnavailable &&
-                this->info.wineChildWindowFix != WineChildWindowFix::Unneeded
+                this->runtimeStatusState.requestedProfile.frame_generation_provisioned
                 ? std::optional<std::string_view>{"offscreen-x11-window"}
                 : std::nullopt,
-        .wineCompatibilityFix = wineChildWindowFixName(this->info.wineChildWindowFix),
         .gpuHeadroomState = this->gpuHeadroomResult.state,
         .frameGenerationPrivatePending =
             this->frameGenerationTransition.pendingRequest(),

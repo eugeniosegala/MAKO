@@ -69,6 +69,7 @@ Apply the activation settings:
 
 ```bash
 flatpak override --user --env=ENABLE_MAKO=1 "$appid"
+flatpak override --user --env=WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1 "$appid"
 flatpak override --user --env=DISABLE_LSFG=1 "$appid"
 flatpak override --user --env=DISABLE_LSFGVK=1 "$appid"
 flatpak override --user --env=DISABLE_GAMESCOPE_WSI=1 "$appid"
@@ -82,6 +83,8 @@ flatpak override --user --unset-env=VK_ADD_IMPLICIT_LAYER_PATH "$appid"
 ```
 
 These settings persist for this app. Repeat with another `appid` for each additional app.
+
+The Wine switch matches the native Renderer launcher default. If it causes display problems, set `flatpak override --user --env=WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=0 "$appid"` and restart the app. Native Linux applications ignore this Wine-specific variable.
 
 - **Heroic/Lutris:** prepare the launcher and match each game's executable. Avoid an app-wide `MAKO_PROFILE`; no host wrapper is needed.
 - **EmuDeck:** prepare each Flatpak emulator, select Vulkan, and keep its Steam shortcut and ROM arguments. Native/AppImage emulators use [native launch setup](../README.md#usage).

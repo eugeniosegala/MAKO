@@ -54,29 +54,6 @@ namespace {
     constexpr uint64_t spatialScalingProcessSupportedBit = uint64_t{2};
     constexpr uint64_t spatialScalingSupersamplingBit = uint64_t{4};
 
-    void logWineChildWindowFix(const WineChildWindowFix fix,
-            const std::string_view profileName) {
-        const std::string_view action =
-            fix == WineChildWindowFix::RestartRequired
-                ? "the launcher draws the game directly from its next start; "
-                  "restart the game to enable Frame Generation"
-            : fix == WineChildWindowFix::Ineffective
-                ? "this Proton still renders the game offscreen; Proton 10 or "
-                  "newer draws it directly"
-            : fix == WineChildWindowFix::NotEligible
-                ? "the game draws into a child window; Frame Generation stays off"
-            : fix == WineChildWindowFix::Disabled
-                ? "turned off for this profile; Frame Generation stays off"
-            : fix == WineChildWindowFix::Manual
-                ? "this launcher cannot apply Wine's switch; add "
-                  "WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1 to the game's "
-                  "launch options"
-                : "none";
-        std::cerr << "MAKO Renderer: Wine compatibility fix: state="
-                  << wineChildWindowFixName(fix) << "; profile=" << profileName
-                  << "; action=" << action << '\n';
-    }
-
     vk::DeviceMemoryTotals memoryDelta(
             const vk::DeviceMemoryTotals& after,
             const vk::DeviceMemoryTotals& before) {
@@ -1078,7 +1055,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         const std::optional<FixedSurfaceScalingContract>& fixedSurfaceContract,
         const bool spatialSurfaceScalingSupported,
         const bool gamescopeScalingSurface,
-        const std::optional<OffscreenX11Surface> offscreenX11Surface,
+        const bool offscreenX11Surface,
         const std::function<void(
             const FixedSurfaceScalingContract&)>& publishSpatialCreate,
         const std::function<void(void)>& finish) const {
@@ -1144,17 +1121,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             this->gamescopeHdrActive.value_or(false))
     );
     const auto contextProfile = profileForLayerContext(*this->active_profile);
-    // Wine copies an offscreen window to the screen once per game frame, so
-    // generated frames could never be shown; present the game's own frames
-    // and record whether Wine's switch can draw the game directly next launch.
-    modification.frameGenerationSurfaceUnavailable = offscreenX11Surface.has_value();
-    if (offscreenX11Surface && contextProfile.frame_generation_provisioned) {
-        modification.wineChildWindowFix = resolveWineChildWindowFix(
-            contextProfile.name, ls::findConfigurationFile().parent_path(),
-            offscreenX11Surface->drawsMainWindow
-        );
-        logWineChildWindowFix(modification.wineChildWindowFix, contextProfile.name);
-    }
+    // Generated frames cannot reach the screen through Wine's offscreen copy.
+    modification.frameGenerationSurfaceUnavailable = offscreenX11Surface;
     const bool frameGenerationAvailable =
         frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled()) &&
         !offscreenX11Surface;

@@ -350,9 +350,7 @@ std::string mako::layer::runtimeStatusJson(
            << ",\"frame_generation_unavailable\":";
     if (status.frameGenerationUnavailableReason) {
         stream << "{\"reason\":"
-               << jsonString(*status.frameGenerationUnavailableReason)
-               << ",\"wine_compatibility_fix\":"
-               << jsonString(status.wineCompatibilityFix) << '}';
+               << jsonString(*status.frameGenerationUnavailableReason) << '}';
     } else {
         stream << "null";
     }

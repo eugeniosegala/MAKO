@@ -1855,14 +1855,9 @@ namespace {
         instance_info->x11PresentationTargets.insert_or_assign(surface, target);
     }
 
-    struct OffscreenX11Window {
-        X11WindowNesting nesting;
-        std::optional<bool> drawsMainWindow;
-    };
-
     /// Wine can move a surface's window offscreen after creating the surface,
     /// so read its nesting when each swapchain is created.
-    [[nodiscard]] std::optional<OffscreenX11Window> offscreenX11Window(
+    [[nodiscard]] std::optional<X11WindowNesting> offscreenX11Window(
             const VkSurfaceKHR surface) {
         if (!frameGenerationLayer || !instance_info)
             return std::nullopt;
@@ -1878,11 +1873,7 @@ namespace {
         if (!nesting || !x11WindowPresentsOffscreen(nesting->width,
                 nesting->height, nesting->topLevelWidth, nesting->topLevelHeight))
             return std::nullopt;
-        return OffscreenX11Window{
-            .nesting = *nesting,
-            .drawsMainWindow = x11ProcessTopLevelHasSize(
-                target, nesting->width, nesting->height),
-        };
+        return nesting;
     }
 
     [[nodiscard]] bool spatialSurfaceScalingSupported(
@@ -2549,20 +2540,12 @@ namespace {
             bool spatialScalingActivationSupported =
                 spatialSurfaceScalingSupported(info->surface);
             const auto offscreenWindow = offscreenX11Window(info->surface);
-            std::optional<OffscreenX11Surface> offscreenSurface;
             if (offscreenWindow) {
-                const auto& nesting = offscreenWindow->nesting;
+                const auto& nesting = *offscreenWindow;
                 std::cerr << "MAKO Renderer: offscreen X11 presentation window: "
                              "window=" << nesting.width << 'x' << nesting.height
                           << "; top_level=" << nesting.topLevelWidth << 'x'
-                          << nesting.topLevelHeight << "; main_window="
-                          << (offscreenWindow->drawsMainWindow
-                              ? (*offscreenWindow->drawsMainWindow ? "1" : "0")
-                              : "unknown")
-                          << '\n';
-                offscreenSurface = OffscreenX11Surface{
-                    .drawsMainWindow = offscreenWindow->drawsMainWindow,
-                };
+                          << nesting.topLevelHeight << '\n';
             }
             auto modification =
                 layer_info->root.modifySwapchainCreateInfo(
@@ -2572,7 +2555,7 @@ namespace {
                     spatialScalingActivationSupported,
                     instance_info->scalingSurfaces &&
                         instance_info->scalingSurfaces->owns(info->surface),
-                    offscreenSurface,
+                    offscreenWindow.has_value(),
                     [&](const FixedSurfaceScalingContract& contract) {
 #if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
                         if (spatialScalingCapabilityOwnedByLayer() &&
@@ -2979,7 +2962,6 @@ namespace {
                     modification.privateOrderedTransport,
                 .frameGenerationSurfaceUnavailable =
                     modification.frameGenerationSurfaceUnavailable,
-                .wineChildWindowFix = modification.wineChildWindowFix,
                 .spatialScalingActive =
                     modification.spatialScalingActive,
                 .bridgeDisplayResize = modification.bridgeDisplayResize,

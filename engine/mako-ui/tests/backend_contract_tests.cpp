@@ -14,11 +14,14 @@
 #include <QJsonArray>
 #include <QMetaObject>
 #include <QMetaProperty>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QString>
 #include <QTemporaryDir>
 
 #include <cstring>
 #include <iostream>
+#include <optional>
 #include <stdexcept>
 
 // GPU discovery is unrelated to persistence and must not require a Vulkan host.
@@ -92,6 +95,49 @@ void test_installed_launcher_selection() {
         "the UI lost the user-local fallback when no launcher exists");
     if (previousPath.isNull()) qunsetenv("PATH");
     else qputenv("PATH", previousPath);
+}
+
+void test_installed_launcher_wine_environment() {
+    QTemporaryDir directory;
+    require(directory.isValid(), "temporary Wine launch fixture directory failed");
+    const auto bin = directory.filePath("Qt user's package/bin");
+    require(QDir().mkpath(bin), "cannot create Qt launch fixture directory");
+    const auto launcher = bin + "/mako-launch";
+    require(QFile::copy(QStringLiteral(MAKO_UI_LAUNCHER), launcher),
+        "cannot stage the Renderer launcher for Qt");
+    require(QFile::setPermissions(launcher, QFileDevice::ReadOwner |
+            QFileDevice::WriteOwner | QFileDevice::ExeOwner),
+        "cannot make the Renderer launcher executable");
+    const auto command = mako::ui::launcherCommandForUiDirectory(bin) +
+        QStringLiteral(" /bin/sh -c 'printf \"%s\" \"${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK-unset}\"'");
+    const auto check = [&](const std::optional<QString>& value,
+            const bool disabled, const QString& expected) {
+        // Isolate the user's launch settings, layer selection and display.
+        QProcessEnvironment environment;
+        environment.insert("PATH", "/usr/bin:/bin");
+        environment.insert("HOME", directory.path());
+        environment.insert("XDG_CONFIG_HOME", directory.filePath("config"));
+        environment.insert("XDG_DATA_HOME", directory.filePath("data"));
+        if (value)
+            environment.insert("WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK", *value);
+        if (disabled)
+            environment.insert("DISABLE_MAKO", "1");
+        QProcess process;
+        process.setProcessEnvironment(environment);
+        process.start("/bin/bash", {"-c", command});
+        require(process.waitForStarted(5000) && process.waitForFinished(5000),
+            "Qt's Renderer launch command did not finish");
+        require(process.exitStatus() == QProcess::NormalExit && process.exitCode() == 0,
+            "Qt's Renderer launch command failed");
+        require(process.readAllStandardOutput() == expected.toUtf8(),
+            "Qt's Renderer launcher lost the Wine default or caller override");
+    };
+    check(std::nullopt, false, "1");
+    check(QStringLiteral("0"), false, "0");
+    check(QStringLiteral("1"), false, "1");
+    check(QStringLiteral(""), false, "");
+    check(std::nullopt, true, "unset");
+    check(QStringLiteral("0"), true, "0");
 }
 
 void test_mangohud_profile_and_availability() {
@@ -1856,6 +1902,7 @@ int main(int argc, char* argv[]) {
     const QCoreApplication application(argc, argv);
     try {
         test_installed_launcher_selection();
+        test_installed_launcher_wine_environment();
         test_mangohud_profile_and_availability();
         test_scaling_properties();
         test_lossless_scaling_is_optional();

@@ -103,14 +103,12 @@ int main() {
     auto offscreenRecord = record;
     offscreenRecord.frameGenerationActive = false;
     offscreenRecord.frameGenerationUnavailableReason = "offscreen-x11-window";
-    offscreenRecord.wineCompatibilityFix = "restart-required";
     const auto offscreenJson = mako::layer::runtimeStatusJson(
         offscreenRecord, 123, 321, 456, "frame-generation", 789
     );
     expect(offscreenJson.find("\"frame_generation_unavailable\":{\"reason\":"
-            "\"offscreen-x11-window\",\"wine_compatibility_fix\":"
-            "\"restart-required\"}") != std::string::npos,
-        "an offscreen window must publish its reason and Wine fix state");
+            "\"offscreen-x11-window\"}") != std::string::npos,
+        "an offscreen window must publish its unavailable reason");
     expect(json.find("\"phase\":\"draining\"") != std::string::npos,
         "phase missing");
     expect(json.find("\"process_start_ticks\":321") != std::string::npos,

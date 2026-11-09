@@ -61,21 +61,15 @@ For games switching between 30 FPS cutscenes and 60 FPS gameplay on a 60 Hz disp
 
 #### Proton offscreen windows
 
-Some games, such as Half-Life 2, draw offscreen on older Proton versions and hide generated frames. The workaround depends on the Proton version:
+The launch command shown by the Qt UI uses MAKO's Renderer launcher, which automatically sets `WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1` before starting the game. On Proton 8 and 9, this bypasses an offscreen-window workaround that can hide generated frames. It applies on the first launch, without detection or a restart prompt. A game already running when the launcher is updated receives the new environment on its next launch.
 
-| Proton version | What to do |
-| --- | --- |
-| **9** | MAKO detects the affected window, keeps Frame Generation off and logs `offscreen X11 presentation window`. Apply the manual fix below when the log recommends it, or use [MAKO Decky's automatic fix](../../plugin/docs/CONFIGURATION.md#proton-offscreen-windows). |
-| **8** | MAKO cannot detect this redirection, so it can report Frame Generation as active even though generated frames are hidden. Apply the manual fix below or try Proton 10 or newer. |
-| **7** | MAKO cannot detect this redirection, and the manual fix is unavailable. Try Proton 10 or newer. |
-
-For the manual fix on Proton 8 or 9, prefix the game's existing launch command with `WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1`, then restart. For a standard standalone launch:
+If this causes display problems, preserve the rest of your launch command and opt out with:
 
 ```text
-WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1 ~/.local/bin/mako-launch %command%
+WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=0 ~/.local/bin/mako-launch %command%
 ```
 
-Apply this only to affected games; remove it if the image becomes blank or misplaced. See [Wine offscreen windows](WSI-ISOLATION.md#wine-offscreen-windows) for detection and fallback details.
+Proton 7 lacks this switch, and later versions can use different offscreen paths. If MAKO still detects an offscreen window under a 1×1 parent, Frame Generation stays off and the log records `offscreen X11 presentation window`. Try another Proton version or window mode. The geometry guard cannot detect Proton 7 or 8's older redirection, so verify visible smoothness as well as FPS. Direct Flatpak setup supplies the variable through the [app environment](FLATPAK-GUIDE.md). See [Wine offscreen windows](WSI-ISOLATION.md#wine-offscreen-windows) for the implementation and limits.
 
 ### Scaling
 

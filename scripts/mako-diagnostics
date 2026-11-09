@@ -245,9 +245,8 @@ add_pattern "$renderer_prefix present diagnostics: operation=(launch-environment
 add_pattern "$renderer_prefix Gamescope presentation feedback"
 add_pattern "$renderer_prefix presentation timing (initialized|fallback);"
 add_pattern "$renderer_prefix present diagnostics: operation=gamescope-presentation-feedback"
-# An offscreen window and Wine's switch state explain why Frame Generation
-# stayed off, or needs a restart, in every report.
-add_pattern "$renderer_prefix (offscreen X11 presentation window|Wine compatibility fix):"
+# Offscreen windows explain unavailable Frame Generation.
+add_pattern "$renderer_prefix offscreen X11 presentation window:"
 # Wrapper session admission failures are deliberately log-only. Retain this
 # line in every focused report so a Desktop-session fallback remains visible
 # without reproducing Gamescope WSI's modal error path.

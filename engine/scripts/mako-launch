@@ -651,6 +651,13 @@ else
 fi
 unset mako_vkbasalt_enabled mako_mangohud_gates
 
+# Bypass Wine's offscreen child-window copy before its X11 driver starts.
+# Keep caller overrides, including 0, and leave disabled launches untouched.
+if [[ "${DISABLE_MAKO:-0}" != 1 &&
+        -z "${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK+set}" ]]; then
+    export WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1
+fi
+
 if [[ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" &&
         ( -z "${WAYLAND_DISPLAY:-}" ||
           "$WAYLAND_DISPLAY" == "$GAMESCOPE_WAYLAND_DISPLAY" ) ]]; then

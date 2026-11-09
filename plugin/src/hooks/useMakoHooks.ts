@@ -8,7 +8,6 @@ import {
   updateMakoConfigFromObject,
   type ConfigUpdateResult,
   type CustomShaderEffect,
-  type RuntimeStatusResult,
   configFailureResult,
 } from "../api/makoApi";
 import {
@@ -27,7 +26,6 @@ import {
 } from "../utils/runtimeScalingUtils";
 import {
   showErrorToast,
-  showSuccessToast,
   ToastMessages,
 } from "../utils/toastUtils";
 import t from "../i18n/i18n";
@@ -172,34 +170,6 @@ export function useDllDetection(dll = "") {
   };
 }
 
-// One notice per game process: the Renderer recorded Wine's switch for the
-// next start, so this session runs without Frame Generation.
-const wineRestartNotified = new Set<string>();
-
-export function notifyWineCompatibilityRestart(
-  status: RuntimeStatusResult,
-): void {
-  for (const context of status.contexts ?? []) {
-    if (
-      context.frame_generation_unavailable?.wine_compatibility_fix !==
-      "restart-required"
-    ) {
-      continue;
-    }
-    const key = `${context.pid}:${context.process_start_ticks}`;
-    if (wineRestartNotified.has(key)) continue;
-    wineRestartNotified.add(key);
-    showSuccessToast(
-      t("TOAST_WINE_COMPAT_RESTART_TITLE", "Restart to use Frame Generation"),
-      t(
-        "TOAST_WINE_COMPAT_RESTART",
-        "{game} needs the Proton Offscreen Window Fix for Frame Generation. MAKO applied it; restart the game to use it.",
-        { game: context.requested.name },
-      ),
-    );
-  }
-}
-
 export function useRuntimeScalingStatus(profileName: string, enabled: boolean) {
   const [runtimeState, setRuntimeState] = useState<RuntimeScalingUiState>({
     ...EMPTY_RUNTIME_SCALING_UI_STATE,
@@ -216,7 +186,6 @@ export function useRuntimeScalingStatus(profileName: string, enabled: boolean) {
       }
       try {
         const status = await getRuntimeStatus(profileName);
-        notifyWineCompatibilityRestart(status);
         if (active) {
           setRuntimeState(runtimeScalingUiState(status, profileName));
         }
