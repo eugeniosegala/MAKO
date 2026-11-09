@@ -16,9 +16,6 @@ renderer_path_output="$(
 cli_relative_path="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" cli-path
 )"
-shader_tool_relative_path="$(
-  python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" shader-tool-path
-)"
 vkbasalt_path_output="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" vkbasalt-paths
 )"
@@ -74,10 +71,12 @@ deploy_frontend=false
 deploy_backend=false
 deploy_engine=false
 deploy_engine_32=false
+deploy_ui=false
 deploy_flatpaks=false
 reload_plugin=false
 experimental_lsfg_fp16=false
 action_selected=false
+development_copies=()
 
 usage() {
   cat <<EOF
@@ -94,6 +93,7 @@ Options:
   --backend               Regenerate and deploy Python backend plus refreshed dev UI.
   --engine                Incrementally build/deploy the 64-bit host layers and CLI plus refreshed dev UI.
   --engine-32             Incrementally build/deploy the 32-bit host layer plus refreshed dev UI.
+  --ui                    Also build/deploy the native Qt configuration app.
   --host                  Deploy Decky plus both 64-bit and 32-bit host layers.
   --flatpaks              Deploy Decky plus Flatpak runtimes $flatpak_runtime_summary.
   --e2e                   Deploy Decky, both host layers, and all Flatpak runtime bundles.
@@ -121,6 +121,11 @@ while (($#)); do
       action_selected=true
       ;;
     --engine)
+      deploy_engine=true
+      action_selected=true
+      ;;
+    --ui)
+      deploy_ui=true
       deploy_engine=true
       action_selected=true
       ;;
@@ -254,6 +259,27 @@ if [[ "$plugin_name" != "MAKO Decky" &&
   exit 1
 fi
 
+# MAKO FG's one 64-bit program and its model sit in mako-fg/ beside the 64-bit Renderer library.
+deploy_mako_fg() {
+  local target="$1/mako-fg"
+  local release model
+  for release in "$engine_repo"/models/mako-fg/V*/; do
+    [[ -f "${release}runtime/x64/bin/mako-fg-host" ]] || continue
+    copy_renderer_file "${release}runtime/x64/bin/mako-fg-host" "$target/mako-fg-host"
+    copy_renderer_file "${release}version.json" "$target/version.json"
+    for model in "${release}model/"*; do
+      copy_renderer_file "$model" "$target/model/${model##*/}"
+    done
+    return
+  done
+  echo "MAKO FG was not deployed: run MAKO FG's release sync first." >&2
+}
+
+copy_renderer_file() {
+  copy_file "$1" "$2"
+  development_copies+=("$1" "$2")
+}
+
 copy_file() {
   local source_path="$1"
   local destination_path="$2"
@@ -345,8 +371,11 @@ PY
 
 built_layer_64=""
 built_cli=""
+built_ui=""
 built_remote_play_sdr=""
 installed_cli=""
+installed_shader_tool=""
+installed_vrr_lease=""
 built_layer_32=""
 built_renderer_manifest_64=""
 built_renderer_manifest_32=""
@@ -409,6 +438,16 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     fi
   done
 
+  host_tool_output="$(python3 "$project_dir/scripts/dev-renderer-selection.py" --bits 64 --tool-paths)"
+  mapfile -t host_tools <<< "$host_tool_output"
+  if ((${#host_tools[@]} != 3)); then
+    echo "Incomplete active native tool selection." >&2
+    exit 1
+  fi
+  installed_cli="${host_tools[0]}"
+  installed_shader_tool="${host_tools[1]}"
+  installed_vrr_lease="${host_tools[2]}"
+
   if [[ ! -x "$engine_repo/scripts/build-steamos-dev.sh" ]]; then
     echo "Incremental engine builder not found: $engine_repo/scripts/build-steamos-dev.sh" >&2
     exit 1
@@ -419,6 +458,7 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   fi
 
   engine_build_args=()
+  [[ "$deploy_ui" == true ]] && engine_build_args+=(--with-ui)
   if [[ "$experimental_lsfg_fp16" == true ]]; then
     engine_build_args+=(--experimental-lsfg-fp16)
   fi
@@ -455,8 +495,8 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   if [[ "$deploy_engine" == true ]]; then
     built_layer_64="$engine_build_dir/mako-render/$renderer_library_filename"
     built_cli="$engine_build_dir/mako-cli/${cli_relative_path##*/}"
+    [[ "$deploy_ui" == true ]] && built_ui="$engine_build_dir/mako-ui/mako-ui"
     built_remote_play_sdr="$engine_build_dir/scripts/mako_remote_play/libmako-remote-play-sdr.so"
-    installed_cli="$HOME/$cli_relative_path"
     built_spatial_layer_64="$engine_build_dir/mako-render/$spatial_library_filename"
     built_spatial_manifest_64="$engine_build_dir/mako-render/private-scaling-manifest/${spatial_manifest_relative_path##*/}"
     installed_spatial_manifest_64="$HOME/$spatial_manifest_relative_path"
@@ -478,7 +518,7 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     installed_vkbasalt_manifest_32="$HOME/$vkbasalt_manifest32_relative_path"
   fi
   for layer_path in \
-      "$built_cli" \
+      "$built_cli" "$built_ui" \
       "$built_remote_play_sdr" \
       "$built_layer_64" "$built_layer_32" \
       "$built_spatial_layer_64" "$built_spatial_layer_32" \
@@ -494,6 +534,10 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     echo "Incremental engine build produced a non-executable CLI: $built_cli" >&2
     exit 1
   fi
+  fg_layers=()
+  [[ -n "$built_layer_64" ]] && fg_layers+=("$built_layer_64")
+  [[ -n "$built_layer_32" ]] && fg_layers+=("$built_layer_32")
+  python3 "$engine_repo/scripts/mako-fg-package.py" verify --separate-only "${fg_layers[@]}"
   for bits in 64 32; do
     if [[ "$bits" == 64 && "$deploy_engine" == false ]] ||
         [[ "$bits" == 32 && "$deploy_engine_32" == false ]]; then
@@ -680,19 +724,28 @@ if [[ "$deploy_backend" == true || "$deploy_engine" == true ||
 fi
 
 if [[ -n "$built_layer_64" ]]; then
-  copy_file "$built_layer_64" "$installed_layer_64"
+  copy_renderer_file "$built_layer_64" "$installed_layer_64"
   for manifest in "${installed_renderer_manifests_64[@]}"; do
     copy_file "$built_renderer_manifest_64" "$manifest"
   done
-  copy_file "$built_spatial_layer_64" "$installed_spatial_layer_64"
+  copy_renderer_file "$built_spatial_layer_64" "$installed_spatial_layer_64"
   copy_file "$built_spatial_manifest_64" "$installed_spatial_manifest_64"
-  copy_file "$built_vkbasalt_library_64" "$installed_vkbasalt_library_64"
+  copy_renderer_file "$built_vkbasalt_library_64" "$installed_vkbasalt_library_64"
   copy_file "$built_vkbasalt_manifest_64" "$installed_vkbasalt_manifest_64"
+  deploy_mako_fg "${installed_layer_64%/*}"
   copy_file "$built_cli" "$installed_cli"
+  if [[ -n "$built_ui" ]]; then
+    copy_file "$built_ui" "$HOME/.local/bin/mako-ui"
+    if [[ ! -x "$HOME/.local/bin/mako-ui" ]] || ! cmp -s "$built_ui" "$HOME/.local/bin/mako-ui"; then
+      echo "Installed Qt app differs from the development build." >&2; exit 1
+    fi
+    ui_checksum="$(sha256sum "$HOME/.local/bin/mako-ui")"
+    echo "MAKO Renderer: verified installed Qt app; sha256=${ui_checksum%% *}"
+  fi
   if [[ -x "$vkbasalt_stage_dir/bin/mako-shader-tool" ]]; then
-    copy_file "$vkbasalt_stage_dir/bin/mako-shader-tool" "$HOME/$shader_tool_relative_path"
+    copy_file "$vkbasalt_stage_dir/bin/mako-shader-tool" "$installed_shader_tool"
   else
-    rm -f -- "$HOME/$shader_tool_relative_path"
+    rm -f -- "$installed_shader_tool"
   fi
   copy_file "$built_remote_play_sdr" \
     "$HOME/.local/share/mako-render/mako_remote_play/libmako-remote-play-sdr.so"
@@ -701,32 +754,36 @@ if [[ -n "$built_layer_64" ]]; then
     echo "Installed Remote Play SDR helper differs from the development build." >&2
     exit 1
   fi
-  if [[ ! -x "$installed_cli" ]] || ! cmp -s "$built_cli" "$installed_cli"; then
-    echo "Installed Renderer CLI differs from the development build: $installed_cli" >&2
-    exit 1
-  fi
-  cli_checksum="$(sha256sum "$installed_cli")"
-  echo "MAKO Renderer: verified installed 64-bit CLI $installed_cli; sha256=${cli_checksum%% *}"
   python3 "$project_dir/scripts/dev-renderer-selection.py" --bits 64 \
     --verify "$built_layer_64" "$built_spatial_layer_64" "$built_vkbasalt_library_64"
   echo "Deployed incremental 64-bit Renderer layers, CLI, and private vkBasalt layers."
 fi
 if [[ -n "$built_layer_32" ]]; then
-  copy_file "$built_layer_32" "$installed_layer_32"
+  copy_renderer_file "$built_layer_32" "$installed_layer_32"
   for manifest in "${installed_renderer_manifests_32[@]}"; do
     copy_file "$built_renderer_manifest_32" "$manifest"
   done
-  copy_file "$built_spatial_layer_32" "$installed_spatial_layer_32"
+  copy_renderer_file "$built_spatial_layer_32" "$installed_spatial_layer_32"
   copy_file "$built_spatial_manifest_32" "$installed_spatial_manifest_32"
-  copy_file "$built_vkbasalt_library_32" "$installed_vkbasalt_library_32"
+  copy_renderer_file "$built_vkbasalt_library_32" "$installed_vkbasalt_library_32"
   copy_file "$built_vkbasalt_manifest_32" "$installed_vkbasalt_manifest_32"
+  [[ -n "$built_layer_64" ]] || deploy_mako_fg "$(dirname "${installed_layer_32%/*}")/lib"
   python3 "$project_dir/scripts/dev-renderer-selection.py" --bits 32 \
     --verify "$built_layer_32" "$built_spatial_layer_32" "$built_vkbasalt_library_32"
   echo "Deployed incremental 32-bit Renderer and private vkBasalt layers."
 fi
 if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   copy_file "$engine_repo/scripts/mako-vrr-lease" \
-    "$HOME/.local/share/mako-render/bin/mako-vrr-lease"
+    "$installed_vrr_lease"
+  if [[ ! -x "$installed_vrr_lease" ]] || ! cmp -s "$engine_repo/scripts/mako-vrr-lease" "$installed_vrr_lease"; then
+    echo "Selected VRR helper differs from the development source: $installed_vrr_lease" >&2
+    exit 1
+  fi
+  if [[ "$deploy_engine" == true ]]; then
+    python3 "$project_dir/scripts/dev-renderer-selection.py" --bits 64 \
+      --verify-tools "$built_cli" "$vkbasalt_stage_dir/bin/mako-shader-tool" \
+      "$engine_repo/scripts/mako-vrr-lease"
+  fi
   echo "Deployed the Gamescope VRR launch helper."
 fi
 if [[ -n "$flatpak_archive" ]]; then
@@ -734,6 +791,11 @@ if [[ -n "$flatpak_archive" ]]; then
     copy_file "$flatpak_unpack_dir/$flatpak_bundle" "$plugin_dir/bin/$flatpak_bundle"
   done
   echo "Deployed Flatpak runtime bundles $flatpak_runtime_summary."
+fi
+
+if ((${#development_copies[@]})); then
+  python3 "$project_dir/scripts/dev-renderer-selection.py" --bits 64 \
+    --record-deployment "$plugin_dir" --copied-files "${development_copies[@]}"
 fi
 
 if [[ "$reload_plugin" == true ]]; then

@@ -124,6 +124,18 @@ class ShaderValidationTests(unittest.TestCase):
 class ShaderPersistenceTests(unittest.TestCase):
     setUp = profiles_fixture.GameProfileTests.setUp
 
+    def test_shader_metadata_uses_selected_renderer_without_other_owner_fallback(self):
+        from py_modules.mako_plugin.constants import JSON_FILENAME, LIB_FILENAME, SHADER_TOOL_FILENAME
+        self.service.standalone_install_prefix = self.service.config_dir.parent / ".local"
+        manifest = self.service.local_share_dir / JSON_FILENAME
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text(json.dumps({"layer": {
+            "library_path": str(self.service.standalone_install_prefix / "lib" / LIB_FILENAME),
+        }}))
+        with patch.object(shader_parameters, "discover", return_value=copy.deepcopy(EFFECTS)) as discover:
+            self.assertTrue(self.service.get_shader_parameters("mako")["success"])
+            self.assertEqual(discover.call_args.args[0], self.service.standalone_install_prefix / "bin" / SHADER_TOOL_FILENAME)
+
     def prepare(self):
         path = self.service._vkbasalt_config_path("mako")
         path.parent.mkdir(parents=True, exist_ok=True)

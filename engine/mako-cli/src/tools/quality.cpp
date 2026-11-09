@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "quality.hpp"
+#include "quality_inputs.hpp"
 #include "benchmark_input.hpp"
 #include "profile_statistics.hpp"
 #include "mako-common/vulkan/timestamp_query_pool.hpp"
@@ -127,9 +128,10 @@ namespace {
     }
 
     void uploadSpatialSource(const vk::Vulkan& vk, const vk::Image& image,
-            const VkExtent2D sourceExtent, const std::span<const uint8_t> rgba) {
+            const VkExtent2D sourceExtent, const std::span<const uint8_t> rgba,
+            const size_t bytesPerPixel = 4) {
         const size_t expectedBytes = static_cast<size_t>(sourceExtent.width) *
-            sourceExtent.height * 4;
+            sourceExtent.height * bytesPerPixel;
         if (rgba.size() != expectedBytes ||
                 sourceExtent.width > image.getExtent().width ||
                 sourceExtent.height > image.getExtent().height)
@@ -228,9 +230,10 @@ namespace {
             const VkImageLayout oldLayout, const VkAccessFlags sourceAccess,
             const VkPipelineStageFlags sourceStage,
             const VkSemaphore waitTimelineSemaphore = VK_NULL_HANDLE,
-            const uint64_t waitValue = 0, const bool restoreGeneral = false) {
+            const uint64_t waitValue = 0, const bool restoreGeneral = false,
+            const size_t bytesPerPixel = 4) {
         const size_t byteCount = static_cast<size_t>(image.getExtent().width) *
-            image.getExtent().height * 4;
+            image.getExtent().height * bytesPerPixel;
         const std::vector<uint8_t> zeroes(byteCount);
         const vk::Buffer staging{
             vk, zeroes.data(), zeroes.size(), VK_BUFFER_USAGE_TRANSFER_DST_BIT
@@ -419,13 +422,13 @@ namespace {
             [&gpu](const std::string& name,
                     std::pair<const std::string&, const std::string&>,
                     const std::optional<std::string>&) { return name == gpu; },
-            *dll, opts.allow_fp16};
+            *dll, opts.allow_fp16, ls::makoFgPackageOverride()};
         auto& context = backend.openContext(
             (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
             (destinationScope.release(), destinationFds),
             (syncScope.release(), syncFd), extent.width, extent.height,
             mako::backend::FrameEncoding::Sdr8,
-            1.0F / opts.flow_scale, opts.performance_mode);
+            1.0F / opts.flow_scale, opts.performance_mode, false, 1);
         const auto awaitContext = [&] {
             const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
             while (!backend.contextReady(context)) {
@@ -523,20 +526,35 @@ int quality::run(const Options& opts) {
                 (opts.hdr10 && opts.sequence_plan) || !std::isfinite(opts.hdr_white_nits) ||
                 opts.hdr_white_nits <= 0 || opts.hdr_white_nits > 10000)
             throw ls::error("HDR quality requires explicit HDR10, valid reference white and a single scene");
+        if (opts.input_pair && (opts.sequence_plan || opts.hdr10 || !opts.output ||
+                opts.scene != "motion-boundary"))
+            throw ls::error("input pair requires SDR, a new output directory and no procedural scene or sequence");
+        if (opts.input_pair && (!std::isfinite(opts.interpolation) ||
+                opts.interpolation <= 0 || opts.interpolation >= 1))
+            throw ls::error("input pair interpolation must be strictly between zero and one");
         if (opts.sequence_plan) return runTemporal(opts);
         if (opts.width || opts.height)
             throw ls::error("quality extents require --sequence-plan");
         const auto kind = sceneKind(opts.scene);
-        const auto scene = mako::quality::makeImageQualityRegressionScene(
-            kind, opts.interpolation
-        );
+        const auto scene = opts.input_pair ? readQualityPair(*opts.input_pair) :
+            mako::quality::makeImageQualityRegressionScene(kind, opts.interpolation);
+        if (opts.input_pair && !std::filesystem::create_directory(*opts.output))
+            throw ls::error("input pair output already exists; choose a fresh directory");
         const VkExtent2D extent{.width = scene.width, .height = scene.height};
         const vk::Vulkan vk = makeVulkan(opts.gpu, "mako-quality-regression");
         const std::string selectedGpu = selectedDeviceName(vk);
 
-        const auto imageFormat = opts.hdr10 ? VK_FORMAT_A2B10G10R10_UNORM_PACK32 : VK_FORMAT_R8G8B8A8_UNORM;
+        if (opts.hdr_encoding != "packed" && opts.hdr_encoding != "pq16" && opts.hdr_encoding != "scrgb")
+            throw ls::error("HDR encoding must be packed, pq16 or scrgb");
+        const bool halfFloat = opts.hdr10 && opts.hdr_encoding != "packed", pq16 = opts.hdr_encoding == "pq16";
+        const auto imageFormat = !opts.hdr10 ? VK_FORMAT_R8G8B8A8_UNORM
+            : halfFloat ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_A2B10G10R10_UNORM_PACK32;
+        const auto encoding = !opts.hdr10 ? mako::backend::FrameEncoding::Sdr8
+            : !halfFloat ? mako::backend::FrameEncoding::Hdr10PqPacked
+            : pq16 ? mako::backend::FrameEncoding::Hdr10Pq : mako::backend::FrameEncoding::ScRgbLinear;
         const auto input = [&](const std::vector<uint8_t>& rgba) {
-            return opts.hdr10 ? benchmark::hdr10ProfileInput(rgba, opts.hdr_white_nits) : rgba;
+            return !opts.hdr10 ? rgba : halfFloat ? benchmark::hdr16Input(rgba, opts.hdr_white_nits, pq16)
+                : benchmark::hdr10ProfileInput(rgba, opts.hdr_white_nits);
         };
         std::array<int, 2> sourceFds{-1, -1};
         ls::FileDescriptorScope sourceScope{sourceFds};
@@ -569,17 +587,16 @@ int quality::run(const Options& opts) {
                     const std::optional<std::string>&) {
                 return selectedGpu == gpuName;
             },
-            dll->string(), opts.allow_fp16
+            dll->string(), opts.allow_fp16, ls::makoFgPackageOverride()
         };
-        if (opts.hdr10 && !backend.supportsPackedHdr10Transport())
+        if (opts.hdr10 && !halfFloat && !backend.supportsPackedHdr10Transport())
             throw ls::error("Packed HDR10 quality is unsupported on this device");
         mako::backend::Context& context = backend.openContext(
             (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
             (destinationScope.release(), destinationFds),
             (syncScope.release(), syncFd),
             extent.width, extent.height,
-            opts.hdr10 ? mako::backend::FrameEncoding::Hdr10PqPacked : mako::backend::FrameEncoding::Sdr8,
-            1.0F / opts.flow_scale, opts.performance_mode, opts.hdr_reduced_precision
+            encoding, 1.0F / opts.flow_scale, opts.performance_mode, opts.hdr_reduced_precision, 1
         );
 
         uploadImage(vk, previousImage, input(scene.previous));
@@ -602,14 +619,27 @@ int quality::run(const Options& opts) {
             VK_ACCESS_SHADER_WRITE_BIT,
             VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
             sync.handle(),
-            4
+            4, false, halfFloat ? 8 : 4
         );
-        const auto generated = opts.hdr10
-            ? benchmark::hdr10QualityPreview(readback, opts.hdr_white_nits) : readback;
+        const auto generated = !opts.hdr10 ? readback : halfFloat
+            ? benchmark::hdr16Preview(readback, opts.hdr_white_nits, pq16)
+            : benchmark::hdr10QualityPreview(readback, opts.hdr_white_nits);
         if (opts.hdr10)
-            std::cout << "MAKO_HDR_QUALITY encoding=hdr10-pq-packed reduced="
+            std::cout << "MAKO_HDR_QUALITY encoding=" << (!halfFloat ? "hdr10-pq-packed" : pq16 ? "hdr10-pq" : "scrgb-linear") << " reduced="
                 << opts.hdr_reduced_precision << " white_nits=" << opts.hdr_white_nits << '\n';
         const auto metrics = mako::quality::evaluateImageQuality(scene, generated);
+        if (opts.input_pair) {
+            writeArtifacts(*opts.output, scene, generated);
+            std::cout << std::setprecision(9)
+                << "MAKO Renderer: image-pair result=OBSERVED width=" << scene.width
+                << " height=" << scene.height << " interpolation=" << opts.interpolation
+                << " flow=" << opts.flow_scale << " model="
+                << (opts.performance_mode ? "performance" : "quality")
+                << " precision_requested=" << (opts.allow_fp16 ? "fp16" : "fp32")
+                << " mae=" << metrics.meanAbsoluteError << '\n';
+            backend.closeContext(context);
+            return EXIT_SUCCESS;
+        }
         const auto thresholds = mako::quality::imageQualityThresholds(kind);
         const bool passed = mako::quality::passesImageQualityRegression(
             metrics, thresholds
@@ -777,6 +807,86 @@ int quality::runSpatial(const SpatialOptions& opts) {
     }
 }
 
+namespace {
+    /// A profiled presentation format and the working image and encoding the
+    /// scaler uses for it, matching the Renderer's colour classification.
+    struct SpatialPresentationFormat {
+        VkFormat format;
+        VkFormat working;
+        size_t bytesPerPixel;
+        mako::backend::FrameEncoding encoding;
+    };
+
+    [[nodiscard]] SpatialPresentationFormat spatialPresentationFormat(
+            const std::string_view name) {
+        using mako::backend::FrameEncoding;
+        if (name == "rgba8")
+            return {VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, 4, FrameEncoding::Sdr8};
+        if (name == "bgra8")
+            return {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM, 4, FrameEncoding::Sdr8};
+        if (name == "a2b10g10r10")
+            return {VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_FORMAT_R16G16B16A16_SFLOAT, 4,
+                FrameEncoding::SdrHighPrecision};
+        if (name == "a2r10g10b10")
+            return {VK_FORMAT_A2R10G10B10_UNORM_PACK32, VK_FORMAT_R16G16B16A16_SFLOAT, 4,
+                FrameEncoding::SdrHighPrecision};
+        if (name == "rgba16f")
+            return {VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R16G16B16A16_SFLOAT, 8,
+                FrameEncoding::SdrHighPrecision};
+        if (name == "scrgb")
+            return {VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R16G16B16A16_SFLOAT, 8,
+                FrameEncoding::ScRgbLinear};
+        throw ls::error("unknown spatial profile presentation format: " + std::string(name));
+    }
+
+    /// Half-float bits for a value in [0, 1], rounded to nearest.
+    [[nodiscard]] uint16_t unitHalf(const float value) {
+        if (value <= 0.0F)
+            return 0;
+        int exponent{};
+        const float mantissa = std::frexp(value, &exponent);
+        const auto fraction = static_cast<uint32_t>(
+            std::lround((mantissa * 2.0F - 1.0F) * 1024.0F));
+        const auto halfExponent = static_cast<uint32_t>(exponent + 14);
+        return static_cast<uint16_t>(fraction == 1024
+            ? (halfExponent + 1) << 10 : (halfExponent << 10) | fraction);
+    }
+
+    /// Deterministic high-contrast source bytes: hashed texels on a checker
+    /// of smooth ramps, opaque alpha. Half-float images receive unit values.
+    [[nodiscard]] std::vector<uint8_t> spatialComparisonSource(
+            const VkExtent2D extent, const SpatialPresentationFormat& format) {
+        std::vector<uint8_t> bytes(static_cast<size_t>(extent.width) *
+            extent.height * format.bytesPerPixel);
+        for (uint32_t y = 0; y < extent.height; ++y) {
+            for (uint32_t x = 0; x < extent.width; ++x) {
+                const size_t pixel = static_cast<size_t>(y) * extent.width + x;
+                std::array<uint8_t, 4> rgba{};
+                for (uint32_t channel = 0; channel < 4; ++channel) {
+                    uint32_t hash = x * 73856093U ^ y * 19349663U ^ channel * 83492791U;
+                    hash ^= hash >> 13;
+                    hash *= 0x5bd1e995U;
+                    hash ^= hash >> 15;
+                    const bool textured = ((x / 7) + (y / 5)) % 2 == 0;
+                    rgba.at(channel) = channel == 3 ? 255 : static_cast<uint8_t>(
+                        textured ? hash & 0xffU : (x * 3 + y + channel * 40) & 0xffU);
+                }
+                if (format.bytesPerPixel == 8) {
+                    for (uint32_t channel = 0; channel < 4; ++channel) {
+                        const auto half = unitHalf(rgba.at(channel) / 255.0F);
+                        bytes.at(pixel * 8 + channel * 2) = static_cast<uint8_t>(half & 0xffU);
+                        bytes.at(pixel * 8 + channel * 2 + 1) = static_cast<uint8_t>(half >> 8);
+                    }
+                } else {
+                    std::copy(rgba.begin(), rgba.end(), bytes.begin() +
+                        static_cast<std::ptrdiff_t>(pixel * 4));
+                }
+            }
+        }
+        return bytes;
+    }
+}
+
 int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
     try {
         const auto method = ls::scalingMethodFromName(opts.method);
@@ -802,8 +912,22 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
             throw ls::error(
                 "spatial profile warm-up iterations must be from 1 through 1000"
             );
+        if (opts.warmup_milliseconds > 60000)
+            throw ls::error(
+                "spatial profile warm-up time must be at most 60000 ms"
+            );
         if (opts.samples == 0 || opts.samples > 1000)
             throw ls::error("spatial profile samples must be from 1 through 1000");
+        const auto presentationFormat =
+            spatialPresentationFormat(opts.presentation_format);
+        const bool directRequested =
+            opts.direct_output || opts.compare_direct_output;
+        if (directRequested && opts.frame_generation_handoff) {
+            throw ls::error(
+                "direct spatial output requires no frame-generation handoff"
+            );
+        }
+        const bool nativeBlit = *method == ls::ScalingMethod::Native;
 
         const VkExtent2D presentationExtent{
             .width = opts.width,
@@ -826,10 +950,10 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
             vk,
             sourceExtent,
             presentationExtent,
-            VK_FORMAT_R8G8B8A8_UNORM,
+            presentationFormat.working,
             *method,
             opts.sharpness,
-            dll, opts.allow_fp16
+            dll, opts.allow_fp16, presentationFormat.encoding
         };
         if (scaler.activeMethod() != *method) {
             throw ls::error(
@@ -839,12 +963,27 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
             );
         }
 
+        // The application image stands in for a swapchain image, which is
+        // always a colour attachment; that usage also lets the driver
+        // compress it, which direct output must preserve. Native Resolution
+        // blits and, like MAKO's display resize, keeps transfer-only usage.
         const auto applicationUsage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+            (directRequested && !nativeBlit ? VK_IMAGE_USAGE_STORAGE_BIT : 0U);
         const vk::Image applicationImage{
-            vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
+            vk, presentationExtent, presentationFormat.format,
             applicationUsage
         };
+        if (opts.direct_output) {
+            const std::array images{applicationImage.handle()};
+            if (scaler.configureDirectPresentationOutputs(
+                    vk, images, presentationFormat.format) != 1) {
+                throw ls::error(
+                    "direct spatial output is unavailable for this format"
+                );
+            }
+        }
         std::optional<vk::Image> frameGenerationSource;
         if (opts.frame_generation_handoff) {
             frameGenerationSource.emplace(
@@ -862,10 +1001,17 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
             );
         }
         const size_t sourceBytes = static_cast<size_t>(sourceExtent.width) *
-            sourceExtent.height * 4;
-        const std::vector<uint8_t> sourcePixels(sourceBytes, 0x80);
+            sourceExtent.height * presentationFormat.bytesPerPixel;
+        std::vector<uint8_t> sourcePixels(sourceBytes, 0x80);
+        if (presentationFormat.bytesPerPixel == 8) {
+            for (size_t i = 0; i + 1 < sourcePixels.size(); i += 2) {
+                sourcePixels.at(i) = 0x00;
+                sourcePixels.at(i + 1) = 0x38;  // 0.5 in half precision
+            }
+        }
         uploadSpatialSource(
-            vk, applicationImage, sourceExtent, sourcePixels
+            vk, applicationImage, sourceExtent, sourcePixels,
+            presentationFormat.bytesPerPixel
         );
 
         const auto recordScaler = [&](const vk::CommandBuffer& command) {
@@ -878,7 +1024,12 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
                 VK_IMAGE_LAYOUT_GENERAL
             );
         };
-        {
+        // Automatic GPU clock management ramps with sustained load, so a
+        // fixed iteration count leaves cheap graphs timed at a lower clock.
+        const auto warmupStart = std::chrono::steady_clock::now();
+        const std::chrono::milliseconds warmupTarget{opts.warmup_milliseconds};
+        uint64_t warmupIterations = 0;
+        do {
             const vk::CommandBuffer warmup{vk};
             warmup.begin(vk);
             for (uint32_t iteration = 0;
@@ -887,7 +1038,10 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
             }
             warmup.end(vk);
             warmup.submit(vk);
-        }
+            warmupIterations += opts.warmup_iterations;
+        } while (std::chrono::steady_clock::now() - warmupStart < warmupTarget);
+        const auto warmupElapsed = std::chrono::duration<double, std::milli>(
+            std::chrono::steady_clock::now() - warmupStart);
 
         TimestampQueryPool timestamps(vk, opts.samples * 2);
         const vk::CommandBuffer measured{vk};
@@ -917,6 +1071,12 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
             << "  sharpness: " << opts.sharpness << '\n'
             << "  frame-generation handoff: "
             << (opts.frame_generation_handoff ? "yes" : "no") << '\n'
+            << "  presentation format: " << opts.presentation_format << '\n'
+            << "  presentation transport: "
+            << (scaler.directPresentationOutputCount() == 0
+                    ? "copy-private-output"
+                    : nativeBlit ? "direct-blit" : "direct-reconstruction")
+            << '\n'
             << "  frame-generation transport: "
             << (!opts.frame_generation_handoff
                     ? "none"
@@ -932,7 +1092,8 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
             << timestamps.timestampValidBits() << '\n'
             << "  timestamp period ns: "
             << timestamps.timestampPeriodNanoseconds() << '\n'
-            << "  warm-up iterations: " << opts.warmup_iterations << '\n'
+            << "  warm-up iterations: " << warmupIterations << '\n'
+            << "  warm-up ms: " << warmupElapsed.count() << '\n'
             << "  samples: " << opts.samples << '\n'
             << "  gpu-time minimum us: " << statistics.minimum << '\n'
             << "  gpu-time median us: " << statistics.median << '\n'
@@ -944,6 +1105,47 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         for (const double sample : samples)
             std::cout << ' ' << sample;
         std::cout << '\n';
+        if (opts.compare_direct_output) {
+            // The same scene through both paths: copy-back into one image,
+            // direct reconstruction into another with identical properties.
+            const vk::Image copied{vk, presentationExtent,
+                presentationFormat.format, applicationUsage};
+            const vk::Image direct{vk, presentationExtent,
+                presentationFormat.format, applicationUsage};
+            const std::array targets{direct.handle()};
+            if (scaler.configureDirectPresentationOutputs(
+                    vk, targets, presentationFormat.format) != 1) {
+                throw ls::error(
+                    "direct spatial output is unavailable for this format"
+                );
+            }
+            const auto scene = spatialComparisonSource(
+                sourceExtent, presentationFormat);
+            const auto reconstruct = [&](const vk::Image& image) {
+                uploadSpatialSource(vk, image, sourceExtent, scene,
+                    presentationFormat.bytesPerPixel);
+                const vk::CommandBuffer command{vk};
+                command.begin(vk);
+                scaler.record(vk, command, image.handle(), VK_NULL_HANDLE,
+                    VK_IMAGE_LAYOUT_GENERAL);
+                command.end(vk);
+                command.submit(vk);
+                return downloadImage(vk, image, VK_IMAGE_LAYOUT_GENERAL,
+                    VK_ACCESS_MEMORY_READ_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+                    VK_NULL_HANDLE, 0, false, presentationFormat.bytesPerPixel);
+            };
+            const auto copiedPixels = reconstruct(copied);
+            const auto directPixels = reconstruct(direct);
+            size_t differing = 0;
+            for (size_t i = 0; i < copiedPixels.size(); ++i)
+                differing += copiedPixels.at(i) != directPixels.at(i);
+            std::cout << "  direct output identical: "
+                << (differing == 0 ? "yes" : "no")
+                << "; differing bytes: " << differing << " of "
+                << copiedPixels.size() << '\n';
+            if (differing != 0)
+                return EXIT_FAILURE;
+        }
         if (ls::licensedScalingModelRequested(*method)) {
             std::cout << "  LS1 model variant: " << scaler.ls1ModelVariant() << '\n'
                 << "  LS1 translator: " << scaler.ls1Translator() << '\n'
@@ -1103,7 +1305,7 @@ int quality::runCombined(const CombinedOptions& opts) {
                     const std::optional<std::string>&) {
                 return selectedGpu == gpuName;
             },
-            dll->string(), opts.allow_fp16
+            dll->string(), opts.allow_fp16, ls::makoFgPackageOverride()
         };
         mako::backend::Context& context = backend.openContext(
             (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
@@ -1111,7 +1313,7 @@ int quality::runCombined(const CombinedOptions& opts) {
             (syncScope.release(), syncFd),
             presentationExtent.width, presentationExtent.height,
             mako::backend::FrameEncoding::Sdr8,
-            1.0F / opts.flow_scale, opts.performance_mode
+            1.0F / opts.flow_scale, opts.performance_mode, false, 1
         );
 
         const auto previousSpatialCommand = submitSpatialEndpoint(

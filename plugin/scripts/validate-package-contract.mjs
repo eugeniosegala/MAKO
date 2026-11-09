@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, lstatSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 const [packageDirectoryArgument, mode] = process.argv.slice(2);
@@ -16,6 +17,25 @@ const packageDirectory = path.resolve(packageDirectoryArgument);
 const manifestPath = path.join(packageDirectory, "package.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const owns = (name) => Object.prototype.hasOwnProperty.call(manifest, name);
+
+const managementRoot = path.join(packageDirectory, "bin/renderer-management");
+if (existsSync(managementRoot)) {
+    for (const name of [
+        "bin/mako-installer",
+        "bin/mako-remote-play",
+        "share/applications/io.github.eugeniosegala.mako.uninstaller.desktop",
+        "share/mako-render/mako_remote_play/__init__.py",
+        "share/mako-render/mako_remote_play/remote_play_core.py",
+        "share/mako-render/mako_remote_play/remote_play_launch.py",
+        "share/mako-render/mako_remote_play/managed_files.py",
+    ]) {
+        const file = path.join(managementRoot, name);
+        if (!existsSync(file) || !lstatSync(file).isFile()
+            || (name.startsWith("bin/") && !(lstatSync(file).mode & 0o100))) {
+            throw new Error(`Renderer management tool is missing or invalid: ${name}`);
+        }
+    }
+}
 
 for (const legalPath of [
     "ASSET_PROVENANCE.md",
@@ -117,6 +137,18 @@ function validateRendererMetadata(renderer, metadataName) {
         throw new Error(
             `${metadataName} checksum does not match embedded archive ${renderer.name}`,
         );
+    }
+    if (renderer.payload_sha256hash !== undefined) {
+        if (!/^[0-9a-f]{64}$/i.test(renderer.payload_sha256hash)) {
+            throw new Error(`${metadataName}.payload_sha256hash must be a SHA-256 checksum`);
+        }
+        const payloadManifest = execFileSync("tar", [
+            "-xJOf", archivePath, "./MAKO-Renderer-install-manifest.txt",
+        ]);
+        const payloadChecksum = createHash("sha256").update(payloadManifest).digest("hex");
+        if (payloadChecksum !== renderer.payload_sha256hash.toLowerCase()) {
+            throw new Error(`${metadataName} payload manifest checksum does not match embedded archive`);
+        }
     }
 }
 

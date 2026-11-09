@@ -8,7 +8,7 @@
 
 In **MAKO Renderer Configuration**, match the game's executable, such as `Game.exe` or `dolphin-emu`, and enable the features you want. Match the executable, not the Flatpak application ID.
 
-Frame Generation and LS1 require Lossless Scaling's default Steam version: set its absolute **Lossless.dll Path**. Without it, turn Frame Generation off and choose MAKO Scaler and/or Shaders.
+MAKO FG, MAKO Scaler, and Shaders work without Lossless Scaling; the matching Flatpak extension includes MAKO FG (see [MAKO FG](MAKO-FG.md)). Only the optional Lossless Scaling frame generation model and LS1 require Lossless Scaling's default Steam version; for those, set its absolute **Lossless.dll Path**.
 
 ## Identify the application and runtime
 
@@ -58,7 +58,7 @@ flatpak override --user --filesystem="$HOME/.config/mako-render:rw" "$appid"
 flatpak override --user --env=MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" "$appid"
 ```
 
-For Frame Generation or LS1, replace the example with the folder containing your configured `Lossless.dll`. Otherwise, skip this block:
+For the optional Lossless Scaling frame generation model or LS1, replace the example with the folder containing your configured `Lossless.dll`. Otherwise, skip this block:
 
 ```bash
 mako_dll_directory="/absolute/path/to/steamapps/common/Lossless Scaling"
@@ -162,7 +162,7 @@ Missing manifests usually mean the extension or runtime branch is wrong. An unre
 
 ## Updates and disabling MAKO
 
-Native Renderer updates do not update Flatpak extensions. Close apps and rerun the newer Flatpak archive's installer for each branch you use. Recheck the branch if an app changes runtime.
+Standalone native Renderer updates do not update Flatpak extensions. Close apps and rerun the newer Flatpak archive's installer for each branch you use. Recheck the branch if an app changes runtime. MAKO Decky refreshes installed extensions when you install or update Renderer through its panel.
 
 Bypass MAKO for one launch of a closed app:
 
@@ -192,7 +192,7 @@ MAKO Decky handles host discovery automatically. For standalone On/Off VRR reque
 ~/.local/bin/mako-vrr-lease --watch-flatpak
 ```
 
-Requires Gamescope and a VRR-capable display. **Follow Steam** needs no helper. Do not grant extra host-execution permissions to the sandbox.
+Requires Gamescope and a VRR-capable display. **Follow Steam** needs no helper. Only one watcher discovers per user, so a manual watcher waits while MAKO Decky's is running and takes over when it exits. Do not grant extra host-execution permissions to the sandbox.
 
 ## Building extensions
 

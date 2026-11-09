@@ -19,16 +19,48 @@ namespace mako::layer {
         std::optional<VkPresentModeKHR> compositorPresentMode;
     };
 
+    /// Proton 9's Wine renders a Vulkan window that has Win32 child windows
+    /// into an offscreen client window under the 1x1 top-level window it keeps
+    /// for that purpose, and copies it to the visible window once per game
+    /// frame, so generated frames presented in between can never be shown.
+    /// FIFO to that window also completes on Xwayland's fallback timer of about
+    /// 17 ms whatever the refresh. Only that 1x1 top-level identifies it: a
+    /// game window can exceed its top-level by any amount while the window
+    /// manager settles a switch to fullscreen, and a visible window never has
+    /// a 1x1 top-level. Proton 7 and 8 redirect the window in place instead,
+    /// which this cannot see.
+    [[nodiscard]] constexpr bool x11WindowPresentsOffscreen(
+            const uint32_t width, const uint32_t height,
+            const uint32_t topLevelWidth,
+            const uint32_t topLevelHeight) noexcept {
+        return topLevelWidth == 1 && topLevelHeight == 1 &&
+            (width > 1 || height > 1);
+    }
+
     /// Every private bridge output needs FIFO plus a distinct bounded future
     /// deadline: FIFO alone can still lose outputs that become ready together.
     /// MAILBOX avoids the second Wayland FIFO callback on the game's thread;
     /// retain lower FIFO unless both that mode and a timing clock are proven.
+    /// Mailbox Presentation is a per-game compatibility opt-out from that
+    /// ordering: an advertised MAILBOX owns both the lower swapchain and the
+    /// bridge, so presents never wait for FIFO slots and a newer output may
+    /// replace one not yet displayed.
     [[nodiscard]] constexpr GamescopeScalingPresentContract
     gamescopeScalingPresentContract(const VkPresentModeKHR intendedPresentMode,
             const bool gamescopeScalingSurface,
             const bool privateOrderedTransport,
             const bool lowerMailboxSupported,
-            const bool refreshKnown) noexcept {
+            const bool refreshKnown,
+            const bool mailboxPresentation = false) noexcept {
+        if (mailboxPresentation && privateOrderedTransport &&
+                lowerMailboxSupported) {
+            return {
+                .lowerPresentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+                .compositorPresentMode = gamescopeScalingSurface
+                    ? std::optional{VK_PRESENT_MODE_MAILBOX_KHR}
+                    : std::nullopt,
+            };
+        }
         if (gamescopeScalingSurface && privateOrderedTransport &&
                 lowerMailboxSupported && refreshKnown) {
             return {
@@ -65,20 +97,24 @@ namespace mako::layer {
 
     /// Apply only the WSI mutations justified by resources provisioned on the
     /// application device. Standalone scaling needs transfer usage, but must
-    /// not reserve FG images or change the application's present mode.
+    /// not reserve FG images or change the application's present mode. A
+    /// swapchain the reconstruction writes directly also needs storage usage.
     [[nodiscard]] inline bool applySwapchainCreateProvisioning(
             const ls::GameConf& profile, const uint32_t maxImages,
             VkSwapchainCreateInfoKHR& createInfo,
             const bool frameGenerationProvisioned,
             const bool spatialScalingActive,
             const bool orderedFrameGenerationTransport,
-            const bool swapchainImageCountCompatibility = false) {
+            const bool swapchainImageCountCompatibility = false,
+            const bool directSpatialOutput = false) {
         if (!frameGenerationProvisioned && !spatialScalingActive)
             return false;
 
         createInfo.imageUsage |=
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+        if (spatialScalingActive && directSpatialOutput)
+            createInfo.imageUsage |= VK_IMAGE_USAGE_STORAGE_BIT;
         if (!frameGenerationProvisioned)
             return false;
 

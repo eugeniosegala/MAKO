@@ -86,27 +86,18 @@ namespace mako::layer {
         std::vector<VkExtensionProperties> properties;
     };
 
+    /// Query instance extensions before an instance exists. Pass the loader's
+    /// global enumeration: the layer interface does not require lower layers
+    /// to answer a null-instance query. Gamescope WSI returns no entrypoint,
+    /// vkBasalt reports only its own extensions, and Mesa's device-select
+    /// layer dereferences a null instance.
     [[nodiscard]] inline InstanceExtensionQuery queryPresentationInstanceExtensions(
-            PFN_vkEnumerateInstanceExtensionProperties enumerate,
-            const PFN_vkEnumerateInstanceExtensionProperties loaderEnumerate) {
+            const PFN_vkEnumerateInstanceExtensionProperties enumerate) {
         InstanceExtensionQuery query;
-        // Some layers (including Gamescope WSI) do not expose global
-        // enumeration at all. The loader owns driver enumeration before
-        // an instance exists, so use it when the layer has no entrypoint.
-        if (!enumerate)
-            enumerate = loaderEnumerate;
         if (!enumerate)
             return query;
         uint32_t count{};
         query.result = enumerate(nullptr, &count, nullptr);
-        // vkBasalt and other layers can expose only layer-specific global
-        // enumeration. Ask the loader for driver capabilities in that case;
-        // never infer optional support from a rejected layer-name query.
-        if (query.result == VK_ERROR_LAYER_NOT_PRESENT && loaderEnumerate) {
-            enumerate = loaderEnumerate;
-            count = 0;
-            query.result = enumerate(nullptr, &count, nullptr);
-        }
         if (query.result == VK_SUCCESS) {
             query.properties.resize(count);
             query.result = enumerate(nullptr, &count, query.properties.data());

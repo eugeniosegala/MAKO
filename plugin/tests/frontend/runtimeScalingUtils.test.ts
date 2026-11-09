@@ -340,4 +340,17 @@ describe("runtime scaling availability", () => {
       ),
     ).toMatchObject({ frameGenerationAdaptiveStyle: "steady" });
   });
+
+  test.each([
+    [{ frame_generation_model: "mako-fg", effective_performance_mode: true }, "mako-fg"],
+    [{ frame_generation_model: "lossless-scaling", effective_performance_mode: false }, "lsfg-quality"],
+    [{ frame_generation_model: "lossless-scaling", effective_performance_mode: true }, "lsfg-performance"],
+  ])("names the applied model like the picker: %o", (applied, model) => {
+    expect(
+      runtimeScalingUiState(
+        status([{ ...context, applied: { ...context.applied, ...applied } }]),
+        "game",
+      ),
+    ).toMatchObject({ frameGenerationModel: model });
+  });
 });

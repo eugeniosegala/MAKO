@@ -98,6 +98,19 @@ int main() {
     );
     expect(json.find("\"schema_version\":5") != std::string::npos,
         "schema version missing");
+    expect(json.find("\"frame_generation_unavailable\":null") != std::string::npos,
+        "available Frame Generation must publish a null unavailable reason");
+    auto offscreenRecord = record;
+    offscreenRecord.frameGenerationActive = false;
+    offscreenRecord.frameGenerationUnavailableReason = "offscreen-x11-window";
+    offscreenRecord.wineCompatibilityFix = "restart-required";
+    const auto offscreenJson = mako::layer::runtimeStatusJson(
+        offscreenRecord, 123, 321, 456, "frame-generation", 789
+    );
+    expect(offscreenJson.find("\"frame_generation_unavailable\":{\"reason\":"
+            "\"offscreen-x11-window\",\"wine_compatibility_fix\":"
+            "\"restart-required\"}") != std::string::npos,
+        "an offscreen window must publish its reason and Wine fix state");
     expect(json.find("\"phase\":\"draining\"") != std::string::npos,
         "phase missing");
     expect(json.find("\"process_start_ticks\":321") != std::string::npos,
@@ -176,7 +189,7 @@ int main() {
                 expect(windowJson.find(featureActive
                         ? "\"spatial_scaling\":{\"active\":true"
                         : "\"spatial_scaling\":{\"active\":false") != std::string::npos,
-                    "internal HDR resize or a pending toggle changed Scaling status");
+                    "internal display resize or a pending toggle changed Scaling status");
                 expect(windowJson.find("\"presentation_width\":3840") != std::string::npos &&
                         windowJson.find("\"frame_generation_active\":true") != std::string::npos,
                     "Scaling status filtering hid transport dimensions or Frame Generation");

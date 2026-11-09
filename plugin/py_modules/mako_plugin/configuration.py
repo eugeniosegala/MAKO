@@ -26,7 +26,6 @@ from .config_schema_generated import (
 from .constants import (
     ARMADA_DEVICE_ENV,
     ARMADA_GAME_LAUNCH,
-    CLI_DIR,
     SHADER_TOOL_FILENAME,
     FLATPAK_IMPLICIT_LAYER_DIR,
     GAMESCOPE_WSI_MANIFEST_FILENAME_64,
@@ -90,7 +89,7 @@ class ConfigurationService(BaseService):
             config_dir=self.config_dir,
             config_file_path=self.config_file_path,
             local_share_dir=self.local_share_dir,
-            renderer_bin_dir=self.user_home / CLI_DIR,
+            renderer_bin_dir=self._selected_renderer_bin_dir(),
             user_vulkan_layer_dir=self.user_vulkan_layer_dir,
             spatial_scaling_layer_dir=self.spatial_scaling_layer_dir,
             gamescope_wsi_compatibility_dir=(
@@ -335,7 +334,8 @@ class ConfigurationService(BaseService):
         if old_path == new_path:
             return
         with self._configuration_write_lock:
-            if not old_path.is_file() or new_path.exists():
+            if not old_path.is_file() or (
+                    new_path.exists() and not self._is_default_shader_alias(new_path)):
                 return
             new_path.parent.mkdir(parents=True, exist_ok=True)
             old_path.replace(new_path)
@@ -412,9 +412,19 @@ class ConfigurationService(BaseService):
                     path.name,
                 )
                 and path.name not in expected_names
+                and not self._is_default_shader_alias(path)
             ):
                 path.unlink()
                 self.log.info("Removed stale MAKO vkBasalt config %s", path)
+
+    def _is_default_shader_alias(self, path: Path) -> bool:
+        """Keep launch-time Default aliases until their game is captured."""
+        if not re.fullmatch(r"steam-[0-9]+\.conf", path.name):
+            return False
+        try:
+            return path.readlink() == self.vkbasalt_global_config_path
+        except OSError:
+            return False
 
     def _wrapper_settings_for_profile(
             self,
@@ -679,9 +689,7 @@ class ConfigurationService(BaseService):
                     raise ValueError("Profile does not exist")
                 metadata = self._read_profile_metadata(data)
                 path = self._vkbasalt_config_path(profile_name, metadata)
-                tool = self.user_home / CLI_DIR / SHADER_TOOL_FILENAME
-                if not tool.is_file():
-                    tool = self.user_home / ".local/bin" / SHADER_TOOL_FILENAME
+                tool = self._selected_renderer_bin_dir() / SHADER_TOOL_FILENAME
                 content = self._profile_shader_content(profile_name, metadata)
             # Shader compilation can be slow. Do not block ordinary profile RPCs
             # on the plugin event loop while the discovery worker is running.
@@ -994,7 +1002,12 @@ class ConfigurationService(BaseService):
                 self._diagnostics_default_marker(),
                 self._REQUIRED_WRAPPER_EXPORTS,
             )
-            if wrapper_is_current:
+            # Either installer can select another native Renderer without
+            # regenerating this cache; keep its helper on the selected owner.
+            selected_vrr_lines = "\n".join(wrapper_generation.vrr_lease_lines(
+                self._wrapper_generation_context()
+            ))
+            if wrapper_is_current and selected_vrr_lines in current_content:
                 return False
 
             profile_data = self._get_profile_data()

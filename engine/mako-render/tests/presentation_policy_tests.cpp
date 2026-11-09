@@ -10,6 +10,7 @@
 #include <limits>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using namespace mako::layer;
 using namespace std::chrono_literals;
@@ -723,6 +724,330 @@ void testFixedUsesExistingSourceDeadline() {
     }
 }
 
+void testSourceIntervalSpacing() {
+    using Spacing = SourceIntervalOutputSpacing;
+    using Clock = Spacing::Clock;
+    using Transition = Spacing::Transition;
+    const auto start = Clock::time_point{100s};
+    static constexpr auto prepare = 2ms;
+
+    // An application model: `period` is its own cadence and `work` the time
+    // it needs after its present returns. A throughput-bound game has no own
+    // cadence; a timer-driven one waits for its next slot when late.
+    struct Source {
+        Clock::duration period{};
+        Clock::duration work{};
+        bool throughputBound{false};
+        bool timerSlots{false};
+    };
+    struct Run {
+        Spacing spacing;
+        Clock::time_point arrival;
+        Clock::time_point due;
+        size_t count{2};
+        std::vector<Spacing::Observation> transitions;
+        size_t frames{};
+        size_t held{};
+        size_t unspaced{};
+
+        void until(const Clock::time_point end, const Source& source) {
+            while (this->arrival < end) {
+                const auto observed = this->spacing.observe(this->arrival, true);
+                if (observed.transition != Transition::None)
+                    this->transitions.push_back(observed);
+                auto returned = this->arrival + prepare;
+                const bool engaged = this->spacing.engaged();
+                if (const auto batch = this->spacing.schedule(returned, this->count)) {
+                    ++this->held;
+                    returned = batch->at(this->count - 1);
+                } else if (engaged) {
+                    ++this->unspaced;
+                }
+                ++this->frames;
+                const auto ready = returned + source.work;
+                if (source.throughputBound) {
+                    this->arrival = this->due = ready;
+                    continue;
+                }
+                this->due += source.period;
+                if (source.timerSlots) {
+                    while (this->due < ready)
+                        this->due += source.period;
+                } else {
+                    this->due = std::max(this->due, ready);
+                }
+                this->arrival = this->due;
+            }
+        }
+    };
+
+    // A heavier scene can make every interval exceed twice the old baseline.
+    // This is sustained work, not an endless sequence of isolated hitches.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 3s, {.period = 25ms, .work = 5ms});
+        expect(run.spacing.engaged(), "the light scene did not engage spacing");
+        const auto changed = run.arrival;
+        const auto heldBefore = run.held;
+        run.until(changed + 1s, {.work = 55ms, .throughputBound = true});
+        expect(run.transitions.size() == 2 &&
+                run.transitions.back().transition == Transition::Slowed &&
+                run.transitions.back().retryAfter == 5s && !run.spacing.engaged(),
+            "sustained intervals above twice the baseline kept spacing engaged");
+        expect(run.held - heldBefore <= Spacing::windowSize,
+            "a heavier scene was held for more than one observation window");
+        const auto unspacedAt = run.arrival;
+        const auto framesBefore = run.frames;
+        run.until(unspacedAt + 1s, {.work = 55ms, .throughputBound = true});
+        expect((run.arrival - unspacedAt) /
+                static_cast<int64_t>(run.frames - framesBefore) == prepare + 55ms,
+            "a released heavy scene retained a spacing delay");
+    }
+
+    // Probe at the 20 FPS boundary, but keep slower sources uninterrupted.
+    for (const auto period : {50ms, 51ms, 200ms}) {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 60s, {.period = period, .work = 1ms});
+        expect(run.transitions.size() == 1 &&
+                run.transitions[0].transition == Transition::Engaged &&
+                run.transitions[0].sourceInterval == period,
+            "a steady source released its spacing at the probe-rate boundary");
+        const size_t expectedProbes = period == 50ms ? 5 : 0;
+        expect(run.unspaced == expectedProbes &&
+                run.held == run.frames - Spacing::windowSize - expectedProbes,
+            "recovery probes disturbed a source below 20 FPS or skipped the boundary");
+    }
+
+    // A 5 FPS video at 5x: after one stable window every output, the real
+    // frame included, is 40 ms after the previous one across batches.
+    {
+        Spacing spacing;
+        std::optional<Clock::time_point> previous;
+        int64_t engagedAt = -1;
+        for (int64_t frame = 0; frame < 200; ++frame) {
+            const auto arrival = start + frame * 200ms;
+            const auto observed = spacing.observe(arrival, true);
+            if (observed.transition == Transition::Engaged) {
+                expect(engagedAt < 0 && observed.sourceInterval == 200ms,
+                    "video spacing engaged twice or at the wrong interval");
+                engagedAt = frame;
+            } else {
+                expect(observed.transition == Transition::None,
+                    "a steady video released its spacing");
+            }
+            const auto batch = spacing.schedule(arrival + prepare, 5);
+            expect(batch.has_value() == (engagedAt >= 0),
+                "video-rate spacing left a batch unspaced");
+            if (!batch)
+                continue;
+            expect(batch->at(4) < arrival + 200ms,
+                "the real frame borrowed the next source interval");
+            for (size_t output = 0; output < batch->count; ++output) {
+                if (previous)
+                    expect(batch->at(output) - *previous == 40ms,
+                        "video outputs lost uniform 40 ms spacing");
+                previous = batch->at(output);
+            }
+        }
+        expect(engagedAt == static_cast<int64_t>(Spacing::windowSize),
+            "spacing did not engage after one stable window");
+    }
+
+    // A game held at 40 FPS by its own limiter keeps its cadence while
+    // spaced; only the game-rate probe leaves one frame unspaced per 10 s.
+    {
+        Run run{.arrival = start, .due = start, .count = 3};
+        run.until(start + 60s, {.period = 25ms, .work = 5ms});
+        expect(run.transitions.size() == 1 &&
+                run.transitions[0].transition == Transition::Engaged &&
+                run.transitions[0].sourceInterval == 25ms,
+            "a frame-limited game did not keep its spacing");
+        expect(run.unspaced == 5 && run.held == run.frames - Spacing::windowSize - 5,
+            "game-rate spacing probed more often than every 10 s");
+    }
+
+    // A game running flat out loses frame rate to any wait. The guard
+    // releases it within one window, backs off 5/15/30/60 s, then leaves an
+    // unchanged cadence alone; a changed cadence earns one more attempt.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 600s, {.work = 23ms, .throughputBound = true});
+        std::vector<Clock::duration> retries;
+        for (const auto& transition : run.transitions)
+            if (transition.transition == Transition::Slowed)
+                retries.push_back(transition.retryAfter);
+        expect(retries == std::vector<Clock::duration>{5s, 15s, 30s, 60s},
+            "throughput-bound retries did not back off and stop");
+        expect(run.held <= retries.size() * Spacing::windowSize,
+            "the slowdown guard held a throughput-bound game for more than a window");
+        expect((run.arrival - start) / static_cast<int64_t>(run.frames) < 25ms + 50us,
+            "spacing cost a throughput-bound game its frame rate");
+
+        const auto changed = run.arrival;
+        run.until(changed + 120s, {.work = 40ms, .throughputBound = true});
+        size_t slowed = 0;
+        for (const auto& transition : run.transitions)
+            slowed += transition.transition == Transition::Slowed;
+        expect(slowed == 5 && run.transitions.back().retryAfter == 60s,
+            "a changed throughput-bound cadence was not retried exactly once");
+    }
+
+    // An emulator only just keeping its 62.5 FPS cadence loses 3% to the
+    // wait (16.5 ms instead of 16 ms); the guard releases it.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 2s, {.period = 16ms, .work = 6500us});
+        expect(run.transitions.size() == 2 &&
+                run.transitions[0].sourceInterval == 16ms &&
+                run.transitions[1].transition == Transition::Slowed,
+            "a 3% emulator slowdown kept its spacing");
+    }
+
+    // A source that speeds up presents as soon as the wait returns; the
+    // median sees the shorter interval and spacing requalifies at once.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 3s, {.period = 32ms, .work = 1ms});
+        run.until(start + 4s, {.period = 16ms, .work = 1ms});
+        expect(run.transitions.size() == 3 &&
+                run.transitions[1].transition == Transition::Faster &&
+                run.transitions[2].transition == Transition::Engaged &&
+                run.transitions[2].sourceInterval == 16ms,
+            "a faster source stayed throttled by the old spacing");
+    }
+
+    // A timer-driven emulator that switches 30 -> 60 FPS waits for its next
+    // slot, so the old wait hides the new cadence until the next probe.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 3s, {.period = 32ms, .work = 1ms, .timerSlots = true});
+        const auto switched = run.arrival;
+        run.until(switched + 12s, {.period = 16ms, .work = 1ms, .timerSlots = true});
+        expect(run.transitions.size() == 3 &&
+                run.transitions[1].transition == Transition::Faster &&
+                run.transitions[2].sourceInterval == 16ms,
+            "the game-rate probe missed a hidden 30 -> 60 FPS switch");
+    }
+
+    // A source that qualifies too fast to space (120 FPS at 2x is under the
+    // 240 Hz floor) and then settles at 60 FPS replaces its stale baseline
+    // without a penalty and is spaced at the settled cadence.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 1s, {.period = 8ms, .work = 1ms});
+        expect(run.spacing.engaged() && run.held == 0,
+            "an unspaceable cadence was spaced");
+        run.until(start + 2s, {.period = 16ms, .work = 1ms});
+        expect(run.transitions.size() == 3 &&
+                run.transitions[1].transition == Transition::Changed &&
+                run.transitions[2].transition == Transition::Engaged &&
+                run.transitions[2].sourceInterval == 16ms && run.held > 0,
+            "a stale unspaced baseline blocked spacing at the settled cadence");
+    }
+
+    // Playback that qualifies on a slightly slow start-up cadence settles to
+    // its real cadence within one window instead of leaving a short last gap.
+    {
+        Spacing spacing;
+        auto arrival = start;
+        for (size_t frame = 0; frame <= Spacing::windowSize; ++frame, arrival += 215ms)
+            static_cast<void>(spacing.observe(arrival, true));
+        arrival -= 215ms;
+        for (size_t frame = 0; frame < 2 * Spacing::windowSize; ++frame) {
+            expect(spacing.schedule(arrival + prepare, 5).has_value(),
+                "settling video spacing skipped a batch");
+            arrival += 200ms;
+            expect(spacing.observe(arrival, true).transition == Transition::None,
+                "a slightly faster settled cadence released spacing");
+        }
+        const auto batch = spacing.schedule(arrival + prepare, 5);
+        expect(batch && batch->interval == 40ms,
+            "spacing kept a slow start-up baseline after settling");
+    }
+
+    // One hitch, even above twice the baseline, keeps spacing; a loading
+    // stall releases it without a penalty.
+    for (const auto [period, hitch] : std::array{
+            std::pair{25ms, 75ms}, std::pair{200ms, 240ms}}) {
+        Spacing spacing;
+        auto arrival = start;
+        for (size_t frame = 0; frame <= Spacing::windowSize; ++frame, arrival += period)
+            static_cast<void>(spacing.observe(arrival, true));
+        arrival -= period;
+        expect(spacing.engaged(), "steady video did not engage");
+        for (size_t frame = 0; frame < 20; ++frame) {
+            expect(spacing.schedule(arrival + prepare, 5).has_value(),
+                "engaged video spacing skipped a batch");
+            arrival += frame == 10 ? hitch : period;
+            expect(spacing.observe(arrival, true).transition == Transition::None,
+                "one hitch released video spacing");
+        }
+        arrival += 300ms;
+        expect(spacing.observe(arrival, true).transition == Transition::Stalled,
+            "a loading stall kept stale spacing");
+        for (size_t frame = 0; frame < Spacing::windowSize; ++frame) {
+            arrival += period;
+            static_cast<void>(spacing.observe(arrival, true));
+        }
+        expect(spacing.engaged(), "a stall imposed a retry penalty");
+    }
+
+    // An irregular source is never spaced.
+    {
+        Spacing spacing;
+        auto arrival = start;
+        for (size_t frame = 0; frame < 200; ++frame) {
+            arrival += frame % 2 ? 22ms : 28ms;
+            expect(spacing.observe(arrival, true).transition == Transition::None &&
+                    !spacing.schedule(arrival + prepare, 2),
+                "an irregular source was spaced");
+        }
+    }
+
+    // Ineligible frames release spacing but keep the retry penalty; a slowed
+    // attempt is forgiven only after 10 s of clean spacing.
+    {
+        // Engaged after 8 x 25 ms, then slowed after 8 x 37.5 ms: 500 ms.
+        Run run{.arrival = start, .due = start};
+        run.until(start + 510ms, {.work = 23ms, .throughputBound = true});
+        const auto slowedAt = start + 500ms;
+        expect(run.transitions.size() == 2 &&
+                run.transitions.back().transition == Transition::Slowed &&
+                run.transitions.back().retryAfter == 5s,
+            "throughput-bound attempt was not released");
+        for (size_t frame = 0; frame < 4; ++frame, run.arrival += 25ms)
+            static_cast<void>(run.spacing.observe(run.arrival, false));
+        run.due = run.arrival;
+        run.until(slowedAt + 4s, {.period = 25ms, .work = 5ms});
+        expect(!run.spacing.engaged(), "an ineligible interval cleared the retry delay");
+        run.until(slowedAt + 20s, {.period = 25ms, .work = 5ms});
+        expect(run.spacing.engaged(), "a source-paced game was not spaced after its retry");
+        run.until(slowedAt + 21s, {.work = 23ms, .throughputBound = true});
+        expect(run.transitions.back().transition == Transition::Slowed &&
+                run.transitions.back().retryAfter == 5s,
+            "clean spacing did not forgive an earlier slowdown");
+        run.spacing.reset();
+        expect(!run.spacing.engaged(), "reset kept spacing engaged");
+    }
+
+    // Batches that cannot be spaced keep ordinary delivery.
+    {
+        Spacing spacing;
+        auto arrival = start;
+        for (size_t frame = 0; frame <= Spacing::windowSize; ++frame, arrival += 10ms)
+            static_cast<void>(spacing.observe(arrival, true));
+        arrival -= 10ms;
+        expect(spacing.engaged() && spacing.schedule(arrival + prepare, 2) &&
+                !spacing.schedule(arrival + prepare, 3),
+            "outputs closer than a 240 Hz refresh were spaced");
+        expect(!spacing.schedule(arrival + prepare, 1) &&
+                !spacing.schedule(arrival + prepare, GeneratedFramePlan::capacity + 2),
+            "a native frame or oversized batch was spaced");
+        expect(!spacing.schedule(arrival + 6ms, 2),
+            "late preparation pushed the real frame past the next source frame");
+    }
+}
+
 void testFractionalUsesExistingSourceDeadline() {
     using Clock = RealFramePacer::Clock;
     const auto start = Clock::time_point{10s};
@@ -948,6 +1273,161 @@ void testBridgeStagedReadiness() {
         "V2 ring expiry retained phantom occupancy or accepted stale feedback");
 }
 
+void testBridgeQueuedRefreshRealignment() {
+    using Timeline = OrderedPresentTimeline;
+    using Clock = Timeline::Clock;
+    const auto tick = std::chrono::duration_cast<Clock::duration>(
+        std::chrono::duration<double>(1.0 / 120.0));
+    struct Output {
+        uint32_t id;
+        Timeline::Slot slot;
+    };
+    // A 60 FPS source at 2x: one real and one generated output per batch.
+    struct Bridge {
+        Timeline timeline;
+        uint32_t id{};
+        uint64_t batch{};
+        Clock::time_point arrival{10s};
+        Clock::time_point now{10s};
+        std::array<Output, 2> produce(Clock::duration tickDuration) {
+            arrival = std::max(arrival + 2 * tickDuration, now);
+            now = arrival;
+            timeline.observeSourceBatch(arrival, ++batch);
+            std::array<Output, 2> outputs{};
+            for (auto& output : outputs) {
+                const auto slot = timeline.schedule(now, 120, 120, 2);
+                timeline.submitted(++id, slot->presentAt, slot->submitAt);
+                output = {id, *slot};
+                now = std::max(now, slot->submitAt);
+            }
+            return outputs;
+        }
+    };
+    const auto display = [](Bridge& bridge, const Output& output, Clock::duration lateness) {
+        bridge.timeline.feedback(output.id, output.slot.presentAt, {}, {},
+            output.slot.presentAt + lateness);
+    };
+
+    // A missed refresh leaves every later output shown one whole refresh late.
+    {
+        Bridge bridge;
+        std::array<Output, 2> last{};
+        for (size_t batch = 0; batch < 6; ++batch) {
+            last = bridge.produce(tick);
+            for (const auto& output : last)
+                display(bridge, output, tick + 1ms);
+        }
+        const auto realigned = bridge.produce(tick);
+        expect(realigned[0].slot.realignment == tick &&
+                realigned[0].slot.presentAt >= last[1].slot.presentAt + 2 * tick,
+            "queued refresh was not drained from the next output target");
+        expect(realigned[1].slot.realignment == Clock::duration::zero() &&
+                realigned[1].slot.presentAt - realigned[0].slot.presentAt == tick,
+            "realignment changed spacing after its single drained slot");
+        // Feedback for outputs requested before the realignment still shows
+        // the old queue and must not remove a second refresh.
+        for (size_t batch = 0; batch < 6; ++batch) {
+            const auto outputs = bridge.produce(tick);
+            for (const auto& output : last)
+                display(bridge, output, tick + 1ms);
+            static_cast<void>(outputs);
+        }
+        expect(bridge.produce(tick)[0].slot.realignment == Clock::duration::zero(),
+            "pre-realignment feedback removed the same queued refresh twice");
+    }
+
+    // Timing phase alone stays below one refresh and never moves deadlines.
+    {
+        Bridge bridge;
+        bool moved = false;
+        for (size_t batch = 0; batch < 20; ++batch) {
+            for (const auto& output : bridge.produce(tick)) {
+                moved |= output.slot.realignment > Clock::duration::zero();
+                display(bridge, output, tick - 50us);
+            }
+        }
+        expect(!moved, "timing phase within one refresh was treated as a queue");
+    }
+
+    // One output shown within a refresh disproves the queue and restarts evidence.
+    {
+        Bridge bridge;
+        bool moved = false;
+        size_t index = 0;
+        for (size_t batch = 0; batch < 10; ++batch) {
+            for (const auto& output : bridge.produce(tick)) {
+                moved |= output.slot.realignment > Clock::duration::zero();
+                display(bridge, output, ++index % 10 == 0 ? 1ms : tick + 1ms);
+            }
+        }
+        expect(!moved, "a transient late output was treated as a persistent queue");
+    }
+
+    // Two queued refreshes drain together.
+    {
+        Bridge bridge;
+        std::array<Output, 2> last{};
+        for (size_t batch = 0; batch < 6; ++batch) {
+            last = bridge.produce(tick);
+            for (const auto& output : last)
+                display(bridge, output, 2 * tick + 1ms);
+        }
+        expect(bridge.produce(tick)[0].slot.realignment == 2 * tick,
+            "two queued refreshes were not drained together");
+    }
+
+    // A source pause rebases deadlines and discards pending queue evidence.
+    {
+        Bridge bridge;
+        for (size_t batch = 0; batch < 6; ++batch)
+            for (const auto& output : bridge.produce(tick))
+                display(bridge, output, tick + 1ms);
+        bridge.arrival += 2s;
+        bridge.now = bridge.arrival;
+        expect(bridge.produce(tick)[0].slot.realignment == Clock::duration::zero(),
+            "a pause applied queue evidence from before the rebase");
+    }
+
+    const auto countRealignments = [&](Bridge& bridge, size_t batches,
+            Clock::duration lateness) {
+        size_t realignments = 0;
+        for (size_t batch = 0; batch < batches; ++batch) {
+            for (const auto& output : bridge.produce(tick)) {
+                realignments += output.slot.realignment > Clock::duration::zero();
+                display(bridge, output, lateness);
+            }
+        }
+        return realignments;
+    };
+
+    // Compositor latency of a whole refresh is not a queue: the realigned
+    // output stays late, so repeating the delay would hold a refresh every
+    // evidence window. One test realignment is allowed, then none.
+    {
+        Bridge bridge;
+        expect(countRealignments(bridge, 30, tick + 1ms) == 1,
+            "constant compositor latency repeatedly held a refresh as a queue");
+        // A pause or timing reset re-arms realignment for a new queue.
+        bridge.arrival += 2s;
+        bridge.now = bridge.arrival;
+        expect(countRealignments(bridge, 7, tick + 1ms) == 1,
+            "a timing reset did not re-arm realignment after a disproved one");
+    }
+
+    // A realignment that drained its queue keeps later queues eligible.
+    {
+        Bridge bridge;
+        expect(countRealignments(bridge, 6, tick + 1ms) == 0,
+            "queue evidence realigned before it was complete");
+        expect(countRealignments(bridge, 4, 1ms) == 1,
+            "queued refresh was not drained");
+        expect(countRealignments(bridge, 6, tick + 1ms) == 0,
+            "a drained queue was realigned again");
+        expect(countRealignments(bridge, 1, 1ms) == 1,
+            "a proven realignment disabled draining a later queue");
+    }
+}
+
 int main() {
     {
         mako::layer::RealFramePacer pacer;
@@ -970,11 +1450,13 @@ int main() {
     testLongSessionDeadlineBounds();
     testFractionalUsesExistingSourceDeadline();
     testFixedUsesExistingSourceDeadline();
+    testSourceIntervalSpacing();
     testSmoothCadenceCapFollowsActivePlan();
     testOrderedPresentationTimeline();
     testBridgeCompositorReadiness();
     testBridgeCompletionReturnDoesNotDrift();
     testBridgeStagedReadiness();
+    testBridgeQueuedRefreshRealignment();
     testBridgeSourceDeadlinePreservesDisplayClock();
     testOrderedAcquireUsesExplicitFailureOnly();
     testOrderedAcquireBackoffAndProbeAreFinite();

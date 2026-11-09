@@ -30,9 +30,10 @@ namespace mako::cli::images {
 
     void uploadImage(const vk::Vulkan& vk, const vk::Image& image,
             const std::span<const uint8_t> rgba) {
-        const size_t expectedBytes = static_cast<size_t>(image.getExtent().width) *
-            image.getExtent().height * 4;
-        if (rgba.size() != expectedBytes)
+        // Four-byte (RGBA8 or packed 10-bit) or eight-byte (RGBA16F) pixels.
+        const size_t pixels = static_cast<size_t>(image.getExtent().width) *
+            image.getExtent().height;
+        if (rgba.size() != pixels * 4 && rgba.size() != pixels * 8)
             throw ls::error("quality source image has an invalid byte count");
         const vk::Buffer staging{
             vk, rgba.data(), rgba.size(), VK_BUFFER_USAGE_TRANSFER_SRC_BIT

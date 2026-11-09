@@ -51,7 +51,10 @@ htmlcov/
 /engine/build/
 /engine/build-*/
 /engine/out/
+# MAKO FG's release command writes the active release here for local packaging; it is never tracked.
+/engine/models/
 /engine/.flatpak-builder/
+/engine/_flatpak_build/
 
 # MAKO Decky plugin (pnpm, generated output, and packaging)
 /node_modules/

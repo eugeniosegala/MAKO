@@ -1,11 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "profile_update.hpp"
+#include "frame_generation_backend.hpp"
 #include "swapchain/create_policy.hpp"
 
+#include <array>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <stdexcept>
+#include <utility>
+#include <vector>
 #include <string_view>
 
 using namespace mako::layer;
@@ -24,6 +29,7 @@ namespace {
             .active_in = {"game"},
             .multiplier = 2,
             .frame_generation_enabled = true,
+            .frame_generation_model = ls::FrameGenerationModel::LosslessScaling,
             .base_fps_cap = 0,
             .adaptive = true,
             .adaptive_auto_base_fps_cap = false,
@@ -42,6 +48,148 @@ namespace {
 }
 
 int main() {
+    for (const auto requested : {ls::FrameGenerationModel::MakoFg, ls::FrameGenerationModel::LosslessScaling}) {
+        std::vector<ls::FrameGenerationModel> attempts;
+        size_t notices = 0;
+        const auto initialize = [&](ls::FrameGenerationModel model) {
+            attempts.push_back(model);
+            if (model == ls::FrameGenerationModel::LosslessScaling)
+                throw std::runtime_error("missing or unsupported Lossless.dll");
+        };
+        const auto applied = initializeFrameGenerationBackend(requested, initialize,
+            [&](const std::exception&) { ++notices; });
+        expect(applied == ls::FrameGenerationModel::MakoFg &&
+                attempts.size() == (requested == ls::FrameGenerationModel::MakoFg ? 1U : 2U) &&
+                notices == (requested == ls::FrameGenerationModel::MakoFg ? 0U : 1U),
+            "Missing or incompatible optional LSFG falls back once to MAKO FG");
+    }
+    {
+        size_t attempts = 0;
+        const auto applied = initializeFrameGenerationBackend(ls::FrameGenerationModel::LosslessScaling,
+            [&](auto) { ++attempts; }, [](const auto&) { expect(false, "Supported LSFG must not fall back"); });
+        expect(applied == ls::FrameGenerationModel::LosslessScaling && attempts == 1,
+            "Supported Lossless Scaling remains selectable");
+        for (const auto requested : {ls::FrameGenerationModel::MakoFg, ls::FrameGenerationModel::LosslessScaling}) {
+            attempts = 0;
+            bool rejected = false;
+            try {
+                initializeFrameGenerationBackend(requested,
+                    [&](auto) { ++attempts; throw std::runtime_error("backend unavailable"); }, [](const auto&) {});
+            } catch (const std::runtime_error&) { rejected = true; }
+            expect(rejected && attempts == (requested == ls::FrameGenerationModel::MakoFg ? 1U : 2U),
+                "A failed MAKO FG fallback propagates without loops or retries");
+        }
+    }
+    {
+        for (const auto model : {ls::FrameGenerationModel::LosslessScaling, ls::FrameGenerationModel::MakoFg}) {
+            ls::GameConf current;
+            current.frame_generation_model = model;
+            auto requested = current;
+            requested.frame_generation_model = model == ls::FrameGenerationModel::MakoFg
+                ? ls::FrameGenerationModel::LosslessScaling : ls::FrameGenerationModel::MakoFg;
+            requested.base_fps_cap = 30;
+            const auto projection = projectProcessStaticProfileForLiveUpdate(current, requested, true, false, false, false);
+            expect(projection.restartRequired() && projection.frameGenerationModelPending &&
+                projection.runtimeProfile.frame_generation_model == model && projection.runtimeProfile.base_fps_cap == 30,
+                "Model changes wait for process restart; unrelated cap edits remain live");
+            const auto plan = planProfileUpdate(current, requested, 2, true, false, true);
+            expect(plan.decision.processRestartDeferred && !plan.decision.frameGenerationPrivateRebuild &&
+                plan.appliedProfile.frame_generation_model == model,
+                "A model change cannot rebuild or silently switch the active backend");
+            expect(profileForExistingBackend(requested, current).frame_generation_model == model &&
+                backendProfileChangePending(current, requested),
+                "Natural swapchain recreation preserves selected model and pending state");
+        }
+    }
+
+    {
+        auto current=ls::GameConf{};
+        current.frame_generation_model=ls::FrameGenerationModel::MakoFg;
+        auto requested=current;requested.flow_scale=.75F;
+        const auto plan=planProfileUpdate(current,requested,3,true,false,true);
+        expect(plan.decision.frameGenerationPrivateRebuild && !plan.decision.processRestartDeferred,
+            "MAKO FG Flow Scale rebuilds only the existing private resource boundary");
+        auto modeRequest=current;modeRequest.mako_fg_mode=ls::MakoFgMode::Performance;
+        const auto modePlan=planProfileUpdate(current,modeRequest,3,true,false,true);
+        expect(modePlan.decision.frameGenerationPrivateRebuild && !modePlan.decision.processRestartDeferred &&
+                modePlan.appliedProfile.mako_fg_mode==current.mako_fg_mode,
+            "MAKO FG Mode rebuilds only the existing private resource boundary and applies at handoff");
+        auto lsfg=current;lsfg.frame_generation_model=ls::FrameGenerationModel::LosslessScaling;
+        auto lsfgRequest=lsfg;lsfgRequest.mako_fg_mode=ls::MakoFgMode::ExtraPerformance;
+        expect(!planProfileUpdate(lsfg,lsfgRequest,3,true,false,true).decision.frameGenerationPrivateRebuild,
+            "MAKO FG Mode leaves Lossless Scaling untouched");
+
+        // Creation and live replacement open a context from these settings.
+        const std::array<std::pair<ls::MakoFgMode,int>,4> periods{{{ls::MakoFgMode::Quality,1},
+            {ls::MakoFgMode::Balanced,2},{ls::MakoFgMode::Performance,3},{ls::MakoFgMode::ExtraPerformance,4}}};
+        for(const auto& [mode,period]:periods) {
+            auto profile=current;profile.mako_fg_mode=mode;
+            expect(frameGenerationContextSettings(profile).motionPeriod==period,
+                "A MAKO FG context must open with its selected motion period");
+            profile.frame_generation_model=ls::FrameGenerationModel::LosslessScaling;
+            expect(frameGenerationContextSettings(profile).motionPeriod==1,
+                "Lossless Scaling contexts must not inherit a saved MAKO FG Mode");
+        }
+        auto ultra=current;ultra.ultra_performance=true;ultra.mako_fg_mode=ls::MakoFgMode::Quality;
+        expect(frameGenerationContextSettings(ultra).motionPeriod==3,
+            "Ultra Performance must open at least the Performance motion period");
+        expect(!(frameGenerationContextSettings(current)==frameGenerationContextSettings(modeRequest)),
+            "A mode-only edit must not coalesce with a prepared context for another mode");
+
+        // A committed context owns its mode; a later reload must find nothing left to do.
+        auto committed=modePlan.appliedProfile;
+        applyFrameGenerationResourceProfile(committed,modeRequest,modeRequest,std::nullopt);
+        expect(committed.mako_fg_mode==modeRequest.mako_fg_mode,
+            "A committed private context must apply its MAKO FG Mode");
+        expect(!planProfileUpdate(committed,modeRequest,3,true,false,true).decision.frameGenerationPrivateRebuild,
+            "A committed MAKO FG Mode must not request another private rebuild");
+
+        // Boundaries that hold Flow Scale back hold the mode with it.
+        expect(maskRecreatedProfileResourcesForLiveUpdate(current,modeRequest).mako_fg_mode==current.mako_fg_mode,
+            "A pending recreation must not rebuild the old context for a new mode");
+        auto ultraRequest=modeRequest;ultraRequest.ultra_performance=true;
+        expect(projectProcessStaticProfileForLiveUpdate(current,ultraRequest,true,false,false,false)
+                .runtimeProfile.mako_fg_mode==current.mako_fg_mode,
+            "A pending Ultra Performance change must not partially mutate the backend");
+        expect(planProfileUpdate(current,ultraRequest,3,true,false,true).appliedProfile.mako_fg_mode==
+                current.mako_fg_mode,
+            "A context must keep its mode while Ultra Performance waits for restart");
+    }
+
+    {
+        ls::GameConf desktop;
+        desktop.multiplier = 5;
+        expect(sourceIntervalSpacingApplies(desktop, true, false, std::nullopt, false),
+            "Desktop Fixed FIFO spaces outputs across the source interval");
+        auto adaptive = desktop;
+        adaptive.adaptive = true;
+        expect(sourceIntervalSpacingApplies(adaptive, true, false, std::nullopt, false),
+            "Desktop Adaptive FIFO spaces each frame's outputs");
+        auto capped = desktop;
+        capped.base_fps_cap = 30;
+        capped.gpu_headroom_percent = 10;
+        expect(sourceIntervalSpacingApplies(capped, true, false, std::nullopt, false),
+            "Desktop caps cannot pace outputs without refresh feedback");
+        expect(!sourceIntervalSpacingApplies(desktop, true, true, std::nullopt, false),
+            "Any Gamescope signal keeps the existing Gamescope pacing paths");
+        expect(!sourceIntervalSpacingApplies(desktop, true, false, 120, false) &&
+                !sourceIntervalSpacingApplies(desktop, true, false, std::nullopt, true),
+            "Known refresh or a compositor output clock keeps its own pacing owner");
+        expect(!sourceIntervalSpacingApplies(desktop, false, false, std::nullopt, false),
+            "MAILBOX, IMMEDIATE and application-owned timing are not spaced");
+        auto recovery = desktop;
+        recovery.dynamic_cadence_recovery = true;
+        expect(!sourceIntervalSpacingApplies(recovery, true, false, std::nullopt, false),
+            "Dynamic Cadence Recovery keeps its unspaced native measurement");
+        recovery.base_fps_cap = 30;
+        expect(sourceIntervalSpacingApplies(recovery, true, false, std::nullopt, false),
+            "A capped profile has no effective Dynamic Cadence Recovery");
+        auto disabled = desktop;
+        disabled.frame_generation_enabled = false;
+        expect(!sourceIntervalSpacingApplies(disabled, true, false, std::nullopt, false),
+            "Native presentation has nothing to space");
+    }
+
     {
         ls::GameConf fixed;
         fixed.multiplier = 2;
@@ -595,16 +743,19 @@ int main() {
     staticRequest.target_fps = 120;
     staticRequest.frame_generation_provisioned = false;
     staticRequest.swapchain_image_count_compatibility = true;
+    staticRequest.mailbox_presentation_compatibility = true;
     const auto staticProjection = projectProcessStaticProfileForLiveUpdate(
         current, staticRequest, current.frame_generation_provisioned,
         current.scaling_enabled,
-        current.swapchain_image_count_compatibility
+        current.swapchain_image_count_compatibility,
+        current.mailbox_presentation_compatibility
     );
     expect(staticProjection.restartRequired() &&
             staticProjection.gpuSelectionPending &&
             staticProjection.frameGenerationProvisioningPending &&
             staticProjection.ultraPerformancePending &&
             staticProjection.swapchainImageCountCompatibilityPending &&
+            staticProjection.mailboxPresentationCompatibilityPending &&
             staticProjection.runtimeProfile.gpu == current.gpu &&
             staticProjection.runtimeProfile.frame_generation_provisioned ==
                 current.frame_generation_provisioned &&
@@ -616,6 +767,9 @@ int main() {
             staticProjection.runtimeProfile
                 .swapchain_image_count_compatibility ==
                     current.swapchain_image_count_compatibility &&
+            staticProjection.runtimeProfile
+                .mailbox_presentation_compatibility ==
+                    current.mailbox_presentation_compatibility &&
             staticProjection.runtimeProfile.target_fps == 120,
         "Process-static projection must retain construction fields and apply live policy");
     auto scalingEngineRequest = current;
@@ -625,7 +779,8 @@ int main() {
         projectProcessStaticProfileForLiveUpdate(
             current, scalingEngineRequest,
             current.frame_generation_provisioned, current.scaling_enabled,
-            current.swapchain_image_count_compatibility
+            current.swapchain_image_count_compatibility,
+            current.mailbox_presentation_compatibility
         );
     expect(scalingEngineProjection.restartRequired() &&
             scalingEngineProjection.scalingEnginePending &&
@@ -640,7 +795,8 @@ int main() {
         scalingOnlyCurrent, current,
         scalingOnlyCurrent.frame_generation_provisioned,
         scalingOnlyCurrent.scaling_enabled,
-        scalingOnlyCurrent.swapchain_image_count_compatibility
+        scalingOnlyCurrent.swapchain_image_count_compatibility,
+        scalingOnlyCurrent.mailbox_presentation_compatibility
     );
     expect(!liveEnableProjection.restartRequired() &&
             liveEnableProjection.runtimeProfile.frame_generation_enabled,
@@ -674,6 +830,20 @@ int main() {
             !backendProfileChangePending(
                 std::nullopt, requestedBackendProfile),
         "An applied or not-yet-constructed profile was marked pending");
+    {
+        auto makoFgBackend = backendProfile;
+        makoFgBackend.frame_generation_model = ls::FrameGenerationModel::MakoFg;
+        auto savedLsfg = makoFgBackend;
+        savedLsfg.frame_generation_model =
+            ls::FrameGenerationModel::LosslessScaling;
+        expect(backendProfileChangePending(
+                std::optional{makoFgBackend}, savedLsfg),
+            "A model chosen after startup was not retained as pending");
+        expect(!backendProfileChangePending(
+                std::optional{makoFgBackend}, savedLsfg,
+                ls::FrameGenerationModel::LosslessScaling),
+            "A saved model that fell back at startup stayed pending forever");
+    }
 
     expect(effectiveFrameGenerationEnabled(current, std::nullopt) &&
             effectiveFrameGenerationEnabled(current, 60),
@@ -1719,18 +1889,18 @@ int main() {
             !liveProfileResourceRecreationAvailable(decision, true),
         "A process-static edit must suppress combined forced recreation");
     expect(ls::effectiveScalingMethod(next) ==
-            ls::ScalingMethod::Ls1Performance,
-        "Ultra Performance must select LS1 Performance when scaling starts");
+            ls::ScalingMethod::Mako,
+        "Ultra Performance must select MAKO Scaler when scaling starts");
 
     auto runningUltra = current;
     runningUltra.ultra_performance = true;
     runningUltra.flow_scale = ls::GameConfDefaults::ultraPerformanceFlowScale;
     runningUltra.performance_mode = true;
     runningUltra.scaling_enabled = true;
-    runningUltra.scaling_method = ls::ScalingMethod::Mako;
+    runningUltra.scaling_method = ls::ScalingMethod::Ls1Performance;
     expect(ls::effectiveScalingMethod(runningUltra) ==
-            ls::ScalingMethod::Ls1Performance,
-        "A running Ultra Performance profile must use the performance scaler");
+            ls::ScalingMethod::Mako,
+        "A running Ultra Performance profile must use MAKO Scaler");
     auto savedUltraScalerChoice = runningUltra;
     savedUltraScalerChoice.scaling_method = ls::ScalingMethod::Ls1;
     const auto savedUltraScalerPlan = planProfileUpdate(
@@ -2369,6 +2539,11 @@ int main() {
     fixedUltra.adaptive = true;
     expect(generatedFrameCapacityForProfile(fixedUltra) == 2,
         "Adaptive 3x Ultra Performance must allocate only its active ceiling");
+    auto makoFgUltra = fixedUltra;
+    makoFgUltra.frame_generation_model = ls::FrameGenerationModel::MakoFg;
+    makoFgUltra.adaptive = false;
+    expect(generatedFrameCapacityForProfile(makoFgUltra) == 1,
+        "MAKO FG Ultra Performance must also allocate only its active output");
     expect(fixedGeneratedFrameCount(2, 2) == 1,
         "Fixed 2x must schedule one frame even with two reserved outputs");
     expect(fixedGeneratedFrameCount(3, 2) == 2,

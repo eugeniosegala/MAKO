@@ -679,6 +679,9 @@ namespace {
             };
             require(storageFormat(sdr.reconstruction) == 4 && storageFormat(hdr.reconstruction) == 2,
                 "LS1 reconstruction must select RGBA8 for SDR and RGBA16F for HDR");
+            require(storageFormat(sdr.reconstructionDirect) == 0 &&
+                    storageFormat(hdr.reconstructionDirect) == 0,
+                "LS1 direct reconstruction must keep a format-less storage write");
             ::setenv("MAKO_TEST_TRANSLATION_FAILURE", "compile", 1);
             require(loadLs1ShaderSet(modelPath, Ls1Mode::Performance, 0.0F, false).reconstruction == sdr.reconstruction &&
                     loadLs1ShaderSet(modelPath, Ls1Mode::Performance, 0.0F, true).reconstruction == hdr.reconstruction,

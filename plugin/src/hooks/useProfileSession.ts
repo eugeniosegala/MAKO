@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Router, type AppOverview } from "@decky/ui";
 import type { ProfileResult } from "../api/makoApi";
 import { DEFAULT_PROFILE_NAME } from "../config/configSchema";
+import type { SessionSnapshot } from "./panelSnapshot";
 
 const PROFILE_SYNC_INTERVAL_MS = 2000;
 
@@ -9,6 +10,8 @@ interface ProfileSessionOptions {
   isInstalled: boolean;
   loadProfileConfig: (profileName?: string) => Promise<void>;
   syncCurrentProfile: (appId?: string) => Promise<ProfileResult>;
+  // Shown until the first sync; restorePanel() checks it is the same app.
+  restored?: SessionSnapshot | null;
 }
 
 /**
@@ -17,23 +20,31 @@ interface ProfileSessionOptions {
  * A live game locks the editor to its resolved profile. After that game exits,
  * the editor follows the backend's idle selection exactly once. Native streams
  * retain their selected profile on exit. Offline choices remain until launch.
+ * A restored session only seeds what is shown: the first sync still follows
+ * the backend exactly as on a fresh panel. profileSynced reports that a sync
+ * or a manual selection has confirmed the editing profile.
  */
 export function useProfileSession({
   isInstalled,
   loadProfileConfig,
   syncCurrentProfile,
+  restored,
 }: ProfileSessionOptions) {
   const [mainRunningApp, setMainRunningApp] = useState<AppOverview | undefined>(
-    undefined,
+    () =>
+      restored?.gameRunning ? (Router.MainRunningApp ?? undefined) : undefined,
   );
-  const [editingProfile, setEditingProfile] =
-    useState<string>(DEFAULT_PROFILE_NAME);
-  const editingProfileRef = useRef<string>(DEFAULT_PROFILE_NAME);
+  const restoredProfile = restored?.profile ?? DEFAULT_PROFILE_NAME;
+  const [editingProfile, setEditingProfile] = useState<string>(restoredProfile);
+  const editingProfileRef = useRef<string>(restoredProfile);
   const gameWasRunningRef = useRef(false);
   const remoteWasRunningRef = useRef(false);
   const initializedProfileRef = useRef(false);
   const selectionRevisionRef = useRef(0);
-  const [remotePlayRunning, setRemotePlayRunning] = useState(false);
+  const [profileSynced, setProfileSynced] = useState(false);
+  const [remotePlayRunning, setRemotePlayRunning] = useState(
+    restored?.remotePlayRunning ?? false,
+  );
   const lastPowerSource = useRef<string | undefined>(undefined);
   const [powerSource, setPowerSource] = useState<string | undefined>(undefined);
 
@@ -104,6 +115,7 @@ export function useProfileSession({
           lastPowerSource.current =
             result.power_source || lastPowerSource.current || "";
           setPowerSource(result.power_source || "");
+          setProfileSynced(true);
           if (editingProfileChanged && nextEditingProfile) {
             await loadProfileConfig(nextEditingProfile);
           } else if (gameIsRunning && powerChanged) {
@@ -131,6 +143,7 @@ export function useProfileSession({
     initializedProfileRef.current = true;
     editingProfileRef.current = profileName;
     setEditingProfile(profileName);
+    setProfileSynced(true);
   }, []);
 
   const getEditingProfile = useCallback(() => editingProfileRef.current, []);
@@ -140,6 +153,7 @@ export function useProfileSession({
     remotePlayRunning,
     powerSource,
     editingProfile,
+    profileSynced,
     selectEditingProfile,
     getEditingProfile,
   };

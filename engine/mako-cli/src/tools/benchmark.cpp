@@ -7,6 +7,7 @@
 #include "mako-common/quality/image_quality.hpp"
 #include "i18n.hpp"
 #include "mako-backend/mako.hpp"
+#include "mako-common/configuration/config.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/file_descriptors.hpp"
 #include "mako-common/helpers/paths.hpp"
@@ -211,7 +212,7 @@ int benchmark::run(const Options& opts, const i18n::Language language) {
         std::string dll{};
         if (opts.dll.has_value())
             dll = *opts.dll;
-        else
+        else if (!ls::makoFgPackageOverride())
             dll = ls::findShaderDll();
 
         mako::backend::Instance mako{
@@ -222,16 +223,20 @@ int benchmark::run(const Options& opts, const i18n::Language language) {
             ) {
                 return opts.gpu.value_or(gpu_name) == gpu_name;
             },
-            dll, opts.allow_fp16
+            dll, opts.allow_fp16, ls::makoFgPackageOverride()
         };
         if (opts.profile_hdr10 && !mako.supportsPackedHdr10Transport())
             throw ls::error("Packed HDR10 profiling is unsupported on the selected backend device");
+        const auto makoFgMode = ls::makoFgModeFromName(opts.mako_fg_mode);
+        if (!makoFgMode)
+            throw ls::error("--mako-fg-mode must be quality, balanced, performance or extra-performance");
         mako::backend::Context& mako_ctx = mako.openContext(
             (sourceScope.release(), std::pair{srcfds[0], srcfds[1]}),
             (destinationScope.release(), destfds),
             (syncScope.release(), syncfd), extent.width, extent.height,
             opts.profile_hdr10 ? mako::backend::FrameEncoding::Hdr10PqPacked : mako::backend::FrameEncoding::Sdr8,
-            1.0F / opts.flow, opts.performance_mode, opts.profile_hdr_reduced_precision
+            1.0F / opts.flow, opts.performance_mode, opts.profile_hdr_reduced_precision,
+            ls::makoFgMotionPeriod(*makoFgMode)
         );
 
         // Defined inputs belong outside the timed capacity loop. This remains a

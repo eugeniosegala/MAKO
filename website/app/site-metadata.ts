@@ -15,7 +15,6 @@ export const siteKeywords = [
   'Steam Deck shaders',
   'Decky Loader plugin',
   'Vulkan frame generation',
-  'Lossless Scaling Linux',
 ];
 
 export const structuredData = {
@@ -55,10 +54,10 @@ export const structuredData = {
       license: `${releaseData.links.repository}/blob/main/LICENSE.md`,
       image: socialImageUrl,
       softwareRequirements:
-        'Lossless Scaling is required only for LSFG frame generation and LS1 scaling. MAKO Scaler and bundled shaders work independently.',
+        'MAKO FG, MAKO Scaler, and bundled shaders work without Lossless Scaling. Only the optional Lossless Scaling frame generation model (LSFG) and LS1 scaling require a separately purchased Lossless Scaling installation.',
       featureList: [
-        'Fixed and adaptive frame generation',
-        'Spatial scaling with MAKO Scaler or LS1',
+        'Fixed and adaptive frame generation with MAKO FG or optional Lossless Scaling models',
+        'Spatial scaling with MAKO Scaler or optional LS1',
         'Per-game Vulkan shader effects',
         'Steam Deck and SteamOS integration through Decky Loader',
         'Standalone MAKO Renderer for desktop Linux',
@@ -82,7 +81,7 @@ export const structuredData = {
           name: 'Does MAKO include Lossless Scaling?',
           acceptedAnswer: {
             '@type': 'Answer',
-            text: 'No. MAKO is independent and does not distribute Lossless Scaling or its proprietary resources. Frame generation and LS1 scaling require a separate Lossless Scaling purchase. MAKO Scaler and the bundled shaders do not.',
+            text: 'No. MAKO is independent and does not distribute Lossless Scaling or its proprietary resources. MAKO FG, MAKO Scaler, and the bundled shaders work without it. Only the optional Lossless Scaling frame generation model (LSFG) and LS1 scaling require a separate Lossless Scaling purchase.',
           },
         },
         {

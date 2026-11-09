@@ -19,7 +19,7 @@
 </p>
 
 <!-- prettier-ignore -->
-> **Independent project:** MAKO is not an official Lossless Scaling, Decky Loader, lsfg-vk, vkBasalt, or ReShade release. MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LSFG frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO Scaler and bundled shaders do not require it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
+> **Independent project:** MAKO is not an official Lossless Scaling, Decky Loader, lsfg-vk, vkBasalt, or ReShade release. MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. The optional Lossless Scaling frame generation model (LSFG) and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; MAKO FG, the open MAKO Scaler, and bundled shaders do not require it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
 
 ## Downloads
 
@@ -33,6 +33,10 @@
 | **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users (bundles MAKO Renderer) | <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">Latest MAKO Decky release (ZIP under Assets)</a> |
 | **MAKO Renderer** | Direct Vulkan-layer installation without Decky | <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v4.6.0" target="_blank" rel="noopener noreferrer">Latest MAKO Renderer release (Linux archive under Assets)</a> |
 
+Published Renderer packages currently target x86_64 Linux hosts and include layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages are not included in this release.
+
+MAKO is developed and tested on AMD GPUs with Mesa's RADV driver, including the Steam Deck. NVIDIA and Intel GPUs are community-tested. Options that need AMD hardware say so in the <a href="plugin/docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">configuration guide</a>.
+
 ## Community
 
 Join the official <a href="https://discord.gg/NAVkyCq7Rc" target="_blank" rel="noopener noreferrer">MAKO Discord</a> for discussion, testing, development, showcases, and live troubleshooting. GitHub remains the source of truth for <a href="https://github.com/eugeniosegala/MAKO/issues/new/choose" target="_blank" rel="noopener noreferrer">bug reports and feature requests</a>.
@@ -40,8 +44,6 @@ Join the official <a href="https://discord.gg/NAVkyCq7Rc" target="_blank" rel="n
 <!-- prettier-ignore -->
 > [!TIP]
 > **Want update alerts?** MAKO Decky and MAKO Renderer are published independently. At the top-right of the <a href="https://github.com/eugeniosegala/MAKO" target="_blank" rel="noopener noreferrer">MAKO GitHub repository</a> page, click **Watch** > **Custom**, select **Releases**, then click **Apply**. GitHub will notify you when a new release is published, subject to your GitHub notification settings.
-
-Published Renderer packages currently target x86_64 Linux hosts and include layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages are not included in this release.
 
 ## ✨ Feature Highlights
 
@@ -54,9 +56,9 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
   <br /><br />
 </p>
 
-- **Full-quality frame generation:** Lossless Scaling models from your licensed installation, with per-game quality and performance controls.
-- **Reduced ghosting:** Full-quality v2 with Lighter FG Model off can reduce ghosting; supported AMD GPUs gain extra safeguards. Results vary by game.
-- **Spatial scaling:** LS1 Quality, LS1 Performance, or the open MAKO Scaler, used alone or alongside frame generation.
+- **Per-game frame generation models:** MAKO FG by default, or the optional Lossless Scaling models from your licensed installation, with quality and performance controls.
+- **Reduced ghosting:** MAKO FG is designed to preserve static HUD elements and reduce ghosts on thin moving objects at 4× and above. Full-quality v2 with LSFG Quality can also reduce ghosting; supported AMD GPUs gain extra safeguards. Results vary by game.
+- **Spatial scaling:** The open MAKO Scaler by default, or optional LS1 Quality and LS1 Performance, used alone or alongside frame generation.
 - **Per-game shaders:** Live sharpening, anti-aliasing, colour, cinematic, and retro effects through bundled vkBasalt.
 - **Adaptive Frame Generation:** Target 30–240 FPS with a selectable 2x–5x generation ceiling.
 - **Display-aware pacing:** Adapts frame delivery to the presentation plan and Gamescope VRR state.
@@ -69,7 +71,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 
 ## What MAKO is
 
-MAKO (**Motion-Adaptive Kernel Orchestration**) brings LSFG frame generation, spatial scaling, and bundled shader effects to Linux gaming. **MAKO Scaler and shaders work without Lossless Scaling; only Frame Generation and LS1 require it.** Scaling can run alone or alongside Fixed or Adaptive Frame Generation.
+MAKO (**Motion-Adaptive Kernel Orchestration**) brings frame generation, spatial scaling, and bundled shader effects to Linux gaming. **MAKO FG and MAKO Scaler are the defaults and, with Shaders, work without Lossless Scaling. Only the optional Lossless Scaling frame generation model and LS1 scaling require it.** Scaling can run alone or alongside Fixed or Adaptive Frame Generation.
 
 The project consists of two closely integrated components:
 
@@ -87,7 +89,7 @@ Every game and display behaves differently, so compare one setting at a time. If
 ## Install and use
 
 1. **Install Decky Loader** if needed. Switch to Desktop Mode and follow the <a href="https://github.com/SteamDeckHomebrew/decky-loader#-installation" target="_blank" rel="noopener noreferrer">official Decky Loader installation guide</a>, then return to Game Mode.
-2. **Install the default public version of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> from Steam if you will use frame generation or LS1 scaling.** MAKO can use beta branches, but they are not validated; the default public branch is recommended. MAKO reads its licensed `Lossless.dll`; MAKO Scaler and Shaders work without it.
+2. **Optional: install the default public version of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> from Steam only if you want its frame generation model or LS1 scaling.** MAKO can use beta branches, but they are not validated; the default public branch is recommended. MAKO reads its licensed `Lossless.dll`; MAKO FG, MAKO Scaler, and Shaders work without it.
 3. Open the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a> and download its ZIP under **Assets**.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
 5. Open **MAKO Decky** and select **Install MAKO Renderer**. Installing the ZIP alone does not install its bundled Renderer.
@@ -125,16 +127,15 @@ For a step-by-step guide that creates a shareable report on the Desktop, see <a 
 1. Quit the games using MAKO.
 2. Uninstall MAKO Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart your Steam Deck or Steam Machine.
-4. Open MAKO Decky and select **Install MAKO Renderer** to install the version bundled in the ZIP.
-5. If you use prepared Flatpak applications, open **Flatpak Setup** and select **Update** for each matching runtime extension shown by MAKO.
+4. Open MAKO Decky and select **Install MAKO Renderer**, or **Update** when MAKO offers it, to install the version bundled in the ZIP. This also refreshes every MAKO Flatpak runtime extension already installed.
 
-Valid profiles and Steam launch options are retained. If the saved Renderer configuration cannot be read or validated, installation recreates it with defaults. Uninstalling MAKO Decky removes the shared native Renderer, while Flatpak extensions remain installed separately; step 5 updates them.
+Valid profiles and Steam launch options are kept, and removing or reinstalling MAKO Decky leaves the native Renderer, launchers and Remote Play override in place. Older Decky versions may remove Renderer during uninstall, so step 4 reinstalls it. A Renderer configuration that cannot be read or validated is recreated with defaults. A ZIP alone does not update Renderer, MAKO FG or Flatpak runtime extensions: open Decky and apply the offered update. MAKO offers it whenever the installed Renderer, MAKO FG or an installed Flatpak runtime extension differs from the ZIP's bundle, including files replaced outside Decky or left by an interrupted update. To remove the shared Renderer, use **Remove MAKO Renderer** in Decky or the desktop **Uninstall MAKO Renderer** entry, which stays available after Decky is removed.
 
 ## Use MAKO Renderer directly
 
 Decky is optional. Desktop Linux users can install MAKO Renderer directly:
 
-1. To use frame generation or LS1 scaling, purchase and install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. MAKO can use beta branches, but they are not validated; the default public branch is recommended. MAKO Scaler and Shaders work without it.
+1. Optional: to use the Lossless Scaling frame generation model or LS1 scaling, purchase and install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. MAKO can use beta branches, but they are not validated; the default public branch is recommended. MAKO FG, MAKO Scaler, and Shaders work without it.
 2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v4.6.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. The installer opens **MAKO Renderer Configuration** and shows the launch option.
 3. Create or select a profile and choose Frame Generation, scaling, and/or shader effects. Add the executable manually under **Profile Matching > Matched Processes**, or start the game normally and use **Detect Running Game…**, then close it. Detection only identifies the executable; it does not activate MAKO in the running game.
 4. Every standalone native Steam or Proton game must start through MAKO. Add the option shown by the configuration window under **Steam Properties > General > Launch Options**, then use Steam's **Play** button normally:
@@ -151,7 +152,7 @@ Run the installer again to update. See the <a href="engine/README.md#direct-linu
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> MAKO Decky and the standalone archive share one native Renderer. Installing either selects its version: the standalone installer warns before replacing Decky's version, while Decky adopts a valid standalone installation or offers its bundled update when versions differ. **Uninstall MAKO Renderer** removes the shared native files but keeps MAKO Decky and profiles; uninstalling MAKO Decky removes both the plugin and managed Renderer. Shared Flatpak extensions remain installed.
+> MAKO Decky and the standalone archive share one native Renderer. Installing either selects its version: the standalone installer warns before replacing Decky's version, while Decky adopts a valid standalone installation or offers its bundled update when payloads differ, including same-version model changes. **Uninstall MAKO Renderer** removes the shared native files but keeps MAKO Decky and profiles; removing MAKO Decky preserves the independent Renderer and its launchers. Shared Flatpak extensions remain installed.
 
 ## Documentation
 
@@ -190,7 +191,7 @@ MAKO uses coding agents as part of an evidence-driven engineering workflow while
 
 ## Contributors
 
-MAKO thanks everyone whose commits or co-authored work is in this repository. This gallery is generated from the current branch's Git history; upstream projects and other forms of help are credited above.
+MAKO thanks everyone whose commits or co-authored work is in this repository. This gallery is generated from human authors and co-authors in the current branch's Git history; upstream projects and other forms of help are credited above.
 
 <!-- mako-contributors:start -->
 

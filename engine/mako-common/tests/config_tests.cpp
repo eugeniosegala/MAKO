@@ -52,9 +52,13 @@ namespace {
             left.frame_generation_provisioned ==
                 right.frame_generation_provisioned &&
             left.frame_generation_enabled == right.frame_generation_enabled &&
+            left.frame_generation_model == right.frame_generation_model &&
+            left.mako_fg_mode == right.mako_fg_mode &&
             left.scaling_enabled == right.scaling_enabled &&
             left.swapchain_image_count_compatibility ==
                 right.swapchain_image_count_compatibility &&
+            left.mailbox_presentation_compatibility ==
+                right.mailbox_presentation_compatibility &&
             left.scaling_method == right.scaling_method &&
             left.scaling_factor == right.scaling_factor &&
             left.scaling_supersampling == right.scaling_supersampling &&
@@ -85,6 +89,94 @@ namespace {
             left.power_profiles.size() == right.power_profiles.size() &&
             std::equal(left.power_profiles.begin(), left.power_profiles.end(),
                 right.power_profiles.begin(), sameGameConf);
+    }
+
+    void testFrameGenerationModel(const std::filesystem::path& directory) {
+        const auto modePath = directory / "fg-mode.toml";
+        writeText(modePath, "version = 2\n[[profile]]\nname = 'unset'\n");
+        expect(ls::ConfigFile(modePath).profiles().front().mako_fg_mode == ls::MakoFgMode::Balanced,
+            "Profiles without a saved MAKO FG mode use Balanced");
+        writeText(modePath, "version = 2\n[[profile]]\nname = 'saved'\nmako_fg_mode = 'extra-performance'\n");
+        ls::ConfigFile modes(modePath);
+        expect(modes.profiles().front().mako_fg_mode == ls::MakoFgMode::ExtraPerformance,
+            "A saved MAKO FG mode is read");
+        modes.write(modePath);
+        expect(ls::ConfigFile(modePath).profiles().front().mako_fg_mode == ls::MakoFgMode::ExtraPerformance,
+            "A saved MAKO FG mode survives a write");
+        writeText(modePath, "version = 2\n[[profile]]\nname = 'invalid'\nmako_fg_mode = 'fast'\n");
+        bool rejected = false;
+        try { ls::ConfigFile invalid(modePath); } catch (const std::exception&) { rejected = true; }
+        expect(rejected, "An unknown MAKO FG mode is rejected");
+        for (const auto mode : {ls::MakoFgMode::Quality, ls::MakoFgMode::Balanced,
+                ls::MakoFgMode::Performance, ls::MakoFgMode::ExtraPerformance})
+            expect(ls::makoFgModeFromName(ls::makoFgModeName(mode)) == mode, "MAKO FG mode names round-trip");
+        expect(ls::makoFgMotionPeriod(ls::MakoFgMode::Quality) == 1 &&
+                ls::makoFgMotionPeriod(ls::MakoFgMode::Balanced) == 2 &&
+                ls::makoFgMotionPeriod(ls::MakoFgMode::Performance) == 3 &&
+                ls::makoFgMotionPeriod(ls::MakoFgMode::ExtraPerformance) == 4,
+            "MAKO FG modes solve every pair, then one in two, three and four");
+        ls::GameConf modeProfile;
+        modeProfile.ultra_performance = true;
+        expect(ls::effectiveFlowScale(modeProfile) == ls::GameConfDefaults::ultraPerformanceMakoFgFlowScale,
+            "Ultra Performance locks MAKO FG at its own Flow Scale");
+        modeProfile.mako_fg_mode = ls::MakoFgMode::Quality;
+        expect(ls::effectiveMakoFgMode(modeProfile) == ls::MakoFgMode::Performance,
+            "Ultra Performance raises lighter modes to Performance");
+        modeProfile.mako_fg_mode = ls::MakoFgMode::ExtraPerformance;
+        expect(ls::effectiveMakoFgMode(modeProfile) == ls::MakoFgMode::ExtraPerformance,
+            "Ultra Performance keeps Extra Performance");
+        modeProfile.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
+        expect(ls::effectiveFlowScale(modeProfile) == ls::GameConfDefaults::ultraPerformanceFlowScale,
+            "Ultra Performance keeps Lossless Scaling at 70%");
+        expect(ls::effectiveMakoFgMode(modeProfile) == ls::MakoFgMode::Quality,
+            "Lossless Scaling has no MAKO FG mode");
+
+        const auto path = directory / "fg-model.toml";
+        ls::ConfigFile config;
+        ls::GameConf profile;
+        expect(profile.frame_generation_model == ls::FrameGenerationModel::MakoFg,
+            "New profiles default to MAKO FG");
+        writeText(path, "version = 2\n[[profile]]\nname = 'unset'\n");
+        expect(ls::ConfigFile(path).profiles().front().frame_generation_model == ls::FrameGenerationModel::MakoFg,
+            "Profiles without a saved model default to MAKO FG");
+        writeText(path, "version = 2\n[[profile]]\nname = 'older'\nultra_performance = true\n"
+            "[profile.handheld]\nperformance_mode = true\n[profile.docked]\nflow_scale = 0.5\n");
+        config = ls::ConfigFile(path);
+        const auto& older = config.profiles().front();
+        expect(older.frame_generation_model == ls::FrameGenerationModel::MakoFg &&
+                older.power_profiles[0].frame_generation_model == ls::FrameGenerationModel::MakoFg &&
+                older.power_profiles[1].frame_generation_model == ls::FrameGenerationModel::MakoFg,
+            "Older profiles and power settings inherit MAKO FG regardless of saved LSFG tuning");
+        config.write(path);
+        expect(sameGameConf(older, ls::ConfigFile(path).profiles().front()),
+            "Saving an older profile retains the current model default without migration");
+        auto handheld = profile;
+        handheld.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
+        profile.power_profiles = {handheld, profile};
+        config.profiles() = {profile};
+        config.write(path);
+        const ls::ConfigFile loaded(path);
+        expect(sameGameConf(profile, loaded.profiles().front()), "Model survives independent profile and power-table roundtrip");
+        for (const auto value : {"'unknown'", "true", "3", "''"}) {
+            writeText(path, "version = 2\n[[profile]]\nname = 'invalid'\nframe_generation_model = " + std::string(value) + "\n");
+            bool rejected = false;
+            try { const ls::ConfigFile invalid(path); } catch (const std::exception&) { rejected = true; }
+            expect(rejected, "Invalid model choices are rejected");
+        }
+        profile.flow_scale = 0.5F;
+        profile.performance_mode = true;
+        expect(ls::effectiveFlowScale(profile) == 0.5F && !ls::effectivePerformanceMode(profile),
+            "MAKO FG uses Flow Scale while ignoring the LSFG-only lighter model");
+        profile.ultra_performance = true;
+        profile.scaling_enabled = true;
+        profile.scaling_method = ls::ScalingMethod::Native;
+        expect(ls::effectiveFlowScale(profile) == 0.6F && !ls::effectivePerformanceMode(profile) &&
+                ls::effectiveScalingMethod(profile) == ls::ScalingMethod::Mako,
+            "Ultra Performance applies its Flow Scale and MAKO Scaler to MAKO FG");
+        profile.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
+        expect(ls::effectiveFlowScale(profile) == 0.7F && ls::effectivePerformanceMode(profile) &&
+                ls::effectiveScalingMethod(profile) == ls::ScalingMethod::Mako,
+            "Ultra Performance also selects LSFG Performance for Lossless Scaling");
     }
 
     void testGpuHeadroom(const std::filesystem::path& directory) {
@@ -279,9 +371,11 @@ name = "test"
 active_in = "game"
 removed_profile_option = true
 adaptive = false
+frame_generation_model = "lossless-scaling"
 frame_generation_provisioned = false
 scaling_enabled = true
 swapchain_image_count_compatibility = true
+mailbox_presentation_compatibility = true
 scaling_method = "ls1"
 scaling_factor = 1.75
 scaling_supersampling = true
@@ -314,6 +408,8 @@ int main() {
                 ls::GameConfDefaults::scalingEnabled &&
             defaults.swapchain_image_count_compatibility ==
                 ls::GameConfDefaults::swapchainImageCountCompatibility &&
+            defaults.mailbox_presentation_compatibility ==
+                ls::GameConfDefaults::mailboxPresentationCompatibility &&
             defaults.scaling_method ==
                 ls::GameConfDefaults::scalingMethod &&
             defaults.scaling_factor == ls::GameConfDefaults::scalingFactor &&
@@ -348,8 +444,8 @@ int main() {
                 ls::GameConfDefaults::performanceMode &&
             defaults.pacing == ls::GameConfDefaults::pacing,
         "GameConf must use the Renderer profile defaults");
-    expect(defaults.scaling_method == ls::ScalingMethod::Ls1,
-        "LS1 Quality must be the default spatial scaling method");
+    expect(defaults.scaling_method == ls::ScalingMethod::Mako,
+        "MAKO Scaler must be the default spatial scaling method");
     expect(ls::GameConfDefaults::flowScale == 0.8F,
         "standalone Renderer and MAKO Decky must share the 80% Flow Scale default");
     expect(ls::GameConfDefaults::adaptiveStableCadence,
@@ -380,17 +476,19 @@ int main() {
     expect(ls::effectiveScalingMethod(nativeEngine) ==
             ls::ScalingMethod::Mako,
         "An ordinary scaling profile must retain its selected method");
+    nativeEngine.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
+    nativeEngine.scaling_method = ls::ScalingMethod::Ls1;
     nativeEngine.ultra_performance = true;
     expect(!ls::effectiveAllowFp16({.allow_fp16 = false}, nativeEngine),
         "Ultra Performance must respect an explicit FP32 choice");
     expect(ls::effectiveAllowFp16({.allow_fp16 = true}, nativeEngine),
         "Ultra Performance must retain an explicit FP16 choice");
     expect(ls::effectiveScalingMethod(nativeEngine) ==
-            ls::ScalingMethod::Ls1Performance,
-        "Ultra Performance must select LS1 Performance for an enabled engine");
+            ls::ScalingMethod::Mako,
+        "Ultra Performance must select MAKO Scaler for an enabled engine");
     nativeEngine.scaling_enabled = false;
     expect(ls::effectiveScalingMethod(nativeEngine) ==
-            ls::ScalingMethod::Mako,
+            ls::ScalingMethod::Ls1,
         "Ultra Performance must not activate or overwrite a disabled scaler");
 
     const auto directory = std::filesystem::temp_directory_path() /
@@ -398,6 +496,7 @@ int main() {
     std::filesystem::create_directories(directory);
 
     unsetenv("MAKO_ENV");
+    testFrameGenerationModel(directory);
     testGpuHeadroom(directory);
     testOptionalLosslessScaling(directory);
     testPowerProfiles(directory);
@@ -518,6 +617,8 @@ int main() {
             config.get().profiles().front().scaling_enabled &&
             config.get().profiles().front()
                 .swapchain_image_count_compatibility &&
+            config.get().profiles().front()
+                .mailbox_presentation_compatibility &&
             config.get().profiles().front().scaling_method ==
                 ls::ScalingMethod::Ls1 &&
             config.get().profiles().front().scaling_factor == 1.75F &&
@@ -928,6 +1029,7 @@ scaling_sharpness = 0.5
     setenv("MAKO_ULTRA_PERFORMANCE", "1", 1);
     setenv("MAKO_SCALING_ENABLED", "1", 1);
     setenv("MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY", "1", 1);
+    setenv("MAKO_MAILBOX_PRESENTATION_COMPATIBILITY", "1", 1);
     setenv("MAKO_SCALING_METHOD", "native", 1);
     setenv("MAKO_SCALING_FACTOR", "2", 1);
     setenv("MAKO_SCALING_SUPERSAMPLING", "1", 1);
@@ -954,6 +1056,8 @@ scaling_sharpness = 0.5
             environmentConfig.get().profiles().front().scaling_enabled &&
             environmentConfig.get().profiles().front()
                 .swapchain_image_count_compatibility &&
+            environmentConfig.get().profiles().front()
+                .mailbox_presentation_compatibility &&
             environmentConfig.get().profiles().front().scaling_method ==
                 ls::ScalingMethod::Native &&
             ls::spatialScalingRequested(
@@ -969,6 +1073,7 @@ scaling_sharpness = 0.5
     unsetenv("MAKO_ULTRA_PERFORMANCE");
     unsetenv("MAKO_SCALING_ENABLED");
     unsetenv("MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY");
+    unsetenv("MAKO_MAILBOX_PRESENTATION_COMPATIBILITY");
     unsetenv("MAKO_SCALING_METHOD");
     unsetenv("MAKO_SCALING_FACTOR");
     unsetenv("MAKO_SCALING_SUPERSAMPLING");

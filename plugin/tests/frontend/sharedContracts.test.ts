@@ -141,7 +141,7 @@ describe("generated cross-language contracts", () => {
       sharpness: defaults.scaling_sharpness,
     }).toEqual({
       enabled: false,
-      method: "ls1",
+      method: "mako",
       factor: 1.5,
       sharpness: 0.8,
     });

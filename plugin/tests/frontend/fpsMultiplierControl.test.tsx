@@ -22,13 +22,15 @@ vi.mock("@decky/ui", () => ({
   }) => (
     <button
       data-testid={
-        rgOptions[0]?.data === "auto"
+        rgOptions[0]?.data === "mako-fg" ? "fg-model-dropdown" : rgOptions[0]?.data === "auto"
           ? "real-frame-priority-dropdown"
-          : "gamescope-vrr-dropdown"
+          : rgOptions.some((option) => option.data === "extra-performance")
+            ? "mako-fg-mode-dropdown"
+            : "gamescope-vrr-dropdown"
       }
       data-options={JSON.stringify(rgOptions.map((option) => option.data))}
       data-labels={JSON.stringify(rgOptions.map((option) => option.label))}
-      onClick={() => onChange(rgOptions[2])}
+      onClick={() => onChange(rgOptions[rgOptions[0]?.data === "mako-fg" ? 0 : 2])}
     >
       {rgOptions.find((option) => option.data === selectedOption)?.label}
     </button>
@@ -200,6 +202,34 @@ afterEach(() => {
 });
 
 describe("Frame Generation controls", () => {
+  test("one model picker selects MAKO FG, LSFG Quality or LSFG Performance", () => {
+    window.SP_REACT = React;
+    const onConfigUpdate = vi.fn(async () => undefined);
+    const props = {config: {...getDefaults(), frame_generation_model: "lossless-scaling"}, onConfigChange: vi.fn(), onConfigUpdate};
+    const {rerender} = render(<FpsMultiplierControl {...props} />);
+    const picker = () => screen.getByTestId("fg-model-dropdown");
+    expect(picker().getAttribute("data-options")).toBe(
+      JSON.stringify(["mako-fg", "lsfg-quality", "lsfg-performance"]),
+    );
+    expect(picker().getAttribute("data-labels")).toBe(
+      JSON.stringify(["MAKO FG", "LSFG Quality", "LSFG Performance"]),
+    );
+    expect(picker().textContent).toBe("LSFG Quality");
+    expect(screen.queryByText("Lighter FG Model")).toBeNull();
+    fireEvent.click(picker());
+    expect(onConfigUpdate).toHaveBeenCalledWith({frame_generation_model: "mako-fg"});
+    expect(props.onConfigChange).not.toHaveBeenCalled();
+
+    rerender(<FpsMultiplierControl {...props} config={{...props.config, performance_mode: true}} />);
+    expect(picker().textContent).toBe("LSFG Performance");
+    rerender(<FpsMultiplierControl {...props} config={{...props.config, frame_generation_model: "mako-fg", performance_mode: true}} />);
+    expect(picker().textContent).toBe("MAKO FG");
+    rerender(<FpsMultiplierControl {...props} config={{...props.config, ultra_performance: true}} />);
+    expect(picker().getAttribute("data-options")).toBe(
+      JSON.stringify(["mako-fg", "lsfg-performance"]),
+    );
+    expect(picker().textContent).toBe("LSFG Performance");
+  });
   test("refresh matching follows the target and locks its saved fallback until matching is off", () => {
     window.SP_REACT = React;
     const config = { ...getDefaults(), adaptive: true };
@@ -286,7 +316,7 @@ describe("Frame Generation controls", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
     const onConfigUpdate = vi.fn(async () => undefined);
-    const defaults = getDefaults();
+    const defaults = { ...getDefaults(), frame_generation_model: "lossless-scaling" };
     const { rerender } = render(
       <FpsMultiplierControl
         config={{ ...defaults, adaptive: false }}
@@ -316,9 +346,7 @@ describe("Frame Generation controls", () => {
       "true",
     );
     expect(screen.queryByText(/Maximum Adaptive Multiplier/)).toBeNull();
-    const lighterModel = screen.getByText("Lighter FG Model");
     const smoothCadence = screen.getByText("Smooth Cadence");
-    expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
     expect(
       screen
         .getByText("Fixed Multiplier (2x)")
@@ -326,11 +354,9 @@ describe("Frame Generation controls", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(
-      smoothCadence.compareDocumentPosition(lighterModel) &
+      smoothCadence.compareDocumentPosition(screen.getByText("Gamescope VRR")) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
-    fireEvent.click(lighterModel);
-    expect(onConfigChange).toHaveBeenCalledWith("performance_mode", true);
     expect(
       within(fixedMultiplierField as HTMLElement).getByText(
         /2x–5x sets a constant output ratio/,
@@ -403,17 +429,31 @@ describe("Frame Generation controls", () => {
       frame_generation_enabled: true,
       adaptive_max_multiplier: 5,
     });
+  });
 
+  test("offers MAKO FG Mode only with MAKO FG", () => {
+    window.SP_REACT = React;
+    const onConfigChange = vi.fn(async () => undefined);
+    const onConfigUpdate = vi.fn(async () => undefined);
+    const props = { onConfigChange, onConfigUpdate };
+    const { rerender } = render(
+      <FpsMultiplierControl config={getDefaults()} {...props} />,
+    );
+    expect(screen.getByText("MAKO FG Mode")).toBeTruthy();
+    expect(
+      screen.getByTestId("mako-fg-mode-dropdown").getAttribute("data-options"),
+    ).toBe(
+      JSON.stringify(["quality", "balanced", "performance", "extra-performance"]),
+    );
+    fireEvent.click(screen.getByTestId("mako-fg-mode-dropdown"));
+    expect(onConfigChange).toHaveBeenCalledWith("mako_fg_mode", "performance");
     rerender(
       <FpsMultiplierControl
-        config={{ ...defaults, adaptive: false, ultra_performance: true }}
-        onConfigChange={onConfigChange}
-        onConfigUpdate={onConfigUpdate}
+        config={{ ...getDefaults(), frame_generation_model: "lossless-scaling" }}
+        {...props}
       />,
     );
-    const lockedLighterModel = screen.getByText("Lighter FG Model");
-    expect((lockedLighterModel as HTMLButtonElement).disabled).toBe(true);
-    expect(lockedLighterModel.getAttribute("data-checked")).toBe("true");
+    expect(screen.queryByText("MAKO FG Mode")).toBeNull();
   });
 
   test("uses 0x as the live generation switch without collapsing saved controls", () => {

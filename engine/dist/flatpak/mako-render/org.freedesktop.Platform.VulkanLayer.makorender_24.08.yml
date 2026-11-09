@@ -26,6 +26,9 @@ modules:
   - name: mako
     buildsystem: cmake-ninja
     subdir: engine
+    # Configure outside the source tree: CMake's files there would mark the
+    # build fingerprint dirty. Git ignores engine/_flatpak_build.
+    builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=Release
       - -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
@@ -33,6 +36,7 @@ modules:
       - -DCMAKE_INSTALL_LIBDIR=lib64
       - -DBUILD_TESTING=OFF
       - -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON
+      - -DMAKO_REQUIRE_FG=ON
       - -DMAKO_BUILD_VK_LAYER=ON
       - -DMAKO_BUILD_UI=OFF
       - -DMAKO_BUILD_CLI=OFF
@@ -47,6 +51,7 @@ modules:
   - name: mako-32bit
     buildsystem: cmake-ninja
     subdir: engine
+    builddir: true
     build-options:
       append-path: /usr/lib/sdk/toolchain-i386/bin
       env:
@@ -58,6 +63,7 @@ modules:
       - -DCMAKE_INSTALL_LIBDIR=lib/i386-linux-gnu
       - -DBUILD_TESTING=OFF
       - -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON
+      - -DMAKO_REQUIRE_FG=ON
       - -DMAKO_BUILD_VK_LAYER=ON
       - -DMAKO_BUILD_UI=OFF
       - -DMAKO_BUILD_CLI=OFF

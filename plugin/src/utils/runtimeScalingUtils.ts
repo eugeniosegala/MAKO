@@ -3,8 +3,11 @@ import type {
   RuntimeContextState,
   RuntimeScalingMethod,
   RuntimeScalingPipeline,
+  RuntimeWineCompatibilityFix,
   RuntimeStatusResult,
 } from "../api/makoApi";
+import type { FrameGenerationModelChoice } from "../config/frameGenerationModelChoice";
+import t from "../i18n/i18n";
 
 export function scalingInactiveReason(
   status: RuntimeStatusResult,
@@ -31,11 +34,13 @@ export interface RuntimeScalingUiState {
   phase: RuntimeApplicationPhase;
   frameGenerationActive: boolean;
   frameGenerationEnabled: boolean;
+  frameGenerationModel: FrameGenerationModelChoice | null;
   frameGenerationMode: "off" | "fixed" | "adaptive";
   frameGenerationAdaptiveStyle: "fractional" | "steady" | null;
   frameGenerationTargetFps: number | null;
   frameGenerationMultiplier: number | null;
   frameGenerationPending: boolean;
+  wineCompatibilityFix: RuntimeWineCompatibilityFix | null;
   gpuHeadroomState: string;
   gpuHeadroomPercent: number;
   scalingActive: boolean;
@@ -65,6 +70,8 @@ export const EMPTY_RUNTIME_SCALING_UI_STATE: RuntimeScalingUiState = {
   phase: "inactive",
   frameGenerationActive: false,
   frameGenerationEnabled: false,
+  wineCompatibilityFix: null,
+  frameGenerationModel: null,
   frameGenerationMode: "off",
   frameGenerationAdaptiveStyle: null,
   frameGenerationTargetFps: null,
@@ -128,7 +135,7 @@ export function runtimeScalingUiState(
     (candidate) => candidate.requested.scaling_enabled,
   );
   const spatialContext =
-    // HDR display-size presentation can have a private spatial graph with
+    // Bridge display-size presentation can have a private spatial graph with
     // Scaling off. Use the applied feature flag, including restart-pending
     // edits, when selecting its user-visible owner.
     newestContext(
@@ -152,8 +159,18 @@ export function runtimeScalingUiState(
     phase: contexts.length > 0 ? status.phase : "inactive",
     frameGenerationActive: Boolean(frameContext?.frame_generation_active),
     frameGenerationEnabled,
+    wineCompatibilityFix:
+      frameContext?.frame_generation_unavailable?.wine_compatibility_fix ??
+      null,
     gpuHeadroomState: frameContext?.gpu_headroom_state ?? "unavailable",
     gpuHeadroomPercent: appliedFrameProfile?.gpu_headroom_percent ?? 0,
+    frameGenerationModel: appliedFrameProfile
+      ? appliedFrameProfile.frame_generation_model === "mako-fg"
+        ? "mako-fg"
+        : appliedFrameProfile.effective_performance_mode
+          ? "lsfg-performance"
+          : "lsfg-quality"
+      : null,
     frameGenerationMode,
     frameGenerationAdaptiveStyle: appliedFrameProfile?.adaptive
       ? appliedFrameProfile.adaptive_auto_base_fps_cap
@@ -216,4 +233,40 @@ export function runtimeScalingUiState(
     ),
     fallbackReason: spatialContext?.spatial_scaling.fallback_reason ?? null,
   };
+}
+
+/** Explain why Wine's offscreen copy keeps Frame Generation off for a game. */
+export function wineCompatibilityFixMessage(
+  fix: RuntimeScalingUiState["wineCompatibilityFix"],
+): string | null {
+  switch (fix) {
+    case "restart-required":
+      return t(
+        "LIVE_STATUS_FG_WINE_RESTART",
+        "Off: this game needs the Proton Offscreen Window Fix. MAKO applied it; restart the game to use Frame Generation.",
+      );
+    case "ineffective":
+      return t(
+        "LIVE_STATUS_FG_WINE_INEFFECTIVE",
+        "Unavailable: the Proton Offscreen Window Fix doesn't work with this Proton version. Use Proton 10 or newer.",
+      );
+    case "manual":
+      return t(
+        "LIVE_STATUS_FG_WINE_MANUAL",
+        "Unavailable: this game needs the Proton Offscreen Window Fix. Add WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1 to its launch options.",
+      );
+    case "disabled":
+      return t(
+        "LIVE_STATUS_FG_WINE_DISABLED",
+        "Off: this game needs the Proton Offscreen Window Fix. Turn it on in Tweaks to apply it.",
+      );
+    case "not-eligible":
+    case "unneeded":
+      return t(
+        "LIVE_STATUS_FG_WINE_UNAVAILABLE",
+        "Unavailable: Frame Generation doesn't work with this game on this Proton version. Use Proton 10 or newer.",
+      );
+    default:
+      return null;
+  }
 }

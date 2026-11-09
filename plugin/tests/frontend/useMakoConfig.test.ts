@@ -39,6 +39,12 @@ import {
   useDllDetection,
   useMakoConfig,
 } from "../../src/hooks/useMakoHooks";
+import {
+  forgetPanel,
+  panelGeneration,
+  resetPanelSnapshotForTests,
+  type ConfigSnapshot,
+} from "../../src/hooks/panelSnapshot";
 
 describe("native host installation boundary", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -61,6 +67,21 @@ describe("native host installation boundary", () => {
     expect(result.current.installationStatus).toBe(
       "MAKO Renderer is disabled on this host",
     );
+  });
+
+  test("shows the system-package ownership guidance during setup", async () => {
+    mocks.checkMakoInstalled.mockResolvedValue({
+      installed: false,
+      host_architecture_supported: true,
+      engine_update_required: false,
+      error: null,
+      system_renderer_notice: "MAKO Renderer is installed through pacman",
+    });
+    const { result } = renderHook(() => useInstallationStatus());
+    await waitFor(() => expect(result.current.installationStatus).toBe(
+      "MAKO Renderer is installed through pacman",
+    ));
+    expect(result.current.hostArchitectureSupported).toBe(true);
   });
 
   test("does not treat a transient backend failure as unsupported hardware", async () => {
@@ -110,9 +131,7 @@ describe("Lossless Scaling availability", () => {
     await act(async () => {});
     expect(mocks.checkLosslessScalingDll).toHaveBeenLastCalledWith("/new.dll");
     expect(result.current.dllMissing).toBe(true);
-    expect(result.current.dllDetectionStatus).toContain(
-      "Lossless Scaling not found",
-    );
+    expect(result.current.dllDetected).toBe(false);
     await act(async () => finishOld({ detected: true, error: null }));
     expect(result.current.dllMissing).toBe(true);
     mocks.checkLosslessScalingDll.mockResolvedValue({
@@ -129,7 +148,7 @@ describe("Lossless Scaling availability", () => {
     const { result } = renderHook(() => useDllDetection());
     await act(async () => {});
     expect(result.current.dllMissing).toBe(false);
-    expect(result.current.dllDetectionStatus).toContain("Unable to check");
+    expect(result.current.dllDetected).toBe(false);
     mocks.checkLosslessScalingDll.mockResolvedValue({
       detected: false,
       error: "permission denied",
@@ -351,5 +370,136 @@ describe("MAKO configuration persistence", () => {
     expect(result.current.config.scaling_factor).toBe(1.5);
     expect(result.current.config.scaling_sharpness).toBe(0.8);
     expect(result.current.config.frame_generation_enabled).toBe(true);
+  });
+});
+
+describe("restored panel", () => {
+  const restoredInstallation = {
+    engineUpdateRequired: false,
+    installedEngineVersion: "4.6",
+    expectedEngineVersion: "4.6",
+  };
+  const restoredConfig: ConfigSnapshot = {
+    profile: "game-123",
+    powerMode: "handheld",
+    separatePowerModes: true,
+    powerSource: "handheld",
+    config: { ...getDefaults(), target_fps: 45 },
+    vkBasaltConfigPath: "/tmp/vkBasalt.conf",
+    customShaderEffects: [
+      { id: "custom/Tone", name: "Tone", path: "/tmp/tone.fx" },
+    ],
+  };
+  function gate<T>() {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>((done) => {
+      resolve = done;
+    });
+    return { promise, resolve };
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetPanelSnapshotForTests();
+  });
+  afterEach(cleanup);
+
+  test("shows the restored installation until the real check replaces it", async () => {
+    const check = gate<{ installed: boolean }>();
+    mocks.checkMakoInstalled.mockReturnValue(check.promise);
+    const { result } = renderHook(() =>
+      useInstallationStatus(restoredInstallation),
+    );
+    expect(result.current.isInstalled).toBe(true);
+    expect(result.current.installationStatus).toBe("MAKO Renderer installed");
+    expect(result.current.installationVerified).toBe(false);
+    expect(result.current.installationGeneration).toBeNull();
+
+    await act(async () => check.resolve({ installed: false }));
+    expect(result.current.isInstalled).toBe(false);
+    expect(result.current.installationVerified).toBe(true);
+    expect(result.current.installationStatus).toBe(
+      "MAKO Renderer not installed",
+    );
+  });
+
+  test("a failed first check does not keep a restored installation", async () => {
+    mocks.checkMakoInstalled.mockRejectedValue(new Error("Decky reloading"));
+    const { result } = renderHook(() =>
+      useInstallationStatus(restoredInstallation),
+    );
+    await waitFor(() => expect(result.current.installationVerified).toBe(true));
+    expect(result.current.isInstalled).toBe(false);
+    expect(result.current.installationGeneration).toBeNull();
+  });
+
+  test("a check keeps the generation it started in", async () => {
+    const check = gate<{ installed: boolean }>();
+    mocks.checkMakoInstalled.mockReturnValue(check.promise);
+    const started = panelGeneration();
+    const { result } = renderHook(() => useInstallationStatus());
+    forgetPanel();
+    await act(async () => check.resolve({ installed: true }));
+    expect(result.current.installationGeneration).toBe(started);
+    expect(started).not.toBe(panelGeneration());
+  });
+
+  test("refreshes the restored profile in place with edits locked", async () => {
+    const load = gate<object>();
+    mocks.getProfileConfig.mockReturnValue(load.promise);
+    const { result } = renderHook(() => useMakoConfig(restoredConfig));
+
+    expect(mocks.getMakoConfig).not.toHaveBeenCalled();
+    expect(mocks.getProfileConfig).toHaveBeenCalledWith("game-123");
+    expect(result.current.config.target_fps).toBe(45);
+    expect(result.current.configProfile).toBe("game-123");
+    expect(result.current.isConfigLoading).toBe(true);
+    expect(result.current.isConfigLoadingShown).toBe(false);
+    expect(result.current.canEditConfig()).toBe(false);
+    expect(result.current.customShaderEffects).toHaveLength(1);
+    expect(result.current.vkBasaltConfigPath).toBe("/tmp/vkBasalt.conf");
+
+    await act(async () =>
+      load.resolve({
+        success: true,
+        config: { ...getDefaults(), target_fps: 60 },
+        power_mode: "handheld",
+        separate_power_modes: true,
+        power_source: "handheld",
+        custom_shader_effects: [],
+      }),
+    );
+    expect(result.current.config.target_fps).toBe(60);
+    expect(result.current.customShaderEffects).toEqual([]);
+    expect(result.current.canEditConfig()).toBe(true);
+
+    // Only the first reload is in place; later ones behave as before.
+    mocks.getProfileConfig.mockReturnValue(new Promise(() => undefined));
+    act(() => void result.current.loadMakoConfig("game-123"));
+    expect(result.current.isConfigLoadingShown).toBe(true);
+  });
+
+  test("loading another profile or power set is shown as usual", () => {
+    for (const [profile, mode] of [
+      ["mako", undefined],
+      ["game-123", "docked"],
+    ] as const) {
+      mocks.getProfileConfig.mockReturnValue(new Promise(() => undefined));
+      const { result, unmount } = renderHook(() =>
+        useMakoConfig(restoredConfig),
+      );
+      act(() => void result.current.loadMakoConfig(profile, mode));
+      expect(result.current.isConfigLoadingShown).toBe(true);
+      expect(result.current.customShaderEffects).toEqual([]);
+      unmount();
+    }
+  });
+
+  test("a failed refresh falls back to defaults and no longer claims the profile", async () => {
+    mocks.getProfileConfig.mockResolvedValue({ success: false, error: "gone" });
+    const { result } = renderHook(() => useMakoConfig(restoredConfig));
+    await waitFor(() => expect(result.current.isConfigLoading).toBe(false));
+    expect(result.current.configProfile).toBeNull();
+    expect(result.current.config.target_fps).toBe(getDefaults().target_fps);
   });
 });

@@ -84,6 +84,7 @@ DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES = (
 FLOW_SCALE_MIN = 0.25
 FLOW_SCALE_MAX = 1.0
 ULTRA_PERFORMANCE_FLOW_SCALE = 0.7
+ULTRA_PERFORMANCE_MAKO_FG_FLOW_SCALE = 0.6
 SCALING_FACTOR_MIN = 1.0
 SCALING_FACTOR_MAX = 2.0
 SCALING_SHARPNESS_MIN = 0.0
@@ -206,7 +207,22 @@ class ConfigFieldDefinition(TypedDict):
     location: ConfigFieldLocation
 
 
+FRAME_GENERATION_MODEL_VALUES = ("lossless-scaling", "mako-fg")
+MAKO_FG_MODE_VALUES = ("quality", "balanced", "performance", "extra-performance")
+
 CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
+    "frame_generation_model": {
+        "fieldType": ConfigFieldType.STRING,
+        "default": "mako-fg",
+        "description": "per-game frame generation model: lossless-scaling or mako-fg; requires a game restart",
+        "location": "toml"
+    },
+    "mako_fg_mode": {
+        "fieldType": ConfigFieldType.STRING,
+        "default": "balanced",
+        "description": "how often MAKO FG solves motion: quality, balanced, performance or extra-performance; higher modes free GPU time and can add artifacts",
+        "location": "toml"
+    },
     "dll": {
         "fieldType": ConfigFieldType.STRING,
         "default": "",
@@ -230,7 +246,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
 
     "scaling_method": {
         "fieldType": ConfigFieldType.STRING,
-        "default": SCALING_METHOD_LS1,
+        "default": SCALING_METHOD_MAKO,
         "description": "live spatial selection inside a provisioned engine: Native Resolution, MAKO Scaler, LS1 Quality, or LS1 Performance",
         "location": "toml"
     },
@@ -371,7 +387,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "ultra_performance": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 70% flow scale, the lighter FG model and active-policy resource allocation while respecting the global precision choice; compatible controls remain available after startup",
+        "description": "restart-bound low-power preset for either FG model with 60% flow scale for MAKO FG and 70% for Lossless Scaling, active-policy resource allocation, the lighter LSFG model for Lossless Scaling and MAKO Scaler when scaling is enabled, while respecting the global precision choice; compatible controls remain available after startup",
         "location": "toml"
     },
 
@@ -447,10 +463,26 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "profile"
     },
 
+    "mailbox_presentation_compatibility": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "present Frame Generation through MAILBOX instead of ordered FIFO for games that cannot run with FIFO backpressure",
+        "location": "profile"
+    },
+
     "external_vulkan_layer": {
         "fieldType": ConfigFieldType.STRING,
         "default": "",
         "description": "optional guarded post-process Vulkan layer: MangoHud or vkBasalt",
+        "location": "script"
+    },
+
+    # MangoHud below MAKO counts every output frame, generated ones included;
+    # above MAKO it counts the game's own frames. Restart-only.
+    "mangohud_count_real_frames": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "order 64-bit MangoHud above MAKO so it counts the game's own frames instead of every output frame",
         "location": "script"
     },
 
@@ -523,6 +555,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "may improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds; restart required",
+        "location": "script"
+    },
+
+    "wine_compatibility_fix": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": True,
+        "description": "let MAKO apply Wine's switch that draws a Proton 9 game directly when its offscreen window would hide generated frames; restart required",
         "location": "script"
     }
 }

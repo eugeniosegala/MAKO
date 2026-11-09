@@ -4,9 +4,9 @@
   <img src="assets/mako-render-logo.webp" width="256" alt="MAKO Renderer logo" />
 </p>
 
-MAKO Renderer is a Vulkan layer for Frame Generation, spatial scaling, and optional shader effects on SteamOS and Linux. It supports LSFG Fixed and Adaptive Frame Generation, LS1 scaling, and the open MAKO Scaler. **MAKO Scaler and shaders work without Lossless Scaling.**
+MAKO Renderer is a Vulkan layer for Frame Generation, spatial scaling, and optional shader effects on SteamOS and Linux. It supports Fixed and Adaptive Frame Generation with MAKO FG by default or the optional Lossless Scaling model, and spatial scaling with the open MAKO Scaler by default or optional LS1. **MAKO FG, MAKO Scaler, and Shaders work without Lossless Scaling.**
 
-LSFG and LS1 require a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation. MAKO does not distribute or modify `Lossless.dll`; the open MAKO Scaler and bundled shaders do not require it. MAKO Renderer descends from the GPL-3.0-or-later lsfg-vk version 2 tree. See the <a href="../THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">third-party notices</a> and <a href="../LICENSE.md#lsfg-vk-renderer-lineage" target="_blank" rel="noopener noreferrer">Renderer lineage</a>.
+Only the optional Lossless Scaling frame generation model (LSFG) and LS1 scaling require a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation. MAKO does not distribute or modify `Lossless.dll`; MAKO FG, the open MAKO Scaler, and bundled shaders do not require it. MAKO Renderer descends from the GPL-3.0-or-later lsfg-vk version 2 tree. See the <a href="../THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">third-party notices</a> and <a href="../LICENSE.md#lsfg-vk-renderer-lineage" target="_blank" rel="noopener noreferrer">Renderer lineage</a>.
 
 ## Downloads
 
@@ -22,7 +22,7 @@ GitHub's automatic **Source code** archives are not installable Renderer package
 
 ## Installation
 
-For Frame Generation or LS1, install the default public version of Lossless Scaling through Steam first. For MAKO Scaler or Shaders without it, turn Frame Generation off and follow the same steps below.
+MAKO FG, MAKO Scaler, and Shaders work without Lossless Scaling. To use the optional Lossless Scaling frame generation model or LS1 scaling, first install the default public version of Lossless Scaling through Steam.
 
 ### Steam Deck or Steam Machine
 
@@ -134,3 +134,7 @@ For host, Flatpak, Arch, or complete local packages, choose an entry point in [B
 - [Troubleshooting](docs/TROUBLESHOOTING.md): activation, presentation, and diagnostics.
 - [Collect diagnostics](docs/COLLECT_DIAGNOSTICS.md): create a standalone support report.
 - [Building from source](docs/BUILDING-FROM-SOURCE.md): development and packaging requirements.
+
+## MAKO FG
+
+MAKO FG is bundled with MAKO Renderer. Choose MAKO FG or an optional Lossless Scaling model per game, then restart the game. See [MAKO FG setup](docs/MAKO-FG.md) for model details and limitations.

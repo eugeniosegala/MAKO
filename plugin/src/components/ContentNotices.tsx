@@ -26,6 +26,7 @@ interface ContentNoticesProps {
   installedEngineVersion?: string | null;
   expectedEngineVersion?: string | null;
   isInstalling: boolean;
+  installationVerified: boolean;
   isInstallCompletionVisible: boolean;
   isUninstalling: boolean;
   onInstall: () => Promise<void>;
@@ -177,6 +178,7 @@ export function ContentNotices({
   installedEngineVersion,
   expectedEngineVersion,
   isInstalling,
+  installationVerified,
   isInstallCompletionVisible,
   isUninstalling,
   onInstall,
@@ -438,21 +440,32 @@ export function ContentNotices({
               data-mako-info="true"
               style={{ fontSize: "13px", marginBottom: "10px" }}
             >
-              {t("CONTENT_ENGINE_INSTALLED", "Installed:")}{" "}
-              {installedEngineVersion ||
-                t("CONTENT_ENGINE_NOT_RECORDED", "not recorded")}
-              . {t("CONTENT_ENGINE_EXPECTS", "This plugin expects:")}{" "}
-              {expectedEngineVersion ||
-                t("CONTENT_ENGINE_BUNDLED_VERSION", "the bundled version")}
-              .
-              {!installedEngineVersion &&
-                ` ${t(
-                  "CONTENT_ENGINE_PREDATES_TRACKING",
-                  "The installed payload predates version tracking.",
-                )}`}{" "}
+              {installedEngineVersion &&
+              installedEngineVersion === expectedEngineVersion ? (
+                // Same version: the installed files or Flatpak runtimes differ.
+                t(
+                  "CONTENT_ENGINE_FILES_DIFFER",
+                  "Installed MAKO Renderer, MAKO FG or Flatpak runtime extension files differ from this plugin's copies.",
+                )
+              ) : (
+                <>
+                  {t("CONTENT_ENGINE_INSTALLED", "Installed:")}{" "}
+                  {installedEngineVersion ||
+                    t("CONTENT_ENGINE_NOT_RECORDED", "not recorded")}
+                  . {t("CONTENT_ENGINE_EXPECTS", "This plugin expects:")}{" "}
+                  {expectedEngineVersion ||
+                    t("CONTENT_ENGINE_BUNDLED_VERSION", "the bundled version")}
+                  .
+                  {!installedEngineVersion &&
+                    ` ${t(
+                      "CONTENT_ENGINE_PREDATES_TRACKING",
+                      "The installed payload predates version tracking.",
+                    )}`}
+                </>
+              )}{" "}
               {t(
                 "CONTENT_ENGINE_UPDATE_DESC",
-                "Reinstall bundled MAKO Renderer, then update runtime extensions for prepared Flatpaks.",
+                "Update installs this plugin's MAKO Renderer and MAKO FG and refreshes every installed Flatpak runtime extension.",
               )}
             </MakoInfo>
             <div className="Mako_BrandButton">
@@ -460,7 +473,10 @@ export function ContentNotices({
                 layout="below"
                 onClick={onInstall}
                 disabled={
-                  isInstalling || isInstallCompletionVisible || isUninstalling
+                  isInstalling ||
+                  isInstallCompletionVisible ||
+                  isUninstalling ||
+                  !installationVerified
                 }
               >
                 {isInstallCompletionVisible ? (

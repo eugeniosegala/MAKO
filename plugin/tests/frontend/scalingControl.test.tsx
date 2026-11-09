@@ -145,6 +145,25 @@ import {
 afterEach(cleanup);
 
 describe("Scaling controls", () => {
+  test("missing Lossless Scaling blocks LS1 selection while built-in scaling stays editable", () => {
+    window.SP_REACT = React;
+    const onConfigChange = vi.fn(async () => undefined);
+    render(
+      <ScalingControl
+        losslessAvailable={false}
+        config={{ ...getDefaults(), scaling_enabled: true }}
+        onConfigChange={onConfigChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Scaling Method" }));
+    expect(onConfigChange).not.toHaveBeenCalled();
+    const sharpness = screen.getByText(
+      "Scaling Sharpness (80%)",
+    ) as HTMLButtonElement;
+    expect(sharpness.disabled).toBe(false);
+    fireEvent.click(sharpness);
+    expect(onConfigChange).toHaveBeenCalledWith(SCALING_SHARPNESS, 0.81);
+  });
   test.each(["ls1", "ls1-performance"])(
     "keeps saved %s controls alongside one shared Lossless Scaling warning",
     (method) => {
@@ -398,8 +417,9 @@ describe("Scaling controls", () => {
       <ScalingControl
         config={{
           ...getDefaults(),
+          frame_generation_model: "lossless-scaling",
           scaling_enabled: true,
-          scaling_method: SCALING_METHOD_MAKO,
+          scaling_method: SCALING_METHOD_LS1,
           ultra_performance: true,
         }}
         onConfigChange={vi.fn(async () => undefined)}
@@ -407,7 +427,27 @@ describe("Scaling controls", () => {
     );
 
     const method = screen.getByRole("button", { name: "Scaling Method" });
-    expect(method.getAttribute("data-selected")).toBe("ls1-performance");
+    expect(method.getAttribute("data-selected")).toBe(SCALING_METHOD_MAKO);
+    expect((method as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  test("locks MAKO Scaler under Ultra Performance with MAKO FG", () => {
+    window.SP_REACT = React;
+    render(
+      <ScalingControl
+        config={{
+          ...getDefaults(),
+          frame_generation_model: "mako-fg",
+          scaling_enabled: true,
+          scaling_method: SCALING_METHOD_LS1,
+          ultra_performance: true,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const method = screen.getByRole("button", { name: "Scaling Method" });
+    expect(method.getAttribute("data-selected")).toBe(SCALING_METHOD_MAKO);
     expect((method as HTMLButtonElement).disabled).toBe(true);
   });
 

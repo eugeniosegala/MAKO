@@ -289,6 +289,71 @@ describe("profile runtime session", () => {
     expect(result.current.editingProfile).toBe("Future streams");
     expect(loadProfileConfig).toHaveBeenCalledWith("Future streams");
   });
+  test("a restored session is shown until the first sync follows the backend", async () => {
+    decky.router.MainRunningApp = { appid: 123, display_name: "Test Game" };
+    const loadProfileConfig = vi.fn(async () => undefined);
+    let finishSync!: (value: ProfileResult) => void;
+    const syncCurrentProfile = vi.fn(
+      () =>
+        new Promise<ProfileResult>((resolve) => {
+          finishSync = resolve;
+        }),
+    );
+    const { result } = renderHook(() =>
+      useProfileSession({
+        isInstalled: true,
+        loadProfileConfig,
+        syncCurrentProfile,
+        restored: {
+          profile: "game-123",
+          appId: "123",
+          gameRunning: true,
+          remotePlayRunning: false,
+        },
+      }),
+    );
+    expect(result.current.editingProfile).toBe("game-123");
+    expect(result.current.mainRunningApp?.appid).toBe(123);
+    expect(result.current.profileSynced).toBe(false);
+    expect(loadProfileConfig).toHaveBeenCalledWith("game-123");
+
+    await act(async () =>
+      finishSync({
+        success: true,
+        game_running: true,
+        profile_name: "game-123",
+      } as ProfileResult),
+    );
+    expect(result.current.profileSynced).toBe(true);
+    expect(loadProfileConfig).toHaveBeenCalledTimes(1);
+  });
+
+  test("a restored session gives way when the backend selects another profile", async () => {
+    const loadProfileConfig = vi.fn(async () => undefined);
+    const syncCurrentProfile = vi.fn().mockResolvedValue({
+      success: true,
+      game_running: false,
+      profile_name: "mako",
+    });
+    const { result } = renderHook(() =>
+      useProfileSession({
+        isInstalled: true,
+        loadProfileConfig,
+        syncCurrentProfile,
+        restored: {
+          profile: "offline-profile",
+          appId: null,
+          gameRunning: false,
+          remotePlayRunning: false,
+        },
+      }),
+    );
+    expect(result.current.mainRunningApp).toBeUndefined();
+    await act(async () => Promise.resolve());
+    expect(result.current.editingProfile).toBe("mako");
+    expect(loadProfileConfig).toHaveBeenLastCalledWith("mako");
+    expect(result.current.profileSynced).toBe(true);
+  });
 });
 
 test("native streams without an AppID follow the selected profile and refresh its power set", async () => {

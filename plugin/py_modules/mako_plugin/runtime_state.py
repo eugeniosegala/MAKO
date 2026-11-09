@@ -13,12 +13,14 @@ from .base_service import BaseService
 from .types import (
     RuntimeApplicationPhase,
     RuntimeContextState,
+    RuntimeFrameGenerationUnavailable,
     RuntimePendingState,
     RuntimeProfileSnapshot,
     RuntimeScalingMethod,
     RuntimeScalingPipeline,
     RuntimeSpatialScalingState,
     RuntimeStatusResponse,
+    RuntimeWineCompatibilityFix,
 )
 
 
@@ -97,6 +99,7 @@ def _profile(value: object, field: str) -> RuntimeProfileSnapshot:
             value.get("frame_generation_provisioned", True),
             f"{field}.frame_generation_provisioned",
         ),
+        "frame_generation_model": _string(value.get("frame_generation_model", "lossless-scaling"), f"{field}.frame_generation_model"),
         "frame_generation_enabled": _boolean(
             value.get("frame_generation_enabled"),
             f"{field}.frame_generation_enabled",
@@ -281,6 +284,32 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
     }
 
 
+_WINE_COMPATIBILITY_FIXES = frozenset({
+    "unneeded", "restart-required", "ineffective", "not-eligible", "disabled",
+    "manual",
+})
+
+
+def _frame_generation_unavailable(
+        value: object,
+) -> Optional[RuntimeFrameGenerationUnavailable]:
+    # Renderers before the offscreen-window check omit this field.
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("frame_generation_unavailable must be an object or null")
+    fix = _string(
+        value.get("wine_compatibility_fix"),
+        "frame_generation_unavailable.wine_compatibility_fix",
+    )
+    if fix not in _WINE_COMPATIBILITY_FIXES:
+        raise ValueError("unsupported Wine compatibility fix state")
+    return {
+        "reason": _string(value.get("reason"), "frame_generation_unavailable.reason"),
+        "wine_compatibility_fix": cast(RuntimeWineCompatibilityFix, fix),
+    }
+
+
 def _context(value: object) -> RuntimeContextState:
     if not isinstance(value, dict):
         raise ValueError("runtime record must be an object")
@@ -318,6 +347,9 @@ def _context(value: object) -> RuntimeContextState:
         "frame_generation_active": _boolean(
             value.get("frame_generation_active"),
             "frame_generation_active",
+        ),
+        "frame_generation_unavailable": _frame_generation_unavailable(
+            value.get("frame_generation_unavailable")
         ),
         "spatial_scaling": _spatial_scaling(value.get("spatial_scaling")),
         "gpu_headroom_state": _string(value.get("gpu_headroom_state", "unavailable"), "gpu_headroom_state"),

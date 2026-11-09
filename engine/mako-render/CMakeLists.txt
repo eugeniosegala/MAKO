@@ -1,5 +1,6 @@
 set(LAYER_SOURCES
     "src/entrypoint.cpp"
+    "src/frame_recorder.cpp"
     "src/gamescope_hdr_feedback.cpp"
     "src/gamescope_scaling_surface.cpp"
     "src/instance.cpp"
@@ -14,7 +15,9 @@ set(LAYER_SOURCES
     "src/swapchain/present/retirement.cpp"
     "src/swapchain/profile.cpp"
     "src/swapchain/resources.cpp"
-    "src/swapchain/status.cpp")
+    "src/swapchain/status.cpp"
+    "src/wine_compatibility.cpp"
+    "src/x11_presentation_target.cpp")
 
 set(ADAPTIVE_SOURCE "src/adaptive_scheduler.cpp")
 set(SPATIAL_SCALER_SOURCE "src/spatial_scaler.cpp")
@@ -193,7 +196,7 @@ if(BUILD_TESTING)
 
     add_dependencies(mako-portable-policy-test-binaries
         mako-external-fd-tests mako-descriptor-pool-tests mako-shader-pipeline-tests
-        mako-command-buffer-submit-storage-tests)
+        mako-command-buffer-submit-storage-tests mako-device-feature-tests)
 
     add_library(mako-launch-preload-fixture SHARED
         "../scripts/test-launch-preload.cpp")
@@ -208,12 +211,25 @@ if(BUILD_TESTING)
         COMMAND mako-steam-overlay-diagnostics-tests $<TARGET_FILE:mako-launch-preload-fixture>)
     mako_register_portable_policy_test(mako-steam-overlay-diagnostics-tests steam-overlay-library-diagnostics)
 
+    add_executable(mako-wine-compatibility-tests
+        "tests/wine_compatibility_tests.cpp" "src/wine_compatibility.cpp")
+    target_include_directories(mako-wine-compatibility-tests PRIVATE "src")
+    add_test(NAME wine-compatibility COMMAND mako-wine-compatibility-tests)
+    mako_register_portable_policy_test(mako-wine-compatibility-tests wine-compatibility)
+
     add_executable(mako-runtime-health-tests
         "tests/runtime_health_tests.cpp" "src/runtime_health.cpp")
     target_link_libraries(mako-runtime-health-tests PRIVATE mako-common Threads::Threads)
     target_include_directories(mako-runtime-health-tests PRIVATE "src")
     add_test(NAME runtime-health COMMAND mako-runtime-health-tests)
     mako_register_portable_policy_test(mako-runtime-health-tests runtime-health)
+
+    add_executable(mako-frame-recorder-tests
+        "tests/frame_recorder_tests.cpp" "src/frame_recorder.cpp")
+    target_link_libraries(mako-frame-recorder-tests PRIVATE mako-common Threads::Threads)
+    target_include_directories(mako-frame-recorder-tests PRIVATE "src")
+    add_test(NAME frame-recorder COMMAND mako-frame-recorder-tests)
+    mako_register_portable_policy_test(mako-frame-recorder-tests frame-recorder)
 
     add_executable(mako-gpu-headroom-tests
         "tests/gpu_headroom_tests.cpp" "src/runtime_health.cpp")
@@ -224,8 +240,10 @@ if(BUILD_TESTING)
 
     add_executable(mako-device-selection-tests
         "tests/device_selection_tests.cpp")
+    # Policy-only builds do not create mako-backend; this test uses its public header only.
     target_include_directories(mako-device-selection-tests
-        PRIVATE "src")
+        PRIVATE "src"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../mako-backend/include")
     add_test(NAME device-selection
         COMMAND mako-device-selection-tests)
     mako_register_portable_policy_test(
@@ -327,6 +345,19 @@ if(BUILD_TESTING)
         COMMAND mako-spatial-layer-role-tests)
     mako_register_portable_policy_test(
         mako-spatial-layer-role-tests spatial-layer-role)
+
+    if(TARGET mako-render)
+        # Drives the built layer through the loader interface over a fake
+        # lower chain; policy-only builds have no layer to load.
+        add_executable(mako-layer-dispatch-tests "tests/layer_dispatch_tests.cpp")
+        target_link_libraries(mako-layer-dispatch-tests
+            PRIVATE mako-common ${CMAKE_DL_LIBS})
+        add_dependencies(mako-layer-dispatch-tests mako-render mako-render-scaling)
+        add_test(NAME layer-dispatch
+            COMMAND mako-layer-dispatch-tests $<TARGET_FILE:mako-render>)
+        add_test(NAME spatial-layer-dispatch
+            COMMAND mako-layer-dispatch-tests $<TARGET_FILE:mako-render-scaling>)
+    endif()
 
     add_executable(mako-presentation-policy-tests
         "tests/presentation_policy_tests.cpp")

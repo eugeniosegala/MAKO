@@ -145,6 +145,36 @@ class RuntimeStateTests(unittest.TestCase):
         self._write("headroom.json", record)
         self.assertIsNone(self.service._read_context(path))
 
+    def test_frame_generation_unavailable_is_optional_and_validated(self):
+        record = self._record()
+        path = self._write("offscreen.json", record)
+        context = self.service._read_context(path)
+        self.assertIsNotNone(context)
+        self.assertIsNone(context["frame_generation_unavailable"])
+        record["frame_generation_unavailable"] = {
+            "reason": "offscreen-x11-window",
+            "wine_compatibility_fix": "restart-required",
+        }
+        self._write("offscreen.json", record)
+        context = self.service._read_context(path)
+        self.assertEqual(context["frame_generation_unavailable"], {
+            "reason": "offscreen-x11-window",
+            "wine_compatibility_fix": "restart-required",
+        })
+        record["frame_generation_unavailable"]["wine_compatibility_fix"] = "manual"
+        self._write("offscreen.json", record)
+        context = self.service._read_context(path)
+        self.assertEqual(
+            context["frame_generation_unavailable"]["wine_compatibility_fix"],
+            "manual",
+        )
+        record["frame_generation_unavailable"]["wine_compatibility_fix"] = "maybe"
+        self._write("offscreen.json", record)
+        self.assertIsNone(self.service._read_context(path))
+        record["frame_generation_unavailable"] = "offscreen"
+        self._write("offscreen.json", record)
+        self.assertIsNone(self.service._read_context(path))
+
     def test_valid_contexts_are_filtered_sorted_and_aggregated(self):
         self._write(
             "fg.json",

@@ -45,7 +45,8 @@ frame_generation_provisioned = true
 frame_generation_enabled = true
 scaling_enabled = false
 swapchain_image_count_compatibility = false
-scaling_method = 'ls1'
+mailbox_presentation_compatibility = false
+scaling_method = 'mako'
 scaling_factor = 1.5
 scaling_supersampling = false
 scaling_sharpness = 0.8
@@ -96,6 +97,8 @@ ConfigFile::ConfigFile() {
         .scaling_enabled = GameConfDefaults::scalingEnabled,
         .swapchain_image_count_compatibility =
             GameConfDefaults::swapchainImageCountCompatibility,
+        .mailbox_presentation_compatibility =
+            GameConfDefaults::mailboxPresentationCompatibility,
         .scaling_method = GameConfDefaults::scalingMethod,
         .scaling_factor = GameConfDefaults::scalingFactor,
         .scaling_supersampling = GameConfDefaults::scalingSupersampling,
@@ -165,6 +168,16 @@ namespace {
         if (str == "none")
             return Pacing::None;
         throw ls::error("unknown pacing method: " + str);
+    }
+    FrameGenerationModel frameGenerationModelFromString(const std::string& value) {
+        const auto model = frameGenerationModelFromName(value);
+        if (!model) throw ls::error("frame_generation_model must be 'lossless-scaling' or 'mako-fg'");
+        return *model;
+    }
+    MakoFgMode makoFgModeFromString(const std::string& value) {
+        const auto mode = makoFgModeFromName(value);
+        if (!mode) throw ls::error("mako_fg_mode must be 'quality', 'balanced', 'performance' or 'extra-performance'");
+        return *mode;
     }
     ScalingMethod scalingMethodFromString(const std::string& value) {
         if (const auto method = scalingMethodFromName(value))
@@ -307,6 +320,10 @@ namespace {
     }
     /// parse a game profile configuration
     GameConf parseGameConf(const toml::table& tbl) {
+        if (tbl.contains("frame_generation_model") && !tbl["frame_generation_model"].is_string())
+            throw ls::error("frame_generation_model must be a string");
+        if (tbl.contains("mako_fg_mode") && !tbl["mako_fg_mode"].is_string())
+            throw ls::error("mako_fg_mode must be a string");
         uint32_t headroom = GameConfDefaults::gpuHeadroomPercent;
         if (tbl.contains("gpu_headroom_percent")) {
             const auto value = tbl["gpu_headroom_percent"].value<int64_t>();
@@ -326,12 +343,24 @@ namespace {
             .frame_generation_enabled = tbl["frame_generation_enabled"].value_or(
                 GameConfDefaults::frameGenerationEnabled
             ),
+            .frame_generation_model = frameGenerationModelFromString(
+                tbl["frame_generation_model"].value_or<std::string>(
+                    frameGenerationModelName(GameConfDefaults::frameGenerationModel))
+            ),
+            .mako_fg_mode = makoFgModeFromString(
+                tbl["mako_fg_mode"].value_or<std::string>(
+                    makoFgModeName(GameConfDefaults::makoFgMode))
+            ),
             .scaling_enabled = tbl["scaling_enabled"].value_or(
                 GameConfDefaults::scalingEnabled
             ),
             .swapchain_image_count_compatibility =
                 tbl["swapchain_image_count_compatibility"].value_or(
                     GameConfDefaults::swapchainImageCountCompatibility
+                ),
+            .mailbox_presentation_compatibility =
+                tbl["mailbox_presentation_compatibility"].value_or(
+                    GameConfDefaults::mailboxPresentationCompatibility
                 ),
             .scaling_method = scalingMethodFromString(
                 tbl["scaling_method"].value_or<std::string>(
@@ -441,6 +470,12 @@ namespace {
             "swapchain_image_count_compatibility",
             conf.swapchain_image_count_compatibility
         );
+        profile.insert(
+            "mailbox_presentation_compatibility",
+            conf.mailbox_presentation_compatibility
+        );
+        profile.insert("frame_generation_model", frameGenerationModelName(conf.frame_generation_model));
+        profile.insert("mako_fg_mode", makoFgModeName(conf.mako_fg_mode));
         profile.insert("scaling_method", scalingMethodName(conf.scaling_method));
         profile.insert("scaling_factor", conf.scaling_factor);
         profile.insert("scaling_supersampling", conf.scaling_supersampling);
@@ -513,6 +548,8 @@ namespace {
             .scaling_enabled = GameConfDefaults::scalingEnabled,
             .swapchain_image_count_compatibility =
                 GameConfDefaults::swapchainImageCountCompatibility,
+            .mailbox_presentation_compatibility =
+                GameConfDefaults::mailboxPresentationCompatibility,
             .scaling_method = GameConfDefaults::scalingMethod,
             .scaling_factor = GameConfDefaults::scalingFactor,
             .scaling_supersampling = GameConfDefaults::scalingSupersampling,
@@ -561,6 +598,16 @@ namespace {
             conf.swapchain_image_count_compatibility =
                 std::string(swapchain_image_count_compatibility) != "0";
         }
+        const char* mailbox_presentation_compatibility =
+            std::getenv("MAKO_MAILBOX_PRESENTATION_COMPATIBILITY");
+        if (mailbox_presentation_compatibility) {
+            conf.mailbox_presentation_compatibility =
+                std::string(mailbox_presentation_compatibility) != "0";
+        }
+        if (const char* model = std::getenv("MAKO_FRAME_GENERATION_MODEL"))
+            conf.frame_generation_model = frameGenerationModelFromString(model);
+        if (const char* mode = std::getenv("MAKO_FG_MODE"))
+            conf.mako_fg_mode = makoFgModeFromString(mode);
         const char* scaling_method = std::getenv("MAKO_SCALING_METHOD");
         if (scaling_method)
             conf.scaling_method = scalingMethodFromString(scaling_method);

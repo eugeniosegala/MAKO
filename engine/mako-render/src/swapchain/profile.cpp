@@ -202,7 +202,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
         this->gamescopeRefreshHz,
         this->colorPipeline.encoding == backend::FrameEncoding::Hdr10Pq ||
             this->colorPipeline.encoding == backend::FrameEncoding::Hdr10PqPacked,
-        hdrFrameGenerationPrecisionChanged, this->info.hdrDisplayResize
+        hdrFrameGenerationPrecisionChanged, this->info.bridgeDisplayResize
     );
     auto decision = plan.decision;
     if (decision.frameGenerationPrivateRebuild) {
@@ -225,6 +225,9 @@ ProfileUpdateDecision Swapchain::updateProfile(
                       << " flow_scale_pending="
                       << (ls::effectiveFlowScale(this->profile) !=
                             ls::effectiveFlowScale(nextProfile))
+                      << " mako_fg_mode_pending="
+                      << (ls::effectiveMakoFgMode(this->profile) !=
+                            ls::effectiveMakoFgMode(nextProfile))
                       << " lighter_model_pending="
                       << (ls::effectivePerformanceMode(this->profile) !=
                             ls::effectivePerformanceMode(nextProfile))
@@ -239,6 +242,8 @@ ProfileUpdateDecision Swapchain::updateProfile(
     } else if (!hdrFrameGenerationPrecisionChanged &&
             ls::effectiveFlowScale(this->profile) ==
                 ls::effectiveFlowScale(nextProfile) &&
+            ls::effectiveMakoFgMode(this->profile) ==
+                ls::effectiveMakoFgMode(nextProfile) &&
             ls::effectivePerformanceMode(this->profile) ==
                 ls::effectivePerformanceMode(nextProfile) &&
             requestedGeneratedFrameCapacity <=
@@ -254,9 +259,9 @@ ProfileUpdateDecision Swapchain::updateProfile(
     }
     if (decision.spatialScalingLiveRebuild) {
         const SpatialResourceRequest request{
-            .method = this->info.hdrDisplayResize ? ls::ScalingMethod::Native
+            .method = this->info.bridgeDisplayResize ? ls::ScalingMethod::Native
                 : ls::effectiveScalingMethod(nextProfile),
-            .sharpness = this->info.hdrDisplayResize ? 0.0F : nextProfile.scaling_sharpness,
+            .sharpness = this->info.bridgeDisplayResize ? 0.0F : nextProfile.scaling_sharpness,
             .hdrQuality = nextProfile.hdr_quality,
         };
         if (this->spatialTransition.pendingRequest() &&
@@ -280,7 +285,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
                       << request.sharpness
                       << " action=rebuild-private-scaler\n";
         }
-    } else if ((this->info.hdrDisplayResize ||
+    } else if ((this->info.bridgeDisplayResize ||
             (ls::effectiveScalingMethod(nextProfile) ==
                 ls::effectiveScalingMethod(this->profile) &&
             nextProfile.scaling_sharpness ==
@@ -329,6 +334,9 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << " flow_scale_pending="
                   << (ls::effectiveFlowScale(this->profile) !=
                         ls::effectiveFlowScale(nextProfile))
+                  << " mako_fg_mode_pending="
+                  << (ls::effectiveMakoFgMode(this->profile) !=
+                        ls::effectiveMakoFgMode(nextProfile))
                   << " lighter_model_pending="
                   << (ls::effectivePerformanceMode(this->profile) !=
                         ls::effectivePerformanceMode(nextProfile))
@@ -450,6 +458,11 @@ ProfileUpdateDecision Swapchain::updateProfile(
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
     );
+    // A changed wait or source cap invalidates spacing's slowdown evidence.
+    if (decision.gpuHeadroomChanged || decision.baseFpsCapChanged ||
+            decision.generationPolicyChanged || decision.generationModeChanged ||
+            decision.fixedMultiplierChanged || enabling || disabling)
+        this->sourceIntervalSpacing.reset();
     if (decision.generationModeChanged || decision.fixedMultiplierChanged ||
             decision.baseFpsCapChanged || enabling || disabling) {
         this->fixedRefreshBudget.reset();
@@ -650,7 +663,7 @@ bool Swapchain::requestSpatialScalingAdmissionRetryAfterPresent(
             !this->spatialScalingAdmissionRetryAfter ||
             now < *this->spatialScalingAdmissionRetryAfter ||
             this->spatialScaler ||
-            !(ls::spatialScalingRequested(this->profile) || this->info.hdrDisplayResize) ||
+            !(ls::spatialScalingRequested(this->profile) || this->info.bridgeDisplayResize) ||
             this->info.spatialScalingInactiveReason !=
                 SpatialScalingInactiveReason::VariableSurfaceMemoryBudget ||
             (lowerPresentResult != VK_SUCCESS &&

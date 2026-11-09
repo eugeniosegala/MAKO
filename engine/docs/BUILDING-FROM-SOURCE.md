@@ -30,7 +30,7 @@ Install:
 - Vulkan headers and loader development files
 - X11 and XCB headers (`libx11`, `libxcb`, and `xorgproto` on Arch/SteamOS)
 - Python 3 when building the registered tests
-- A multilib C++ toolchain when building the 32-bit Vulkan layer
+- A multilib C++ toolchain and an SSE2-capable x86 CPU when building the 32-bit Vulkan layer. CMake selects SSE2 floating-point arithmetic for GCC/Clang x86 builds so timing and image calculations use the same precision as x86-64; x87 excess precision can change truncation at nanosecond boundaries.
 - Qt 6.2 or newer and Qt6Quick (only needed when building `mako-ui`)
 
 Package names vary by distribution. These commands cover common Debian/Ubuntu and Arch installations:
@@ -93,6 +93,12 @@ The Vulkan layer manifests' `api_version` describes the layer's supported API an
 
 To update vkBasalt, merge the intended upstream baseline into the maintained fork, increment the fork release revision, run its dual-architecture release workflow, and retain the successful workflow and artifact attestations. Then update `vkbasalt-release.json`, regenerate `dist/flatpak/mako-render/vkbasalt-module.json` with `just generate-vkbasalt-release`, and run `just check-vkbasalt-release`. Never retag or replace a pinned asset: publish a new fork tag and change the MAKO pin. A released MAKO Renderer archive contains the verified libraries, manifests, licenses, source record, and pin, so an installed or downloaded MAKO release does not depend on the upstream vkBasalt repository remaining available. Rebuilding the same MAKO source from an empty cache still requires the pinned fork release asset.
 
+### MAKO FG
+
+MAKO FG is the default frame generation model and a separate program: the Renderer starts `mako-fg-host` and links no MAKO FG code, so source builds need nothing from MAKO FG. Packages carry one 64-bit program, which serves the 64-bit and 32-bit native layers and both architectures in every Flatpak runtime extension. MAKO FG's release command writes the active open-weight release to the ignored `engine/models/mako-fg`: its version folder holds the model files (`model/`), the x64 program (`runtime/x64/bin`), `LICENSE`, `MODEL_CARD.md` and `MANIFEST.json`, and `versions.json` marks the active version. `mako-backend/CMakeLists.txt` verifies the active version's model files and program against its `MANIFEST.json`, and the 64-bit build installs them in `mako-fg/` beside the 64-bit Renderer library, printing `MAKO FG: installing release VERSION`. The program was built on the Ubuntu 22.04 baseline, so it needs glibc 2.35, the same floor as the portable Renderer. Packagers and the SteamOS development builder configure CMake with `MAKO_REQUIRE_FG=ON`, which rejects a missing or altered active release and one whose `MANIFEST.json` does not set `public_release_cleared`. [MAKO FG](MAKO-FG.md#installed-release) describes the installed release.
+
+After building, the SteamOS development builder and each packager check that no frame generation layer (`libmako-render.so`, 64-bit and 32-bit, before and after Flatpak deployment) contains any release's weights. Packagers also check that each layer can find the active release's unmodified program and model files, and that the program's protocol matches the Renderer's. Each native or Flatpak archive also gets an adjacent `.mako-fg.json` verification receipt containing its SHA-256 and the active release version and model hash. Decky's local-source packager reuses an archive only when that receipt matches both the archive and the current active release; missing or stale receipts trigger a rebuild. Keep receipts with cached archives. Without the program, profiles that select MAKO FG report an error and keep presenting real frames.
+
 Distributable archives and Flatpak extensions include the project license, third-party notices, and asset-provenance record. Packaging fails if those files or another required payload entry is missing. The standalone installer also rewrites its desktop entries to the selected installation prefix.
 
 ## Reusable SteamOS release-build SDK
@@ -113,7 +119,7 @@ For native Steam-game iteration, use the persistent incremental build instead of
 ./scripts/build-steamos-dev.sh
 ```
 
-This native host build uses the shared Vulkan-Headers pin and package presentation check while retaining its incremental CMake tree. Its first run needs network access to cache the pinned headers; later runs reuse a pinned release tag offline. It still needs the host C++ toolchain and X11/XCB development headers. Use the portable package builder when the output itself must match the release toolchain and packaging checks.
+This native host build uses the shared Vulkan-Headers pin and package presentation check while retaining its incremental CMake tree. It carries [MAKO FG](#mako-fg) like the packages, and every requested Frame Generation layer is verified against the active release before it is reported ready. Its first run needs network access to cache the pinned headers; later runs reuse a pinned release tag offline. It still needs the host C++ toolchain and X11/XCB development headers. Use the portable package builder when the output itself must match the release toolchain and packaging checks.
 
 It builds both 64-bit Renderer roles and the CLI, retaining `build/steamos-dev` between runs. For real AMD validation with a sibling MAKO Gym checkout, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli`. To retain a second tree for genuine 32-bit games, run:
 
@@ -150,7 +156,7 @@ cd engine
 ./scripts/package-flatpaks.sh
 ```
 
-The script verifies both Renderer roles for 64-bit and 32-bit processes on every supported runtime and writes the archive under `engine/out/`.
+The script verifies both Renderer roles for 64-bit and 32-bit processes and the installed [MAKO FG](#mako-fg) release on every supported runtime, and writes the archive under `engine/out/`.
 
 [`runtime-versions.json`](../dist/flatpak/mako-render/runtime-versions.json) owns the ordered Freedesktop branches and LLVM SDK versions; the adjacent `org.freedesktop.Platform.VulkanLayer.makorender.yml.in` owns the common manifest. After adding or retiring a branch, run from the monorepo root:
 

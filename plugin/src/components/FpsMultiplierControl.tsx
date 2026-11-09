@@ -1,4 +1,5 @@
 import type { ConfigurationEditorProps } from "./settings/types";
+import { ModelDropdown } from "./ModelDropdown";
 import {
   Dropdown,
   Field,
@@ -24,10 +25,10 @@ import {
   ADAPTIVE_TARGET_REFRESH_RATE,
   type AdaptiveFractionalRealFramePriority,
   FRAME_GENERATION_ENABLED,
+  MAKO_FG_MODE,
   FRAME_GENERATION_PROVISIONED,
   GAMESCOPE_VRR_MODE,
   getDefaults,
-  PERFORMANCE_MODE,
   TARGET_FPS,
   TARGET_FPS_MAX,
   TARGET_FPS_MIN,
@@ -40,6 +41,19 @@ import {
   isFractionalAdaptivePresetEnabled,
   steadyBaseCapChanges,
 } from "../config/fractionalAdaptivePreset";
+import {
+  frameGenerationModelChoice,
+  frameGenerationModelChoiceChanges,
+  frameGenerationModelChoices,
+  frameGenerationModelLabel,
+  type FrameGenerationModelChoice,
+} from "../config/frameGenerationModelChoice";
+import {
+  effectiveMakoFgMode,
+  makoFgModeChoices,
+  makoFgModeLabel,
+  type MakoFgMode,
+} from "../config/makoFgMode";
 import t from "../i18n/i18n";
 import { MakoRestartLabel, MakoSettingRelationship } from "./MakoUi";
 
@@ -82,10 +96,11 @@ function multiplierAtSliderPosition(position: number): number | undefined {
 }
 
 export function FpsMultiplierControl({
+  losslessAvailable = true,
   config,
   onConfigChange,
   onConfigUpdate,
-}: ConfigurationEditorProps) {
+}: ConfigurationEditorProps & { losslessAvailable?: boolean }) {
   const pendingMultiplierFocus = useRef<{
     mode: "adaptive" | "fixed";
     ownerDocument: Document;
@@ -256,6 +271,70 @@ export function FpsMultiplierControl({
 
       {frameGenerationProvisioned && (
         <>
+          <PanelSectionRow>
+            <Field
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_FG_MODEL",
+                    "Frame Generation Model (Restart)",
+                  )}
+                />
+              }
+              description={t(
+                "CONFIG_FG_MODEL_DESC",
+                "MAKO FG installs alongside MAKO Renderer and needs no Lossless Scaling. LSFG Quality and LSFG Performance need Lossless Scaling and switch live; Performance is lighter but ghosts more. Changing to or from MAKO FG needs a restart.",
+              )}
+              childrenLayout="below"
+              childrenContainerWidth="max"
+            >
+              <ModelDropdown
+                menuLabel={t(
+                  "CONFIG_FG_MODEL",
+                  "Frame Generation Model (Restart)",
+                )}
+                rgOptions={frameGenerationModelChoices(config).map(
+                  (choice) => ({
+                    data: choice,
+                    label: frameGenerationModelLabel(choice),
+                    disabled: choice !== "mako-fg" && !losslessAvailable,
+                  }),
+                )}
+                selectedOption={frameGenerationModelChoice(config)}
+                onChange={(option) =>
+                  void onConfigUpdate(
+                    frameGenerationModelChoiceChanges(
+                      option.data as FrameGenerationModelChoice,
+                    ),
+                  )
+                }
+              />
+            </Field>
+          </PanelSectionRow>
+          {config.frame_generation_model === "mako-fg" && (
+            <PanelSectionRow>
+              <Field
+                label={t("CONFIG_MAKO_FG_MODE", "MAKO FG Mode")}
+                description={t(
+                  "CONFIG_MAKO_FG_MODE_DESC",
+                  "How often MAKO FG works out motion. Balanced suits most games. Performance and Extra Performance free more GPU time but can add artifacts. Quality works it out for every frame. Ultra Performance uses at least Performance.",
+                )}
+                childrenLayout="below"
+                childrenContainerWidth="max"
+              >
+                <Dropdown
+                  rgOptions={makoFgModeChoices(config).map((mode) => ({
+                    data: mode,
+                    label: makoFgModeLabel(mode),
+                  }))}
+                  selectedOption={effectiveMakoFgMode(config)}
+                  onChange={(option) =>
+                    onConfigChange(MAKO_FG_MODE, option.data as MakoFgMode)
+                  }
+                />
+              </Field>
+            </PanelSectionRow>
+          )}
           <PanelSectionRow>
             <ToggleField
               label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
@@ -529,6 +608,7 @@ export function FpsMultiplierControl({
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
+              bottomSeparator="none"
             >
               <Dropdown
                 rgOptions={[
@@ -548,20 +628,6 @@ export function FpsMultiplierControl({
                 }
               />
             </Field>
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <ToggleField
-              label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model")}
-              description={t(
-                "CONFIG_PERFORMANCE_MODE_DESC",
-                "Lighter FG model lowers GPU cost but increases ghosting; Ultra Performance forces it on.",
-              )}
-              checked={config.ultra_performance || config.performance_mode}
-              disabled={config.ultra_performance}
-              onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
-              bottomSeparator="none"
-            />
           </PanelSectionRow>
         </>
       )}

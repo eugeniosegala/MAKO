@@ -10,6 +10,8 @@ interface InstallationButtonProps {
   isInstallCompletionVisible: boolean;
   isUninstalling: boolean;
   hostArchitectureSupported: boolean;
+  // Install and removal act on the real check, never on a restored snapshot.
+  installationVerified: boolean;
   onInstall: () => void;
   onUninstall: () => void;
   topMargin?: string;
@@ -21,6 +23,7 @@ export function InstallationButton({
   isInstallCompletionVisible,
   isUninstalling,
   hostArchitectureSupported,
+  installationVerified,
   onInstall,
   onUninstall,
   topMargin = "0"
@@ -74,7 +77,13 @@ export function InstallationButton({
         <ButtonItem
           layout="below"
           onClick={isInstalled ? onUninstall : onInstall}
-          disabled={isInstalling || isInstallCompletionVisible || isUninstalling || !hostArchitectureSupported}
+          disabled={
+            isInstalling ||
+            isInstallCompletionVisible ||
+            isUninstalling ||
+            !hostArchitectureSupported ||
+            !installationVerified
+          }
         >
           {renderButtonContent()}
         </ButtonItem>

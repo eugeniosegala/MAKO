@@ -27,6 +27,8 @@ describe("Decky RPC contract", () => {
       "check_scaling_model",
       "check_frame_generation_model",
       "get_dll_stats",
+      "request_frame_recording",
+      "get_frame_recording_status",
       "get_mako_config",
       "get_profile_config",
       "reload_profile_shaders",

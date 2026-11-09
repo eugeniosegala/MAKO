@@ -70,7 +70,8 @@ bool layer::context_ModifySwapchainCreateInfo(const ls::GameConf& profile,
         const bool gamescopeDetected,
         const PresentationEnvironmentPolicy& presentationEnvironment,
         const bool frameGenerationInteropEnabled,
-        const bool spatialScalingActive) {
+        const bool spatialScalingActive,
+        const bool directSpatialOutput) {
     const auto colorPipeline = classifySwapchainColor(
         createInfo.imageFormat, createInfo.imageColorSpace,
         gamescopeHdrActive
@@ -95,7 +96,8 @@ bool layer::context_ModifySwapchainCreateInfo(const ls::GameConf& profile,
         profile, maxImages, createInfo,
         frameGenerationProvisioned, spatialScalingActive,
         orderedFrameGenerationTransport,
-        profile.swapchain_image_count_compatibility
+        profile.swapchain_image_count_compatibility,
+        directSpatialOutput
     );
 }
 
@@ -118,7 +120,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             std::move(gamescopePresentationFeedback)),
         colorPipeline(initialColorPipeline(
             info.format, info.colorSpace, gamescopeHdrActive, gamescopeDetected,
-            hdrExposureDisabled
+            hdrExposureDisabled, info.frameGenerationSurfaceUnavailable
         )),
         hdrExposureDisabled(hdrExposureDisabled),
         scalingShaderDll(scalingShaderDll),
@@ -186,19 +188,21 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             combinedSpatialFramePipelineOwnedByLayer()
             ? selectSpatialFramePipelinePlacement(
                 this->info.applicationExtent, this->info.extent,
-                this->info.hdrDisplayResize
+                this->info.bridgeDisplayResize
             )
             : SpatialFramePipelinePlacement::PostFrameGeneration;
 
         this->spatialScaler.emplace(
             vk, this->info.applicationExtent, this->info.extent,
             this->colorPipeline.exchangeFormat,
-            this->info.hdrDisplayResize ? ls::ScalingMethod::Native
+            this->info.bridgeDisplayResize ? ls::ScalingMethod::Native
                 : ls::effectiveScalingMethod(this->profile),
             this->profile.scaling_sharpness,
             scalingShaderDll, this->fp16Requested, this->colorPipeline.encoding,
             ls::hdrCompactBuffers(this->profile.hdr_quality)
         );
+        this->configureDirectSpatialPresentationOutputs(
+            vk, *this->spatialScaler, "swapchain-created");
         this->spatialScalingPasses.reserve(this->info.images.size());
         for (size_t i = 0; i < this->info.images.size(); ++i) {
             static_cast<void>(i);
@@ -327,6 +331,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                   << initialDynamicCadenceRecoveryActive
                   << " effective_flow_scale="
                   << ls::effectiveFlowScale(this->profile)
+                  << " effective_mako_fg_mode="
+                  << ls::makoFgModeName(ls::effectiveMakoFgMode(this->profile))
                   << " lighter_model="
                   << ls::effectivePerformanceMode(this->profile)
                   << " frame_generation_resources_available="
@@ -430,6 +436,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         ls::FileDescriptorScope syncScope{{&syncFd, 1}};
         this->syncSemaphore.emplace(vk, 0, std::nullopt, &syncFd);
 
+        const auto contextSettings = frameGenerationContextSettings(this->profile);
         try {
             this->ctx = ls::owned_ptr<ls::R<backend::Context>>(
                 new ls::R<backend::Context>(backend->openContext(
@@ -438,13 +445,15 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                     (syncScope.release(), syncFd),
                     generationExtent.width, generationExtent.height,
                     this->colorPipeline.encoding,
-                    1.0F / ls::effectiveFlowScale(this->profile),
-                    ls::effectivePerformanceMode(this->profile),
-                    ls::hdrApproximateGeneration(this->profile.hdr_quality)
+                    contextSettings.flow, contextSettings.performanceMode,
+                    contextSettings.reducedHdrPrecision, contextSettings.motionPeriod
                 )),
                 [backend](ls::R<backend::Context>& ctx) {
                     backend->closeContext(ctx);
                 }
+            );
+            backend->setContextLossHandler(
+                this->ctx.get(), this->syncSemaphore->releaser(vk)
             );
 
             // The backend's private VkDevice must outlive this layer on loader

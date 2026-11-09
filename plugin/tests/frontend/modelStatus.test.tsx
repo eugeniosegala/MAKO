@@ -27,6 +27,7 @@ afterEach(() => {
 });
 const config = () => ({
   ...getDefaults(),
+  frame_generation_model: "lossless-scaling",
   scaling_enabled: true,
   frame_generation_enabled: false,
   scaling_method: "ls1",
@@ -81,20 +82,24 @@ test("late replies cannot attach a previous profile's result to the selected mod
   expect(result.current.ls1?.compatible).toBe(true);
 });
 
-test("debounces sharpness changes and inspects Ultra Performance's effective model", async () => {
-  const { rerender } = renderHook((saved) => useModelStatus(saved, true), {
+test("debounces sharpness changes and skips probes for Ultra Performance's MAKO Scaler", async () => {
+  const { result, rerender } = renderHook((saved) => useModelStatus(saved, true), {
     initialProps: config(),
   });
   rerender({ ...config(), scaling_sharpness: 0.25 });
-  rerender({ ...config(), scaling_sharpness: 0.75, ultra_performance: true });
+  rerender({ ...config(), scaling_sharpness: 0.75 });
   await settle();
   expect(checkScalingModel).toHaveBeenCalledTimes(1);
   expect(checkScalingModel).toHaveBeenCalledWith(
     config().dll,
-    "ls1-performance",
+    "ls1",
     0.75,
     false,
   );
+  rerender({ ...config(), scaling_sharpness: 0.75, ultra_performance: true });
+  await settle();
+  expect(result.current.ls1).toBeNull();
+  expect(checkScalingModel).toHaveBeenCalledTimes(1);
 });
 
 test("model-free choices and disabled scaling never start a probe", async () => {
@@ -134,7 +139,10 @@ test("missing inspector RPC is unknown, and unmount stops subsequent polling", a
   checkScalingModel.mockRejectedValue(new Error("old backend"));
   const { result, unmount } = renderHook(() => useModelStatus(config(), true));
   await settle();
-  expect(result.current.ls1).toBeNull();
+  expect(result.current.ls1).toEqual({
+    compatible: null,
+    reason: "inspection-unavailable",
+  });
   unmount();
   await act(() => vi.advanceTimersByTimeAsync(60000));
   expect(checkScalingModel).toHaveBeenCalledTimes(1);

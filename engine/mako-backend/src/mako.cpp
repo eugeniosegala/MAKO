@@ -1,8 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+#include "context.hpp"
+#include "mako_fg.hpp"
 #include "helpers/temporal_phases.hpp"
 #include "helpers/black_image.hpp"
 #include "helpers/frame_color_policy.hpp"
+#include "mako-backend/device_identity.hpp"
 #include "mako-backend/mako.hpp"
 #include "extraction/dll_reader.hpp"
 #include "extraction/shader_registry.hpp"
@@ -119,19 +122,19 @@ namespace mako::backend {
     };
 
     /// context class
-    class ContextImpl {
+    class LSFGContext final : public ContextImpl {
     public:
         /// create a context
         /// (see mako documentation)
-        ContextImpl(const InstanceImpl& instance,
+        LSFGContext(const InstanceImpl& instance,
             ls::FileDescriptorScope& sourceFds, ls::FileDescriptorScope& destFds,
             ls::FileDescriptorScope& syncFd, VkExtent2D extent, FrameEncoding encoding, float flow, bool perf, bool reducedHdrPrecision);
 
         // Borrowed scratch and cached descriptors require stable context owners.
-        ContextImpl(const ContextImpl&) = delete;
-        ContextImpl& operator=(const ContextImpl&) = delete;
-        ContextImpl(ContextImpl&&) = delete;
-        ContextImpl& operator=(ContextImpl&&) = delete;
+        LSFGContext(const LSFGContext&) = delete;
+        LSFGContext& operator=(const LSFGContext&) = delete;
+        LSFGContext(LSFGContext&&) = delete;
+        LSFGContext& operator=(LSFGContext&&) = delete;
 
         /// schedule frames
         /// (see mako documentation)
@@ -202,7 +205,17 @@ namespace mako::backend {
 Instance::Instance(
         const DevicePicker& devicePicker,
         const std::filesystem::path& shaderDllPath,
-        bool allowLowPrecision) {
+        bool allowLowPrecision,
+        std::optional<std::filesystem::path> modelPackage,
+        const std::optional<DriverIdentity>& gameDriver) {
+    if (modelPackage) {
+#ifdef MAKO_FG
+        this->m_fg = std::make_unique<MakoFG>(devicePicker, *modelPackage, allowLowPrecision, gameDriver);
+        return;
+#else
+        throw backend::error("This MAKO Renderer build has no MAKO FG support");
+#endif
+    }
     const auto selectFunc = [&devicePicker](const vk::VulkanInstanceFuncs funcs,
             const std::vector<VkPhysicalDevice>& devices) {
         for (const auto& device : devices) {
@@ -234,12 +247,11 @@ Instance::Instance(
 
             if (devicePicker(
                 std::string(devname.data()),
-                { backend::to_hex_id(props.properties.vendorID),
-                  backend::to_hex_id(props.properties.deviceID) },
+                { backend::deviceIdText(props.properties.vendorID),
+                  backend::deviceIdText(props.properties.deviceID) },
                 has_pci_ext ? std::optional<std::string>{
-                    std::to_string(pciInfo.pciBus) + ":" +
-                    std::to_string(pciInfo.pciDevice) + "." +
-                    std::to_string(pciInfo.pciFunction)
+                    backend::pciAddressText(pciInfo.pciBus, pciInfo.pciDevice,
+                        pciInfo.pciFunction)
                 } : std::nullopt
             ))
                 return device;
@@ -254,6 +266,11 @@ Instance::Instance(
 }
 
 bool Instance::supportsPackedHdr10Transport() const {
+#ifdef MAKO_FG
+    // MAKO FG imports and converts packed HDR10 on its own device.
+    if (this->m_fg)
+        return this->m_fg->supportsPackedHdr10();
+#endif
     const auto& vk = this->m_impl->getVulkan();
     constexpr VkImageUsageFlags usage =
         VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
@@ -384,7 +401,8 @@ InstanceImpl::InstanceImpl(vk::PhysicalDeviceSelector selectPhysicalDevice,
 
 Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<int>& destFds,
         int syncFd, uint32_t width, uint32_t height,
-        const FrameEncoding encoding, float flow, bool perf, bool reducedHdrPrecision) {
+        const FrameEncoding encoding, float flow, bool perf, bool reducedHdrPrecision,
+        const int motionPeriod) {
     // Take the complete batch before any operation that can fail. Individual
     // import wrappers consume their descriptor even on failure; unattempted
     // descriptors remain here until construction succeeds or unwinds.
@@ -398,11 +416,17 @@ Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<
             "Too many frame-generation contexts are still retiring"
         );
     }
+#ifdef MAKO_FG
+    if (this->m_fg) {
+        auto context = this->m_fg->open(sourceScope, destinationScope, syncScope, width, height, encoding, flow, motionPeriod);
+        return *this->m_contexts.emplace_back(std::move(context));
+    }
+#endif
     const VkExtent2D extent{ width, height };
     const auto& vulkan = this->m_impl->getVulkan();
     const auto before = vulkan.deviceMemorySnapshot();
     const float modelFlow = generationFlowFactor(encoding, reducedHdrPrecision, flow);
-    auto context = std::make_unique<ContextImpl>(*this->m_impl,
+    auto context = std::make_unique<LSFGContext>(*this->m_impl,
         sourceScope, destinationScope, syncScope,
         extent, encoding, modelFlow, perf, reducedHdrPrecision
     );
@@ -636,7 +660,7 @@ namespace {
     }
 }
 
-ContextImpl::ContextImpl(const InstanceImpl& instance,
+LSFGContext::LSFGContext(const InstanceImpl& instance,
             ls::FileDescriptorScope& sourceFds, ls::FileDescriptorScope& destFds,
             ls::FileDescriptorScope& syncFd, VkExtent2D extent, const FrameEncoding encoding, float flow, bool perf, bool reducedHdrPrecision) :
         sourceImages(importSourceImages(instance.getVulkan(), sourceFds,
@@ -858,7 +882,7 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
 void Instance::scheduleFrames(Context& context) { // NOLINT (static)
 #ifdef MAKO_TESTING_RENDERDOC
     const auto& impl = this->m_impl;
-    if (impl->getRenderDocAPI()) {
+    if (impl && impl->getRenderDocAPI()) {
         impl->getRenderDocAPI()->StartFrameCapture(
             RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(impl->getVulkan().inst()),
             nullptr);
@@ -870,7 +894,7 @@ void Instance::scheduleFrames(Context& context) { // NOLINT (static)
         throw backend::error("Unable to schedule frames", e);
     }
 #ifdef MAKO_TESTING_RENDERDOC
-    if (impl->getRenderDocAPI()) {
+    if (impl && impl->getRenderDocAPI()) {
         impl->getVulkan().df().DeviceWaitIdle(impl->getVulkan().dev());
         impl->getRenderDocAPI()->EndFrameCapture(
             RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(impl->getVulkan().inst()),
@@ -887,13 +911,13 @@ FrameProfile Instance::readFrameProfile(const Context& context) const { // NOLIN
     return context.readFrameProfile();
 }
 
-void Context::enableFrameProfiling() {
+void LSFGContext::enableFrameProfiling() {
     if (this->fidx != 0 || this->workScheduled || this->profiling)
         throw backend::error("Frame profiling requires a fresh unscheduled context");
     this->profiling = std::make_unique<FrameProfilingState>(this->ctx.vk, this->destImages.size());
 }
 
-FrameProfile Context::readFrameProfile() const {
+FrameProfile LSFGContext::readFrameProfile() const {
     if (!this->profiling || !this->workScheduled || this->profiling->generatedCount == 0)
         throw backend::error("No generated batch is available for frame profiling");
     const auto& state = *this->profiling;
@@ -926,7 +950,7 @@ void Instance::scheduleFrames(Context& context, std::span<const float> timestamp
         throw backend::error("At least one interpolation timestamp is required");
 #ifdef MAKO_TESTING_RENDERDOC
     const auto& impl = this->m_impl;
-    if (impl->getRenderDocAPI()) {
+    if (impl && impl->getRenderDocAPI()) {
         impl->getRenderDocAPI()->StartFrameCapture(
             RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(impl->getVulkan().inst()),
             nullptr);
@@ -938,7 +962,7 @@ void Instance::scheduleFrames(Context& context, std::span<const float> timestamp
         throw backend::error("Unable to schedule frames", e);
     }
 #ifdef MAKO_TESTING_RENDERDOC
-    if (impl->getRenderDocAPI()) {
+    if (impl && impl->getRenderDocAPI()) {
         impl->getVulkan().df().DeviceWaitIdle(impl->getVulkan().dev());
         impl->getRenderDocAPI()->EndFrameCapture(
             RENDERDOC_DEVICEPOINTER_FROM_VKINSTANCE(impl->getVulkan().inst()),
@@ -955,7 +979,32 @@ bool Instance::contextReady(const Context& context) const {
     return context.waitForIdle(0);
 }
 
-void Context::prepareWork() {
+void Instance::setContextLossHandler(Context& context, std::function<void()> handler) { // NOLINT (static)
+    context.setLossHandler(std::move(handler));
+}
+
+bool Instance::contextLost(const Context& context) const {
+    return context.lost();
+}
+
+bool Instance::restartFrameGeneration(const Context& context) {
+#ifdef MAKO_FG
+    if (this->m_fg)
+        return this->m_fg->restart(context);
+#endif
+    static_cast<void>(context);
+    return false;
+}
+
+bool Instance::usesSeparateProgram() const {
+#ifdef MAKO_FG
+    return this->m_fg != nullptr;
+#else
+    return false;
+#endif
+}
+
+void LSFGContext::prepareWork() {
     const auto start = this->profiling ? ProfileClock::now() : ProfileClock::time_point{};
     if (this->workScheduled && !this->cmdbufFence.wait(
             this->ctx.vk, previousWorkFenceTimeoutNs)) {
@@ -970,7 +1019,7 @@ void Context::prepareWork() {
     }
 }
 
-const vk::CommandBuffer& Context::recordPrepass() {
+const vk::CommandBuffer& LSFGContext::recordPrepass() {
     auto& recorded = this->cmdbufs.at(0).at(this->fidx % commandPhaseCount);
     if (!recorded) {
         vk::CommandBuffer cmdbuf(ctx.vk);
@@ -1020,7 +1069,7 @@ const vk::CommandBuffer& Context::recordPrepass() {
     return *recorded;
 }
 
-const vk::CommandBuffer& Context::recordSourceRelease() {
+const vk::CommandBuffer& LSFGContext::recordSourceRelease() {
     if (!this->sourceRelease) {
         vk::CommandBuffer command(ctx.vk);
         command.begin(ctx.vk, 0);
@@ -1040,7 +1089,7 @@ const vk::CommandBuffer& Context::recordSourceRelease() {
     return *this->sourceRelease;
 }
 
-void Context::schedulePrepass(const VkFence completionFence) {
+void LSFGContext::schedulePrepass(const VkFence completionFence) {
     const auto& cmdbuf = this->recordPrepass();
     const std::array commands{cmdbuf.handle(), this->recordSourceRelease().handle()};
     // Preserve the completed fence while allocation/recording can still fail.
@@ -1061,11 +1110,11 @@ void Context::schedulePrepass(const VkFence completionFence) {
     this->idx++;
 }
 
-void Context::scheduleFrames() {
+void LSFGContext::scheduleFrames() {
     this->scheduleFrames({});
 }
 
-void Context::scheduleFrames(std::span<const float> timestamps) {
+void LSFGContext::scheduleFrames(std::span<const float> timestamps) {
     const bool explicitTimestamps = !timestamps.empty();
     const size_t generatedFrameCount = explicitTimestamps
         ? timestamps.size()
@@ -1220,7 +1269,7 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
     this->fidx++;
 }
 
-void Context::scheduleFrameHistory() {
+void LSFGContext::scheduleFrameHistory() {
     this->prepareWork();
     if (this->profiling)
         this->profiling->generatedCount = 0;
@@ -1228,7 +1277,7 @@ void Context::scheduleFrameHistory() {
     this->fidx++;
 }
 
-bool Context::waitForIdle(const uint64_t timeoutNs) const {
+bool LSFGContext::waitForIdle(const uint64_t timeoutNs) const {
     return !this->workScheduled || this->cmdbufFence.wait(this->ctx.vk, timeoutNs);
 }
 
@@ -1236,7 +1285,7 @@ void Instance::collectRetiredContexts() {
     std::erase_if(this->m_retiredContexts,
         [](const std::unique_ptr<ContextImpl>& context) {
             try {
-                return context->waitForIdle(0);
+                return context->lost() || context->waitForIdle(0);
             } catch (const std::exception& e) {
                 std::cerr << "MAKO Renderer: unable to poll a retired backend context: "
                           << e.what() << '\n';
@@ -1255,8 +1304,10 @@ void Instance::closeContext(const Context& context) {
         throw backend::error("attempted to close unknown context",
             std::runtime_error("no such context"));
 
+    // The timeline this handler signals is destroyed with the caller's resources.
+    (*it)->setLossHandler(nullptr);
     try {
-        if ((*it)->waitForIdle(previousWorkFenceTimeoutNs)) {
+        if ((*it)->lost() || (*it)->waitForIdle(previousWorkFenceTimeoutNs)) {
             this->m_contexts.erase(it);
             return;
         }
@@ -1279,7 +1330,7 @@ Instance::~Instance() = default;
 
 std::shared_ptr<const vk::DeviceMemoryAccounting>
 Instance::deviceMemoryAccounting() const {
-    return this->m_impl->getVulkan().deviceMemoryAccounting();
+    return this->m_impl ? this->m_impl->getVulkan().deviceMemoryAccounting() : nullptr;
 }
 
 // leaking shenanigans

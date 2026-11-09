@@ -279,18 +279,23 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     require(english.value(QStringLiteral("fractionalAdaptiveDesc")).toString()
             .contains(QStringLiteral("60 real FPS → 90 displayed FPS")),
         "English Fractional Adaptive help does not explain fractional output");
-    require(!english.value(QStringLiteral("performanceModeDesc")).toString()
-            .contains(QStringLiteral("private frame-generation context")),
-        "English lighter-model help exposes an implementation detail");
+    require(english.value(QStringLiteral("fgModelLsfgQuality")).toString() ==
+                QStringLiteral("LSFG Quality") &&
+            english.value(QStringLiteral("fgModelLsfgPerformance")).toString() ==
+                QStringLiteral("LSFG Performance"),
+        "English LSFG model labels do not match Decky");
     require(!english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
             .contains(QStringLiteral("swaps private resources live")),
         "English Adaptive ceiling help exposes its capacity contract");
     require(!english.value(QStringLiteral("multiplierDesc")).toString()
             .contains(QStringLiteral("swaps private resources live")),
         "English Fixed multiplier help exposes its capacity contract");
-    require(english.value(QStringLiteral("ultraPerformanceDesc")).toString()
-            .contains(QStringLiteral("compatible controls remain available")),
-        "English Ultra Performance help overstates its restart boundary");
+    require(!english.value(QStringLiteral("ultraPerformanceDesc")).toString()
+            .contains(QStringLiteral("restart")),
+        "English Ultra Performance help duplicates its restart marker");
+    require(english.value(QStringLiteral("ultraPerformance")).toString()
+            .contains(QStringLiteral("(Restart)")),
+        "English Ultra Performance must retain its restart marker");
 }
 
 } // namespace

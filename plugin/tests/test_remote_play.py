@@ -1,5 +1,6 @@
 """Portable native Remote Play install, restoration, launch and session tests."""
 import asyncio
+from contextlib import nullcontext
 import fcntl
 import hashlib
 import json
@@ -568,6 +569,7 @@ class RemotePlayTests(unittest.TestCase):
         plugin.remote_play_service = self.service
         plugin.installation_service = Mock()
         plugin.installation_service._error_response.side_effect = lambda _type, error: {"success": False, "error": error}
+        plugin.installation_service.native_installation_lock.return_value = nullcontext()
         plugin._stop_flatpak_vrr_monitor = AsyncMock()
         self.service.install()
         self.service.backup.write_bytes(ELF + b"corrupt")
@@ -576,10 +578,14 @@ class RemotePlayTests(unittest.TestCase):
         with patch("py_modules.mako_plugin.plugin.asyncio.to_thread", inline):
             result = asyncio.run(plugin.uninstall_mako())
             self.assertFalse(result["success"])
-            plugin.installation_service.uninstall.assert_not_called()
+            plugin.installation_service.uninstall_locked.assert_not_called()
             plugin._stop_flatpak_vrr_monitor.assert_not_called()
+            wrapper = self.service.client.read_bytes()
             asyncio.run(plugin._uninstall())
-            plugin.installation_service.cleanup_on_uninstall.assert_not_called()
+            plugin.installation_service.cleanup_on_uninstall.assert_called_once()
+            self.assertEqual(self.service.client.read_bytes(), wrapper)
+            self.assertTrue(self.service.state.is_file())
+            self.assertEqual(self.service.backup.read_bytes(), ELF + b"corrupt")
 
     def test_remote_session_preserves_selected_profile_and_power_source(self):
         with self.configuration._configuration_write_lock:
@@ -789,6 +795,11 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
             self.assertTrue(self.configuration.update_profile_config_fields(SELECTED_PROFILE,
                 {'frame_generation_provisioned': False, 'frame_generation_enabled': False}, mode)['success'])
         values = self.execute_profile({'external_vulkan_layer': 'mangohud'})
+        from py_modules.mako_plugin.constants import MAKO_LAYER_NAME, MANGOHUD_LAYER_NAME_64
+        # The Renderer stays provisioned; with MangoHud both join through the
+        # explicit order and keep their activation gates for older loaders.
+        layers = values['VK_INSTANCE_LAYERS'].split(':')
+        self.assertLess(layers.index(MAKO_LAYER_NAME), layers.index(MANGOHUD_LAYER_NAME_64))
         self.assertEqual('1', values['ENABLE_MAKO'])
         self.assertEqual('1', values['MANGOHUD'])
         self.assertNotIn('DISABLE_MANGOHUD', values)

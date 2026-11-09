@@ -9,15 +9,19 @@ import os
 import asyncio
 import hashlib
 import shlex
+import tarfile
 from typing import Dict, Any
 from pathlib import Path
 
 import decky
 
 from .installation import InstallationService
+from .constants import VRR_WATCH_PARENT_ENV
 from .dll_detection import DllDetectionService
 from .configuration import ConfigurationService
 from .runtime_state import RuntimeStateService
+from . import frame_recording
+from .base_service import resolve_user_home
 from .remote_play import RemotePlayService
 from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
 from .config_schema_generated import ConfigurationPatch
@@ -64,6 +68,7 @@ class Plugin:
         self.remote_play_service = RemotePlayService()
         self.flatpak_service = FlatpakService()
         self._flatpak_vrr_monitor: asyncio.subprocess.Process | None = None
+        self._frame_recording_shortcut: asyncio.Task | None = None
 
     async def install_mako(self) -> InstallationResult:
         """Install MAKO Renderer and refresh existing Flatpak runtime copies.
@@ -103,10 +108,31 @@ class Plugin:
     async def check_mako_installed(self) -> InstallationCheckResponse:
         """Check if MAKO Renderer is already installed
 
+        The check hashes installed files and queries Flatpak, so it runs off
+        the event loop.
+
         Returns:
             InstallationCheckResponse dict with installation status and paths
         """
-        return self.installation_service.check_installation()
+        return await asyncio.to_thread(self._installation_status)
+
+    def _installation_status(self) -> InstallationCheckResponse:
+        """Combine the native check with the installed Flatpak runtimes.
+
+        Installed Flatpak runtime copies belong to the same Renderer: one that
+        differs from this plugin's bundle makes the native update path, which
+        refreshes every installed branch, the remedy.
+        """
+        status = self.installation_service.check_installation()
+        if status["installed"] and not status["engine_update_required"]:
+            stale = self.flatpak_service.stale_runtime_versions()
+            if stale:
+                decky.logger.warning(
+                    "MAKO Flatpak runtimes differ from the bundled Renderer; "
+                    "offering an update: %s", ", ".join(stale)
+                )
+                status["engine_update_required"] = True
+        return status
 
     async def uninstall_mako(self) -> InstallationResult:
         """Uninstall MAKO Renderer by removing the installed files
@@ -115,11 +141,27 @@ class Plugin:
             UninstallationResponse dict with success status and removed files
         """
         try:
-            await asyncio.to_thread(self.remote_play_service.restore_before_uninstall)
+            with self.installation_service.native_installation_lock():
+                restoration = asyncio.create_task(asyncio.to_thread(
+                    self.remote_play_service.restore_before_uninstall,
+                ))
+                cancelled = False
+                while True:
+                    try:
+                        await asyncio.shield(restoration)
+                        break
+                    except asyncio.CancelledError:
+                        if restoration.cancelled():
+                            raise
+                        # Cancelling a caller cannot stop its filesystem worker.
+                        # Keep the native lease until that worker has finished.
+                        cancelled = True
+                if cancelled:
+                    raise asyncio.CancelledError
+                await self._stop_flatpak_vrr_monitor()
+                return self.installation_service.uninstall_locked()
         except (OSError, ValueError) as error:
             return self.installation_service._error_response(InstallationResult, str(error))
-        await self._stop_flatpak_vrr_monitor()
-        return self.installation_service.uninstall()
 
     async def get_remote_play_status(self) -> RemotePlayResponse:
         def read():
@@ -267,6 +309,38 @@ class Plugin:
     ) -> RuntimeStatusResponse:
         """Return validated requested-versus-applied Renderer state."""
         return self.runtime_state_service.get_status(profile_name)
+
+    async def request_frame_recording(self) -> dict:
+        """Ask the running game's Renderer for a short test recording of real frames."""
+        return frame_recording.request_recording(resolve_user_home())
+
+    async def get_frame_recording_status(self) -> dict:
+        """Report the Renderer's last recording status and the newest recordings."""
+        return await asyncio.to_thread(frame_recording.recording_status, resolve_user_home())
+
+    async def _start_frame_recording_shortcut(self):
+        """Tell the frontend when both sticks are pressed in an armed game."""
+        task = getattr(self, "_frame_recording_shortcut", None)
+        if task is not None and not task.done():
+            return
+
+        async def pressed():
+            await decky.emit(frame_recording.SHORTCUT_EVENT)
+
+        self._frame_recording_shortcut = asyncio.create_task(
+            frame_recording.watch_shortcut(resolve_user_home(), pressed, decky.logger.info)
+        )
+
+    def _stop_frame_recording_shortcut(self):
+        """Cancel the gamepad watch without awaiting it during Loader shutdown.
+
+        The watch closes its devices when it next runs; if Decky Loader never
+        grants another event-loop turn, process exit closes them instead.
+        """
+        task = getattr(self, "_frame_recording_shortcut", None)
+        self._frame_recording_shortcut = None
+        if task is not None and not task.done():
+            task.cancel()
 
     async def get_shader_parameters(self, profile_name: str) -> ShaderParametersResponse:
         return await asyncio.to_thread(self.configuration_service.get_shader_parameters, profile_name)
@@ -611,7 +685,7 @@ class Plugin:
         monitor = getattr(self, "_flatpak_vrr_monitor", None)
         if monitor is not None and monitor.returncode is None:
             return
-        helper = self.installation_service.vrr_lease_file
+        helper = self.installation_service.selected_vrr_lease_file()
         try:
             user_home = self.installation_service.user_home
             if not helper.is_file() or user_home.stat().st_uid != os.geteuid():
@@ -620,6 +694,9 @@ class Plugin:
                 "PATH": "/usr/bin:/bin",
                 "HOME": str(user_home),
                 "MAKO_CONFIG": str(self.configuration_service.config_file_path),
+                # The helper exits with this backend, even when Decky Loader
+                # SIGKILLs it before _unload can stop the monitor.
+                VRR_WATCH_PARENT_ENV: str(os.getpid()),
             }
             self._flatpak_vrr_monitor = await asyncio.create_subprocess_exec(
                 str(helper), "--watch-flatpak", env=environment,
@@ -638,8 +715,8 @@ class Plugin:
         except ProcessLookupError:
             pass
         try:
-            # Decky allows five seconds for plugin shutdown. Leave time for
-            # reaping and uninstall cleanup, including when SIGTERM is ignored.
+            # Keep install and uninstall requests bounded, including when
+            # SIGTERM is ignored. Loader shutdown uses _end_flatpak_vrr_monitor.
             await asyncio.wait_for(monitor.wait(), timeout=2)
         except asyncio.TimeoutError:
             try:
@@ -658,6 +735,21 @@ class Plugin:
                 return
         if self._flatpak_vrr_monitor is monitor:
             self._flatpak_vrr_monitor = None
+
+    def _end_flatpak_vrr_monitor(self):
+        """End discovery during Loader shutdown without awaiting its exit.
+
+        Discovery owns no VRR state, so SIGKILL needs neither a reply nor a
+        later event-loop turn. Init reaps the monitor once this backend exits.
+        """
+        monitor = getattr(self, "_flatpak_vrr_monitor", None)
+        self._flatpak_vrr_monitor = None
+        if monitor is None or monitor.returncode is not None:
+            return
+        try:
+            monitor.kill()
+        except ProcessLookupError:
+            pass
 
     async def _main(self):
         """
@@ -737,6 +829,12 @@ class Plugin:
             )
 
         try:
+            if await asyncio.to_thread(self.installation_service.ensure_native_uninstaller_if_needed):
+                decky.logger.info("MAKO Decky: installed independent MAKO Renderer removal tools")
+        except (OSError, ValueError, tarfile.TarError) as error:
+            decky.logger.warning("MAKO Decky: could not prepare MAKO Renderer removal tools: %s", error)
+
+        try:
             if self.installation_service.migrate_gamescope_wsi_compatibility_manifest_if_needed():
                 decky.logger.info("Staged the guarded Gamescope WSI compatibility manifest")
         except OSError as error:
@@ -769,15 +867,19 @@ class Plugin:
             decky.logger.warning("MAKO Decky: Remote Play payload refresh deferred: %s", error)
 
         await self._start_flatpak_vrr_monitor()
+        await self._start_frame_recording_shortcut()
 
     async def _unload(self):
         """
         Cleanup tasks when the plugin is unloaded.
 
         This method is called by Decky Loader when the plugin is being unloaded.
-        Any cleanup code should go here.
+        Any cleanup code should go here. Decky Loader 3.3.1 closes the plugin
+        socket right after SIGTERM, and its listener can then monopolize the
+        event loop, so this and _uninstall must finish without suspending.
         """
-        await self._stop_flatpak_vrr_monitor()
+        self._end_flatpak_vrr_monitor()
+        self._stop_frame_recording_shortcut()
         decky.logger.info("MAKO Decky unloaded")
 
     async def _uninstall(self):
@@ -789,15 +891,12 @@ class Plugin:
         """
         decky.logger.info("MAKO Decky is being uninstalled")
 
-        await self._stop_flatpak_vrr_monitor()
+        # Run inline: Decky Loader may never resume a suspended _uninstall.
+        self._end_flatpak_vrr_monitor()
+        self._stop_frame_recording_shortcut()
 
-        try:
-            await asyncio.to_thread(self.remote_play_service.restore_before_uninstall)
-        except (OSError, ValueError) as error:
-            decky.logger.error("MAKO Decky: Remote Play restoration blocked; preserving Renderer files: %s", error)
-            return
-
-        # Clean up MAKO Renderer files when the plugin is uninstalled
+        # Native launchers and the Remote Play override are self-contained.
+        # Their lifetime belongs to explicit Renderer removal, not Decky Loader.
         self.installation_service.cleanup_on_uninstall()
 
         # Flatpak runtime extensions are shared by every MAKO Renderer installation.

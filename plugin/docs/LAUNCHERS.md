@@ -79,8 +79,8 @@ Launch, configure the game profile, and restart after enabling features. For Ope
 
 ## Updates and help
 
-After updating MAKO, use **Flatpak Setup > Update** for each prepared app's matching runtime extension, then restart the app. Flatpak Heroic/Lutris use per-game wrappers; emulator preparation is app-wide.
+Installing or updating MAKO Renderer through Decky also refreshes installed MAKO Flatpak extensions. Restart the app and its games afterward. If an extension update fails, retry it through **Flatpak Setup > Update**. Flatpak Heroic/Lutris use per-game wrappers; emulator preparation is app-wide.
 
-If an app update changes its runtime, reopen **Flatpak Setup**. Select **Install <version> extension** if the matching extension is missing, then restart the app and its games. You do not need to re-prepare an app whose ID and overrides are unchanged. If MAKO cannot identify a supported runtime, follow the displayed warning rather than guessing a branch. **Install MAKO Renderer** refreshes installed branches; install new branches through **Flatpak Setup**.
+If an app update changes its runtime, reopen **Flatpak Setup**. Select **Install <version> extension** if the matching extension is missing, then restart the app and its games. You do not need to re-prepare an app whose ID and overrides are unchanged. If MAKO cannot identify a supported runtime, follow the displayed warning rather than guessing a branch.
 
-MAKO Scaler and Shaders work without Lossless Scaling; Frame Generation and LS1 require it. For problems, [collect diagnostics](COLLECT_DIAGNOSTICS.md).
+MAKO FG, MAKO Scaler, and Shaders work without Lossless Scaling. The matching Flatpak extension includes MAKO FG; only the optional Lossless Scaling frame generation model and LS1 require Lossless Scaling. See [MAKO FG](../../engine/docs/MAKO-FG.md). For problems, [collect diagnostics](COLLECT_DIAGNOSTICS.md).

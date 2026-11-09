@@ -132,7 +132,7 @@ class ProductBrandingTests(unittest.TestCase):
             renderer_publisher,
         )
         self.assertIn(
-            "Flow Scale and Lighter FG Model normally apply live",
+            "Flow Scale changes and switches between LSFG Quality and LSFG Performance normally apply live",
             renderer_publisher,
         )
         self.assertNotIn(

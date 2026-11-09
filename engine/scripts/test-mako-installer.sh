@@ -40,6 +40,10 @@ MAKO_INSTALLER_NO_LAUNCH=1 \
 "$package_root/Install MAKO Renderer" --install >"$test_root/install.log"
 
 [[ -x "$install_prefix/bin/mako-ui" ]] || fail "UI was not installed"
+payload_checksum="$(sha256sum "$package_root/MAKO-Renderer-install-manifest.txt" | cut -d' ' -f1)"
+grep -Fq "\"payload_sha256hash\": \"$payload_checksum\"" \
+    "$install_prefix/share/mako-render/active-renderer.json" ||
+    fail "installer did not record its native payload fingerprint"
 grep -Fq 'For a native Steam or Proton game, use this Steam launch option:' \
     "$test_root/install.log" ||
     fail "installer completion did not explain how to activate the Renderer"
@@ -203,6 +207,8 @@ MAKO_INSTALLER_ASSUME_YES=1 \
     fail "default uninstaller left the active Renderer identity"
 [[ ! -e "$test_root/.local/share/mako-render" ]] ||
     fail "default uninstaller left the managed Renderer data directory"
+[[ -d "$test_root/.local/bin" ]] ||
+    fail "default uninstaller removed the standard per-user bin directory"
 [[ -f "$config_home/mako-render/present-diagnostics.log" ]] ||
     fail "shared Renderer uninstall removed diagnostics without confirmation"
 
@@ -307,6 +313,8 @@ XDG_CONFIG_HOME="$purge_config_home" \
 "$purge_prefix/bin/mako-installer" --uninstall --purge-configuration >/dev/null
 [[ ! -e "$purge_config_home/mako-render" ]] ||
     fail "explicit configuration purge left profiles or diagnostics behind"
+[[ ! -e "$purge_prefix/bin" && ! -e "$purge_prefix/share" ]] ||
+    fail "custom-prefix uninstall left empty payload directories"
 
 # Remote Play restoration must precede every payload/configuration removal.
 remote_prefix="$test_root/remote-install"

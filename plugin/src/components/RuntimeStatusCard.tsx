@@ -1,6 +1,10 @@
 import { PanelSectionRow } from "@decky/ui";
 import type { ConfigurationData } from "../config/configSchema";
-import type { RuntimeScalingUiState } from "../utils/runtimeScalingUtils";
+import { frameGenerationModelShortLabel } from "../config/frameGenerationModelChoice";
+import {
+  type RuntimeScalingUiState,
+  wineCompatibilityFixMessage,
+} from "../utils/runtimeScalingUtils";
 import t from "../i18n/i18n";
 import {
   MakoSectionHeader,
@@ -192,6 +196,9 @@ export function RuntimeStatusCard({
   > &
     Partial<Pick<ConfigurationData, "gpu_headroom_percent">>;
 }) {
+  const wineFixMessage = wineCompatibilityFixMessage(
+    runtimeState.wineCompatibilityFix,
+  );
   // Configuration explains absent telemetry; it must not override live reports.
   const featuresOff =
     !runtimeState.hasContext &&
@@ -368,6 +375,14 @@ export function RuntimeStatusCard({
                     {runtimeState.frameGenerationActive ? (
                       <>
                         <StatusDetail
+                          label={t("LIVE_STATUS_MODEL", "Model")}
+                          value={
+                            runtimeState.frameGenerationModel
+                              ? frameGenerationModelShortLabel(runtimeState.frameGenerationModel)
+                              : "—"
+                          }
+                        />
+                        <StatusDetail
                           label={t("LIVE_STATUS_MODE", "Mode")}
                           value={
                             runtimeState.frameGenerationMode === "adaptive"
@@ -408,6 +423,8 @@ export function RuntimeStatusCard({
                           />
                         )}
                       </>
+                    ) : wineFixMessage ? (
+                      wineFixMessage
                     ) : runtimeState.frameGenerationEnabled ? (
                       t(
                         "LIVE_STATUS_FG_INACTIVE",

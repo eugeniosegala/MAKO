@@ -22,6 +22,8 @@ Generated files must be updated through their owning generator. Do not edit gene
 
 The README gallery is generated from commit authors and `Co-authored-by` trailers on the current branch. After adding contributor work, add any new commit author or co-author name under its GitHub login in `scripts/contributors.json`, then run `python3 scripts/update-contributors.py` and include the README update. Multiple commit names can point to one account. The optional `additional_logins` list credits contributors who are not represented in Git history. Run `python3 scripts/update-contributors.py --check` to verify freshness; do not edit the generated gallery directly.
 
+AI co-author trailers do not identify human GitHub accounts for the gallery. For any such trailers retained in Git history, register their exact name and email in `nonhuman_coauthors`; other unmapped authors and co-authors still fail the freshness check.
+
 Profile pictures use each contributor's GitHub avatar. To refresh cached pictures, increase `avatar_revision` in `scripts/contributors.json` (for example, to today's date as `YYYYMMDD`) and regenerate the gallery. Keep this revision fixed between refreshes so freshness checks remain deterministic.
 
 ## Validation

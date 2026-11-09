@@ -8,11 +8,13 @@ const state = vi.hoisted(() => ({
   installed: true,
   updateRequired: false,
   save: vi.fn(),
+  saveChanges: vi.fn(async () => undefined),
 }));
 function pass({ children }: { children: React.ReactNode }) {
   return <div>{children}</div>;
 }
 vi.mock("@decky/ui", () => ({
+  Router: { MainRunningApp: undefined },
   PanelSection: pass,
   PanelSectionRow: pass,
   ButtonItem: pass,
@@ -103,13 +105,17 @@ vi.mock("../../src/hooks/useMakoHooks", () => ({
   useInstallationStatus: () => ({
     isInstalled: state.installed,
     engineUpdateRequired: state.updateRequired,
+    installationVerified: true,
+    installationGeneration: 0,
   }),
   useDllDetection: () => ({
     dllDetected: false,
     dllMissing: true,
-    dllDetectionStatus: "missing",
   }),
-  useMakoConfig: () => ({ config: getDefaults(), isConfigLoading: false }),
+  useMakoConfig: () => ({
+    config: { ...getDefaults(), frame_generation_model: "lossless-scaling" },
+    isConfigLoading: false,
+  }),
   useRuntimeScalingStatus: () => EMPTY_RUNTIME_SCALING_UI_STATE,
 }));
 vi.mock("../../src/hooks/useModelStatus", () => ({
@@ -125,7 +131,10 @@ vi.mock("../../src/hooks/useProfileSession", () => ({
   useProfileSession: () => ({ editingProfile: "mako" }),
 }));
 vi.mock("../../src/hooks/useProfileConfigWriter", () => ({
-  useProfileConfigWriter: () => ({ saveConfigField: state.save }),
+  useProfileConfigWriter: () => ({
+    saveConfigField: state.save,
+    saveConfigChanges: state.saveChanges,
+  }),
 }));
 vi.mock("../../src/components/InfoVisibility", () => ({
   InfoVisibility: pass,
@@ -223,6 +232,14 @@ afterEach(() => {
   state.installed = true;
   state.updateRequired = false;
   state.save.mockClear();
+  state.saveChanges.mockClear();
+});
+
+test("missing Lossless Scaling keeps the saved model and warns without a manual action", () => {
+  render(<Content />);
+  expect(screen.queryByRole("button", { name: "Use MAKO FG" })).toBeNull();
+  expect(state.saveChanges).not.toHaveBeenCalled();
+  expect(screen.getByRole("alert")).toBeTruthy();
 });
 
 test.each([false, true])(
@@ -287,5 +304,18 @@ test("the profile gate still requires MAKO Renderer itself", () => {
   expect(
     screen.queryByRole("tablist", { name: "Image Processing" }),
   ).toBeNull();
+  expect(state.save).not.toHaveBeenCalled();
+});
+
+test("first installation immediately unlocks the editor without Lossless Scaling", () => {
+  state.installed = false;
+  const { rerender } = render(<Content />);
+  expect(screen.queryByText("Profile editor")).toBeNull();
+  state.installed = true;
+  rerender(<Content />);
+  expect(screen.getByText("Profile editor")).toBeTruthy();
+  expect(
+    screen.getByRole("tablist", { name: "Image Processing" }),
+  ).toBeTruthy();
   expect(state.save).not.toHaveBeenCalled();
 });

@@ -98,6 +98,7 @@ void test_mangohud_profile_and_availability() {
     require_property("enable_mangohud", "bool", true, false);
     require_property("mangohud_available", "bool", false, false);
     require_property("mangohud_checking", "bool", false, false);
+    require_property("mangohud_count_real_frames", "bool", true, false);
     QTemporaryDir directory;
     require(directory.isValid(), "MangoHud fixture directory failed");
     const auto previousConfig = qgetenv("MAKO_CONFIG");
@@ -152,13 +153,23 @@ void test_mangohud_profile_and_availability() {
         require(!backend.getEnableMangoHud(), "MangoHud leaked to another profile");
         backend.profileSelected(0);
         require(backend.getEnableMangoHud(), "MangoHud selection was not retained");
+        require(!backend.getMangoHudCountRealFrames() &&
+                !backend.getLaunchOption().contains("MAKO_MANGOHUD_REAL_FRAMES"),
+            "MangoHud must count every output frame by default");
+        backend.mangoHudCountRealFramesUpdated(true);
+        require(backend.getLaunchOption().contains("MANGOHUD=1 MAKO_MANGOHUD_REAL_FRAMES=1"),
+            "the real-frame count is missing from the copied launch option");
+        backend.profileSelected(1);
+        require(!backend.getMangoHudCountRealFrames(), "the MangoHud frame count leaked to another profile");
+        backend.profileSelected(0);
         backend.enableVkBasaltUpdated(true);
         backend.enableVkBasaltUpdated(false);
         require(!backend.getEnableMangoHud(), "disabling Shaders resurrected an old MangoHud selection");
         backend.enableMangoHudUpdated(true);
         require(backend.getVkBasaltSharpness() == 0.65F, "switching external tools lost shader settings");
         require(backend.createProfile("Mango copy") && backend.getEnableMangoHud() &&
-                backend.renameProfile("Mango renamed") && backend.getEnableMangoHud(),
+                backend.renameProfile("Mango renamed") && backend.getEnableMangoHud() &&
+                backend.getMangoHudCountRealFrames(),
             "profile copy or rename discarded MangoHud");
         require(backend.getLaunchOption().contains("MAKO_PROFILE='Mango renamed'"),
             "renamed profile launch option is stale");
@@ -170,7 +181,8 @@ void test_mangohud_profile_and_availability() {
         require(!backend.mangoHudAvailable() && backend.getEnableMangoHud(),
             "an unavailable installation must preserve the saved profile choice");
         backend.enableMangoHudUpdated(false);
-        require(!backend.getEnableMangoHud() && !backend.getLaunchOption().contains("MANGOHUD=1"),
+        require(!backend.getEnableMangoHud() && !backend.getLaunchOption().contains("MANGOHUD=1") &&
+                !backend.getLaunchOption().contains("MAKO_MANGOHUD_REAL_FRAMES"),
             "an unavailable saved MangoHud selection could not be turned off");
         backend.enableMangoHudUpdated(true);
         require(!backend.getEnableMangoHud(), "Qt enabled an unavailable MangoHud installation");
@@ -192,6 +204,10 @@ void test_mangohud_profile_and_availability() {
             profiles.value("Mango renamed").toObject().value("external_vulkan_layer") == "mangohud" &&
             profiles.value("Other game").toObject().value("external_vulkan_layer") == "",
         "Qt did not preserve Decky's per-profile external-layer format");
+    require(profiles.value("Mango game").toObject().value("mangohud_count_real_frames") == true &&
+            profiles.value("Mango renamed").toObject().value("mangohud_count_real_frames") == true &&
+            !profiles.value("Other game").toObject().contains("mangohud_count_real_frames"),
+        "Qt did not store Decky's per-profile MangoHud frame-count format");
     for (const auto& entry : {std::pair{"MAKO_CONFIG", previousConfig},
             std::pair{"MAKO_LAUNCH_CONFIG", previousLaunch},
             std::pair{"XDG_CONFIG_HOME", previousConfigHome},
@@ -207,7 +223,7 @@ void test_scaling_properties() {
     require_property("capture_failed", "bool", false, false);
     static_assert(!ls::GameConfDefaults::scalingEnabled);
     static_assert(ls::GameConfDefaults::scalingMethod ==
-        ls::ScalingMethod::Ls1);
+        ls::ScalingMethod::Mako);
     static_assert(ls::GameConfDefaults::scalingFactor == 1.5F);
     static_assert(!ls::GameConfDefaults::scalingSupersampling);
     static_assert(ls::GameConfDefaults::scalingSharpness == 0.8F);
@@ -216,16 +232,25 @@ void test_scaling_properties() {
     static_assert(ls::GameConfLimits::minimumScalingSharpness == 0.0F);
     static_assert(ls::GameConfLimits::maximumScalingSharpness == 1.0F);
     ls::GameConf ultra_scaling;
+    ultra_scaling.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
     ultra_scaling.scaling_enabled = true;
-    ultra_scaling.scaling_method = ls::ScalingMethod::Mako;
+    ultra_scaling.scaling_method = ls::ScalingMethod::Ls1;
     ultra_scaling.ultra_performance = true;
     require(ls::effectiveScalingMethod(ultra_scaling) ==
-            ls::ScalingMethod::Ls1Performance,
-        "Ultra Performance does not select LS1 Performance for Scaling");
+            ls::ScalingMethod::Mako,
+        "Ultra Performance does not select MAKO Scaler for Scaling");
+    ultra_scaling.frame_generation_model = ls::FrameGenerationModel::MakoFg;
+    require(ls::effectiveScalingMethod(ultra_scaling) ==
+            ls::ScalingMethod::Mako,
+        "Ultra Performance does not select MAKO Scaler with MAKO FG");
 
+    require_property("mako_fg_mode", "QString", true, false);
     require_property("scaling_enabled", "bool", true, false);
     require_property(
         "swapchain_image_count_compatibility", "bool", true, false
+    );
+    require_property(
+        "mailbox_presentation_compatibility", "bool", true, false
     );
     require_property("scaling_method", "QString", true, false);
     require_property("scaling_factor", "float", true, false);
@@ -237,8 +262,181 @@ void test_scaling_properties() {
     require_property("maximum_scaling_sharpness", "float", false, true);
 }
 
+void test_lossless_model_inspection() {
+    require_property("lsfg_unavailable", "bool", false, false);
+    require_property("ls1_unavailable", "bool", false, false);
+    require_property("model_inspection_unavailable", "bool", false, false);
+    QTemporaryDir directory;
+    require(directory.isValid(), "model inspection fixture failed");
+    const auto previousConfig = qgetenv("MAKO_CONFIG"), previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    const auto previousConfigHome = qgetenv("XDG_CONFIG_HOME"), previousPath = qgetenv("PATH");
+    qputenv("MAKO_CONFIG", directory.filePath("conf.toml").toUtf8());
+    qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launch.toml").toUtf8());
+    qputenv("XDG_CONFIG_HOME", directory.path().toUtf8());
+    qputenv("PATH", directory.path().toUtf8() + ':' + previousPath);
+    const auto dll = directory.filePath("Lossless.dll"), command = directory.filePath("mako-cli");
+    QFile input(dll);
+    require(input.open(QIODevice::WriteOnly) && input.write("synthetic file") > 0, "cannot create inspection DLL fixture");
+    input.close();
+    const auto writeCommand = [&](const QByteArray& body) {
+        QFile file(command);
+        require(file.open(QIODevice::WriteOnly), "cannot write inspector fixture");
+        file.write("#!/bin/sh\n");
+        file.write(body);
+        file.close();
+        require(file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner),
+            "cannot make inspector fixture executable");
+    };
+    const auto fixture = [&] {
+        ls::ConfigFile config;
+        config.global().dll = dll.toStdString();
+        ls::GameConf game;
+        game.name = "Inspected";
+        game.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
+        game.scaling_enabled = true;
+        game.scaling_method = ls::ScalingMethod::Ls1;
+        game.power_profiles = {game, game};
+        config.profiles() = {game};
+        config.write(directory.filePath("conf.toml").toStdString());
+    };
+    const auto wait = [](const std::function<bool()>& complete, qint64 limit = 5000) {
+        QElapsedTimer timer;
+        timer.start();
+        while (!complete() && timer.elapsed() < limit) {
+            QCoreApplication::processEvents();
+            QThread::msleep(5);
+        }
+        require(complete(), "model inspection did not complete");
+    };
+    fixture();
+    writeCommand("case \"$*\" in *--lsfg*) printf '%s\\n' '{\"schema_version\":1,\"compatible\":false}'; exit 1;; esac\n"
+        "printf '%s\\n' '{\"schema_version\":1,\"compatible\":true}'\n");
+    {
+        mako::ui::Backend backend;
+        require(!backend.isLosslessScalingMissing() && !backend.isModelInspectionUnavailable(),
+            "a pending inspection was presented as a failure");
+        wait([&] { return backend.getFrameGenerationModel() == QStringLiteral("mako-fg"); });
+        require(backend.losslessScalingFallback() && backend.isLsfgUnavailable() && !backend.isLs1Unavailable() &&
+                backend.getScalingMethod() == QStringLiteral("ls1"),
+            "an LSFG failure must warn and repair only Frame Generation");
+        backend.powerModeSelected(1);
+        require(backend.getFrameGenerationModel() == QStringLiteral("mako-fg"),
+            "a confirmed unavailable model remained selected in the edited power mode");
+    }
+    const auto saved = ls::ConfigFile(directory.filePath("conf.toml").toStdString()).profiles().front();
+    require(saved.frame_generation_model == ls::FrameGenerationModel::MakoFg &&
+            saved.scaling_method == ls::ScalingMethod::Ls1 &&
+            saved.power_profiles[0].frame_generation_model == ls::FrameGenerationModel::MakoFg &&
+            saved.power_profiles[1].frame_generation_model == ls::FrameGenerationModel::LosslessScaling,
+        "inspection fallback did not persist exactly the edited models and power modes");
+
+    fixture();
+    writeCommand("case \"$*\" in *--ls1*) printf '%s\\n' '{\"schema_version\":1,\"compatible\":false}'; exit 1;; esac\n"
+        "printf '%s\\n' '{\"schema_version\":1,\"compatible\":true}'\n");
+    {
+        mako::ui::Backend backend;
+        wait([&] { return backend.getScalingMethod() == QStringLiteral("mako"); });
+        require(backend.losslessScalingFallback() && backend.isLs1Unavailable() && !backend.isLsfgUnavailable() &&
+                backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling"),
+            "an LS1 failure must preserve working LSFG");
+        writeCommand("printf '%s\\n' '{\"schema_version\":1,\"compatible\":true}'\n");
+        backend.refreshLosslessScaling();
+        require(!backend.isLs1Unavailable() && !backend.losslessScalingFallback(),
+            "inspector replacement did not invalidate the failed cached result");
+    }
+
+    // Crashes, old schemas, malformed output, and exit/protocol disagreement are
+    // unknown. They must explain uncertainty without disabling or rewriting LS.
+    for (const auto& response : {
+            QByteArray("exit 2\n"),
+            QByteArray("printf '%s\\n' 'not JSON'\n"),
+            QByteArray("printf '%070000d' 0\n"),
+            QByteArray("printf '%s\\n' '{\"schema_version\":2,\"compatible\":false}'; exit 1\n"),
+            QByteArray("printf '%s\\n' '{\"schema_version\":1,\"compatible\":false}'; exit 0\n")}) {
+        fixture();
+        writeCommand(response);
+        mako::ui::Backend backend;
+        wait([&] { return backend.isModelInspectionUnavailable(); });
+        require(!backend.losslessScalingFallback() && !backend.isLsfgUnavailable() && !backend.isLs1Unavailable() &&
+                backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling") &&
+                backend.getScalingMethod() == QStringLiteral("ls1"),
+            "an inconclusive inspection changed or disabled a saved model");
+    }
+
+    fixture();
+    {
+        QFile file(command);
+        require(file.open(QIODevice::WriteOnly) && file.write("#!/missing-mako-inspector-interpreter\n") > 0,
+            "cannot create an unavailable inspector fixture");
+        file.close();
+        mako::ui::Backend backend;
+        wait([&] { return backend.isModelInspectionUnavailable(); });
+        require(!backend.losslessScalingFallback() && !backend.isLsfgUnavailable() &&
+                backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling"),
+            "an inspector that cannot start changed the selected model");
+    }
+
+    fixture();
+    writeCommand("exec /usr/bin/sleep 30\n");
+    {
+        mako::ui::Backend backend;
+        wait([&] { return backend.isModelInspectionUnavailable(); }, 18000);
+        require(!backend.losslessScalingFallback() && !backend.isLsfgUnavailable() &&
+                backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling"),
+            "an inspector timeout changed the selected model");
+    }
+
+    fixture();
+    const auto started = directory.filePath("started");
+    writeCommand("case \"$*\" in *--lsfg*) : > '" + started.toUtf8() + "'; /usr/bin/sleep 0.6; "
+        "printf '%s\\n' '{\"schema_version\":1,\"compatible\":false}'; exit 1;; esac\n"
+        "printf '%s\\n' '{\"schema_version\":1,\"compatible\":true}'\n");
+    {
+        mako::ui::Backend backend;
+        wait([&] { return QFileInfo::exists(started); });
+        // The response from the old DLL must not repair the new selection.
+        backend.dllUpdated(dll + QStringLiteral(".new"));
+        require(backend.isLosslessScalingMissing(), "missing replacement DLL not detected");
+        require(QFile::copy(dll, dll + QStringLiteral(".new")), "cannot replace the inspected DLL");
+        writeCommand("printf '%s\\n' '{\"schema_version\":1,\"compatible\":true}'\n");
+        backend.refreshLosslessScaling();
+        backend.frameGenerationModelUpdated(QStringLiteral("lossless-scaling"));
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 1200) { QCoreApplication::processEvents(); QThread::msleep(5); }
+        require(!backend.losslessScalingFallback() && !backend.isLsfgUnavailable() &&
+                backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling"),
+            "a stale inspection rewrote the replacement DLL's model selection");
+    }
+    fixture();
+    QFile::remove(started);
+    writeCommand(": > '" + started.toUtf8() + "'\nexec /usr/bin/sleep 30\n");
+    {
+        mako::ui::Backend backend;
+        backend.scalingMethodUpdated(QStringLiteral("mako"));
+        wait([&] { return QFileInfo::exists(started); });
+        backend.frameGenerationModelUpdated(QStringLiteral("mako-fg"));
+        QElapsedTimer timer;
+        timer.start();
+        while (timer.elapsed() < 400) { QCoreApplication::processEvents(); QThread::msleep(5); }
+        require(!backend.isModelInspectionUnavailable() && !backend.losslessScalingFallback(),
+            "cancelling inspection for a MAKO selection produced a spurious notice");
+        // No inspector process may restart while both MAKO models are selected.
+        QFile::remove(started);
+        backend.refreshLosslessScaling();
+        timer.restart();
+        while (timer.elapsed() < 400) { QCoreApplication::processEvents(); QThread::msleep(5); }
+        require(!QFileInfo::exists(started), "MAKO-only settings started licensed-model inspection");
+    }
+    for (const auto& entry : {std::pair{"MAKO_CONFIG", previousConfig}, std::pair{"MAKO_LAUNCH_CONFIG", previousLaunch},
+            std::pair{"XDG_CONFIG_HOME", previousConfigHome}, std::pair{"PATH", previousPath}}) {
+        if (entry.second.isNull()) qunsetenv(entry.first); else qputenv(entry.first, entry.second);
+    }
+}
+
 void test_lossless_scaling_is_optional() {
     require_property("lossless_scaling_missing", "bool", false, false);
+    require_property("lossless_scaling_fallback", "bool", false, false);
     QTemporaryDir directory;
     require(directory.isValid(), "optional Lossless Scaling fixture failed");
     const auto previousConfig = qgetenv("MAKO_CONFIG");
@@ -255,6 +453,9 @@ void test_lossless_scaling_is_optional() {
     global.dll = dll.toStdString();
     ls::GameConf game;
     game.name = "optional";
+    game.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
+    game.scaling_method = ls::ScalingMethod::Ls1;
+    game.power_profiles = {game, game};
     fixture.global() = global;
     fixture.profiles() = {game};
     fixture.write(directory.filePath("conf.toml").toStdString());
@@ -262,6 +463,16 @@ void test_lossless_scaling_is_optional() {
         mako::ui::Backend backend;
         require(backend.isLosslessScalingMissing() && backend.isValidProfileIndex(),
             "a missing DLL must not block the Qt profile editor");
+        require(backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling") &&
+                backend.getScalingMethod() == QStringLiteral("ls1") && backend.losslessScalingFallback(),
+            "a missing DLL must keep the saved models, since it can return, and show a warning");
+        backend.powerModeSelected(1);
+        require(backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling") &&
+                backend.getScalingMethod() == QStringLiteral("ls1") && backend.losslessScalingFallback(),
+            "a missing DLL replaced a saved model in an edited power profile");
+        backend.frameGenerationModelUpdated(QStringLiteral("mako-fg"));
+        backend.powerModeSelected(0);
+        backend.frameGenerationModelUpdated(QStringLiteral("mako-fg"));
         backend.frameGenerationProvisionedUpdated(false);
         backend.scalingEnabledUpdated(true);
         backend.scalingMethodUpdated(QStringLiteral("mako"));
@@ -276,19 +487,34 @@ void test_lossless_scaling_is_optional() {
         input.close();
         backend.refreshLosslessScaling();
         require(!backend.isLosslessScalingMissing(), "DLL installation was not detected");
+        require(!backend.losslessScalingFallback(), "a restored DLL did not clear the missing-DLL warning");
+        backend.frameGenerationModelUpdated(QStringLiteral("lossless-scaling"));
+        require(backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling"),
+            "an available Lossless Scaling selection must remain valid");
         backend.dllUpdated(dll + QStringLiteral(".missing"));
         require(backend.isLosslessScalingMissing(), "a missing saved DLL path was not authoritative");
+        require(backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling") && backend.losslessScalingFallback(),
+            "a missing DLL replaced the saved model or hid the warning, and it may only be an unmounted SD card");
         backend.dllUpdated(dll);
         require(!backend.isLosslessScalingMissing(), "DLL path edit did not refresh availability");
+        require(backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling") && !backend.losslessScalingFallback(),
+            "a returned DLL did not leave the saved model in place and clear the warning");
         require(input.remove() && QDir().mkdir(dll), "cannot create non-file DLL fixture");
         backend.refreshLosslessScaling();
         require(backend.isLosslessScalingMissing(), "a directory was accepted as a DLL");
+        backend.frameGenerationModelUpdated(QStringLiteral("mako-fg"));
     }
     const auto saved = ls::ConfigFile(directory.filePath("conf.toml").toStdString()).profiles().front();
     require(saved.scaling_enabled && saved.scaling_method == ls::ScalingMethod::Mako && !saved.frame_generation_provisioned,
         "model-free profile settings did not persist without Lossless Scaling");
+    require(saved.frame_generation_model == ls::FrameGenerationModel::MakoFg &&
+            saved.power_profiles[0].frame_generation_model == ls::FrameGenerationModel::MakoFg &&
+            saved.power_profiles[1].frame_generation_model == ls::FrameGenerationModel::LosslessScaling,
+        "a model edit did not persist exactly the edited power profile");
     {
         mako::ui::Backend reopened;
+        require(!reopened.losslessScalingFallback(),
+            "a profile already using MAKO must not get a new fallback warning");
         require(reopened.getEnableVkBasalt() && reopened.getVkBasaltShader() == QStringLiteral("vibrance"),
             "shader settings did not persist without Lossless Scaling");
     }
@@ -314,6 +540,12 @@ void test_power_profile_editor() {
     qputenv("MAKO_CONFIG", path.toUtf8());
     qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launch.toml").toUtf8());
     ls::ConfigFile fixture;
+    const auto availableDll = directory.filePath("available.dll");
+    QFile dllFixture(availableDll);
+    require(dllFixture.open(QIODevice::WriteOnly) && dllFixture.write("synthetic DLL availability fixture") > 0,
+        "cannot create the available-model fixture");
+    dllFixture.close();
+    fixture.global().dll = availableDll.toStdString();
     ls::GameConf game;
     game.name = "game";
     game.target_fps = 90;
@@ -329,6 +561,10 @@ void test_power_profile_editor() {
             "Refresh targeting must be off for an existing profile");
         backend.adaptiveTargetRefreshRateUpdated(true);
         require(backend.getTargetFPS() == 90, "Handheld did not clone shared settings");
+        require(backend.getFrameGenerationModel() == QStringLiteral("mako-fg"), "Qt profiles default to MAKO FG");
+        backend.frameGenerationModelUpdated(QStringLiteral("lossless-scaling"));
+        backend.frameGenerationModelUpdated(QStringLiteral("unknown"));
+        require(backend.getFrameGenerationModel() == QStringLiteral("lossless-scaling"), "Qt accepts only supported model choices");
         backend.targetFPSUpdated(60);
         backend.baseFPSCapUpdated(30);
         backend.gpuHeadroomPercentUpdated(15);
@@ -342,6 +578,7 @@ void test_power_profile_editor() {
         backend.powerModeSelected(2);
         require(!backend.getAdaptiveTargetRefreshRate(),
             "Handheld refresh targeting changed Docked settings");
+        require(backend.getFrameGenerationModel() == QStringLiteral("mako-fg"), "Model choice leaked to another power profile");
         require(backend.getTargetFPS() == 90, "Handheld edits changed Docked settings");
         require(backend.getGpuHeadroomPercent() == 0 &&
                 backend.getBaseFPSCap() == ls::GameConfDefaults::baseFpsCap &&
@@ -362,6 +599,10 @@ void test_power_profile_editor() {
     }
     const ls::ConfigFile saved(path.toStdString());
     const auto& base = saved.profiles().front();
+    require(base.power_profiles[0].frame_generation_model == ls::FrameGenerationModel::LosslessScaling &&
+            base.power_profiles[1].frame_generation_model == ls::FrameGenerationModel::MakoFg &&
+            base.frame_generation_model == ls::FrameGenerationModel::MakoFg,
+        "Qt did not persist independent model choices");
     require(base.name == "renamed" && base.active_in.size() == 2 &&
             base.power_profiles[0].target_fps == 60 &&
             base.power_profiles[0].gpu_headroom_percent == 15 &&
@@ -407,6 +648,7 @@ void test_multiplier_limits() {
     require_property("minimum_adaptive_max_multiplier", "uint", false, true);
     require_property("maximum_adaptive_max_multiplier", "uint", false, true);
     require_property("frame_generation_provisioned", "bool", true, false);
+    require_property("frame_generation_model", "QString", true, false);
     require_property("frame_generation_enabled", "bool", true, false);
     require_property("gamescope_vrr_mode", "QString", true, false);
     require_property("frame_generation_factor_index", "uint", true, false);
@@ -551,9 +793,9 @@ void test_feature_group_order_and_ownership() {
         frame_generation_group_start,
         group_start - frame_generation_group_start
     );
-    require(frame_generation_group.count(QStringLiteral("GroupEntry {")) == 14 &&
+    require(frame_generation_group.count(QStringLiteral("GroupEntry {")) == 15 &&
             frame_generation_group.count(QStringLiteral(
-                "visible: backend.frame_generation_provisioned")) == 13,
+                "visible: backend.frame_generation_provisioned")) == 14,
         "Frame Generation must retain its provisioning switch while keeping live controls visible at 0x");
     require(frame_generation_group.contains(QStringLiteral(
                 "title: t.gamescopeVrrMode")),
@@ -584,11 +826,27 @@ void test_feature_group_order_and_ownership() {
     require(!frame_generation_group.contains(QStringLiteral(
                 "enabled: backend.frame_generation_enabled")),
         "A dormant live Frame Generation setting cannot be prepared while the factor is 0x");
-    require(frame_generation_group.contains(
-                QStringLiteral("title: t.performanceMode")) &&
-            frame_generation_group.contains(
-                QStringLiteral("checked: backend.performance_mode")),
-        "Lighter FG Model does not belong to Frame Generation");
+    require(!qml.contains(QStringLiteral("title: t.performanceMode")),
+        "Lighter FG Model must be an LSFG entry in the model picker, not a separate toggle");
+    const qsizetype model_picker_entry = frame_generation_group.indexOf(
+        QStringLiteral("title: t.fgModel")
+    );
+    const qsizetype adaptive_entry = frame_generation_group.indexOf(
+        QStringLiteral("title: t.adaptiveFrameGen")
+    );
+    const QString model_picker = frame_generation_group.mid(
+        model_picker_entry, adaptive_entry - model_picker_entry
+    );
+    require(model_picker_entry >= 0 && adaptive_entry > model_picker_entry &&
+            model_picker.contains(QStringLiteral(
+                "[\"mako-fg\", \"lsfg-quality\", \"lsfg-performance\"]")) &&
+            model_picker.contains(QStringLiteral(
+                "backend.ultra_performance\n                                ? [\"mako-fg\", \"lsfg-performance\"]")) &&
+            model_picker.contains(QStringLiteral("t.fgModelLsfgQuality")) &&
+            model_picker.contains(QStringLiteral("t.fgModelLsfgPerformance")) &&
+            model_picker.contains(QStringLiteral(
+                "backend.performance_mode = choice === \"lsfg-performance\"")),
+        "The model picker must offer MAKO FG, LSFG Quality and LSFG Performance, hiding Quality under Ultra Performance");
     const qsizetype fixed_multiplier_entry = frame_generation_group.indexOf(
         QStringLiteral("title: t.multiplier")
     );
@@ -598,28 +856,10 @@ void test_feature_group_order_and_ownership() {
     const qsizetype smooth_cadence_entry = frame_generation_group.indexOf(
         QStringLiteral("title: t.smoothCadence")
     );
-    const qsizetype lighter_model_entry = frame_generation_group.indexOf(
-        QStringLiteral("title: t.performanceMode")
-    );
     require(adaptive_multiplier_entry >= 0 &&
             adaptive_multiplier_entry < fixed_multiplier_entry &&
-            fixed_multiplier_entry < smooth_cadence_entry &&
-            smooth_cadence_entry < lighter_model_entry,
-        "Frame Generation must order its conditional multipliers, Smooth Cadence, then Lighter FG Model");
-
-    qsizetype performance_group_end = qml.indexOf(
-        QStringLiteral("\n                Group {"),
-        performance_group_start + 1
-    );
-    if (performance_group_end < 0)
-        performance_group_end = qml.size();
-    const QString performance_group = qml.mid(
-        performance_group_start,
-        performance_group_end - performance_group_start
-    );
-    require(!performance_group.contains(
-                QStringLiteral("title: t.performanceMode")),
-        "Lighter FG Model remains duplicated under Performance Settings");
+            fixed_multiplier_entry < smooth_cadence_entry,
+        "Frame Generation must order its conditional multipliers before Smooth Cadence");
 
     qsizetype group_end = qml.indexOf(
         QStringLiteral("\n                Group {"), group_start + 1
@@ -651,8 +891,8 @@ void test_feature_group_order_and_ownership() {
             "enabled: backend.scaling_enabled && !backend.ultra_performance")),
         "Ultra Performance must visibly lock the Renderer scaling method");
     require(scaling_group.contains(QStringLiteral(
-            "currentIndex: backend.ultra_performance ? 3")),
-        "Ultra Performance must visibly select LS1 Performance");
+            "return backend.ultra_performance ? 1")),
+        "Ultra Performance must visibly select MAKO Scaler");
     require(!scaling_group.contains(QStringLiteral("backend.adaptive")),
         "Scaling group is coupled to Adaptive");
     require(!scaling_group.contains(
@@ -682,6 +922,11 @@ void test_feature_group_order_and_ownership() {
             compatibility_group.contains(QStringLiteral(
                 "onToggled: backend.swapchain_image_count_compatibility = checked")),
         "Compatibility Settings does not expose the restart-bound swapchain image policy");
+    require(compatibility_group.contains(QStringLiteral(
+                "checked: backend.mailbox_presentation_compatibility")) &&
+            compatibility_group.contains(QStringLiteral(
+                "onToggled: backend.mailbox_presentation_compatibility = checked")),
+        "Compatibility Settings does not expose the restart-bound Mailbox presentation policy");
 }
 
 void test_shader_controls() {
@@ -730,7 +975,7 @@ void test_compact_restart_markers() {
     QFile ui_file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(ui_file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString ui_qml = QString::fromUtf8(ui_file.readAll());
-    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 13,
+    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 16,
         "Every restart-bound Renderer control must opt into the compact marker");
 
     QFile entry_file(QString::fromUtf8(MAKO_UI_GROUP_ENTRY_QML_FILE));
@@ -1614,6 +1859,7 @@ int main(int argc, char* argv[]) {
         test_mangohud_profile_and_availability();
         test_scaling_properties();
         test_lossless_scaling_is_optional();
+        test_lossless_model_inspection();
         test_power_profile_editor();
         test_multiplier_limits();
         test_fractional_adaptive_preset();

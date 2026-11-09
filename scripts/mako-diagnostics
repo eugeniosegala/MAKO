@@ -215,10 +215,21 @@ renderer_prefix='(MAKO Renderer:|mako:)'
 # Steam console-linux.txt timestamps every stderr line, including exception
 # continuations and Wayland errors. Match only that known envelope.
 steam_timestamp_prefix='[[][0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9][]][[:space:]]+'
+# Loaders without the [Vulkan Loader] prefix, including copies bundled in
+# AppImages, start VK_LOADER_DEBUG lines with their message types, such as
+# "LAYER:", "INFO | LAYER:" or "ERROR:", padded to align the message. A game's
+# own "ERROR: ..." line has neither a type list nor that padding.
+loader_message_type='(INFO|WARNING|ERROR|DEBUG|PERF|DRIVER|LAYER|VALIDATION|IMPLEMENTATION)'
+bare_loader_record="^($steam_timestamp_prefix)?$loader_message_type(( [|] $loader_message_type)+:|:[[:space:]][[:space:]]+)"
+bare_loader_problem="^($steam_timestamp_prefix)?(ERROR|WARNING)(( [|] $loader_message_type)+:|:[[:space:]][[:space:]]+)"
 add_pattern "$renderer_prefix render layer active; identity=VK_LAYER_MAKO_render; build="
 # A presentation or initialization failure explains missing later telemetry in
 # any preset. Its adjacent exception details are folded into the same record.
 add_pattern "$renderer_prefix [^:]*failed:"
+# Optional model fallback explains the applied model in every focused preset.
+add_pattern "$renderer_prefix fg-model operation=fallback"
+# A lost or missing frame generation program explains why generation stopped.
+add_pattern "$renderer_prefix (temporarily bypassing frame generation|frame-generation context initialization failed|frame generation restart|mako-fg operation=host-)"
 # libwayland reports compositor protocol errors without a Renderer prefix.
 # Keep its exact error shape, including older @ object IDs and destroyed
 # proxies: an EPIPE bridge failure can otherwise hide the server's cause.
@@ -234,6 +245,9 @@ add_pattern "$renderer_prefix present diagnostics: operation=(launch-environment
 add_pattern "$renderer_prefix Gamescope presentation feedback"
 add_pattern "$renderer_prefix presentation timing (initialized|fallback);"
 add_pattern "$renderer_prefix present diagnostics: operation=gamescope-presentation-feedback"
+# An offscreen window and Wine's switch state explain why Frame Generation
+# stayed off, or needs a restart, in every report.
+add_pattern "$renderer_prefix (offscreen X11 presentation window|Wine compatibility fix):"
 # Wrapper session admission failures are deliberately log-only. Retain this
 # line in every focused report so a Desktop-session fallback remains visible
 # without reproducing Gamescope WSI's modal error path.
@@ -249,7 +263,7 @@ live_recreation_record="$renderer_prefix present diagnostics: operation=(generat
 add_pattern "$live_recreation_record"
 # Periodic health and collection failures are useful for every failure mode,
 # including memory/thermal degradation outside frame-generation presets.
-add_pattern "$renderer_prefix present diagnostics: operation=(runtime-health|present-phase-summary|gpu-headroom|adaptive-efficiency-probe-cancelled)"
+add_pattern "$renderer_prefix present diagnostics: operation=(runtime-health|present-phase-summary|gpu-headroom|source-interval-spacing|adaptive-efficiency-probe-cancelled)"
 
 for preset in "${presets[@]}"; do
   case "$preset" in
@@ -279,6 +293,7 @@ for preset in "${presets[@]}"; do
       ;;
     adaptive)
       add_pattern "$renderer_prefix present diagnostics: operation=adaptive-"
+      add_pattern "$renderer_prefix present diagnostics: operation=dynamic-cadence-(probe-start|probe-rejected|probe-skipped|recovered)"
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)"
       ;;
     recovery)
@@ -298,6 +313,8 @@ for preset in "${presets[@]}"; do
       add_pattern "$renderer_prefix present diagnostics: operation=(gamescope-bridge-timing|application-present-mode|application-present-wait)"
       add_pattern "$renderer_prefix present diagnostics: operation=(gamescope-focus|lower-present-stall-|adaptive-recovery-(recreation-|in-place-))"
       add_pattern "$renderer_prefix (backend-memory|renderer-memory) operation="
+      # Native-only Dynamic Cadence Recovery probes can explain periodic hitches.
+      add_pattern "$renderer_prefix present diagnostics: operation=dynamic-cadence-(probe-start|probe-rejected|probe-skipped|recovered)"
       add_pattern "$renderer_prefix present diagnostics: operation=(adaptive-wsi-headroom-limit|fixed-plan|fixed-cadence-collapse-(probe-start|probe-rejected|probe-recovered|recovery-unstable|recovery-verified)|runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-transition-recreation-requested|runtime-state-applied|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|ordered-acquire-policy|ordered-acquire-classification-split|ordered-acquire-budget-exhausted|ordered-acquire-guard|ordered-acquire-guard-bypass|ordered-acquire-native-saturation|ordered-acquire-quarantine|ordered-acquire-retry|ordered-acquire-recovered|ordered-acquire-stabilized|pipeline-busy-recovered|pipeline-busy-bypass|gamescope-refresh-rate-applied|present-|schedule-|submit-|acquire-|wait-|copy-|render-)"
       ;;
     lifecycle)
@@ -307,6 +324,7 @@ for preset in "${presets[@]}"; do
       ;;
     startup)
       add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      add_pattern "$bare_loader_record"
       add_pattern "$renderer_prefix present diagnostics: operation=swapchain-context-create"
       add_pattern "$renderer_prefix Gamescope application HDR feedback"
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied)"
@@ -314,13 +332,16 @@ for preset in "${presets[@]}"; do
       ;;
     layers)
       add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      add_pattern "$bare_loader_record"
       ;;
     errors)
       add_pattern "$renderer_prefix.*(failed|failure|error|timeout|fallback|passthrough|disabled|VK_ERROR|VK_TIMEOUT|VK_NOT_READY|device lost)"
       add_pattern '(Vulkan Loader|Gamescope WSI).*(ERROR|Error|error|WARNING|Warning|warning)'
+      add_pattern "$bare_loader_problem"
       ;;
     all|everything)
       add_pattern '(MAKO Renderer:|mako:|VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      add_pattern "$bare_loader_record"
       ;;
     *)
       echo "Unknown preset: $preset" >&2
@@ -347,7 +368,10 @@ normalize_renderer_errors() {
         next
       }
       if (header != "") { print header; header = "" }
-      if ($0 ~ renderer " [^:]*failed:[[:space:]]*$") {
+      if ($0 ~ renderer " [^:]*failed:[[:space:]]*$" ||
+          $0 ~ renderer " fg-model operation=fallback " ||
+          $0 ~ renderer " temporarily bypassing frame generation " ||
+          $0 ~ renderer " frame-generation context initialization failed;") {
         header = $0
         details = 0
       } else print
@@ -452,11 +476,23 @@ collect_context() {
   '
 }
 
+# PROTON_LOG makes Proton write a game's output to its own log file, leaving
+# only the launcher's record here. Name that file instead of an empty trace.
+proton_log_file() {
+  { grep -aE "$renderer_prefix present diagnostics: operation=launch-environment .* proton_log=1 proton_log_file=" "$1" || true; } |
+    tail -n 1 | sed -n 's/.* proton_log=1 proton_log_file=//p'
+}
+
 for index in "${!log_paths[@]}"; do
   selected_log_path="${log_paths[$index]}"
   selected_session="${session_labels[$index]}"
   echo "MAKO Renderer diagnostics source: $selected_log_path" >&2
   echo "session: $selected_session; retained sessions: $retained_session_count; presets: ${presets[*]}; last matching lines: $line_count" >&2
+  redirected_log="$(proton_log_file "$selected_log_path")"
+  if [[ -n "$redirected_log" ]] &&
+      ! grep -aqE "$renderer_prefix render layer active;" "$selected_log_path"; then
+    echo "proton log: PROTON_LOG sent this game's output, including MAKO Renderer records, to $redirected_log; attach that file or remove PROTON_LOG from Launch Options and collect again" >&2
+  fi
   collect_context "$selected_log_path"
   echo "MAKO Renderer diagnostics recent trace:" >&2
   { normalize_renderer_errors "$selected_log_path" | grep -aE "$pattern" || true; } | tail -n "$line_count"

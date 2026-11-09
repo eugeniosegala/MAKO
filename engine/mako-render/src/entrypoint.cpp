@@ -12,6 +12,7 @@
 #include "swapchain/swapchain.hpp"
 #include "swapchain/create_policy.hpp"
 #include "swapchain/retirement.hpp"
+#include "x11_presentation_target.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -98,6 +99,8 @@ namespace {
         std::unordered_map<VkSurfaceKHR, SpatialScalingExtents>
             variableSurfaceRollbackExtents;
         std::unordered_map<VkSurfaceKHR, SpatialSurfaceOrigin> surfaceOrigins;
+        std::unordered_map<VkSurfaceKHR, X11PresentationTarget>
+            x11PresentationTargets;
         std::unordered_set<VkSurfaceKHR> unprovenSplitSurfacesLogged;
         std::unordered_map<
             VkSurfaceKHR, ScalingAdmissionRetrySurfaceBudget
@@ -116,7 +119,42 @@ namespace {
         std::mutex retiredSwapchainsMutex;
         std::unordered_map<VkSwapchainKHR, RetiredSwapchain>
             retiredSwapchains;
+        // Lower commands called after vkCreateInstance returns, resolved
+        // while each instance was being created.
+        std::unordered_map<VkInstance,
+            std::unordered_map<std::string_view, PFN_vkVoidFunction>>
+            lowerInstanceCommands;
     }* instance_info; // NOLINT (global variable)
+
+    // Loaders before Vulkan-Loader's terminator fix, such as 1.3.239 in
+    // Steam's runtime, answer a lookup made after vkCreateInstance returns
+    // from the instance's top-level dispatch table: the lower chain hands back
+    // this layer's own hook, which then calls itself until the stack
+    // overflows. These are the instance commands this layer looks up late.
+    constexpr std::array lateLowerInstanceCommands{
+        "vkCreateWaylandSurfaceKHR",
+        "vkCreateXcbSurfaceKHR",
+        "vkCreateXlibSurfaceKHR",
+        "vkDestroySurfaceKHR",
+        "vkGetPhysicalDeviceSurfaceCapabilities2KHR",
+        "vkGetPhysicalDeviceSurfaceFormats2KHR",
+    };
+
+    // The lower chain's vkGetInstanceProcAddr, serving the commands above
+    // from the entry points resolved at instance creation.
+    PFN_vkVoidFunction VKAPI_CALL lowerInstanceProcAddr(
+            VkInstance instance, const char* name) {
+        if (instance_info && name) {
+            const auto commands =
+                instance_info->lowerInstanceCommands.find(instance);
+            if (commands != instance_info->lowerInstanceCommands.end()) {
+                const auto command = commands->second.find(name);
+                if (command != commands->second.end())
+                    return command->second;
+            }
+        }
+        return layer_info->GetInstanceProcAddr(instance, name);
+    }
 
     enum class FixedSurfaceCapabilityRelayOperation : uint32_t {
         BeginCapability,
@@ -530,13 +568,9 @@ namespace {
                 layer_info->root.scalingEngineProvisioned(),
                 layer_info->root.scalingSurfaceConnectionProvisioned());
             InstanceExtensionQuery extensionQuery;
-            if (retirementRequested) {
-                const auto enumerate = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
-                    layer_info->GetInstanceProcAddr(VK_NULL_HANDLE,
-                        "vkEnumerateInstanceExtensionProperties"));
+            if (retirementRequested)
                 extensionQuery = queryPresentationInstanceExtensions(
-                    enumerate, vk::enumerateLoaderInstanceExtensionProperties);
-            }
+                    vk::enumerateLoaderInstanceExtensionProperties);
             const auto& available = extensionQuery.properties;
             if (needsX11Adapter && !(instance_info && instance_info->scalingSurfaces) &&
                     needsGamescopeScalingSurface(
@@ -638,6 +672,15 @@ namespace {
                     instance_info->scalingSurfaces = std::move(scalingSurfaces);
             }
 
+            std::unordered_map<std::string_view, PFN_vkVoidFunction>
+                lowerCommands;
+            for (const std::string_view name : lateLowerInstanceCommands) {
+                if (const auto command = layer_info->GetInstanceProcAddr(
+                        *instance, name.data()))
+                    lowerCommands.emplace(name, command);
+            }
+            instance_info->lowerInstanceCommands.insert_or_assign(
+                *instance, std::move(lowerCommands));
             instance_info->handles.push_back(*instance);
             lowerInstanceCreated = false;
 
@@ -825,6 +868,7 @@ namespace {
             supportedGamescopeDisplayTiming(physdev, *info);
         bool presentRetirementEnabled = false;
         bool shaderFloat16Enabled = false;
+        bool storageWriteWithoutFormatEnabled = false;
         bool hdrMetadataEnabled = false;
         bool lowerHdrMetadataEnabled = false;
         bool lowerDeviceCreated = false;
@@ -911,6 +955,20 @@ namespace {
                 }
             }
             const vk::ShaderFloat16FeatureRequest precisionFeatures(newInfo, enableScalingFp16);
+            // MAKO Scaler writes an eligible swapchain image directly when its
+            // view can supply the storage format; otherwise it keeps the copy.
+            bool enableScalingDirectOutput = false;
+            if (scalingEngineProvisioned &&
+                    instance_info->funcs.GetPhysicalDeviceFeatures2) {
+                VkPhysicalDeviceFeatures2 supported{
+                    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+                };
+                instance_info->funcs.GetPhysicalDeviceFeatures2(physdev, &supported);
+                enableScalingDirectOutput =
+                    supported.features.shaderStorageImageWriteWithoutFormat == VK_TRUE;
+            }
+            const vk::StorageImageWriteWithoutFormatRequest directOutputFeatures(
+                newInfo, enableScalingDirectOutput);
 #if defined(VK_EXT_present_timing) && defined(VK_KHR_present_id2)
             std::vector<const char*> timingExtensions;
             VkPhysicalDevicePresentId2FeaturesKHR timingIds{
@@ -947,6 +1005,8 @@ namespace {
                     presentRetirementEnabled =
                         swapchainMaintenance1Enabled(*newInfo);
                     shaderFloat16Enabled = vk::shaderFloat16Enabled(newInfo->pNext);
+                    storageWriteWithoutFormatEnabled =
+                        vk::storageImageWriteWithoutFormatEnabled(*newInfo);
                     auto res = instance_info->funcs.CreateDevice(physdev, newInfo, alloc, device);
                     if (res != VK_SUCCESS)
                         throw ls::vulkan_error(res, "vkCreateDevice() failed");
@@ -1020,7 +1080,8 @@ namespace {
                         true, frameGenerationInteropEnabled),
                     *layerQueueFamily,
                     frameGenerationInteropEnabled,
-                    true, setLoaderData, std::nullopt, shaderFloat16Enabled
+                    true, setLoaderData, std::nullopt, shaderFloat16Enabled,
+                    storageWriteWithoutFormatEnabled
                 )
             );
             if (!inserted)
@@ -1138,6 +1199,7 @@ namespace {
         auto it = std::ranges::find(instance_info->handles, instance);
         if (it != instance_info->handles.end())
             instance_info->handles.erase(it);
+        instance_info->lowerInstanceCommands.erase(instance);
 
         const bool lastInstance = instance_info->handles.empty();
 
@@ -1255,6 +1317,8 @@ namespace {
     }
 
     // get instance-level function pointers
+    PFN_vkVoidFunction myvkGetDeviceProcAddr(VkDevice device, const char* name);
+
     PFN_vkVoidFunction myvkGetInstanceProcAddr(VkInstance instance, const char* name) {
         if (!name) return nullptr;
         // A loader may cache the negotiated GPA function across multiple
@@ -1262,6 +1326,13 @@ namespace {
         // teardown destroys Root so its monitor thread is joined before a
         // possible dlclose; recreate that process state on the next GPA query.
         if (!layer_info && !initializeLayerInfo()) return nullptr;
+
+        // A layer above resolves the commands it does not intercept through
+        // the lookups returned here, so they must be this layer's own.
+        if (std::string_view(name) == "vkGetInstanceProcAddr")
+            return reinterpret_cast<PFN_vkVoidFunction>(myvkGetInstanceProcAddr);
+        if (std::string_view(name) == "vkGetDeviceProcAddr")
+            return reinterpret_cast<PFN_vkVoidFunction>(myvkGetDeviceProcAddr);
 
         if (std::string_view(name) ==
                 "vkGetPhysicalDeviceSurfaceCapabilities2KHR" ||
@@ -1271,7 +1342,7 @@ namespace {
                 std::string_view(name) == "vkGetPhysicalDeviceFeatures2KHR" ||
                 isOptionalPresentationCommand(name)) {
             if (!instance || !layer_info->GetInstanceProcAddr ||
-                    !layer_info->GetInstanceProcAddr(instance, name)) {
+                    !lowerInstanceProcAddr(instance, name)) {
                 return nullptr;
             }
         }
@@ -1286,6 +1357,11 @@ namespace {
     // get device-level function pointers
     PFN_vkVoidFunction myvkGetDeviceProcAddr(VkDevice device, const char* name) {
         if (!name) return nullptr;
+        // Steam's Fossilize layer, for example, asks for this lookup and then
+        // resolves every command it does not intercept, swapchain creation
+        // included, through it. The next layer's lookup would skip MAKO.
+        if (std::string_view(name) == "vkGetDeviceProcAddr")
+            return reinterpret_cast<PFN_vkVoidFunction>(myvkGetDeviceProcAddr);
         if (!layer_info || !instance_info) return nullptr;
 
         if (!instance_info->funcs.GetDeviceProcAddr) return nullptr;
@@ -1771,6 +1847,44 @@ namespace {
             ? SpatialSurfaceOrigin::Unknown : origin->second;
     }
 
+    void recordX11PresentationTarget(
+            const VkSurfaceKHR surface, const X11PresentationTarget target) {
+        if (!instance_info || surface == VK_NULL_HANDLE || !target.connection)
+            return;
+        const std::lock_guard lock(instance_info->surfaceScalingMutex);
+        instance_info->x11PresentationTargets.insert_or_assign(surface, target);
+    }
+
+    struct OffscreenX11Window {
+        X11WindowNesting nesting;
+        std::optional<bool> drawsMainWindow;
+    };
+
+    /// Wine can move a surface's window offscreen after creating the surface,
+    /// so read its nesting when each swapchain is created.
+    [[nodiscard]] std::optional<OffscreenX11Window> offscreenX11Window(
+            const VkSurfaceKHR surface) {
+        if (!frameGenerationLayer || !instance_info)
+            return std::nullopt;
+        X11PresentationTarget target;
+        {
+            const std::lock_guard lock(instance_info->surfaceScalingMutex);
+            const auto found = instance_info->x11PresentationTargets.find(surface);
+            if (found == instance_info->x11PresentationTargets.end())
+                return std::nullopt;
+            target = found->second;
+        }
+        const auto nesting = queryX11WindowNesting(target);
+        if (!nesting || !x11WindowPresentsOffscreen(nesting->width,
+                nesting->height, nesting->topLevelWidth, nesting->topLevelHeight))
+            return std::nullopt;
+        return OffscreenX11Window{
+            .nesting = *nesting,
+            .drawsMainWindow = x11ProcessTopLevelHasSize(
+                target, nesting->width, nesting->height),
+        };
+    }
+
     [[nodiscard]] bool spatialSurfaceScalingSupported(
             const VkSurfaceKHR surface) {
         return spatialSplitSurfaceScalingSupported(
@@ -2029,7 +2143,7 @@ namespace {
         if (!layer_info || !instance_info || !surfaceInfo || !count)
             return VK_ERROR_INITIALIZATION_FAILED;
         const auto lower = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceFormats2KHR>(
-            layer_info->GetInstanceProcAddr(instance_info->handles.front(),
+            lowerInstanceProcAddr(instance_info->handles.front(),
                 "vkGetPhysicalDeviceSurfaceFormats2KHR"));
         if (!lower)
             return VK_ERROR_EXTENSION_NOT_PRESENT;
@@ -2070,7 +2184,7 @@ namespace {
             return VK_ERROR_INITIALIZATION_FAILED;
         const auto lower = reinterpret_cast<
             PFN_vkGetPhysicalDeviceSurfaceCapabilities2KHR>(
-                layer_info->GetInstanceProcAddr(
+                lowerInstanceProcAddr(
                     instance_info->handles.front(),
                     "vkGetPhysicalDeviceSurfaceCapabilities2KHR"
                 )
@@ -2126,12 +2240,13 @@ namespace {
                 instance_info->variableSurfaceScalingExtents.erase(surface);
                 instance_info->variableSurfaceRollbackExtents.erase(surface);
                 instance_info->surfaceOrigins.erase(surface);
+                instance_info->x11PresentationTargets.erase(surface);
                 instance_info->unprovenSplitSurfacesLogged.erase(surface);
                 instance_info->scalingAdmissionRetryStates.erase(surface);
             }
         }
         const auto lower = reinterpret_cast<PFN_vkDestroySurfaceKHR>(
-            layer_info->GetInstanceProcAddr(instance, "vkDestroySurfaceKHR")
+            lowerInstanceProcAddr(instance, "vkDestroySurfaceKHR")
         );
         if (lower)
             lower(instance, surface, alloc);
@@ -2161,7 +2276,7 @@ namespace {
             const char* entrypoint,
             const SpatialSurfaceOrigin origin) {
         const auto lower = reinterpret_cast<CreateSurface>(
-            layer_info->GetInstanceProcAddr(instance, entrypoint)
+            lowerInstanceProcAddr(instance, entrypoint)
         );
         if (!lower)
             return VK_ERROR_EXTENSION_NOT_PRESENT;
@@ -2190,7 +2305,7 @@ namespace {
         if (instance_info && instance_info->scalingSurfaces && createInfo) {
             try {
                 const auto result = instance_info->scalingSurfaces->create(
-                    instance, layer_info->GetInstanceProcAddr, *createInfo, alloc, surface);
+                    instance, lowerInstanceProcAddr, *createInfo, alloc, surface);
                 if (result) {
                     if (*result == VK_SUCCESS)
                         recordSurfaceOrigin(*surface, SpatialSurfaceOrigin::Wayland);
@@ -2200,10 +2315,13 @@ namespace {
                 return VK_ERROR_OUT_OF_HOST_MEMORY;
             }
         }
-        return createSurfaceAndRecord<
+        const auto result = createSurfaceAndRecord<
             CreateXcbSurface
         >(instance, createInfo, alloc, surface, "vkCreateXcbSurfaceKHR",
             SpatialSurfaceOrigin::Xcb);
+        if (result == VK_SUCCESS && surface && createInfo)
+            recordX11PresentationTarget(*surface, x11PresentationTarget(*createInfo));
+        return result;
     }
 
     VkResult myvkCreateXlibSurfaceKHR(
@@ -2214,7 +2332,7 @@ namespace {
         if (instance_info && instance_info->scalingSurfaces && createInfo) {
             try {
                 const auto result = instance_info->scalingSurfaces->create(
-                    instance, layer_info->GetInstanceProcAddr, *createInfo, alloc, surface);
+                    instance, lowerInstanceProcAddr, *createInfo, alloc, surface);
                 if (result) {
                     if (*result == VK_SUCCESS)
                         recordSurfaceOrigin(*surface, SpatialSurfaceOrigin::Wayland);
@@ -2224,10 +2342,13 @@ namespace {
                 return VK_ERROR_OUT_OF_HOST_MEMORY;
             }
         }
-        return createSurfaceAndRecord<
+        const auto result = createSurfaceAndRecord<
             CreateXlibSurface
         >(instance, createInfo, alloc, surface, "vkCreateXlibSurfaceKHR",
             SpatialSurfaceOrigin::Xlib);
+        if (result == VK_SUCCESS && surface && createInfo)
+            recordX11PresentationTarget(*surface, x11PresentationTarget(*createInfo));
+        return result;
     }
 
     VkResult myvkCreateSwapchainKHR(
@@ -2427,6 +2548,22 @@ namespace {
             }
             bool spatialScalingActivationSupported =
                 spatialSurfaceScalingSupported(info->surface);
+            const auto offscreenWindow = offscreenX11Window(info->surface);
+            std::optional<OffscreenX11Surface> offscreenSurface;
+            if (offscreenWindow) {
+                const auto& nesting = offscreenWindow->nesting;
+                std::cerr << "MAKO Renderer: offscreen X11 presentation window: "
+                             "window=" << nesting.width << 'x' << nesting.height
+                          << "; top_level=" << nesting.topLevelWidth << 'x'
+                          << nesting.topLevelHeight << "; main_window="
+                          << (offscreenWindow->drawsMainWindow
+                              ? (*offscreenWindow->drawsMainWindow ? "1" : "0")
+                              : "unknown")
+                          << '\n';
+                offscreenSurface = OffscreenX11Surface{
+                    .drawsMainWindow = offscreenWindow->drawsMainWindow,
+                };
+            }
             auto modification =
                 layer_info->root.modifySwapchainCreateInfo(
                     it->second, newInfo, previousVariableExtents,
@@ -2435,6 +2572,7 @@ namespace {
                     spatialScalingActivationSupported,
                     instance_info->scalingSurfaces &&
                         instance_info->scalingSurfaces->owns(info->surface),
+                    offscreenSurface,
                     [&](const FixedSurfaceScalingContract& contract) {
 #if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
                         if (spatialScalingCapabilityOwnedByLayer() &&
@@ -2463,7 +2601,7 @@ namespace {
                                 !(instance_info->scalingSurfaces &&
                                   instance_info->scalingSurfaces->owns(info->surface))) {
                             const auto query = reinterpret_cast<PFN_vkGetPhysicalDeviceSurfaceCapabilities2KHR>(
-                                layer_info->GetInstanceProcAddr(it->second.inst(),
+                                lowerInstanceProcAddr(it->second.inst(),
                                     "vkGetPhysicalDeviceSurfaceCapabilities2KHR"));
                             VkSurfaceCapabilitiesPresentId2KHR ids{
                                 .sType = VK_STRUCTURE_TYPE_SURFACE_CAPABILITIES_PRESENT_ID_2_KHR,
@@ -2732,11 +2870,11 @@ namespace {
                 }
             };
 
-            // The internal HDR resize must not shrink CAS/DLS from one source
+            // The internal display resize must not shrink CAS/DLS from one source
             // pixel to one display pixel. Hand off admitted source geometry
             // before vkBasalt exposes images and builds its immutable graph.
-            if (hdrBridgeSharpenSourceRequired(
-                    modification.hdrDisplayResize,
+            if (bridgeDisplayResizeSharpenSourceRequired(
+                    modification.bridgeDisplayResize,
                     modification.spatialScalingActive,
                     modification.applicationExtent,
                     modification.presentationExtent)) {
@@ -2820,8 +2958,10 @@ namespace {
                 .gamescopeDisplayTiming =
                     instance_info->gamescopeTimingDevices.contains(device),
                 .ownedPresentTiming = ownedPresentTiming,
+                .gamescopeSession = layer_info->root.gamescopeSessionDetected(),
                 .format = newInfo.imageFormat,
                 .colorSpace = newInfo.imageColorSpace,
+                .imageUsage = newInfo.imageUsage,
                 .requestedMinImageCount = info->minImageCount,
                 .provisionedMinImageCount = newInfo.minImageCount,
                 .swapchainImageCountCompatibility =
@@ -2837,9 +2977,12 @@ namespace {
                     .value_or(newInfo.presentMode),
                 .privateOrderedTransport =
                     modification.privateOrderedTransport,
+                .frameGenerationSurfaceUnavailable =
+                    modification.frameGenerationSurfaceUnavailable,
+                .wineChildWindowFix = modification.wineChildWindowFix,
                 .spatialScalingActive =
                     modification.spatialScalingActive,
-                .hdrDisplayResize = modification.hdrDisplayResize,
+                .bridgeDisplayResize = modification.bridgeDisplayResize,
                 .variableSurface = modification.variableSurface,
                 .spatialScalingMemoryConstrained =
                     modification.spatialScalingMemoryConstrained,
@@ -2926,6 +3069,49 @@ namespace {
         }
     }
 
+    // Time the application spends inside MAKO's acquire and present calls
+    // for one swapchain on this thread. Its share of each source interval
+    // separates a self-capped source from one held by generated FIFO work.
+    // A different thread or swapchain leaves that share unknown.
+    struct ApplicationLayerTime {
+        VkSwapchainKHR swapchain{VK_NULL_HANDLE};
+        std::optional<std::chrono::steady_clock::time_point> presentEnteredAt;
+        std::chrono::steady_clock::duration presentDuration{};
+        std::chrono::steady_clock::duration acquireDuration{};
+        uint32_t acquires{0};
+    };
+    thread_local ApplicationLayerTime applicationLayerTime;
+
+    // Returns the previous source interval's share and starts the next one.
+    std::optional<double> beginApplicationLayerPresent(
+            const VkSwapchainKHR swapchain,
+            const std::chrono::steady_clock::time_point entered) {
+        auto& time = applicationLayerTime;
+        std::optional<double> share;
+        if (time.swapchain == swapchain && time.presentEnteredAt &&
+                time.acquires > 0 && entered > *time.presentEnteredAt) {
+            share = std::chrono::duration<double>(
+                    time.presentDuration + time.acquireDuration).count() /
+                std::chrono::duration<double>(
+                    entered - *time.presentEnteredAt).count();
+        }
+        time = {.swapchain = swapchain, .presentEnteredAt = entered};
+        return share;
+    }
+
+    template<typename Acquire>
+    VkResult timeApplicationAcquire(const VkSwapchainKHR swapchain,
+            Acquire&& acquire) {
+        const auto started = std::chrono::steady_clock::now();
+        const VkResult result = acquire();
+        auto& time = applicationLayerTime;
+        if (time.swapchain != swapchain)
+            time = {.swapchain = swapchain};
+        time.acquireDuration += std::chrono::steady_clock::now() - started;
+        time.acquires++;
+        return result;
+    }
+
     VkResult myvkQueuePresentKHR(VkQueue queue, const VkPresentInfoKHR* info) {
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wunknown-warning-option"
@@ -2933,6 +3119,23 @@ namespace {
         present_diagnostics::ApplicationPresentScope timingScope(
             queue, info->swapchainCount == 1 ? info->pSwapchains[0] : VK_NULL_HANDLE
         );
+        const auto presentEntered = std::chrono::steady_clock::now();
+        const std::optional<double> applicationLayerShare =
+            info->swapchainCount == 1
+                ? beginApplicationLayerPresent(info->pSwapchains[0], presentEntered)
+                : std::nullopt;
+        struct ApplicationLayerPresentScope {
+            VkSwapchainKHR swapchain;
+            std::chrono::steady_clock::time_point entered;
+            ~ApplicationLayerPresentScope() {
+                if (applicationLayerTime.swapchain == this->swapchain)
+                    applicationLayerTime.presentDuration =
+                        std::chrono::steady_clock::now() - this->entered;
+            }
+        } applicationLayerPresentScope{
+            info->swapchainCount == 1 ? info->pSwapchains[0] : VK_NULL_HANDLE,
+            presentEntered,
+        };
         VkResult result = VK_SUCCESS;
         bool swapchainOutOfDate = false;
 
@@ -3083,6 +3286,7 @@ namespace {
 
                 auto& context = layer_info->root.getSwapchainContext(swapchain, it->second);
                 presentingContextId = context.diagnosticsId();
+                context.observeApplicationLayerShare(applicationLayerShare);
                 result = context.present(it->second,
                     queue, swapchain,
                     const_cast<void*>(info->pNext),
@@ -3252,8 +3456,10 @@ namespace {
         return present_diagnostics::observeApplicationAcquire(
             device, swapchain, present_diagnostics::ApplicationFrameApi::AcquireKhr,
             timeout, [&] {
-                return mapping->second.get().df().AcquireNextImageKHR(
-                    device, swapchain, timeout, semaphore, fence, imageIndex);
+                return timeApplicationAcquire(swapchain, [&] {
+                    return mapping->second.get().df().AcquireNextImageKHR(
+                        device, swapchain, timeout, semaphore, fence, imageIndex);
+                });
             });
     }
 
@@ -3272,7 +3478,11 @@ namespace {
             return extentResult;
         return present_diagnostics::observeApplicationAcquire(
             device, info->swapchain, present_diagnostics::ApplicationFrameApi::AcquireKhr2,
-            info->timeout, [&] { return lower(device, info, imageIndex); });
+            info->timeout, [&] {
+                return timeApplicationAcquire(info->swapchain, [&] {
+                    return lower(device, info, imageIndex);
+                });
+            });
     }
 
     void myvkDestroySwapchainKHR(

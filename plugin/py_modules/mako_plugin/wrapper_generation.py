@@ -38,6 +38,7 @@ from .constants import (
     MAKO_SPLIT_LAYER_CHAIN_ENV,
     MANGOHUD_CONFIG_FILENAME,
     MANGOHUD_CONFIG_FILE_ENV,
+    MANGOHUD_LAYER_NAME_32,
     MANGOHUD_LAYER_NAME_64,
     PRESENT_ACQUIRE_TIMEOUT_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
@@ -58,6 +59,11 @@ from .constants import (
     VKBASALT_LAYER_ENABLE_ENV,
     VKBASALT_LAYER_NAME_64,
     WAYLAND_DISPLAY_ENV,
+    WINE_CHILD_WINDOW_INEFFECTIVE_SUFFIX,
+    WINE_CHILD_WINDOW_MARKER_SUFFIX,
+    WINE_CHILD_WINDOW_SWITCH_ENV,
+    WINE_COMPATIBILITY_DIRNAME,
+    WINE_COMPATIBILITY_FIX_ENV,
 )
 from .profile_storage import (
     ProfileMetadata,
@@ -70,7 +76,7 @@ from .profile_storage import (
 from .process_detection import is_matchable_process_name
 
 
-WRAPPER_FORMAT_VERSION = 79
+WRAPPER_FORMAT_VERSION = 83
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -87,6 +93,8 @@ REQUIRED_WRAPPER_EXPORTS = (
     *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
     f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
     f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
+    # Older wrappers lack the Wine compatibility marker check.
+    f"export {WINE_CHILD_WINDOW_SWITCH_ENV}=1",
     "mako_gamescope_wsi_required=",
     "mako_gamescope_wsi_session=",
     "mako_gamescope_wsi_skip_log=",
@@ -106,6 +114,7 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
     "mako_steam_overlay_layers=",
     "mako_disable_steam_overlay=",
+    "mako_mangohud_real_frames=",
     "mako_steam_overlay_preload_removed=0",
     'mako_steam_overlay_preload_filter_requested="${mako_disable_steam_overlay:-1}"',
     f"export {MAKO_PROFILE_FALLBACK_ENV}=",
@@ -299,7 +308,34 @@ def vkbasalt_profile_environment_lines(
                 steam_app_id,
             )
         )
-    return [f"mako_vkbasalt_config={shlex.quote(config_path)}"]
+    lines = [f"mako_vkbasalt_config={shlex.quote(config_path)}"]
+    if profile_name == DEFAULT_PROFILE_NAME and config_path:
+        # vkBasalt watches its launch-time filename. Give an uncaptured Steam
+        # game its final filename now; capture atomically replaces the Default
+        # alias with the new profile without changing any other game's input.
+        lines.extend([
+            f'mako_vkbasalt_app_id="{steam_app_id_expression()}"',
+            'if [ -z "${MAKO_PROFILE:-}" ] && [[ "$mako_vkbasalt_app_id" =~ ^[0-9]+$ ]]; then',
+            f'    mako_vkbasalt_game_config={shlex.quote(str(profile_config_dir))}/steam-"$mako_vkbasalt_app_id".conf',
+            f'    if mkdir -p -- {shlex.quote(str(profile_config_dir))}; then',
+            '        ln -sT -- "$mako_vkbasalt_config" "$mako_vkbasalt_game_config" 2>/dev/null || true',
+            '        if { [ -L "$mako_vkbasalt_game_config" ] && [ "$(readlink -- "$mako_vkbasalt_game_config")" = "$mako_vkbasalt_config" ]; } ||',
+            '                { [ ! -L "$mako_vkbasalt_game_config" ] && [ -f "$mako_vkbasalt_game_config" ]; }; then',
+            '            mako_vkbasalt_config="$mako_vkbasalt_game_config"',
+            '        fi',
+            '    fi',
+            'fi',
+            'unset mako_vkbasalt_app_id mako_vkbasalt_game_config',
+        ])
+    return lines
+
+
+def steam_app_id_expression() -> str:
+    """Use the same Steam identity for launcher settings and shader filenames."""
+    expression = ""
+    for environment_name in reversed(STEAM_APP_ID_ENV_KEYS):
+        expression = f"${{{environment_name}:-{expression}}}"
+    return expression
 
 
 def unsupported_host_passthrough_lines(
@@ -348,6 +384,27 @@ def host_compatibility_guard_lines(
                 "    ",
             )
         ),
+        "fi",
+    ]
+
+
+def wine_compatibility_lines(context: WrapperGenerationContext) -> list[str]:
+    """Export Wine's direct-drawing switch for a profile MAKO Renderer marked."""
+    marker_directory = shlex.quote(str(context.config_dir / WINE_COMPATIBILITY_DIRNAME))
+    # The Renderer names markers by the profile name's bytes in lowercase hex.
+    # A caller's own value for the switch, including 0, is left untouched.
+    return [
+        'if [ "${mako_renderer_enabled:-0}" = 1 ] && '
+        f'[ "${{{WINE_COMPATIBILITY_FIX_ENV}:-1}}" != 0 ] && '
+        f'[ -n "${{{MAKO_PROFILE_ENV}:-}}" ] && '
+        f'[ -z "${{{WINE_CHILD_WINDOW_SWITCH_ENV}+set}}" ]; then',
+        f'    mako_wine_compatibility_marker={marker_directory}/'
+        f'"$(printf \'%s\' "${MAKO_PROFILE_ENV}" | od -An -v -tx1 | tr -d \' \\n\')"',
+        f'    if [ -e "$mako_wine_compatibility_marker{WINE_CHILD_WINDOW_MARKER_SUFFIX}" ] && '
+        f'[ ! -e "$mako_wine_compatibility_marker{WINE_CHILD_WINDOW_INEFFECTIVE_SUFFIX}" ]; then',
+        f"        export {WINE_CHILD_WINDOW_SWITCH_ENV}=1",
+        "    fi",
+        "    unset mako_wine_compatibility_marker",
         "fi",
     ]
 
@@ -450,6 +507,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"    unset {MAKO_LAYER_ENABLE_ENV}",
         f"    export {MAKO_LAYER_DISABLE_ENV}=1",
         "fi",
+        *wine_compatibility_lines(context),
         f"unset {MAKO_SPLIT_LAYER_CHAIN_ENV}",
         *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
         f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
@@ -467,6 +525,8 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "fi",
         "mako_managed_instance_layers=",
         "mako_managed_external_layer=",
+        "mako_mangohud_instance_layers=",
+        "mako_mangohud_gates=0",
         "mako_steam_overlay_layers=",
         "mako_gamescope_wsi_session=0",
         "mako_gamescope_wsi_skip_log=",
@@ -560,6 +620,14 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_mangohud_layer_dir"',
         f"                if [ -r {mangohud_manifest} ]; then",
         f"                    mako_managed_external_layer={MANGOHUD_LAYER_NAME_64}",
+        f"                    mako_mangohud_instance_layers={MANGOHUD_LAYER_NAME_64}",
+        # Listing the guarded 32-bit identity keeps MangoHud for 32-bit
+        # games once the explicit list replaces the activation gate; the
+        # loader skips it in 64-bit processes by its library_arch.
+        f"                    if [ -r {mangohud_manifest32} ]; then",
+        '                        mako_mangohud_instance_layers="$mako_mangohud_instance_layers:'
+        f'{MANGOHUD_LAYER_NAME_32}"',
+        "                    fi",
         "                fi",
         "            fi",
         "            ;;",
@@ -620,8 +688,33 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"        mako_managed_instance_layers={MAKO_LAYER_NAME}",
         "    fi",
         "fi",
+        # MangoHud's side of the Renderer decides what it counts, so order it
+        # explicitly on every path. Older loaders, such as 1.3.239, never
+        # enable an implicit layer from this list alone, so both activation
+        # gates stay set here. With gates set, the Steam Linux Runtime's
+        # loader uses discovery order instead, so the guarded directories
+        # follow the list.
+        f'if [ "$mako_managed_external_layer" = "{MANGOHUD_LAYER_NAME_64}" ] && '
+        '[ "$mako_renderer_enabled" = 1 ] && '
+        '[ -z "$mako_managed_instance_layers" ]; then',
+        f"    mako_managed_instance_layers={MAKO_LAYER_NAME}",
+        "    mako_mangohud_gates=1",
+        '    if [ "${mako_mangohud_real_frames:-0}" = 1 ]; then',
+        '        mako_implicit_layer_path="$mako_mangohud_layer_dir:${mako_implicit_layer_path%:"$mako_mangohud_layer_dir"}"',
+        "    fi",
+        "fi",
         'if [ -n "$mako_managed_instance_layers" ]; then',
-        '    if [ -n "$mako_managed_external_layer" ]; then',
+        # Below the Renderer, MangoHud counts every output frame; above it,
+        # only the game's own presents. vkBasalt stays below MAKO so its
+        # effects shade every output frame, generated ones included.
+        '    if [ "$mako_managed_external_layer" = "'
+        f'{MANGOHUD_LAYER_NAME_64}" ]; then',
+        '        if [ "${mako_mangohud_real_frames:-0}" = 1 ]; then',
+        '            mako_managed_instance_layers="$mako_mangohud_instance_layers:$mako_managed_instance_layers"',
+        "        else",
+        '            mako_managed_instance_layers="$mako_managed_instance_layers:$mako_mangohud_instance_layers"',
+        "        fi",
+        '    elif [ -n "$mako_managed_external_layer" ]; then',
         '        mako_managed_instance_layers="$mako_managed_instance_layers:$mako_managed_external_layer"',
         "    fi",
         '    if [ -n "$mako_steam_overlay_layers" ]; then',
@@ -635,11 +728,13 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         # Prevent the same manifests from joining first through their implicit
         # activation gates. The explicit list above is the only owner of the
         # managed WSI/scaling order on this supported 64-bit path.
-        f"    unset {MAKO_LAYER_ENABLE_ENV}",
+        '    if [ "$mako_mangohud_gates" != 1 ]; then',
+        f"        unset {MAKO_LAYER_ENABLE_ENV}",
+        "    fi",
         f"    unset {GAMESCOPE_WSI_ENABLE_ENV}",
         f"    unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
         '    if [ "$mako_managed_external_layer" = "'
-        f'{MANGOHUD_LAYER_NAME_64}" ]; then',
+        f'{MANGOHUD_LAYER_NAME_64}" ] && [ "$mako_mangohud_gates" != 1 ]; then',
         "        unset MANGOHUD",
         '    elif [ "$mako_managed_external_layer" = "'
         f'{VKBASALT_LAYER_NAME_64}" ]; then',
@@ -666,6 +761,9 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "unset mako_existing_instance_layers",
         "unset mako_managed_instance_layers",
         "unset mako_managed_external_layer",
+        "unset mako_mangohud_instance_layers",
+        "unset mako_mangohud_gates",
+        "unset mako_mangohud_real_frames",
         "unset mako_spatial_scaling_manifest",
         "unset mako_vkbasalt_manifest",
         "unset mako_vkbasalt_manifest32",
@@ -773,8 +871,16 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "fi",
         "unset mako_gamescope_wsi_skip_log",
         f'if [ "${{{PRESENT_DIAGNOSTICS_ENV}:-0}}" != 0 ]; then',
-        "    printf 'MAKO Renderer: present diagnostics: operation=launch-environment pid=%s steam_overlay_preload_filter_requested=%s steam_overlay_preload_removed=%s\\n' "
-        '"$$" "$mako_steam_overlay_preload_filter_requested" "$mako_steam_overlay_preload_removed" >&2',
+        # With PROTON_LOG set and a Steam game ID, Proton sends the game's
+        # output, MAKO's records included, to its own log file instead.
+        "    mako_proton_log=0",
+        '    if [ -n "${PROTON_LOG:-}" ] && [ "$PROTON_LOG" != 0 ] && '
+        '[ -n "${SteamGameId+set}" ]; then',
+        '        mako_proton_log="1 proton_log_file=${PROTON_LOG_DIR-$HOME}/steam-$SteamGameId.log"',
+        "    fi",
+        "    printf 'MAKO Renderer: present diagnostics: operation=launch-environment pid=%s steam_overlay_preload_filter_requested=%s steam_overlay_preload_removed=%s proton_log=%s\\n' "
+        '"$$" "$mako_steam_overlay_preload_filter_requested" "$mako_steam_overlay_preload_removed" "$mako_proton_log" >&2',
+        "    unset mako_proton_log",
         "fi",
         "unset mako_steam_overlay_preload_removed",
         "unset mako_steam_overlay_preload_filter_requested mako_disable_steam_overlay",
@@ -817,9 +923,6 @@ def wrapper_profile_configuration_lines(
         return cast(ConfigurationData, config)
 
     current_profile = profile_data["current_profile"]
-    app_id_fallback = ""
-    for environment_name in reversed(STEAM_APP_ID_ENV_KEYS):
-        app_id_fallback = f"${{{environment_name}:-{app_id_fallback}}}"
     app_profiles = [
         (entry.get("steam_app_id"), profile_name)
         for profile_name, entry in metadata.items()
@@ -841,7 +944,7 @@ def wrapper_profile_configuration_lines(
     lines = [
         f'mako_wrapper_profile="${{{MAKO_PROFILE_ENV}:-}}"',
         "mako_wrapper_profile_from_identity=0",
-        f'mako_wrapper_app_id="{app_id_fallback}"',
+        f'mako_wrapper_app_id="{steam_app_id_expression()}"',
         'if [ -z "$mako_wrapper_profile" ]; then',
         '    if [ -n "$mako_wrapper_app_id" ]; then',
         '        case "$mako_wrapper_app_id" in',

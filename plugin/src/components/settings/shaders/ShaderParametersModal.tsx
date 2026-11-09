@@ -10,6 +10,7 @@ import { MakoFocusable } from "../../MakoUi";
 import { ShaderParameterControls } from "./ShaderParameterControls";
 
 const CONTROL_INSET = 12;
+const MIN_SAVING_STATUS_MS = 500;
 
 export function ShaderParametersModal({
   profileName: requestedProfile,
@@ -31,19 +32,44 @@ export function ShaderParametersModal({
   const alive = useRef(true);
   const pending = useRef<Record<string, number | null>>({});
   const timer = useRef<ReturnType<typeof setTimeout>>();
+  const savingTimer = useRef<ReturnType<typeof setTimeout>>();
+  const savingStarted = useRef<number | null>(null);
   const flight = useRef<Promise<void> | null>(null);
   const closing = useRef(false);
   const closed = useRef(false);
   const editorFields = useRef<HTMLDivElement>(null);
   const feedback = useRef<HTMLDivElement>(null);
 
+  const startSaving = () => {
+    if (!alive.current) return;
+    clearTimeout(savingTimer.current);
+    savingStarted.current ??= performance.now();
+    setSaving(true);
+  };
+  const finishSaving = () => {
+    if (!alive.current || savingStarted.current === null) return;
+    clearTimeout(savingTimer.current);
+    const remaining =
+      MIN_SAVING_STATUS_MS - (performance.now() - savingStarted.current);
+    const finish = () => {
+      savingStarted.current = null;
+      if (alive.current) setSaving(false);
+    };
+    // Hold only the label; persistence and closing never wait for this timer.
+    if (remaining > 0) savingTimer.current = setTimeout(finish, remaining);
+    else finish();
+  };
+
   const flush = (): Promise<void> => {
     clearTimeout(timer.current);
     if (flight.current) return flight.current.then(flush);
-    if (!Object.keys(pending.current).length) return Promise.resolve();
+    if (!Object.keys(pending.current).length) {
+      finishSaving();
+      return Promise.resolve();
+    }
     const changes = pending.current;
     pending.current = {};
-    if (alive.current) setSaving(true);
+    startSaving();
     const work = (async () => {
       try {
         const result = await setShaderParameters(profileName, changes);
@@ -52,11 +78,15 @@ export function ShaderParametersModal({
       } catch (e) {
         // Keep unsaved values for an explicit retry; never claim they were applied.
         pending.current = { ...changes, ...pending.current };
-        if (alive.current) setError(String(e));
+        clearTimeout(savingTimer.current);
+        savingStarted.current = null;
+        if (alive.current) {
+          setError(String(e));
+          setSaving(false);
+        }
         throw e;
       } finally {
         flight.current = null;
-        if (alive.current) setSaving(false);
       }
     })();
     flight.current = work;
@@ -82,6 +112,7 @@ export function ShaderParametersModal({
     return () => {
       alive.current = false;
       clearTimeout(timer.current);
+      clearTimeout(savingTimer.current);
       void flush().catch((e) =>
         console.error("MAKO Decky: shader parameter save failed", e),
       );
@@ -90,6 +121,8 @@ export function ShaderParametersModal({
 
   const change = (values: Record<string, number | null>) => {
     pending.current = { ...pending.current, ...values };
+    // Include the debounce interval: the displayed value is not saved yet.
+    startSaving();
     setEffects((current) =>
       current.map((effect) => ({
         ...effect,
@@ -168,6 +201,17 @@ export function ShaderParametersModal({
     });
   };
   const effect = effects.find((item) => item.id === selected);
+  const savedStatus = t(
+    "SHADER_EDITOR_LIVE",
+    "Saved to this profile and applied live.",
+  );
+  let status = savedStatus;
+  if (loading) status = t("SHADER_EDITOR_LOADING", "Reading shader options...");
+  else if (saving) status = t("SHADER_EDITOR_SAVING", "Saving...");
+  else if (error)
+    status = Object.keys(pending.current).length
+      ? t("SHADER_EDITOR_UNSAVED", "Changes not saved.")
+      : "";
   return (
     <ModalRoot
       className={`mako-shader-editor${preview ? " mako-shader-editor-preview" : ""}`}
@@ -189,6 +233,10 @@ export function ShaderParametersModal({
       .mako-shader-editor-preview { height: auto !important; align-self: flex-start; }
       .mako-shader-editor-preview > .DialogContent_InnerWidth, .mako-shader-editor-preview .mako-shader-editor-content { flex: 0 1 auto; }
       .mako-shader-editor-header { flex-shrink: 0; min-width: 0; overflow-wrap: anywhere; }
+      .mako-shader-editor-status { display: grid; min-height: 32px; margin-bottom: 6px; font-size: 12px; line-height: 16px; color: #aebac6; }
+      /* Reserve the translated saved message's height while a shorter status is shown. */
+      .mako-shader-editor-status::before { content: attr(data-saved-label); visibility: hidden; grid-area: 1 / 1; }
+      .mako-shader-editor-status > span { grid-area: 1 / 1; }
       /* Steam buttons default to content-box sizing and a 160px minimum. */
       .mako-shader-editor button.DialogButton { box-sizing: border-box !important; min-width: 0 !important; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
       .mako-shader-editor-actions { display: flex; gap: 8px; min-width: 0; padding: 4px; }
@@ -213,9 +261,17 @@ export function ShaderParametersModal({
           <div style={{ fontSize: 18, marginBottom: 6 }}>
             {t("SHADER_EDITOR_TITLE", "Customize shaders")}
           </div>
-          <div style={{ fontSize: 12, color: "#aebac6", marginBottom: 10 }}>
-            {profileName} ·{" "}
-            {t("SHADER_EDITOR_LIVE", "Saved to this profile and applied live.")}
+          <div style={{ fontSize: 12, color: "#aebac6", marginBottom: 6 }}>
+            {profileName}
+          </div>
+          <div
+            className="mako-shader-editor-status"
+            data-saved-label={savedStatus}
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            <span>{status}</span>
           </div>
           <MakoFocusable
             className="mako-shader-editor-actions"
@@ -238,11 +294,6 @@ export function ShaderParametersModal({
         </div>
         {!preview && (
           <div ref={editorFields} className="mako-shader-editor-controls">
-            {loading && (
-              <div>
-                {t("SHADER_EDITOR_LOADING", "Reading shader options...")}
-              </div>
-            )}
             {!!effects.length && (
               <Dropdown
                 selectedOption={selected}
@@ -293,11 +344,6 @@ export function ShaderParametersModal({
                 {t("SHADER_EDITOR_RESET", "Reset shader to defaults")}
               </DialogButton>
             )}
-          </div>
-        )}
-        {saving && (
-          <div role="status" style={{ flexShrink: 0 }}>
-            {t("SHADER_EDITOR_SAVING", "Saving...")}
           </div>
         )}
         {error && (

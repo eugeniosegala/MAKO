@@ -268,12 +268,12 @@ class PathAndPackageContractTests(unittest.TestCase):
             deploy,
         )
         self.assertIn(
-            'copy_file "$built_vkbasalt_library_64" '
+            'copy_renderer_file "$built_vkbasalt_library_64" '
             '"$installed_vkbasalt_library_64"',
             deploy,
         )
         self.assertIn(
-            'copy_file "$built_vkbasalt_library_32" '
+            'copy_renderer_file "$built_vkbasalt_library_32" '
             '"$installed_vkbasalt_library_32"',
             deploy,
         )
@@ -425,8 +425,10 @@ class PathAndPackageContractTests(unittest.TestCase):
         script = _read(PLUGIN_DEPLOY_SCRIPT)
         self.assertIn('copy_file "$engine_repo/scripts/mako-vrr-lease"', script)
         self.assertIn(
-            '"$HOME/.local/share/mako-render/bin/mako-vrr-lease"', script,
+            '"$installed_vrr_lease"', script,
         )
+        self.assertIn('--bits 64 --tool-paths', script)
+        self.assertIn('--verify-tools "$built_cli"', script)
 
     def test_decky_slug_listing_and_developer_aliases_match_independent_tools(self):
         slug = "Mako"

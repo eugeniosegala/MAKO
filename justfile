@@ -8,7 +8,8 @@ default:
 install-plugin:
     pnpm --dir plugin install --frozen-lockfile
 
-# Enable the tracked Markdown pre-commit hook for this checkout.
+# Enable the tracked Git hooks for this checkout: the Markdown pre-commit hook, and a pre-push guard that keeps
+# branches on a remote named mako-private when one is configured.
 install-hooks:
     ./scripts/install-git-hooks.sh
 
@@ -86,12 +87,20 @@ check-arch-package:
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 
-# Run the protected-input, release-candidate, engine, plugin, and trace-producer tests.
-test: test-protected-inputs test-release-candidate test-engine test-plugin test-trace-producer
+# Run the protected-input, release-candidate, contributor, engine, plugin, and trace-producer tests.
+test: test-protected-inputs test-private-push-guard test-release-candidate test-contributors test-engine test-plugin test-trace-producer
+
+# Exercise contributor identity handling without changing the gallery.
+test-contributors:
+    python3 scripts/test-update-contributors.py
 
 # Reject licensed inputs and disguised binary/model/archive payloads from Git.
 test-protected-inputs:
     ./scripts/test-protected-inputs.sh
+
+# Check that a checkout with a mako-private remote pushes only main to other remotes.
+test-private-push-guard:
+    ./scripts/test-private-push-guard.sh
 
 # Verify the local release-candidate checker with complete and incomplete ZIP fixtures.
 test-release-candidate:

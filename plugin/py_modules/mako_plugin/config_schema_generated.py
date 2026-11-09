@@ -9,6 +9,8 @@ from enum import Enum
 from shared_config import CONFIG_SCHEMA_DEF, ConfigFieldType
 
 # Field name constants for type-safe access
+FRAME_GENERATION_MODEL = "frame_generation_model"
+MAKO_FG_MODE = "mako_fg_mode"
 DLL = "dll"
 ALLOW_FP16 = "allow_fp16"
 SCALING_ENABLED = "scaling_enabled"
@@ -43,7 +45,9 @@ HDR_QUALITY = "hdr_quality"
 DISABLE_HDR_EXPOSURE = "disable_hdr_exposure"
 GAMESCOPE_WSI_COMPATIBILITY = "gamescope_wsi_compatibility"
 SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY = "swapchain_image_count_compatibility"
+MAILBOX_PRESENTATION_COMPATIBILITY = "mailbox_presentation_compatibility"
 EXTERNAL_VULKAN_LAYER = "external_vulkan_layer"
+MANGOHUD_COUNT_REAL_FRAMES = "mangohud_count_real_frames"
 VKBASALT_SHARPENING = "vkbasalt_sharpening"
 VKBASALT_SHARPNESS = "vkbasalt_sharpness"
 VKBASALT_DLS_DENOISE = "vkbasalt_dls_denoise"
@@ -54,10 +58,13 @@ DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode"
 DISABLE_STEAM_OVERLAY = "disable_steam_overlay"
 ENABLE_ZINK = "enable_zink"
 FORCE_ALSA_AUDIO = "force_alsa_audio"
+WINE_COMPATIBILITY_FIX = "wine_compatibility_fix"
 
 
 class ConfigurationData(TypedDict):
     """Type-safe configuration data structure - AUTO-GENERATED"""
+    frame_generation_model: str
+    mako_fg_mode: str
     dll: str
     allow_fp16: bool
     scaling_enabled: bool
@@ -92,7 +99,9 @@ class ConfigurationData(TypedDict):
     disable_hdr_exposure: bool
     gamescope_wsi_compatibility: bool
     swapchain_image_count_compatibility: bool
+    mailbox_presentation_compatibility: bool
     external_vulkan_layer: str
+    mangohud_count_real_frames: bool
     vkbasalt_sharpening: str
     vkbasalt_sharpness: float
     vkbasalt_dls_denoise: float
@@ -103,10 +112,13 @@ class ConfigurationData(TypedDict):
     disable_steam_overlay: bool
     enable_zink: bool
     force_alsa_audio: bool
+    wine_compatibility_fix: bool
 
 
 class ConfigurationPatch(TypedDict, total=False):
     """Validated partial profile update - AUTO-GENERATED"""
+    frame_generation_model: str
+    mako_fg_mode: str
     dll: str
     allow_fp16: bool
     scaling_enabled: bool
@@ -141,7 +153,9 @@ class ConfigurationPatch(TypedDict, total=False):
     disable_hdr_exposure: bool
     gamescope_wsi_compatibility: bool
     swapchain_image_count_compatibility: bool
+    mailbox_presentation_compatibility: bool
     external_vulkan_layer: str
+    mangohud_count_real_frames: bool
     vkbasalt_sharpening: str
     vkbasalt_sharpness: float
     vkbasalt_dls_denoise: float
@@ -152,6 +166,7 @@ class ConfigurationPatch(TypedDict, total=False):
     disable_steam_overlay: bool
     enable_zink: bool
     force_alsa_audio: bool
+    wine_compatibility_fix: bool
 
 
 class WrapperSettingsData(TypedDict):
@@ -160,6 +175,7 @@ class WrapperSettingsData(TypedDict):
     disable_hdr_exposure: bool
     gamescope_wsi_compatibility: bool
     external_vulkan_layer: str
+    mangohud_count_real_frames: bool
     vkbasalt_sharpening: str
     vkbasalt_sharpness: float
     vkbasalt_dls_denoise: float
@@ -170,6 +186,7 @@ class WrapperSettingsData(TypedDict):
     disable_steam_overlay: bool
     enable_zink: bool
     force_alsa_audio: bool
+    wine_compatibility_fix: bool
 
 
 def get_script_generation_logic():
@@ -182,6 +199,8 @@ def get_script_generation_logic():
             lines.append("export MAKO_DISABLE_HDR_EXPOSURE=1")
         external_vulkan_layer = config.get("external_vulkan_layer", "")
         lines.append(f"export MAKO_EXTERNAL_VULKAN_LAYER={external_vulkan_layer}")
+        lines.append("mako_mangohud_real_frames=" +
+            ("1" if config.get("mangohud_count_real_frames", False) else "0"))
         if config.get("disable_steamdeck_mode", False):
             lines.append("export SteamDeck=0")
         lines.append("mako_disable_steam_overlay=" +
@@ -202,8 +221,11 @@ def get_script_generation_logic():
                 '    *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winealsa.drv=b" ;;',
                 "esac",
             ])
+        lines.append("export MAKO_WINE_COMPATIBILITY_FIX=" +
+            ("1" if config.get("wine_compatibility_fix", True) and
+                config.get("frame_generation_provisioned", True) else "0"))
         return lines
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'scaling_enabled', 'scaling_method', 'scaling_factor', 'scaling_supersampling', 'scaling_sharpness', 'frame_generation_provisioned', 'frame_generation_enabled', 'frame_generation_refresh_threshold', 'gpu_headroom_percent', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'adaptive_fractional_real_frame_priority', 'target_fps', 'adaptive_target_refresh_rate', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'gamescope_vrr_mode', 'dynamic_cadence_recovery', 'dynamic_cadence_probe_interval_seconds', 'ultra_performance', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'hdr_quality', 'disable_hdr_exposure', 'gamescope_wsi_compatibility', 'swapchain_image_count_compatibility', 'external_vulkan_layer', 'vkbasalt_sharpening', 'vkbasalt_sharpness', 'vkbasalt_dls_denoise', 'vkbasalt_antialiasing', 'vkbasalt_shader', 'vkbasalt_manage_custom_shaders', 'disable_steamdeck_mode', 'disable_steam_overlay', 'enable_zink', 'force_alsa_audio']
+ALL_FIELDS = ['frame_generation_model', 'mako_fg_mode', 'dll', 'allow_fp16', 'scaling_enabled', 'scaling_method', 'scaling_factor', 'scaling_supersampling', 'scaling_sharpness', 'frame_generation_provisioned', 'frame_generation_enabled', 'frame_generation_refresh_threshold', 'gpu_headroom_percent', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'adaptive_fractional_real_frame_priority', 'target_fps', 'adaptive_target_refresh_rate', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'gamescope_vrr_mode', 'dynamic_cadence_recovery', 'dynamic_cadence_probe_interval_seconds', 'ultra_performance', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'hdr_quality', 'disable_hdr_exposure', 'gamescope_wsi_compatibility', 'swapchain_image_count_compatibility', 'mailbox_presentation_compatibility', 'external_vulkan_layer', 'mangohud_count_real_frames', 'vkbasalt_sharpening', 'vkbasalt_sharpness', 'vkbasalt_dls_denoise', 'vkbasalt_antialiasing', 'vkbasalt_shader', 'vkbasalt_manage_custom_shaders', 'disable_steamdeck_mode', 'disable_steam_overlay', 'enable_zink', 'force_alsa_audio', 'wine_compatibility_fix']

@@ -170,6 +170,32 @@ int main() {
         expect(result.capFps == 0 && result.state == "telemetry-unavailable", "invalid GPU evidence fails open");
     }
 
+    // Witcher 3 at a 120 FPS target: Headroom cut 60x2 below 50 FPS, then
+    // Adaptive's own 40 FPS 3x cap held the source below it at about 80%
+    // utilization. That rate says nothing about the cap's rate, so the cap
+    // must hold rather than creep up and release 60x2 at full load again.
+    controller.reset();
+    result = {};
+    for (int frame = 0; frame < 2000 && (result.capFps == 0 || result.capFps > 50); ++frame) {
+        now += 1.0 / (result.capFps > 0 ? result.capFps : 60.0);
+        result = controller.update(timeAt(now), 10, {timeAt(now), 100.0}, 40);
+    }
+    expect(result.capFps > 40 && result.capFps <= 50, "precondition: 60x2 overload set a cap above 40 FPS");
+    const double heldCap = result.capFps;
+    for (int frame = 0; frame < 40 * 60; ++frame) {
+        now += 1.0 / 40;
+        result = controller.update(timeAt(now), 10, {timeAt(now), 80.0}, 40);
+        expect(result.capFps == heldCap,
+            "utilization below a cap that limits nothing must not raise or release it");
+    }
+    // A genuinely lighter scene still restores the healthy source rate.
+    for (int frame = 0; frame < 40 * 12 && result.capFps > 0; ++frame) {
+        now += 1.0 / 40;
+        result = controller.update(timeAt(now), 10, {timeAt(now), 40.0}, 40);
+    }
+    expect(result.capFps == 0,
+        "clearly spare capacity below a non-limiting cap still releases it");
+
     char pattern[] = "/tmp/mako-gpu-headroom.XXXXXX";
     const auto directory = mkdtemp(pattern);
     expect(directory != nullptr, "telemetry fixture");

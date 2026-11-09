@@ -23,13 +23,15 @@ vi.mock("@decky/ui", () => ({
     label,
     disabled,
     description,
+    onChange,
   }: {
     label: React.ReactNode;
     disabled?: boolean;
     description?: React.ReactNode;
+    onChange?: (value: number) => void;
   }) => (
     <div>
-      <button disabled={disabled}>{label}</button>
+      <button disabled={disabled} onClick={() => onChange?.(0.85)}>{label}</button>
       {description}
     </div>
   ),
@@ -135,6 +137,32 @@ describe("Performance Settings", () => {
     });
   });
 
+  test("MAKO FG exposes saved Flow Scale outside Ultra Performance", () => {
+    window.SP_REACT = React;
+    const onConfigChange = vi.fn(async () => undefined);
+    render(<PerformanceConfigurationGroup config={{...getDefaults(), frame_generation_model: "mako-fg", ultra_performance: false, flow_scale: 0.75}} onConfigChange={onConfigChange} onConfigUpdate={vi.fn(async () => undefined)} />);
+    const slider = screen.getByText("Flow Scale (75%)") as HTMLButtonElement;
+    expect(slider.disabled).toBe(false);
+    fireEvent.click(slider);
+    expect(onConfigChange).toHaveBeenCalledWith("flow_scale", 0.85);
+  });
+
+  test("MAKO FG keeps Ultra Performance available and applies its Flow Scale", () => {
+    window.SP_REACT = React;
+    const onConfigUpdate = vi.fn(async () => undefined);
+    render(<PerformanceConfigurationGroup config={{...getDefaults(), frame_generation_model: "mako-fg", ultra_performance: true, flow_scale: 0.75}} onConfigChange={vi.fn(async () => undefined)} onConfigUpdate={onConfigUpdate} />);
+    const ultra = screen.getByText("Ultra Performance (Restart)").closest("button") as HTMLButtonElement;
+    expect(ultra.disabled).toBe(false);
+    expect(ultra.getAttribute("data-checked")).toBe("true");
+    expect((screen.getByText("Flow Scale (60%)") as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(ultra);
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      ultra_performance: false,
+      flow_scale: 0.8,
+      performance_mode: false,
+    });
+  });
+
   test("groups Ultra Performance, Flow Scale, and FP16 without duplicating the lighter model", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
@@ -144,6 +172,7 @@ describe("Performance Settings", () => {
       <PerformanceConfigurationGroup
         config={{
           ...getDefaults(),
+          frame_generation_model: "lossless-scaling",
           ultra_performance: true,
           performance_mode: false,
           allow_fp16: false,
@@ -181,19 +210,15 @@ describe("Performance Settings", () => {
       screen.queryByText(/private frame-generation context live/),
     ).toBeNull();
     expect(
-      screen.getByText(/Reduces MAKO's GPU workload on low-power devices/),
+      screen.getByText(/Cuts GPU and memory use on low-power devices/),
     ).toBeTruthy();
     expect(
-      screen.getByText(/LS1 Performance when Scaling is enabled/),
+      screen.getByText(/Locks Flow Scale at 60% for MAKO FG and 70% for LSFG/),
     ).toBeTruthy();
     expect(
-      screen.getByText(/Trades image quality for performance/),
+      screen.getByText(/MAKO Scaler when Scaling is enabled/),
     ).toBeTruthy();
-    const info = screen.getByRole("note");
-    expect(info.getAttribute("data-tone")).toBe("info");
-    expect(info.textContent).toContain(
-      "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
-    );
+    expect(screen.queryByRole("note")).toBeNull();
 
     onConfigChange.mockClear();
     fireEvent.click(screen.getByText("Ultra Performance (Restart)"));

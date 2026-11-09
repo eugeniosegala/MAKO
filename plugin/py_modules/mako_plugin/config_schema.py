@@ -29,6 +29,8 @@ from shared_config import (
     FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
     FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
     GAMESCOPE_VRR_MODE_VALUES,
+    FRAME_GENERATION_MODEL_VALUES,
+    MAKO_FG_MODE_VALUES,
     PROFILE_KIND_DEFAULT,
     PROFILE_KIND_GAME,
     PROFILE_KIND_MANUAL,
@@ -222,6 +224,16 @@ class ConfigurationManager:
         validated["adaptive_fractional_real_frame_priority"] = (
             fractional_priority
         )
+        model = validated["frame_generation_model"].strip().lower()
+        if model not in FRAME_GENERATION_MODEL_VALUES:
+            raise ValueError("frame_generation_model must be 'lossless-scaling' or 'mako-fg'")
+        validated["frame_generation_model"] = model
+        mako_fg_mode = validated["mako_fg_mode"].strip().lower()
+        if mako_fg_mode not in MAKO_FG_MODE_VALUES:
+            raise ValueError(
+                "mako_fg_mode must be 'quality', 'balanced', 'performance', or 'extra-performance'"
+            )
+        validated["mako_fg_mode"] = mako_fg_mode
         hdr_quality = validated["hdr_quality"].strip().lower()
         if hdr_quality not in ("quality", "balanced", "performance"):
             raise ValueError("hdr_quality must be 'quality', 'balanced', or 'performance'")

@@ -2,8 +2,8 @@
 """Resolve and verify the active native libraries for direct development deploys."""
 
 import argparse
-import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -12,6 +12,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from py_modules.mako_plugin import constants as paths  # noqa: E402
 from py_modules.mako_plugin.layer_manifests import (  # noqa: E402
     manifest_library, manifest_owner,
+)
+from py_modules.mako_plugin.development_renderer import (  # noqa: E402
+    file_sha256 as sha256, record_development_files,
 )
 
 
@@ -40,12 +43,31 @@ def selected_libraries(home: Path, bits: int) -> tuple[str, tuple[Path, ...]]:
     )
 
 
-def sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
+def selected_tools(home: Path) -> tuple[str, tuple[Path, ...]]:
+    """Host tools follow the 64-bit owner used by Decky's runtime services."""
+    owner, _libraries = selected_libraries(home, 64)
+    directory = (home / paths.STANDALONE_INSTALL_PREFIX / "bin"
+                 if owner == paths.ACTIVE_RENDERER_OWNER_STANDALONE
+                 else home / paths.CLI_DIR)
+    return owner, tuple(directory / name for name in (
+        paths.CLI_FILENAME, paths.SHADER_TOOL_FILENAME, paths.VRR_LEASE_FILENAME,
+    ))
+
+
+def verify_tools(home: Path, built: list[Path]) -> None:
+    owner, installed_tools = selected_tools(home)
+    for index, (source, installed) in enumerate(zip(built, installed_tools, strict=True)):
+        if index == 1 and not source.is_file():
+            if installed.exists():
+                raise ValueError(f"Stale shader tool remains selected: {installed}")
+            continue
+        if not installed.is_file() or not os.access(installed, os.X_OK):
+            raise ValueError(f"Selected native tool is not executable: {installed}")
+        checksum = sha256(source)
+        if sha256(installed) != checksum:
+            raise ValueError(f"Selected native tool differs from the development build: {installed}")
+        label = "CLI" if index == 0 else installed.name
+        print(f"MAKO Renderer: verified installed 64-bit {label} {installed}; owner={owner}; sha256={checksum}")
 
 
 def renderer_manifest(home: Path, bits: int, build_directory: Path) -> tuple[dict[str, object], tuple[Path, Path]]:
@@ -98,9 +120,30 @@ def main() -> None:
     operations = parser.add_mutually_exclusive_group()
     operations.add_argument("--verify", type=Path, nargs=3, metavar=("FG", "SPATIAL", "VKBASALT"))
     operations.add_argument("--prepare-manifest", type=Path, nargs=2, metavar=("BUILD_DIRECTORY", "STAGED_MANIFEST"))
+    operations.add_argument("--tool-paths", action="store_true")
+    operations.add_argument("--verify-tools", type=Path, nargs=3, metavar=("CLI", "SHADER", "VRR"))
+    operations.add_argument("--record-deployment", type=Path, metavar="PLUGIN_DIRECTORY")
+    parser.add_argument("--copied-files", type=Path, nargs="+", metavar="PATH")
     args = parser.parse_args()
+    if bool(args.record_deployment) != bool(args.copied_files) or (
+            args.copied_files and len(args.copied_files) % 2):
+        parser.error("--record-deployment requires source/destination pairs in --copied-files")
     try:
-        if args.verify:
+        if args.record_deployment:
+            record_development_files(
+                args.record_deployment,
+                args.home / paths.MAKO_ROOT / paths.ACTIVE_RENDERER_STATE_FILENAME,
+                list(zip(args.copied_files[::2], args.copied_files[1::2], strict=True)))
+            print("MAKO Renderer: recorded verified development files for installation checks.")
+        elif args.tool_paths or args.verify_tools:
+            if args.bits != 64:
+                raise ValueError("Native host tools follow the selected 64-bit Renderer")
+            if args.verify_tools:
+                verify_tools(args.home, args.verify_tools)
+            else:
+                _owner, tools = selected_tools(args.home)
+                print(*tools, sep="\n")
+        elif args.verify:
             verify(args.home, args.bits, args.verify)
         elif args.prepare_manifest:
             prepare_manifest(args.home, args.bits, *args.prepare_manifest)

@@ -32,6 +32,8 @@ DISPLAY_FLAGS = re.compile(r"(?:^|\n)\s*-\s*Display Flags:\s*0x([0-9a-fA-F]+)(?:
 X_DISPLAY = re.compile(r":[0-9]+(?:\.[0-9]+)?\Z")
 X_CARDINAL = re.compile(r"^([A-Z_]+)\(CARDINAL\) = ([0-9]+)$", re.MULTILINE)
 VRR_DISPLAY_FLAG = 0x4
+PR_SET_PDEATHSIG = 1
+WATCH_OWNER_ENV = "MAKO_VRR_WATCH_PARENT"
 STOP = False
 XROOT_CACHE: tuple[str, int, str] | None = None
 XROOT_RETRY_AFTER: tuple[str, int, float] | None = None
@@ -405,13 +407,17 @@ def session_lock() -> int | None:
     display = os.environ.get("GAMESCOPE_WAYLAND_DISPLAY")
     if not runtime or not display:
         return None
-    directory = Path(runtime)
+    suffix = hashlib.sha256(display.encode()).hexdigest()[:16]
+    return runtime_lock(Path(runtime), f"mako-vrr-{suffix}.lock")
+
+
+def runtime_lock(directory: Path, name: str) -> int | None:
+    """Open a same-user lock file without following a planted symlink."""
     try:
         info = directory.stat()
         if not stat.S_ISDIR(info.st_mode) or info.st_uid != os.geteuid():
             return None
-        suffix = hashlib.sha256(display.encode()).hexdigest()[:16]
-        descriptor = os.open(directory / f"mako-vrr-{suffix}.lock",
+        descriptor = os.open(directory / name,
                              os.O_CREAT | os.O_RDWR | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600)
         opened = os.fstat(descriptor)
         if not stat.S_ISREG(opened.st_mode) or opened.st_uid != os.geteuid():
@@ -523,12 +529,42 @@ def flatpak_environment(pid: int, tick: int) -> dict[str, str] | None:
         return None
 
 
+def watch_owner() -> int | None:
+    """Bind discovery to the backend that started it, even when that backend is SIGKILLed."""
+    owner = os.environ.get(WATCH_OWNER_ENV, "")
+    if not owner.isdigit():
+        return None  # A standalone watcher keeps running after its shell exits.
+    try:
+        import ctypes
+        ctypes.CDLL(None, use_errno=True).prctl(PR_SET_PDEATHSIG, int(signal.SIGTERM), 0, 0, 0)
+    except (OSError, AttributeError):
+        pass  # The parent check in the poll loop still ends an orphan.
+    return int(owner)
+
+
 def watch_flatpak() -> int:
     """Host discovery only; existing detached per-game leases own all writes."""
     signal.signal(signal.SIGTERM, _stop)
     signal.signal(signal.SIGINT, _stop)
+    owner = watch_owner()
+    runtime = os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.geteuid()}"
+    lock_fd = runtime_lock(Path(runtime), "mako-vrr-flatpak-watch.lock")
+    owns_lock = lock_fd is None
     retry_at: dict[tuple[int, int], float] = {}
     while not STOP:
+        # Checked after arming PDEATHSIG, so an owner that died first is seen too.
+        if owner is not None and os.getppid() != owner:
+            break
+        if not owns_lock:
+            try:
+                fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                # One watcher discovers per user; this one takes over when the holder exits.
+                time.sleep(POLL_SECONDS)
+                continue
+            except OSError:
+                pass  # Unlockable runtime storage keeps unlocked discovery.
+            owns_lock = True
         current = {(p.pid, p.tick) for p in publishers(config_path().parent / "runtime-state")
                    if p.mode in ("on", "off")}
         retry_at = {key: value for key, value in retry_at.items() if key in current}
@@ -553,6 +589,8 @@ def watch_flatpak() -> int:
             except (OSError, subprocess.TimeoutExpired):
                 pass
         time.sleep(POLL_SECONDS)
+    if lock_fd is not None:
+        os.close(lock_fd)
     return 0
 
 

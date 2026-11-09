@@ -32,7 +32,7 @@ Installing the package does not activate MAKO for every game. Open **MAKO Render
 mako-ui
 ```
 
-Create or select a game profile and configure Frame Generation, Scaling, and/or Shaders. Frame Generation and LS1 scaling require a lawful user-supplied `Lossless.dll`; the open MAKO Scaler and bundled shaders do not. LS1 and DirectX-only LSFG models additionally need the optional `vkd3d` dependency, plus `lib32-vkd3d` for 32-bit games. Native SPIR-V LSFG models do not need the translator. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**:
+Create or select a game profile and configure Frame Generation, Scaling, and/or Shaders. Only the optional Lossless Scaling frame generation model and LS1 scaling require a lawful user-supplied `Lossless.dll`; MAKO FG, the open MAKO Scaler, and bundled shaders do not. LS1 and DirectX-only LSFG models additionally need the optional `vkd3d` dependency, plus `lib32-vkd3d` for 32-bit games. Native SPIR-V LSFG models do not need the translator. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**:
 
 ```text
 /usr/bin/mako-launch %command%
@@ -81,7 +81,7 @@ Do not run the upstream installer or extract the archive with `MAKO_INSTALL_PREF
 
 ## Coexistence with MAKO Decky and other user-local installs
 
-The pacman package manages `/usr`; MAKO Decky and the standalone archive share a separate native installation under `~/.local`. Pacman reports user-local copies but does not change or remove them.
+The pacman package manages `/usr`; MAKO Decky and the standalone archive share a separate native installation under `~/.local`. Pacman reports user-local copies but does not change or remove them. Decky does not adopt the system package or run pacman. First-time Decky Renderer setup explains that selecting Install creates a separate user-local copy. You can keep the system package and explicitly choose that local installation; keep their versions aligned because they share profiles. An already existing user-local payload remains updateable and removable independently. Removing the Decky plugin preserves that user-local Renderer.
 
 Use `/usr/bin/mako-launch` and `/usr/bin/mako-ui` explicitly to select this package. Do not export `ENABLE_MAKO=1` globally: use the launcher to select the matching layers. Flatpak runtime extensions are installed and updated separately.
 
@@ -89,7 +89,7 @@ Use `/usr/bin/mako-launch` and `/usr/bin/mako-ui` explicitly to select this pack
 
 Profiles, settings, and runtime state live in `~/.config/mako-render` (`conf.toml`, `profile-metadata.json`, `profile-wrapper-settings.json`, and `runtime-state/`). They belong to the user and are never installed, replaced, or removed by this package.
 
-Because both delivery paths share that directory, do not run two different MAKO Renderer versions against one `~/.config/mako-render`: a user-local install and this package would migrate the same profiles with different engine versions. Keep one owner per user.
+Because both delivery paths share that directory, do not run two different MAKO Renderer versions against one `~/.config/mako-render`: a user-local install and this package would migrate the same profiles with different engine versions. Use explicit launchers to choose an installation and keep Renderer releases/builds aligned before editing their shared profiles.
 
 ## Updating for a new release
 

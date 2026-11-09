@@ -108,10 +108,16 @@ public:
             state = "limiting";
             return {cap, state};
         }
-        if (cap > 0 && *load.percent < target - 5.0) {
+        // Another owner, such as Adaptive's integer-rung cap, can hold the
+        // source below this cap. Utilization at that lower rate is not spare
+        // capacity at the cap: raising a cap that limits nothing until it
+        // releases would return the full load at once. Project it first.
+        const double capUtilization = cap > 0 && sourceFps < cap * 0.95
+            ? *load.percent * cap / sourceFps : *load.percent;
+        if (cap > 0 && capUtilization < target - 5.0) {
             // Recover clearly spare capacity promptly after a scene change;
             // approach the utilization band cautiously to avoid oscillation.
-            cap *= *load.percent < target * 0.75 ? 1.20 : 1.02;
+            cap *= capUtilization < target * 0.75 ? 1.20 : 1.02;
             if (cap >= ceiling * 0.995)
                 cap = 0;
         }

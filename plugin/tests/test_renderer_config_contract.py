@@ -24,12 +24,13 @@ from shared_config import (
     FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
     SCALING_FACTOR_MAX,
     SCALING_FACTOR_MIN,
-    SCALING_METHOD_LS1,
+    SCALING_METHOD_MAKO,
     SCALING_SHARPNESS_MAX,
     SCALING_SHARPNESS_MIN,
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
     ULTRA_PERFORMANCE_FLOW_SCALE,
+    ULTRA_PERFORMANCE_MAKO_FG_FLOW_SCALE,
 )
 from py_modules.mako_plugin.config_schema import CONFIG_FORMAT_VERSION
 from py_modules.mako_plugin.launcher_exclusions_generated import EXCLUDED_WINDOWS_LAUNCHERS
@@ -221,6 +222,10 @@ class RendererConfigContractTests(unittest.TestCase):
             renderer_constant("ultraPerformanceFlowScale"),
         )
         self.assertEqual(
+            ULTRA_PERFORMANCE_MAKO_FG_FLOW_SCALE,
+            renderer_constant("ultraPerformanceMakoFgFlowScale"),
+        )
+        self.assertEqual(
             CONFIG_SCHEMA_DEF["flow_scale"]["default"],
             renderer_constant("flowScale"),
         )
@@ -239,10 +244,18 @@ class RendererConfigContractTests(unittest.TestCase):
         )
         self.assertEqual(
             CONFIG_SCHEMA_DEF["scaling_method"]["default"],
-            SCALING_METHOD_LS1,
+            SCALING_METHOD_MAKO,
         )
         self.assertIn(
-            "static constexpr ScalingMethod scalingMethod = ScalingMethod::Ls1;",
+            "static constexpr ScalingMethod scalingMethod = ScalingMethod::Mako;",
+            source,
+        )
+        self.assertEqual(
+            CONFIG_SCHEMA_DEF["frame_generation_model"]["default"],
+            "mako-fg",
+        )
+        self.assertIn(
+            "static constexpr FrameGenerationModel frameGenerationModel = FrameGenerationModel::MakoFg;",
             source,
         )
 
@@ -325,6 +338,7 @@ class RendererConfigContractTests(unittest.TestCase):
             "enable_mangohud",
             "mangohud_available",
             "mangohud_checking",
+            "mangohud_count_real_frames",
         ):
             with self.subTest(field=field):
                 self.assertIn(f"backend.{field}", ui_source)
@@ -365,6 +379,12 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertIn(f'export {MANGOHUD_CONFIG_FILE_ENV}="$mako_mangohud_config"', launcher)
         self.assertIn('layer.get("enable_environment") != {"MANGOHUD": "1"}', launcher)
         self.assertIn('layer.get("disable_environment") != {"DISABLE_MANGOHUD": "1"}', launcher)
+        # Qt stores Decky's per-profile frame-count field and hands the same
+        # choice to the standalone launcher through its copied launch option.
+        self.assertIn("mangohud_count_real_frames", CONFIG_SCHEMA_DEF)
+        self.assertIn('QStringLiteral("mangohud_count_real_frames")', backend)
+        self.assertIn('QStringLiteral("MAKO_MANGOHUD_REAL_FRAMES=1")', backend)
+        self.assertIn('mako_mangohud_real_frames="${MAKO_MANGOHUD_REAL_FRAMES:-0}"', launcher)
 
     def test_adaptive_minimum_base_fps_matches_renderer_policy(self):
         source = (

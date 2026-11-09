@@ -258,6 +258,8 @@ namespace {
                << jsonString(ls::gamescopeVrrModeName(profile.gamescope_vrr_mode))
                << ",\"frame_generation_provisioned\":"
                << profile.frame_generation_provisioned
+               << ",\"frame_generation_model\":"
+               << jsonString(ls::frameGenerationModelName(profile.frame_generation_model))
                << ",\"frame_generation_enabled\":"
                << profile.frame_generation_enabled
                << ",\"scaling_enabled\":" << profile.scaling_enabled
@@ -311,7 +313,7 @@ std::string mako::layer::runtimeStatusJson(
         const uint64_t processStartTicks, const uint64_t contextId,
         const std::string_view role,
         const int64_t updatedUnixMilliseconds) {
-    // The private spatial graph also serves HDR display-size presentation.
+    // The private spatial graph also serves bridge display-size presentation.
     // That work must not enable the user-facing Scaling feature; a saved
     // toggle waiting for restart must not override the applied setting either.
     const bool scalingActive = status.spatialScalingActive &&
@@ -345,6 +347,16 @@ std::string mako::layer::runtimeStatusJson(
            << status.appliedGeneratedCapacity
            << ",\"frame_generation_active\":"
            << status.frameGenerationActive
+           << ",\"frame_generation_unavailable\":";
+    if (status.frameGenerationUnavailableReason) {
+        stream << "{\"reason\":"
+               << jsonString(*status.frameGenerationUnavailableReason)
+               << ",\"wine_compatibility_fix\":"
+               << jsonString(status.wineCompatibilityFix) << '}';
+    } else {
+        stream << "null";
+    }
+    stream
            << ",\"gpu_headroom_state\":" << jsonString(status.gpuHeadroomState)
            << ",\"spatial_scaling\":{"
            << "\"active\":" << scalingActive

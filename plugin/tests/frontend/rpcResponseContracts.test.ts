@@ -36,6 +36,7 @@ const nullableResponseFixtures = {
     engine_update_required: false,
     host_architecture: null,
     host_architecture_supported: false,
+    system_renderer_notice: null,
     error: null,
   } satisfies InstallationStatus,
   dllDetection: {

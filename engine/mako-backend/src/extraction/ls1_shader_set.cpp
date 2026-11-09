@@ -31,12 +31,16 @@ namespace {
         const auto selection = backend::resolveLs1ModelResources(archive, mode, variant);
         const auto spec = backend::detail::ls1ModelSpec(mode, variant);
         const backend::detail::DxbcShaderTranslator translator(shaderDllPath);
+        const auto translate = [&](const backend::detail::Ls1ShaderSpec& shader,
+                const uint32_t storageImageFormat) {
+            return translator.translate(selection.resource(archive, shader.resourceId),
+                shader.contract, storageImageFormat,
+                "LS1 resource " + std::to_string(selection.resourceId(shader.resourceId)), true);
+        };
         const auto load = [&](const backend::detail::Ls1ShaderSpec& shader,
                 const bool reconstruction = false) {
-            return translator.translate(selection.resource(archive, shader.resourceId),
-                shader.contract, (highPrecision && reconstruction)
-                    ? 2U : shader.storageImageFormat,
-                "LS1 resource " + std::to_string(selection.resourceId(shader.resourceId)), true);
+            return translate(shader, (highPrecision && reconstruction)
+                ? 2U : shader.storageImageFormat);
         };
 
         mako::backend::Ls1ShaderSet result{
@@ -50,6 +54,7 @@ namespace {
         if (spec.stage2) result.stage2 = load(*spec.stage2);
         if (spec.stage3) result.stage3 = load(*spec.stage3);
         result.reconstruction = load(spec.reconstruction, true);
+        result.reconstructionDirect = translate(spec.reconstruction, 0U);
         return result;
     }
 }

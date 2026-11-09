@@ -8,8 +8,11 @@ import io
 import fcntl
 import json
 import os
+import signal
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -99,6 +102,7 @@ class VrrLeaseTests(unittest.TestCase):
     def test_host_monitor_reuses_lease_and_retries_failed_service(self):
         with patch.object(module, "STOP", False), \
              patch.object(module.signal, "signal"), \
+             patch.object(module, "runtime_lock", return_value=None), \
              patch.object(module, "publishers", return_value=[module.Publisher(20, 42, "off")]), \
              patch.object(module, "flatpak_environment", return_value={"PATH": "/usr/bin:/bin"}), \
              patch.object(module.time, "monotonic", side_effect=[0, 0, 1, 30, 30]), \
@@ -117,6 +121,7 @@ class VrrLeaseTests(unittest.TestCase):
     def test_follow_steam_does_not_start_a_flatpak_lease(self):
         with patch.object(module, "STOP", False), \
              patch.object(module.signal, "signal"), \
+             patch.object(module, "runtime_lock", return_value=None), \
              patch.object(module, "publishers", return_value=[module.Publisher(20, 42, "follow-steam")]), \
              patch.object(module, "flatpak_environment") as session, \
              patch.object(module.time, "sleep", side_effect=lambda _: setattr(module, "STOP", True)), \
@@ -124,6 +129,116 @@ class VrrLeaseTests(unittest.TestCase):
             self.assertEqual(module.watch_flatpak(), 0)
             session.assert_not_called()
             run.assert_not_called()
+
+    def test_standalone_watcher_is_not_bound_to_its_shell(self):
+        environment = {key: value for key, value in os.environ.items()
+                       if key != module.WATCH_OWNER_ENV}
+        with patch.dict(os.environ, environment, clear=True), patch("ctypes.CDLL") as libc:
+            self.assertIsNone(module.watch_owner())
+            libc.assert_not_called()
+
+    def test_owned_watcher_arms_parent_death_signal(self):
+        with patch.dict(os.environ, {module.WATCH_OWNER_ENV: "1234"}), \
+             patch("ctypes.CDLL") as libc:
+            self.assertEqual(module.watch_owner(), 1234)
+            libc.return_value.prctl.assert_called_once_with(
+                module.PR_SET_PDEATHSIG, int(signal.SIGTERM), 0, 0, 0)
+
+    def test_watcher_whose_owner_already_died_never_discovers(self):
+        # Our own PID is never our parent, as after an owner dies before arming.
+        with patch.dict(os.environ, {module.WATCH_OWNER_ENV: str(os.getpid())}), \
+             patch("ctypes.CDLL"), \
+             patch.object(module, "STOP", False), \
+             patch.object(module.signal, "signal"), \
+             patch.object(module, "runtime_lock", return_value=None), \
+             patch.object(module, "publishers") as discovered, \
+             patch.object(module.time, "sleep") as sleep:
+            self.assertEqual(module.watch_flatpak(), 0)
+            discovered.assert_not_called()
+            sleep.assert_not_called()
+
+    def test_second_watcher_waits_for_the_discovery_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            holder = os.open(Path(temporary) / "mako-vrr-flatpak-watch.lock",
+                             os.O_CREAT | os.O_RDWR, 0o600)
+            fcntl.flock(holder, fcntl.LOCK_EX)
+
+            def release_then_stop(_seconds):
+                if sleep.call_count == 1:
+                    os.close(holder)
+                else:
+                    module.STOP = True
+
+            with patch.dict(os.environ, {"XDG_RUNTIME_DIR": temporary}), \
+                 patch.object(module, "STOP", False), \
+                 patch.object(module.signal, "signal"), \
+                 patch.object(module, "watch_owner", return_value=None), \
+                 patch.object(module, "publishers", return_value=[]) as discovered, \
+                 patch.object(module.time, "sleep", side_effect=release_then_stop) as sleep:
+                self.assertEqual(module.watch_flatpak(), 0)
+            self.assertEqual(sleep.call_count, 2)
+            discovered.assert_called_once()
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "parent-death signals are Linux-only")
+    def test_owned_watcher_exits_after_its_backend_is_killed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / "runtime-state").mkdir()
+            lock = Path(temporary) / "mako-vrr-flatpak-watch.lock"
+            # Stand in for a Decky backend that SIGKILL ends before _unload completes.
+            backend = subprocess.Popen((
+                sys.executable, "-c",
+                "import os, subprocess, sys, time\n"
+                f"env = dict(os.environ, {module.WATCH_OWNER_ENV}=str(os.getpid()))\n"
+                "watcher = subprocess.Popen((sys.executable, sys.argv[1], '--watch-flatpak'), env=env,\n"
+                "                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                "print(watcher.pid, flush=True)\n"
+                "time.sleep(60)\n",
+                str(source),
+            ), stdout=subprocess.PIPE, text=True, env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": temporary,
+                "XDG_RUNTIME_DIR": temporary, "MAKO_CONFIG": str(Path(temporary) / "conf.toml"),
+            })
+            watcher = None
+            try:
+                watcher = int(backend.stdout.readline())
+                deadline = time.monotonic() + 10
+                while not lock.exists() or self._lock_is_free(lock):
+                    self.assertLess(time.monotonic(), deadline, "watcher never started discovery")
+                    time.sleep(0.05)
+                backend.kill()
+                backend.wait()
+                deadline = time.monotonic() + 5
+                while self._running(watcher):
+                    self.assertLess(time.monotonic(), deadline, "orphaned watcher kept running")
+                    time.sleep(0.05)
+                self.assertTrue(self._lock_is_free(lock))
+            finally:
+                if backend.poll() is None:
+                    backend.kill()
+                    backend.wait()
+                backend.stdout.close()
+                if watcher is not None and self._running(watcher) and str(source).encode() in \
+                        Path(f"/proc/{watcher}/cmdline").read_bytes():
+                    os.kill(watcher, signal.SIGKILL)  # Never leave a failed run's orphan behind.
+
+    @staticmethod
+    def _lock_is_free(path: Path) -> bool:
+        descriptor = os.open(path, os.O_RDWR)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(descriptor)
+
+    @staticmethod
+    def _running(pid: int) -> bool:
+        try:
+            state = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[0]
+        except (OSError, IndexError):
+            return False
+        return state != "Z"  # An unreaped orphan has still exited.
 
     def test_decision_log_emits_only_on_state_changes(self):
         output = io.StringIO()

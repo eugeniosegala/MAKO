@@ -178,6 +178,12 @@ namespace {
         return supportedFeatures;
     }
 
+    bool checkStorageImageWriteWithoutFormat(const VulkanInstanceFuncs& fi,
+            VkPhysicalDevice physdev) {
+        return queryFeatures(fi, physdev).features
+            .shaderStorageImageWriteWithoutFormat == VK_TRUE;
+    }
+
     bool checkFP16(const VulkanInstanceFuncs& fi, VkPhysicalDevice physdev) {
         VkPhysicalDeviceVulkan12Features vulkan12{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES
@@ -243,6 +249,7 @@ namespace {
     /// create a logical device
     ls::owned_ptr<VkDevice> createLogicalDevice(const VulkanInstanceFuncs& fi,
             VkPhysicalDevice physdev, uint32_t cfi, bool fp16,
+            bool storageWriteWithoutFormat,
             const OptionalDeviceFeatures optionalFeatures) {
         VkDevice handle{};
 
@@ -263,6 +270,8 @@ namespace {
         const VkPhysicalDeviceFeatures requestedFeatures{
             .shaderStorageImageExtendedFormats =
                 supportedFeatures.features.shaderStorageImageExtendedFormats,
+            .shaderStorageImageWriteWithoutFormat =
+                storageWriteWithoutFormat ? VK_TRUE : VK_FALSE,
         };
         const VkDeviceQueueCreateInfo requestedQueueInfo{
             .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
@@ -424,6 +433,11 @@ VulkanInstanceFuncs vk::initVulkanInstanceFuncs(VkInstance i, PFN_vkGetInstanceP
         .GetPhysicalDeviceFormatProperties =
             ipa<PFN_vkGetPhysicalDeviceFormatProperties>(mpa, i,
                 "vkGetPhysicalDeviceFormatProperties"),
+        .GetPhysicalDeviceFormatProperties2 = optionalIpa<
+            PFN_vkGetPhysicalDeviceFormatProperties2>(
+                mpa, i, "vkGetPhysicalDeviceFormatProperties2",
+                "vkGetPhysicalDeviceFormatProperties2KHR"
+            ),
         .GetPhysicalDeviceImageFormatProperties2 = graphical ?
             optionalIpa<PFN_vkGetPhysicalDeviceImageFormatProperties2>(
                 mpa, i, "vkGetPhysicalDeviceImageFormatProperties2",
@@ -583,6 +597,8 @@ Vulkan::Vulkan(const std::string& appName, version appVersion,
         this->instance_funcs, this->phys_dev, this->queueFamilyIdx
     )),
     fp16(checkFP16(this->instance_funcs, this->phys_dev)),
+    storageWriteWithoutFormat(checkStorageImageWriteWithoutFormat(
+        this->instance_funcs, this->phys_dev)),
     robustImageAccess2(checkOptionalDeviceFeatures(
         this->instance_funcs, this->phys_dev
     ).robustImageAccess2),
@@ -590,6 +606,7 @@ Vulkan::Vulkan(const std::string& appName, version appVersion,
         this->phys_dev,
         this->queueFamilyIdx,
         this->fp16,
+        this->storageWriteWithoutFormat,
         OptionalDeviceFeatures{
             .robustImageAccess2 = this->robustImageAccess2,
         }
@@ -621,7 +638,8 @@ Vulkan::Vulkan(VkInstance instance, VkDevice device,
         bool isGraphical,
         std::optional<PFN_vkSetDeviceLoaderData> setLoaderData,
         const std::optional<std::filesystem::path>& cachefile,
-        const bool shaderFloat16Enabled) :
+        const bool shaderFloat16Enabled,
+        const bool storageImageWriteWithoutFormatEnabled) :
     instance(new VkInstance(instance)),
     instance_funcs(instanceFuncs),
     phys_dev(physdev),
@@ -631,6 +649,7 @@ Vulkan::Vulkan(VkInstance instance, VkDevice device,
     )),
     frameGenerationInterop(frameGenerationInteropEnabled),
     fp16(shaderFloat16Enabled),
+    storageWriteWithoutFormat(storageImageWriteWithoutFormatEnabled),
     robustImageAccess2(false),
     device(new VkDevice(device)),
     setLoaderData(setLoaderData),
@@ -723,6 +742,43 @@ bool Vulkan::supportsStorageImageExtendedFormats() const {
         this->instance_funcs, this->phys_dev
     );
     return features.features.shaderStorageImageExtendedFormats == VK_TRUE;
+}
+
+bool Vulkan::supportsStorageImageWriteWithoutFormat(
+        const VkFormat format) const {
+    if (!this->storageWriteWithoutFormat ||
+            !this->supportsOptimalTilingFormatFeatures(
+                format, VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT))
+        return false;
+    // The core feature covers only Vulkan's storage-without-format list,
+    // which excludes BGRA8 and A2R10G10B10. Require per-format proof for this
+    // optional path instead of guessing from a legacy storage-image bit.
+    if (!this->instance_funcs.GetPhysicalDeviceFormatProperties2)
+        return false;
+    VkPhysicalDeviceProperties properties{};
+    this->instance_funcs.GetPhysicalDeviceProperties(this->phys_dev, &properties);
+    if (properties.apiVersion < VK_API_VERSION_1_3) {
+        try {
+            if (!supportsDeviceExtension(this->instance_funcs, this->phys_dev,
+                    VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME))
+                return false;
+        } catch (const ls::vulkan_error&) {
+            // Failed discovery of an optimization must not prevent the
+            // existing copy-based scaler from creating its swapchain.
+            return false;
+        }
+    }
+    VkFormatProperties3 features{
+        .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_3,
+    };
+    VkFormatProperties2 formatProperties{
+        .sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2,
+        .pNext = &features,
+    };
+    this->instance_funcs.GetPhysicalDeviceFormatProperties2(
+        this->phys_dev, format, &formatProperties);
+    return (features.optimalTilingFeatures &
+        VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT) != 0;
 }
 
 void Vulkan::persistPipelineCache() const noexcept {

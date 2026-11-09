@@ -16,9 +16,10 @@ using namespace mako::layer;
 namespace {
     VkResult extensionQueryResult = VK_SUCCESS;
     VkResult extensionListResult = VK_SUCCESS;
-    uint32_t loaderEnumerationCalls{};
-    VkResult VKAPI_CALL enumerateLayerExtensions(const char*, uint32_t* count,
+    VkResult VKAPI_CALL enumerateLoaderExtensions(const char* layerName, uint32_t* count,
             VkExtensionProperties* properties) {
+        if (layerName)
+            return VK_ERROR_LAYER_NOT_PRESENT;
         if (extensionQueryResult != VK_SUCCESS)
             return extensionQueryResult;
         *count = 1;
@@ -26,14 +27,6 @@ namespace {
             std::strcpy(properties[0].extensionName, "VK_KHR_surface");
             return extensionListResult;
         }
-        return VK_SUCCESS;
-    }
-    VkResult VKAPI_CALL enumerateLoaderExtensions(const char*, uint32_t* count,
-            VkExtensionProperties* properties) {
-        ++loaderEnumerationCalls;
-        *count = 1;
-        if (properties)
-            std::strcpy(properties[0].extensionName, "VK_KHR_surface");
         return VK_SUCCESS;
     }
     void expect(const bool condition, const std::string& message) {
@@ -160,32 +153,20 @@ namespace {
 
 int main() {
     {
-        auto query = queryPresentationInstanceExtensions(
-            enumerateLayerExtensions, enumerateLoaderExtensions);
-        expect(query.result == VK_SUCCESS && query.properties.size() == 1 &&
-                loaderEnumerationCalls == 0,
-            "A complete next-layer query needs no loader fallback");
-        extensionQueryResult = VK_ERROR_LAYER_NOT_PRESENT;
-        query = queryPresentationInstanceExtensions(enumerateLayerExtensions, enumerateLoaderExtensions);
-        expect(query.result == VK_SUCCESS && query.properties.size() == 1 &&
-                loaderEnumerationCalls == 2,
-            "A layer-specific query uses real loader count and property results");
+        auto query = queryPresentationInstanceExtensions(enumerateLoaderExtensions);
+        expect(query.result == VK_SUCCESS && query.properties.size() == 1,
+            "The loader query reports the implementation's instance extensions");
         extensionQueryResult = VK_ERROR_INITIALIZATION_FAILED;
-        query = queryPresentationInstanceExtensions(enumerateLayerExtensions, enumerateLoaderExtensions);
-        expect(query.result == VK_ERROR_INITIALIZATION_FAILED && query.properties.empty() &&
-                loaderEnumerationCalls == 2,
-            "Other driver errors cannot trigger speculative extension support");
+        query = queryPresentationInstanceExtensions(enumerateLoaderExtensions);
+        expect(query.result == VK_ERROR_INITIALIZATION_FAILED && query.properties.empty(),
+            "Enumeration errors cannot trigger speculative extension support");
         extensionQueryResult = VK_SUCCESS;
         extensionListResult = VK_INCOMPLETE;
-        query = queryPresentationInstanceExtensions(enumerateLayerExtensions, enumerateLoaderExtensions);
+        query = queryPresentationInstanceExtensions(enumerateLoaderExtensions);
         expect(query.result == VK_INCOMPLETE && query.properties.empty(),
             "Incomplete extension lists cannot authorize optional device features");
-        query = queryPresentationInstanceExtensions(nullptr, enumerateLoaderExtensions);
-        expect(query.result == VK_SUCCESS && query.properties.size() == 1 &&
-                loaderEnumerationCalls == 4,
-            "A layer without global enumeration uses verified loader capabilities");
-        expect(queryPresentationInstanceExtensions(nullptr, nullptr).properties.empty(),
-            "Missing both enumeration entrypoints preserves the unsupported fallback");
+        expect(queryPresentationInstanceExtensions(nullptr).properties.empty(),
+            "A missing loader entrypoint preserves the unsupported fallback");
     }
     {
         const auto extensions = [](std::initializer_list<const char*> names) {

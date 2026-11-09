@@ -6,6 +6,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cstdio>
 #include <cstdlib>
 #include <iostream>
 #include <sstream>
@@ -165,6 +166,43 @@ void logBridgeTiming(const uint64_t bridgeId, const VkSwapchainKHR swapchain,
          << " refresh_cycle_ns=" << refreshCycleNs
          << " refresh_interval_ns=" << refreshIntervalNs << '\n';
     std::cerr << line.str();
+}
+
+bool bridgeFramesEnabled() {
+    static const bool value = [] {
+        const char* environment = std::getenv("MAKO_PRESENT_DIAGNOSTICS_BRIDGE_FRAMES");
+        return enabled() && environment && std::string_view(environment) != "0";
+    }();
+    return value;
+}
+
+void logBridgeFrame(const uint64_t bridgeId, const uint32_t timingVersion,
+        const BridgePresentTiming::Frame& frame) {
+    // One bounded write per output; feedback can be drained on the present thread.
+    const auto signedMs = [](const uint64_t later, const uint64_t earlier) {
+        if (!later || !earlier)
+            return 0.0;
+        return later >= earlier ? static_cast<double>(later - earlier) / 1000000.0
+                                : -static_cast<double>(earlier - later) / 1000000.0;
+    };
+    std::array<char, 512> line{};
+    const int length = std::snprintf(line.data(), line.size(),
+        "MAKO Renderer: present diagnostics: operation=gamescope-bridge-frame"
+        " bridge=%llu timing_protocol=%u id=%llu desired_ns=%llu planned_submit_ns=%llu"
+        " submitted_ns=%llu shown_ns=%llu latch_ns=%llu queue_end_ns=%llu"
+        " lateness_ms=%.3f slack_ms=%.3f late_latch=%d dropped=%d\n",
+        static_cast<unsigned long long>(bridgeId), timingVersion,
+        static_cast<unsigned long long>(frame.id),
+        static_cast<unsigned long long>(frame.desired),
+        static_cast<unsigned long long>(frame.plannedSubmit),
+        static_cast<unsigned long long>(frame.submitted),
+        static_cast<unsigned long long>(frame.shown),
+        static_cast<unsigned long long>(frame.latch),
+        static_cast<unsigned long long>(frame.queueEnd),
+        signedMs(frame.shown, frame.desired), signedMs(frame.desired, frame.submitted),
+        frame.lateLatch ? 1 : 0, frame.dropped ? 1 : 0);
+    if (length > 0)
+        std::cerr.write(line.data(), std::min<std::streamsize>(length, line.size() - 1));
 }
 
 void recordApplicationPresentWait(const VkDevice device, const VkSwapchainKHR swapchain,
@@ -505,21 +543,34 @@ namespace {
                   << " policy=sdr-fast-resume\n";
     }
 
-    void logDynamicCadenceRecovery(const std::string_view operation,
-            const size_t generationLimit, const double baselineBaseFps,
-            const double measuredBaseFps,
-            const size_t confirmedSamples) {
+    void logDynamicCadenceRecovery(
+            const AdaptiveNativeCadenceProbeDiagnostic& probe) {
         if (!enabled())
             return;
 
-        std::cerr << "MAKO Renderer: present diagnostics: operation="
-                  << operation
-                  << " context=" << activeContextId
-                  << " generated_limit=" << generationLimit
-                  << " baseline_base_fps=" << baselineBaseFps
-                  << " measured_base_fps=" << measuredBaseFps
-                  << " confirmed_samples=" << confirmedSamples
-                  << '\n';
+        // Build the record once so concurrent output cannot split it.
+        std::ostringstream line;
+        line << "MAKO Renderer: present diagnostics: operation="
+             << probe.operation
+             << " context=" << activeContextId
+             << " generated_limit=" << probe.generationLimit
+             << " baseline_base_fps=" << probe.baselineBaseFps
+             << " measured_base_fps=" << probe.measuredBaseFps
+             << " confirmed_samples=" << probe.confirmedSamples
+             << " native_frames=" << probe.nativeFrames
+             << " native_ms="
+             << std::chrono::duration_cast<std::chrono::milliseconds>(
+                    probe.nativeDuration
+                ).count()
+             << " reason=" << (probe.reason.empty()
+                 ? std::string_view{"none"} : probe.reason)
+             << " layer_share_max=";
+        if (probe.maximumLayerShare)
+            line << *probe.maximumLayerShare;
+        else
+            line << "unknown";
+        line << '\n';
+        std::cerr << line.str();
     }
 
     void logAdaptiveNearTargetNativePreference(
@@ -801,15 +852,9 @@ namespace {
             );
         }
 
-        void nativeCadenceProbe(const std::string_view operation,
-                const size_t generationLimit,
-                const double baselineBaseFps,
-                const double measuredBaseFps,
-                const size_t confirmedSamples) override {
-            logDynamicCadenceRecovery(
-                operation, generationLimit, baselineBaseFps,
-                measuredBaseFps, confirmedSamples
-            );
+        void nativeCadenceProbe(
+                const AdaptiveNativeCadenceProbeDiagnostic& probe) override {
+            logDynamicCadenceRecovery(probe);
         }
 
         void nearTargetNativePreference(const std::string_view operation,

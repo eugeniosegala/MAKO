@@ -105,6 +105,21 @@ namespace {
         1.02;
     constexpr double adaptiveNativeCadenceMinimumRiseRatio = 1.25;
     constexpr size_t adaptiveNativeCadenceConfirmationFrames = 3;
+    // A source able to run 25% faster spends at least a fifth of each
+    // interval waiting inside MAKO while generated FIFO work holds it. A
+    // self-capped source spends almost none (about 2% in MAKO Gym's capped
+    // 30 FPS rows, against about 100% while held). Below a tenth for the
+    // whole interval the timer probe is skipped, at most three times in a
+    // row; reaching the held share right after capped frames probes at once.
+    constexpr double adaptiveNativeCadenceHeldLayerShare =
+        1.0 - 1.0 / adaptiveNativeCadenceMinimumRiseRatio;
+    constexpr double adaptiveNativeCadenceCappedLayerShare = 0.10;
+    constexpr size_t adaptiveNativeCadenceMaximumSkippedProbes = 3;
+    // The held trigger targets a rise hidden at the capped rate. Once the
+    // observed source has climbed beyond this, ordinary planning already
+    // sees it; a probe would measure against the risen baseline, reject, and
+    // restore generated work that holds the source again.
+    constexpr double adaptiveNativeCadenceHeldTriggerRiseTolerance = 1.10;
     constexpr auto adaptiveStabilizationDuration = std::chrono::seconds(1);
     constexpr auto adaptiveRecoveryStabilizationDuration = std::chrono::seconds(3);
     constexpr auto adaptiveRampEvaluationDuration = std::chrono::seconds(1);
@@ -1737,6 +1752,23 @@ MAKO_ADAPTIVE_STAGE_INLINE size_t AdaptiveScheduler::selectGeneratedFrameCount(
     return generatedFrameCount;
 }
 
+void AdaptiveScheduler::reportNativeCadenceProbe(const TimePoint now,
+        const std::string_view operation, const double measuredBaseFps) {
+    const auto& probe = this->state.nativeCadenceProbe;
+    this->diagnostics->nativeCadenceProbe({
+        .operation = operation,
+        .generationLimit = this->state.outputPlanner.generationLimit,
+        .baselineBaseFps = probe.baselineBaseFps,
+        .measuredBaseFps = measuredBaseFps,
+        .confirmedSamples = probe.confirmedSamples,
+        .nativeFrames = probe.nativeFrames,
+        .nativeDuration = probe.startedAt
+            ? now - *probe.startedAt : Clock::duration{},
+        .reason = probe.reason,
+        .maximumLayerShare = probe.reasonLayerShare,
+    });
+}
+
 MAKO_ADAPTIVE_STAGE_INLINE AdaptiveScheduler::PlanningStageResult
 AdaptiveScheduler::advanceNativeCadenceProbe(
         const TimePoint now, const double baseFps,
@@ -1744,12 +1776,13 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         const double desiredOutputsPerRealFrame,
         const size_t maximumGeneratedFrameCount,
         size_t& generatedFrameCount,
-        const std::optional<TimePoint> queuedPresentationDeadline) {
+        const std::optional<TimePoint> queuedPresentationDeadline,
+        const std::optional<double> applicationLayerShare) {
     // Ordered FIFO work makes a genuine 30-FPS source observationally
     // identical to a native 60-FPS source held at 30 by MAKO's previous
     // generated-plus-original present. The opt-in probe removes generated
     // work for one frame, then requires a short faster run before rebasing.
-    // A rejected probe immediately resumes the proven generated policy.
+    // A rejected probe immediately resumes the ordinary generated plan.
     auto& probe = this->state.nativeCadenceProbe;
     if (probe.qualifyingNearTarget) {
         // The native sample already proved a real cadence rise. Keep that
@@ -1797,29 +1830,32 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
                 probe.drainUntil.reset();
             this->state.outputPlanner.resetTargetClock();
             generatedFrameCount = 0;
+            probe.nativeFrames++;
             return {};
         }
         const bool fasterCadence = instantaneousBaseFps >=
             probe.baselineBaseFps * adaptiveNativeCadenceMinimumRiseRatio;
         if (!fasterCadence) {
-            this->diagnostics->nativeCadenceProbe(
-                "dynamic-cadence-probe-rejected",
-                this->state.outputPlanner.generationLimit,
-                probe.baselineBaseFps,
-                instantaneousBaseFps,
-                probe.confirmedSamples
+            this->reportNativeCadenceProbe(
+                now, "dynamic-cadence-probe-rejected", instantaneousBaseFps
             );
             probe.active = false;
+            probe.startedAt.reset();
+            probe.nativeFrames = 0;
+            probe.resetLayerShareWindow();
             probe.baselineBaseFps = 0.0;
             probe.minimumMeasuredBaseFps = 0.0;
             probe.confirmedSamples = 0;
             probe.nextAt = now + this->config.dynamicCadenceProbeInterval;
             this->state.outputPlanner.resetTargetClock();
-            generatedFrameCount = std::max<size_t>(generatedFrameCount, 1);
+            // Resume the ordinary plan without adding to it. A source that
+            // already runs near its target plans no generated frame here, and
+            // forcing one fills the FIFO slot that holds it back to half rate.
             return {.planningReady = true};
         }
 
         probe.confirmedSamples++;
+        probe.nativeFrames++;
         if (probe.minimumMeasuredBaseFps == 0.0) {
             probe.minimumMeasuredBaseFps = instantaneousBaseFps;
         } else {
@@ -1848,18 +1884,17 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         this->state.stableCadence.baselineBaseFps = 0.0;
         this->state.stableCadence.candidate.reset();
         this->state.efficiencyProbe.reset();
-        this->diagnostics->nativeCadenceProbe(
-            "dynamic-cadence-recovered",
-            this->state.outputPlanner.generationLimit,
-            probe.baselineBaseFps,
-            recoveredBaseFps,
-            probe.confirmedSamples
+        this->reportNativeCadenceProbe(
+            now, "dynamic-cadence-recovered", recoveredBaseFps
         );
         probe.qualifyingNearTarget = this->config.nearTargetNativePreference &&
             recoveredBaseFps >= this->config.targetFps *
                 adaptiveNearTargetNativeMinimumOutputRatio;
         this->state.nearTargetNativePreference.resetNativeSample();
         probe.active = probe.qualifyingNearTarget;
+        probe.startedAt.reset();
+        probe.nativeFrames = 0;
+        probe.resetLayerShareWindow();
         probe.baselineBaseFps = 0.0;
         probe.minimumMeasuredBaseFps = 0.0;
         probe.confirmedSamples = 0;
@@ -1867,30 +1902,99 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         return {};
     }
 
-    if (!probe.nextAt) {
-        probe.nextAt = now + this->config.dynamicCadenceProbeInterval;
-        return {.planningReady = true};
+    // Waiting inside MAKO separates a source held by generated FIFO work from
+    // a self-capped one. Missing or partial evidence keeps the timer exact.
+    if (!applicationLayerShare || !std::isfinite(*applicationLayerShare)) {
+        probe.layerShareUnknown = true;
+        probe.cappedFrames = 0;
+        probe.heldFrames = 0;
+        probe.heldTriggerSpent = false;
+    } else {
+        const double share = *applicationLayerShare;
+        probe.maximumLayerShare = std::max(probe.maximumLayerShare, share);
+        probe.layerShareSamples++;
+        if (share < adaptiveNativeCadenceCappedLayerShare) {
+            probe.heldFrames = 0;
+            if (++probe.cappedFrames >= adaptiveNativeCadenceConfirmationFrames &&
+                    !probe.heldTriggerSpent) {
+                // A rise can begin before FIFO work makes the source wait
+                // inside MAKO. Keep the period's lowest rate so that rise
+                // still disarms the trigger instead of becoming its baseline.
+                probe.heldTriggerBaseFps = probe.heldTriggerArmed
+                    ? std::min(probe.heldTriggerBaseFps, baseFps) : baseFps;
+                probe.heldTriggerArmed = true;
+            }
+        } else if (share >= adaptiveNativeCadenceHeldLayerShare) {
+            probe.cappedFrames = 0;
+            probe.heldFrames++;
+            probe.heldTriggerSpent = false;
+        } else {
+            probe.cappedFrames = 0;
+            probe.heldFrames = 0;
+            probe.heldTriggerSpent = false;
+        }
     }
-    if (now < *probe.nextAt)
-        return {.planningReady = true};
 
+    // A capped source that starts waiting on MAKO may have switched to a
+    // faster native mode; probe at once rather than at the next interval.
+    // Only a fresh capped period re-arms this, so a held source that cannot
+    // rise keeps the configured timer instead of probing repeatedly.
+    if (probe.heldTriggerArmed && baseFps > probe.heldTriggerBaseFps *
+            adaptiveNativeCadenceHeldTriggerRiseTolerance) {
+        probe.heldTriggerArmed = false;
+        probe.heldFrames = 0;
+        // Re-arming within the same capped period would take the risen rate.
+        probe.heldTriggerSpent = probe.cappedFrames > 0;
+    }
+    const bool heldTrigger = probe.heldTriggerArmed &&
+        probe.heldFrames >= adaptiveNativeCadenceConfirmationFrames;
+    std::string_view reason = "held";
+    if (!heldTrigger) {
+        if (!probe.nextAt) {
+            probe.nextAt = now + this->config.dynamicCadenceProbeInterval;
+            return {.planningReady = true};
+        }
+        if (now < *probe.nextAt)
+            return {.planningReady = true};
+        const bool capped = !probe.layerShareUnknown &&
+            probe.layerShareSamples >= adaptiveNativeCadenceConfirmationFrames &&
+            probe.maximumLayerShare < adaptiveNativeCadenceCappedLayerShare;
+        if (capped &&
+                probe.skippedProbes < adaptiveNativeCadenceMaximumSkippedProbes) {
+            probe.skippedProbes++;
+            probe.reason = "capped";
+            probe.reasonLayerShare = probe.maximumLayerShare;
+            this->reportNativeCadenceProbe(
+                now, "dynamic-cadence-probe-skipped", 0.0
+            );
+            probe.nextAt = now + this->config.dynamicCadenceProbeInterval;
+            probe.resetLayerShareWindow();
+            return {.planningReady = true};
+        }
+        reason = capped ? "skip-limit" : "interval";
+    }
+
+    probe.reason = reason;
+    probe.reasonLayerShare = probe.layerShareUnknown ||
+            probe.layerShareSamples == 0
+        ? std::nullopt : std::optional{probe.maximumLayerShare};
+    probe.resetLayerShareWindow();
+    probe.skippedProbes = 0;
+    probe.heldTriggerArmed = false;
+    probe.heldFrames = 0;
     probe.active = true;
     probe.nextAt.reset();
     probe.drainUntil = queuedPresentationDeadline &&
             *queuedPresentationDeadline > now
         ? queuedPresentationDeadline : std::nullopt;
+    probe.startedAt = now;
+    probe.nativeFrames = 1;
     probe.baselineBaseFps = baseFps;
     probe.minimumMeasuredBaseFps = 0.0;
     probe.confirmedSamples = 0;
     this->state.outputPlanner.resetTargetClock();
     generatedFrameCount = 0;
-    this->diagnostics->nativeCadenceProbe(
-        "dynamic-cadence-probe-start",
-        this->state.outputPlanner.generationLimit,
-        baseFps,
-        0.0,
-        0
-    );
+    this->reportNativeCadenceProbe(now, "dynamic-cadence-probe-start", 0.0);
     return {};
 }
 
@@ -2056,7 +2160,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
         const std::optional<size_t> orderedFifoGenerationLimit,
         const std::optional<size_t> integerBaseCapGenerationLimit,
         const std::optional<TimePoint> queuedPresentationDeadline,
-        const double headroomSourceCapFps) {
+        const double headroomSourceCapFps,
+        const std::optional<double> applicationLayerShare) {
     this->state.ramp.pacedLoadRollbackLimit.reset();
     // Wall time alone cannot qualify a lower workload. An intentional native
     // probe pauses the delivered-work clock; any other missing observation
@@ -2179,7 +2284,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
             desiredOutputsPerRealFrame,
             maximumGeneratedFrameCount,
             generatedFrameCount,
-            queuedPresentationDeadline
+            queuedPresentationDeadline,
+            applicationLayerShare
         );
         if (!nativeCadenceProbe.planningReady)
             return nativeCadenceProbe.terminalPlan;

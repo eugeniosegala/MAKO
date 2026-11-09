@@ -50,6 +50,7 @@ export default defineConfig({
         "src/hooks/useProfileManagement.ts",
         "src/hooks/useProfileSession.ts",
         "src/hooks/useModelStatus.ts",
+        "src/hooks/useModelFallback.ts",
         "src/components/ModelWarning.tsx",
         "src/components/InfoVisibility.tsx",
         "src/components/MakoInfo.tsx",

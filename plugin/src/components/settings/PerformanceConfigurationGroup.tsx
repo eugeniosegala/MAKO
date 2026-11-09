@@ -12,11 +12,13 @@ import {
   FLOW_SCALE_MAX,
   FLOW_SCALE_MIN,
   FLOW_SCALE,
-  ULTRA_PERFORMANCE_FLOW_SCALE,
 } from "../../config/configSchema";
-import { ultraPerformanceChanges } from "../../config/ultraPerformancePreset";
+import {
+  ultraPerformanceChanges,
+  ultraPerformanceFlowScale,
+} from "../../config/ultraPerformancePreset";
 import t from "../../i18n/i18n";
-import { MakoInlineTip, MakoRestartLabel } from "../MakoUi";
+import { MakoRestartLabel } from "../MakoUi";
 import type { ConfigurationEditorProps } from "./types";
 
 export function PerformanceConfigurationGroup({
@@ -64,37 +66,25 @@ export function PerformanceConfigurationGroup({
               />
             </span>
           }
-          description={
-            <>
-              <div>
-                {t(
-                  "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "Reduces MAKO's GPU workload on low-power devices. Uses 70% Flow Scale, the Lighter FG Model, and LS1 Performance when Scaling is enabled. Respects the global FP16 setting. Trades image quality for performance across the active MAKO features.",
-                )}
-              </div>
-              <MakoInlineTip tone="info">
-                {t(
-                  "CONFIG_ULTRA_PERFORMANCE_WARNING",
-                  "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
-                )}
-              </MakoInlineTip>
-            </>
-          }
+          description={t(
+            "CONFIG_ULTRA_PERFORMANCE_DESC",
+            "Cuts GPU and memory use on low-power devices at some cost to image quality. Locks Flow Scale at 60% for MAKO FG and 70% for LSFG, switches LSFG to LSFG Performance, and uses MAKO Scaler when Scaling is enabled.",
+          )}
           checked={config.ultra_performance}
-          onChange={(value) => onConfigUpdate(ultraPerformanceChanges(value))}
+          onChange={(value) => onConfigUpdate(ultraPerformanceChanges(value, config))}
         />
       </PanelSectionRow>
 
       <PanelSectionRow>
         <SliderField
-          label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
+          label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round((config.ultra_performance ? ultraPerformanceFlowScale(config) : config.flow_scale) * 100)}%)`}
           description={t(
             "CONFIG_FLOW_SCALE_DESC",
             "Frame Generation motion-estimation resolution. Lower saves GPU work; higher favors quality.",
           )}
           value={
             config.ultra_performance
-              ? ULTRA_PERFORMANCE_FLOW_SCALE
+              ? ultraPerformanceFlowScale(config)
               : config.flow_scale
           }
           min={FLOW_SCALE_MIN}

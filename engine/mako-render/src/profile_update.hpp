@@ -109,17 +109,20 @@ namespace mako::layer {
     struct ProcessStaticProfileProjection {
         ls::GameConf runtimeProfile;
         bool gpuSelectionPending{false};
+        bool frameGenerationModelPending{false};
         bool frameGenerationProvisioningPending{false};
         bool ultraPerformancePending{false};
         bool scalingEnginePending{false};
         bool swapchainImageCountCompatibilityPending{false};
+        bool mailboxPresentationCompatibilityPending{false};
 
         [[nodiscard]] bool restartRequired() const {
-            return this->gpuSelectionPending ||
+            return this->gpuSelectionPending || this->frameGenerationModelPending ||
                 this->frameGenerationProvisioningPending ||
                 this->ultraPerformancePending ||
                 this->scalingEnginePending ||
-                this->swapchainImageCountCompatibilityPending;
+                this->swapchainImageCountCompatibilityPending ||
+                this->mailboxPresentationCompatibilityPending;
         }
     };
 
@@ -132,10 +135,12 @@ namespace mako::layer {
             const ls::GameConf& requested,
             const bool frameGenerationProvisionedAtStartup,
             const bool scalingEngineConfiguredAtStartup,
-            const bool swapchainImageCountCompatibilityConfiguredAtStartup) {
+            const bool swapchainImageCountCompatibilityConfiguredAtStartup,
+            const bool mailboxPresentationCompatibilityConfiguredAtStartup) {
         ProcessStaticProfileProjection projection{
             .runtimeProfile = requested,
             .gpuSelectionPending = requested.gpu != current.gpu,
+            .frameGenerationModelPending = requested.frame_generation_model != current.frame_generation_model,
             .frameGenerationProvisioningPending =
                 requested.frame_generation_provisioned !=
                     frameGenerationProvisionedAtStartup,
@@ -146,7 +151,12 @@ namespace mako::layer {
             .swapchainImageCountCompatibilityPending =
                 requested.swapchain_image_count_compatibility !=
                     swapchainImageCountCompatibilityConfiguredAtStartup,
+            .mailboxPresentationCompatibilityPending =
+                requested.mailbox_presentation_compatibility !=
+                    mailboxPresentationCompatibilityConfiguredAtStartup,
         };
+        if (projection.frameGenerationModelPending)
+            projection.runtimeProfile.frame_generation_model = current.frame_generation_model;
         if (projection.gpuSelectionPending)
             projection.runtimeProfile.gpu = current.gpu;
         if (projection.frameGenerationProvisioningPending) {
@@ -157,6 +167,7 @@ namespace mako::layer {
             projection.runtimeProfile.ultra_performance =
                 current.ultra_performance;
             projection.runtimeProfile.flow_scale = current.flow_scale;
+            projection.runtimeProfile.mako_fg_mode = current.mako_fg_mode;
             projection.runtimeProfile.performance_mode =
                 current.performance_mode;
         }
@@ -167,6 +178,10 @@ namespace mako::layer {
         if (projection.swapchainImageCountCompatibilityPending) {
             projection.runtimeProfile.swapchain_image_count_compatibility =
                 swapchainImageCountCompatibilityConfiguredAtStartup;
+        }
+        if (projection.mailboxPresentationCompatibilityPending) {
+            projection.runtimeProfile.mailbox_presentation_compatibility =
+                mailboxPresentationCompatibilityConfiguredAtStartup;
         }
         return projection;
     }
@@ -202,12 +217,15 @@ namespace mako::layer {
         live.scaling_enabled = current.scaling_enabled;
         live.swapchain_image_count_compatibility =
             current.swapchain_image_count_compatibility;
+        live.mailbox_presentation_compatibility =
+            current.mailbox_presentation_compatibility;
         live.scaling_method = current.scaling_method;
         live.scaling_factor = current.scaling_factor;
         live.scaling_supersampling = current.scaling_supersampling;
         live.scaling_sharpness = current.scaling_sharpness;
         live.hdr_quality = current.hdr_quality;
         live.flow_scale = current.flow_scale;
+        live.mako_fg_mode = current.mako_fg_mode;
         live.performance_mode = current.performance_mode;
         if (generatedFrameCapacityPending) {
             live.adaptive = current.adaptive;
@@ -215,6 +233,30 @@ namespace mako::layer {
             live.adaptive_max_multiplier = current.adaptive_max_multiplier;
         }
         return live;
+    }
+
+    /// Model settings a private FG context opens with. Swapchain creation and
+    /// live replacement share this, so neither can drop a setting and every
+    /// setting joins the comparison that coalesces replacement requests.
+    struct FrameGenerationContextSettings {
+        float flow{1.0F};
+        bool performanceMode{false};
+        bool reducedHdrPrecision{false};
+        int motionPeriod{1};
+
+        friend bool operator==(
+            const FrameGenerationContextSettings&,
+            const FrameGenerationContextSettings&) = default;
+    };
+
+    [[nodiscard]] inline FrameGenerationContextSettings
+    frameGenerationContextSettings(const ls::GameConf& profile) {
+        return {
+            .flow = 1.0F / ls::effectiveFlowScale(profile),
+            .performanceMode = ls::effectivePerformanceMode(profile),
+            .reducedHdrPrecision = ls::hdrApproximateGeneration(profile.hdr_quality),
+            .motionPeriod = ls::makoFgMotionPeriod(ls::effectiveMakoFgMode(profile)),
+        };
     }
 
     struct RecreatedProfileResourceKey {
@@ -226,6 +268,7 @@ namespace mako::layer {
         ls::HdrQuality hdrQuality{ls::HdrQuality::Quality};
         float effectiveFlowScale{ls::GameConfDefaults::flowScale};
         bool effectivePerformanceMode{false};
+        ls::MakoFgMode effectiveMakoFgMode{ls::MakoFgMode::Quality};
         size_t requiredGeneratedFrameCapacity{0};
 
         friend bool operator==(
@@ -250,6 +293,7 @@ namespace mako::layer {
                 ? profile.hdr_quality : ls::HdrQuality::Quality,
             .effectiveFlowScale = ls::effectiveFlowScale(profile),
             .effectivePerformanceMode = ls::effectivePerformanceMode(profile),
+            .effectiveMakoFgMode = ls::effectiveMakoFgMode(profile),
             .requiredGeneratedFrameCapacity =
                 generatedFrameCapacityForActivePolicy(profile),
         };
@@ -376,6 +420,7 @@ namespace mako::layer {
             const ls::GameConf& backendProfile) {
         auto applied = requested;
         applied.gpu = backendProfile.gpu;
+        applied.frame_generation_model = backendProfile.frame_generation_model;
         applied.ultra_performance = backendProfile.ultra_performance;
         return applied;
     }
@@ -391,9 +436,12 @@ namespace mako::layer {
 
     [[nodiscard]] inline bool backendProfileChangePending(
             const std::optional<ls::GameConf>& backendProfile,
-            const ls::GameConf& requestedProfile) {
+            const ls::GameConf& requestedProfile,
+            const std::optional<ls::FrameGenerationModel> modelFallbackFrom = std::nullopt) {
         return backendProfile && (
             backendProfile->gpu != requestedProfile.gpu ||
+            (backendProfile->frame_generation_model != requestedProfile.frame_generation_model &&
+                requestedProfile.frame_generation_model != modelFallbackFrom) ||
             backendProfile->ultra_performance !=
                 requestedProfile.ultra_performance
         );
@@ -518,6 +566,21 @@ namespace mako::layer {
             const ls::GameConf& profile) {
         return profile.dynamic_cadence_recovery &&
             effectiveBaseFpsCap(profile) <= 0.0;
+    }
+
+    /// A desktop compositor gives MAKO neither refresh feedback nor an output
+    /// clock, so ordered FIFO shows a generated batch on consecutive refreshes.
+    /// Fixed and Adaptive spread it across the measured source interval there
+    /// instead. Any Gamescope signal keeps the Gamescope pacing paths, and
+    /// Dynamic Cadence Recovery keeps its unspaced native measurement.
+    [[nodiscard]] inline bool sourceIntervalSpacingApplies(
+            const ls::GameConf& profile, const bool orderedFifoTransport,
+            const bool gamescopeSession,
+            const std::optional<uint32_t> gamescopeRefreshHz,
+            const bool compositorOutputTiming) {
+        return orderedFifoTransport && !gamescopeSession && !gamescopeRefreshHz &&
+            !compositorOutputTiming && !dynamicCadenceRecoveryEnabled(profile) &&
+            effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz);
     }
 
     /// A proven Steady 2x cadence keeps its established FIFO handoff. Under
@@ -764,6 +827,7 @@ namespace mako::layer {
             const ls::GameConf& resources, const ls::GameConf& requested,
             const std::optional<uint32_t> displayRefreshHz) {
         applied.flow_scale = resources.flow_scale;
+        applied.mako_fg_mode = resources.mako_fg_mode;
         applied.performance_mode = resources.performance_mode;
         applied.adaptive = resources.adaptive;
         applied.multiplier = resources.multiplier;
@@ -898,6 +962,10 @@ namespace mako::layer {
         // process-wide backend or Vulkan-layer construction. A natural
         // application swapchain recreation reuses those process owners and
         // therefore cannot satisfy any of these changes.
+        if (current.frame_generation_model != next.frame_generation_model) {
+            applied.frame_generation_model = current.frame_generation_model;
+            processRestartDeferred = true;
+        }
         if (current.gpu != next.gpu) {
             applied.gpu = current.gpu;
             processRestartDeferred = true;
@@ -921,9 +989,10 @@ namespace mako::layer {
 
         const bool frameGenerationBackendChanged = hdrFrameGenerationPrecisionChanged ||
             (current.ultra_performance == next.ultra_performance && (
-            ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||
+            ls::effectiveFlowScale(current) != ls::effectiveFlowScale(applied) ||
             ls::effectivePerformanceMode(current) !=
-                ls::effectivePerformanceMode(next)));
+                ls::effectivePerformanceMode(applied) ||
+            ls::effectiveMakoFgMode(current) != ls::effectiveMakoFgMode(applied)));
         const bool generatedCapacityExceeded =
             generatedFrameCapacityForActivePolicy(next) >
                 generatedFrameCapacity;
@@ -1006,6 +1075,11 @@ namespace mako::layer {
         if (ls::effectiveFlowScale(current) !=
                 ls::effectiveFlowScale(applied)) {
             applied.flow_scale = current.flow_scale;
+            swapchainRecreationDeferred |= !frameGenerationPrivateRebuild;
+        }
+        if (ls::effectiveMakoFgMode(current) !=
+                ls::effectiveMakoFgMode(applied)) {
+            applied.mako_fg_mode = current.mako_fg_mode;
             swapchainRecreationDeferred |= !frameGenerationPrivateRebuild;
         }
         if (ls::effectivePerformanceMode(current) !=

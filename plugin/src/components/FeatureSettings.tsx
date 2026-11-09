@@ -16,6 +16,8 @@ import { ModalityTabs, type ModalityId } from "./ModalityTabs";
 const ACTIVE_MODALITY_STORAGE_KEY = "mako-active-modality";
 
 interface FeatureSettingsProps extends ConfigurationEditorProps {
+  losslessFrameGenerationAvailable?: boolean;
+  losslessScalingAvailable?: boolean;
   runtimeState: RuntimeScalingUiState;
   profileName: string;
   vkBasaltConfigPath: string;
@@ -28,6 +30,8 @@ interface FeatureSettingsProps extends ConfigurationEditorProps {
 
 export function FeatureSettings({
   config,
+  losslessFrameGenerationAvailable,
+  losslessScalingAvailable,
   runtimeState,
   profileName,
   vkBasaltConfigPath,
@@ -105,6 +109,7 @@ export function FeatureSettings({
         {activeModality === "frame-generation" && (
           <FpsMultiplierControl
             config={config}
+            losslessAvailable={losslessFrameGenerationAvailable}
             onConfigChange={onConfigChange}
             onConfigUpdate={onConfigUpdate}
           />
@@ -113,6 +118,7 @@ export function FeatureSettings({
         {activeModality === "spatial" && (
           <ScalingControl
             config={config}
+            losslessAvailable={losslessScalingAvailable}
             runtimeActivationSupported={runtimeState.scalingActivationSupported}
             runtimeInactiveReason={runtimeState.inactiveReason}
             runtimeFactorCeiling={runtimeState.nonSupersamplingFactorCeiling}

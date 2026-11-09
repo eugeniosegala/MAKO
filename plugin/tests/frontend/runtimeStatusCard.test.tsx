@@ -97,6 +97,7 @@ describe("authoritative live status", () => {
           frameGenerationActive: true,
           frameGenerationEnabled: true,
           frameGenerationMode: "adaptive",
+          frameGenerationModel: "lsfg-performance",
           frameGenerationAdaptiveStyle: "fractional",
           frameGenerationTargetFps: 120,
           frameGenerationMultiplier: 3,
@@ -141,7 +142,8 @@ describe("authoritative live status", () => {
     expect(screen.getByText("120 FPS")).toBeTruthy();
     expect(screen.getByText("Max factor")).toBeTruthy();
     expect(screen.getByText("3×")).toBeTruthy();
-    expect(screen.getByText("Model")).toBeTruthy();
+    expect(screen.getAllByText("Model")[0]).toBeTruthy();
+    expect(screen.getByText("LSFG P")).toBeTruthy();
     expect(screen.getByText("MAKO Scaler")).toBeTruthy();
     expect(screen.getByText("Input")).toBeTruthy();
     expect(screen.getByText("960 × 540")).toBeTruthy();

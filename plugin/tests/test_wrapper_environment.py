@@ -100,6 +100,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "DEVICE_SELECT_DISABLED=%s\\n" "${NODEVICE_SELECT:-}"',
             'printf "MESA_ANTI_LAG_DISABLED=%s\\n" "${DISABLE_LAYER_MESA_ANTI_LAG:-}"',
             'printf "PRELOAD=%s\\n" "${LD_PRELOAD:-}"',
+            'printf "WINE_SWITCH=%s\\n" "${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK-unset}"',
+            'printf "WINE_FIX=%s\\n" "${MAKO_WINE_COMPATIBILITY_FIX:-}"',
         ])
         environment = {
             "PATH": os.environ.get("PATH", ""),
@@ -291,6 +293,48 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "VK_LAYER_VALVE_steam_overlay_64",
         )
 
+    def test_desktop_mangohud_counts_game_frames_above_renderer_and_overlay(self):
+        with (
+            tempfile.TemporaryDirectory() as steam_layer_dir,
+            tempfile.TemporaryDirectory() as mangohud_layer_dir,
+        ):
+            self.service.user_vulkan_layer_dir = Path(steam_layer_dir)
+            self.service.mangohud_layer_dir = Path(mangohud_layer_dir)
+            (
+                self.service.user_vulkan_layer_dir /
+                "steamoverlay_x86_64.json"
+            ).write_text("{}", encoding="utf-8")
+            (
+                self.service.mangohud_layer_dir /
+                configuration_module.MANGOHUD_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "mangohud"
+            config["disable_steam_overlay"] = False
+            values = self._evaluate(
+                {"ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1"},
+                config,
+            )
+            config["mangohud_count_real_frames"] = True
+            real = self._evaluate(
+                {"ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1"},
+                config,
+            )
+
+        self.assertEqual(
+            values["INSTANCE"],
+            "VK_LAYER_MAKO_render:"
+            "VK_LAYER_MANGOHUD_overlay_x86_64:"
+            "VK_LAYER_VALVE_steam_overlay_64",
+        )
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(
+            real["INSTANCE"],
+            "VK_LAYER_MANGOHUD_overlay_x86_64:"
+            "VK_LAYER_MAKO_render:"
+            "VK_LAYER_VALVE_steam_overlay_64",
+        )
+
     def test_desktop_steam_overlay_requires_a_readable_manifest(self):
         values = self._evaluate(
             {"ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1"},
@@ -318,6 +362,69 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["INSTANCE"], "VK_LAYER_existing")
         self.assertEqual(values["ENABLE_SCALING"], "")
         self.assertEqual(values["VKBASALT"], "")
+
+    def _wine_marker(self, profile, suffix=".vk-child-window"):
+        directory = self.service.config_dir / "wine-compatibility"
+        directory.mkdir(parents=True, exist_ok=True)
+        marker = directory / (profile.encode().hex() + suffix)
+        marker.write_text("1\n")
+        return marker
+
+    def test_wine_compatibility_marker_exports_the_switch_for_its_profile(self):
+        config = ConfigurationManager.get_defaults()
+        self._wine_marker("Half-Life:-2")
+
+        values = self._evaluate({"MAKO_PROFILE": "Half-Life:-2"}, config)
+        self.assertEqual(values["WINE_FIX"], "1")
+        self.assertEqual(values["WINE_SWITCH"], "1")
+
+        other = self._evaluate({"MAKO_PROFILE": "Other"}, config)
+        self.assertEqual(other["WINE_SWITCH"], "unset")
+        unnamed = self._evaluate({}, config)
+        self.assertEqual(unnamed["WINE_SWITCH"], "unset")
+
+    def test_wine_compatibility_marker_respects_failure_setting_and_caller(self):
+        config = ConfigurationManager.get_defaults()
+        self._wine_marker("Half-Life-2")
+        self._wine_marker("Half-Life-2", ".vk-child-window-ineffective")
+        failed = self._evaluate({"MAKO_PROFILE": "Half-Life-2"}, config)
+        self.assertEqual(failed["WINE_SWITCH"], "unset")
+
+        self._wine_marker("Portal")
+        disabled = dict(config, wine_compatibility_fix=False)
+        values = self._evaluate({"MAKO_PROFILE": "Portal"}, disabled)
+        self.assertEqual(values["WINE_FIX"], "0")
+        self.assertEqual(values["WINE_SWITCH"], "unset")
+
+        caller = self._evaluate({
+            "MAKO_PROFILE": "Portal",
+            "WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK": "0",
+        }, config)
+        self.assertEqual(caller["WINE_SWITCH"], "0")
+
+        without_renderer = dict(
+            config, frame_generation_provisioned=False, scaling_enabled=False
+        )
+        inactive = self._evaluate({"MAKO_PROFILE": "Portal"}, without_renderer)
+        self.assertEqual(inactive["WINE_SWITCH"], "unset")
+
+    def test_wine_compatibility_marker_follows_frame_generation_provisioning(self):
+        config = ConfigurationManager.get_defaults()
+        self._wine_marker("Half-Life-2")
+
+        # A live 0x toggle can turn Frame Generation back on mid-session.
+        live_off = dict(config, frame_generation_enabled=False)
+        values = self._evaluate({"MAKO_PROFILE": "Half-Life-2"}, live_off)
+        self.assertEqual(values["WINE_FIX"], "1")
+        self.assertEqual(values["WINE_SWITCH"], "1")
+
+        # Scaling still needs the Renderer, but nothing needs Wine's switch.
+        scaling_only = dict(
+            config, frame_generation_provisioned=False, scaling_enabled=True
+        )
+        values = self._evaluate({"MAKO_PROFILE": "Half-Life-2"}, scaling_only)
+        self.assertEqual(values["WINE_FIX"], "0")
+        self.assertEqual(values["WINE_SWITCH"], "unset")
 
     def test_scaling_only_keeps_combined_renderer_without_fg_provisioning(self):
         config = ConfigurationManager.get_defaults()
@@ -564,6 +671,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
             config["scaling_method"] = "native"
             config["external_vulkan_layer"] = "mangohud"
             values = self._evaluate(self.gamescope_environment, config)
+            config["mangohud_count_real_frames"] = True
+            real = self._evaluate(self.gamescope_environment, config)
 
         self.assertEqual(
             values["IMPLICIT"],
@@ -580,6 +689,14 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "VK_LAYER_MAKO_spatial_scaling:"
             "VK_LAYER_MANGOHUD_overlay_x86_64",
         )
+        self.assertEqual(
+            real["INSTANCE"],
+            "VK_LAYER_MANGOHUD_overlay_x86_64:"
+            "VK_LAYER_MAKO_render:"
+            "VK_LAYER_FROG_gamescope_wsi_x86_64:"
+            "VK_LAYER_MAKO_spatial_scaling",
+        )
+        self.assertEqual(real["MANGOHUD"], "")
 
     def test_explicit_gamescope_wsi_combines_with_vkbasalt(self):
         with (
@@ -638,7 +755,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             values["IMPLICIT"],
             f"/private/mako/implicit_layer.d:{system_dir}",
         )
-        self.assertEqual(values["MANGOHUD"], "1")
+        self._assert_mangohud_below_renderer(values)
         self.assertEqual(values["MANGOHUD_DISABLED"], "")
         self.assertEqual(
             values["MANGOHUD_CONFIG"],
@@ -648,6 +765,46 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
         self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
         self.assertEqual(values["EXTERNAL_SELECTOR"], "")
+
+    def test_mangohud_frame_count_selects_its_side_of_the_renderer(self):
+        with tempfile.TemporaryDirectory() as system_dir:
+            self.service.mangohud_layer_dir = Path(system_dir)
+            for filename in (
+                configuration_module.MANGOHUD_MANIFEST_FILENAME_64,
+                configuration_module.MANGOHUD_MANIFEST_FILENAME_32,
+            ):
+                (self.service.mangohud_layer_dir / filename).write_text(
+                    "{}", encoding="utf-8"
+                )
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "mangohud"
+            output = self._evaluate(self.gamescope_environment, config)
+            config["mangohud_count_real_frames"] = True
+            real = self._evaluate(self.gamescope_environment, config)
+
+        both = "VK_LAYER_MANGOHUD_overlay_x86_64:VK_LAYER_MANGOHUD_overlay_x86"
+        self._assert_mangohud_below_renderer(output, both)
+        self.assertEqual(output["IMPLICIT"], f"/private/mako/implicit_layer.d:{system_dir}")
+        self.assertEqual(real["MANGOHUD"], "1")
+        self.assertEqual(real["ENABLE"], "1")
+        self.assertEqual(real["INSTANCE"], f"{both}:VK_LAYER_MAKO_render")
+        self.assertEqual(real["IMPLICIT"], f"{system_dir}:/private/mako/implicit_layer.d")
+
+    def test_mangohud_without_renderer_keeps_its_activation_gate(self):
+        with tempfile.TemporaryDirectory() as system_dir:
+            self.service.mangohud_layer_dir = Path(system_dir)
+            (
+                self.service.mangohud_layer_dir /
+                configuration_module.MANGOHUD_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "mangohud"
+            config["frame_generation_provisioned"] = False
+            config["scaling_enabled"] = False
+            values = self._evaluate(config=config)
+
+        self.assertEqual(values["MANGOHUD"], "1")
+        self.assertEqual(values["INSTANCE"], "")
 
     def test_mangohud_profile_retains_guarded_32bit_only_installation(self):
         with tempfile.TemporaryDirectory() as system_dir:
@@ -666,6 +823,14 @@ class WrapperEnvironmentTests(unittest.TestCase):
         )
         self.assertEqual(values["MANGOHUD"], "1")
         self.assertEqual(values["VKBASALT"], "")
+
+    def _assert_mangohud_below_renderer(self, values, layers="VK_LAYER_MANGOHUD_overlay_x86_64"):
+        # Older loaders, such as 1.3.239, need the gates; with them set, the
+        # Steam Linux Runtime's loader follows discovery order, which matches.
+        self.assertEqual(values["MANGOHUD"], "1")
+        self.assertEqual(values["ENABLE"], "1")
+        self.assertEqual(values["INSTANCE"], f"VK_LAYER_MAKO_render:{layers}")
+        self.assertTrue(values["IMPLICIT"].startswith("/private/mako/implicit_layer.d:"))
 
     def _prepare_mangohud_config(self, manifest="MangoHud.x86_64.json"):
         self.service.mangohud_layer_dir = self.service.config_dir / "layers"
@@ -688,7 +853,10 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     if inherited is not None:
                         environment["MANGOHUD_CONFIGFILE"] = inherited
                     values = self._evaluate(environment, config)
-                    self.assertEqual(values["MANGOHUD"], "1")
+                    if manifest == "MangoHud.x86_64.json":
+                        self._assert_mangohud_below_renderer(values)
+                    else:
+                        self.assertEqual(values["MANGOHUD"], "1")
                     self.assertEqual(values["MANGOHUD_CONFIGFILE"], str(shared))
                     self.assertEqual(values["MANGOHUD_CONFIG"], "fps,read_cfg")
                     self.assertEqual(environment.get("MANGOHUD_CONFIGFILE"), inherited)
@@ -708,7 +876,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 for inherited in (None, "/run/user/1000/gamescope.123/mangohud.config"):
                     environment = {} if inherited is None else {"MANGOHUD_CONFIGFILE": inherited}
                     values = self._evaluate(environment, config)
-                    self.assertEqual(values["MANGOHUD"], "1")
+                    self._assert_mangohud_below_renderer(values)
                     self.assertEqual(values["MANGOHUD_CONFIGFILE"], inherited or "")
                 if kind == "directory":
                     shared.rmdir()
@@ -725,7 +893,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             {**ConfigurationManager.get_defaults(), "external_vulkan_layer": "mangohud"},
             user=65534 if os.geteuid() == 0 else None,
         )
-        self.assertEqual(values["MANGOHUD"], "1")
+        self._assert_mangohud_below_renderer(values)
         self.assertEqual(values["MANGOHUD_CONFIGFILE"], "/inherited.conf")
 
     def test_shared_mangohud_config_requires_supported_activation(self):
@@ -1512,6 +1680,22 @@ class WrapperEnvironmentTests(unittest.TestCase):
             self.assertIn("--env=VKBASALT_CONFIG_RELOAD=1", arguments)
             self.assertEqual(arguments[-1], "example.Game")
 
+            subprocess.run(
+                [str(wrapper), str(fake_flatpak), "run", "example.Game"],
+                check=True,
+                env={
+                    "PATH": os.environ.get("PATH", ""),
+                    "MAKO_CAPTURE": str(captured),
+                    "SteamAppId": "3737680422",
+                },
+            )
+            arguments = captured.read_text(encoding="utf-8").splitlines()
+            game_config = self.service.vkbasalt_profile_config_dir / "steam-3737680422.conf"
+            self.assertIn(f"--env=VKBASALT_CONFIG_FILE={game_config}", arguments)
+            self.assertIn("--env=VKBASALT_CONFIG_RELOAD=1", arguments)
+            self.assertEqual(game_config.readlink(), managed_config)
+            self.assertEqual(game_config.read_text(), managed_config.read_text())
+
     def test_direct_flatpak_shortcut_disables_unprovisioned_renderer(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1973,7 +2157,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 suffix = f".{index}" if index else ""
                 records = Path(f"{log_path}{suffix}").read_text(encoding="utf-8").splitlines()
                 self.assertEqual(len(records), 2)
-                self.assertRegex(records[0], r"^MAKO Renderer: present diagnostics: operation=launch-environment pid=\d+ steam_overlay_preload_filter_requested=1 steam_overlay_preload_removed=0$")
+                self.assertRegex(records[0], r"^MAKO Renderer: present diagnostics: operation=launch-environment pid=\d+ steam_overlay_preload_filter_requested=1 steam_overlay_preload_removed=0 proton_log=0$")
                 self.assertEqual(records[1], f"run-{session}")
             self.assertEqual(
                 sorted(path.name for path in log_path.parent.iterdir()),
@@ -1982,6 +2166,42 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     *(f"present-diagnostics.log.{index}" for index in range(1, 10)),
                 ],
             )
+
+    def test_launch_record_names_the_proton_log_that_receives_game_output(self):
+        script = "\n".join(self.service._generate_layer_environment_lines())
+        cases = (
+            ({"PROTON_LOG": "1", "SteamGameId": "4206942", "PROTON_LOG_DIR": "/logs/with space"},
+             "1 proton_log_file=/logs/with space/steam-4206942.log"),
+            ({"PROTON_LOG": "+relay", "SteamGameId": "7", "HOME": "/home/tester"},
+             "1 proton_log_file=/home/tester/steam-7.log"),
+            # Proton writes no per-game log without a game ID, or when logging is off.
+            ({"PROTON_LOG": "1", "HOME": "/home/tester"}, "0"),
+            ({"PROTON_LOG": "0", "SteamGameId": "7"}, "0"),
+            ({"PROTON_LOG": "", "SteamGameId": "7"}, "0"),
+            ({"SteamGameId": "7"}, "0"),
+        )
+        for extra, expected in cases:
+            with self.subTest(extra=extra), tempfile.TemporaryDirectory() as directory:
+                log_path = Path(directory) / "present-diagnostics.log"
+                environment = {
+                    key: value for key, value in os.environ.items()
+                    if key not in ("PROTON_LOG", "PROTON_LOG_DIR", "SteamGameId")
+                }
+                result = subprocess.run(
+                    ["bash", "-c", script],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env={
+                        **environment,
+                        "MAKO_PRESENT_DIAGNOSTICS": "1",
+                        "MAKO_PRESENT_DIAGNOSTICS_LOG": str(log_path),
+                        **extra,
+                    },
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                record = log_path.read_text(encoding="utf-8").splitlines()[0]
+                self.assertTrue(record.endswith(f" proton_log={expected}"), record)
 
     def test_disabled_diagnostics_preserves_existing_session_history(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

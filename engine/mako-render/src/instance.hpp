@@ -12,6 +12,7 @@
 #include "runtime_health.hpp"
 #include "spatial_scaling_policy.hpp"
 #include "swapchain/swapchain.hpp"
+#include "wine_compatibility.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -40,13 +41,21 @@ namespace mako::layer {
         bool refreshRateChanged{false};
     };
 
+    /// An X11 window that Wine renders offscreen, and whether it has the size
+    /// of the game's own top-level window.
+    struct OffscreenX11Surface {
+        std::optional<bool> drawsMainWindow;
+    };
+
     struct SwapchainCreateModification {
         bool privateOrderedTransport{false};
+        bool frameGenerationSurfaceUnavailable{false};
+        WineChildWindowFix wineChildWindowFix{WineChildWindowFix::Unneeded};
         std::optional<VkPresentModeKHR> gamescopeProtocolPresentMode;
         uint32_t gamescopePresentRefreshHz{0};
         bool swapchainImageCountCompatibility{false};
         bool spatialScalingActive{false};
-        bool hdrDisplayResize{false};
+        bool bridgeDisplayResize{false};
         bool variableSurface{false};
         bool variableFeedbackSuppressed{false};
         bool retainVariableSurfaceProof{false};
@@ -120,6 +129,12 @@ namespace mako::layer {
                 !this->presentationEnvironment.gamescopeWsiDisabled;
         }
 
+        /// Either Gamescope signal, including its process environment while
+        /// feedback is disabled.
+        [[nodiscard]] bool gamescopeSessionDetected() const {
+            return this->gamescopeEnvironmentDetected || this->gamescopeDetected;
+        }
+
         [[nodiscard]] bool fp16RequestedAtStartup() const {
             return this->fp16AtStartup;
         }
@@ -159,6 +174,7 @@ namespace mako::layer {
                 fixedSurfaceContract,
             bool spatialSurfaceScalingSupported,
             bool gamescopeScalingSurface,
+            std::optional<OffscreenX11Surface> offscreenX11Surface,
             const std::function<void(
                 const FixedSurfaceScalingContract&)>& publishSpatialCreate,
             const std::function<void(void)>& finish) const;
@@ -212,10 +228,13 @@ namespace mako::layer {
         bool fp16AtStartup{true};
         bool scalingEngineConfiguredAtStartup{false};
         bool swapchainImageCountCompatibilityConfiguredAtStartup{false};
+        bool mailboxPresentationCompatibilityConfiguredAtStartup{false};
 
         ls::lazy<backend::Instance> backend;
         std::optional<ls::GlobalConf> backendGlobal;
         std::optional<ls::GameConf> backendProfile;
+        // The saved model that could not start, when backendProfile runs another.
+        std::optional<ls::FrameGenerationModel> frameGenerationModelFallbackFrom;
         std::unordered_map<VkSwapchainKHR, Swapchain> swapchains;
         PresentationEnvironmentPolicy presentationEnvironment;
         bool gamescopeEnvironmentDetected{false};

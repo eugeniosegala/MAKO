@@ -2,6 +2,8 @@
 Flatpak service for managing MAKO Renderer Flatpak runtime extensions.
 """
 
+import hashlib
+import json
 import subprocess
 import os
 import re
@@ -20,11 +22,14 @@ from .constants import (
     FLATPAK_HOST_ARCHITECTURE,
     FLATPAK_IMPLICIT_LAYER_DIR,
     FLATPAK_RUNTIME_BUNDLES,
+    FLATPAK_RUNTIME_STATE_FILENAME,
+    FLATPAK_RUNTIME_STATE_SCHEMA_VERSION,
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
     HDR_EXPOSURE_DISABLE_ENV,
     MAKO_CONFIG_ENV,
     MAKO_LAYER_ENABLE_ENV,
+    MAKO_ROOT,
     PER_GAME_WRAPPER_FLATPAK_APPS,
     PLUGIN_ROOT,
     VK_ADD_IMPLICIT_LAYER_PATH_ENV,
@@ -34,6 +39,7 @@ from .constants import (
     VKBASALT_LAYER_ENABLE_ENV,
 )
 from .host_environment import detect_host_environment
+from .managed_files import write_managed_text_atomically
 from .types import ServiceResponse
 
 
@@ -163,6 +169,20 @@ class FlatpakOverrideResponse(ServiceResponse, total=False):
     operation: str
 
 
+class FlatpakRuntimeRecord(TypedDict):
+    """What MAKO Decky installed into one Flatpak runtime branch."""
+
+    commit: str
+    bundle_sha256: str
+
+
+class FlatpakRuntimeState(TypedDict):
+    """Persisted runtime records, keyed by Freedesktop branch."""
+
+    schema_version: int
+    runtimes: Dict[str, FlatpakRuntimeRecord]
+
+
 class FlatpakService(BaseService):
     """Service for handling Flatpak runtime extensions and app overrides"""
 
@@ -175,6 +195,10 @@ class FlatpakService(BaseService):
                 bundle.extension_id,
             )
         self.flatpak_command = None
+        self.runtime_state_file = (
+            self.user_home / MAKO_ROOT / FLATPAK_RUNTIME_STATE_FILENAME
+        )
+        self._bundle_checksum_cache: Dict[Path, tuple[tuple[int, int], str]] = {}
 
     def _host_architecture_supported(self) -> bool:
         """Return whether this release's Flatpak payload matches the host ISA."""
@@ -466,6 +490,7 @@ class FlatpakService(BaseService):
 
             action = "updated" if was_installed else "installed"
             self.log.info(f"Successfully {action} MAKO Renderer Flatpak extension {version}")
+            self._record_runtime(version, flatpak_path)
             return self._success_response(
                 ServiceResponse,
                 f"MAKO Renderer {version} runtime extension {action} successfully"
@@ -537,6 +562,120 @@ class FlatpakService(BaseService):
             ),
         }
 
+    def _bundle_sha256(self, bundle: Path) -> Optional[str]:
+        """Return a bundle's SHA-256, reusing it while its size and time hold."""
+        try:
+            bundle_stat = bundle.stat()
+        except OSError:
+            return None
+        key = (bundle_stat.st_size, bundle_stat.st_mtime_ns)
+        cached = self._bundle_checksum_cache.get(bundle)
+        if cached and cached[0] == key:
+            return cached[1]
+        digest = hashlib.sha256()
+        try:
+            with bundle.open("rb") as source:
+                for block in iter(lambda: source.read(1 << 20), b""):
+                    digest.update(block)
+        except OSError:
+            return None
+        self._bundle_checksum_cache[bundle] = (key, digest.hexdigest())
+        return digest.hexdigest()
+
+    def _read_runtime_state(self) -> FlatpakRuntimeState:
+        """Return valid runtime records; anything unreadable counts as none."""
+        state: FlatpakRuntimeState = {
+            "schema_version": FLATPAK_RUNTIME_STATE_SCHEMA_VERSION,
+            "runtimes": {},
+        }
+        try:
+            stored = json.loads(self.runtime_state_file.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return state
+        if not isinstance(stored, dict) or stored.get(
+                "schema_version") != FLATPAK_RUNTIME_STATE_SCHEMA_VERSION:
+            return state
+        runtimes = stored.get("runtimes")
+        if not isinstance(runtimes, dict):
+            return state
+        for version, record in runtimes.items():
+            if (version in FLATPAK_RUNTIME_BUNDLES and isinstance(record, dict)
+                    and isinstance(record.get("commit"), str) and record["commit"]
+                    and isinstance(record.get("bundle_sha256"), str)
+                    and len(record["bundle_sha256"]) == 64):
+                state["runtimes"][version] = {
+                    "commit": record["commit"],
+                    "bundle_sha256": record["bundle_sha256"],
+                }
+        return state
+
+    def _record_runtime(self, version: str, bundle: Optional[Path]) -> None:
+        """Record what a branch now holds, or forget it after removal.
+
+        Recording is bookkeeping for the update check: a failure leaves the
+        branch unrecorded, which only makes the next check offer a refresh.
+        """
+        state = self._read_runtime_state()
+        state["runtimes"].pop(version, None)
+        if bundle is not None:
+            extension_id = self._get_extension_id(version)
+            result = self._run_flatpak_command(
+                ["info", "--user", "--show-commit", extension_id],
+                capture_output=True, text=True,
+            ) if extension_id else None
+            commit = result.stdout.strip() if result and result.returncode == 0 else ""
+            bundle_sha256 = self._bundle_sha256(bundle)
+            if commit and bundle_sha256:
+                state["runtimes"][version] = {
+                    "commit": commit, "bundle_sha256": bundle_sha256,
+                }
+        try:
+            self.runtime_state_file.parent.mkdir(parents=True, exist_ok=True)
+            write_managed_text_atomically(
+                self.runtime_state_file,
+                json.dumps(state, indent=2, sort_keys=True) + "\n",
+                0o644,
+                self.log,
+            )
+        except OSError as error:
+            self.log.warning(
+                "Could not record MAKO Flatpak runtime %s: %s", version, error
+            )
+
+    def stale_runtime_versions(self) -> List[str]:
+        """Return installed MAKO runtime branches that differ from this plugin.
+
+        A branch is stale when MAKO Decky did not install it, when its commit
+        changed outside MAKO Decky, or when the plugin now carries a different
+        bundle. Installing or updating the Renderer refreshes every installed
+        branch, so the ordinary update path resolves each case.
+        """
+        if not self._host_architecture_supported() or not self.check_flatpak_available():
+            return []
+        result = self._run_flatpak_command(
+            ["list", "--user", "--runtime", "--columns=application,branch,active"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            return []
+        active: Dict[str, str] = {}
+        for line in result.stdout.splitlines():
+            fields = line.split("\t")
+            if len(fields) == 3 and fields[0] == FLATPAK_EXTENSION_NAME:
+                active[fields[1]] = fields[2].strip()
+        records = self._read_runtime_state()["runtimes"]
+        stale = []
+        for version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS:
+            commit = active.get(version)
+            bundle = PLUGIN_ROOT / BIN_DIR / FLATPAK_RUNTIME_BUNDLES[version].filename
+            if not commit or not bundle.is_file():
+                continue
+            record = records.get(version)
+            if (record is None or not record["commit"].startswith(commit)
+                    or record["bundle_sha256"] != self._bundle_sha256(bundle)):
+                stale.append(version)
+        return stale
+
     def uninstall_extension(self, version: str) -> ServiceResponse:
         """Uninstall a specific version of the MAKO Renderer Flatpak extension"""
         try:
@@ -561,6 +700,7 @@ class FlatpakService(BaseService):
                 return self._error_response(ServiceResponse, error_msg)
 
             self.log.info(f"Successfully uninstalled MAKO Renderer Flatpak extension {version}")
+            self._record_runtime(version, None)
             return self._success_response(ServiceResponse, f"MAKO Renderer {version} runtime extension uninstalled successfully")
 
         except Exception as e:

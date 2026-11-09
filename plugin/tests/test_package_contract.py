@@ -1,6 +1,8 @@
 """Tests for Decky Loader-compatible packaged metadata."""
 
 import hashlib
+import io
+import tarfile
 import json
 from pathlib import Path
 import subprocess
@@ -75,6 +77,25 @@ class PackageContractTests(unittest.TestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_validates_native_payload_fingerprint_against_embedded_archive(self):
+        content = b"native payload manifest\n"
+        with tarfile.open(self.archive, "w:xz") as archive:
+            info = tarfile.TarInfo("./MAKO-Renderer-install-manifest.txt")
+            info.size = len(content)
+            archive.addfile(info, io.BytesIO(content))
+        self.checksum = hashlib.sha256(self.archive.read_bytes()).hexdigest()
+        for fingerprint, valid in ((hashlib.sha256(content).hexdigest(), True), ("a" * 64, False), ("invalid", False)):
+            with self.subTest(fingerprint=fingerprint):
+                renderer = {**self._renderer(), "payload_sha256hash": fingerprint}
+                result = self._validate({"version": "2.1.0.local.test", "bundled_renderer": renderer}, "local")
+                self.assertEqual(result.returncode == 0, valid, result.stderr)
+
+    def test_rejects_incomplete_renderer_management_bundle(self):
+        (self.bin_dir / "renderer-management").mkdir()
+        result = self._validate({"version": "2.1.0.local.test", "bundled_renderer": self._renderer()}, "local")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Renderer management tool", result.stderr)
 
     def test_rejects_remote_binary_in_self_contained_local_package(self):
         renderer = self._renderer()

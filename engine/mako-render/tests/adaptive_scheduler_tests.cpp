@@ -57,7 +57,16 @@ namespace {
             std::chrono::milliseconds duration{0};
         };
 
+        struct NativeProbe {
+            std::string operation;
+            size_t nativeFrames{0};
+            std::chrono::steady_clock::duration nativeDuration{};
+            std::string reason;
+            std::optional<double> maximumLayerShare;
+        };
+
         std::vector<Event> events;
+        std::vector<NativeProbe> nativeProbes;
         std::vector<AdaptivePlanDiagnostic> plans;
         std::optional<AdaptivePlanDiagnostic> latestPlan;
 
@@ -188,10 +197,17 @@ namespace {
             });
         }
 
-        void nativeCadenceProbe(std::string_view operation, size_t,
-                double, double, size_t) override {
+        void nativeCadenceProbe(
+                const AdaptiveNativeCadenceProbeDiagnostic& probe) override {
             this->events.push_back({
-                .operation = std::string(operation),
+                .operation = std::string(probe.operation),
+            });
+            this->nativeProbes.push_back({
+                .operation = std::string(probe.operation),
+                .nativeFrames = probe.nativeFrames,
+                .nativeDuration = probe.nativeDuration,
+                .reason = std::string(probe.reason),
+                .maximumLayerShare = probe.maximumLayerShare,
             });
         }
 
@@ -294,6 +310,7 @@ namespace {
         TimePoint now{};
         std::optional<TimePoint> queuedPresentationDeadline;
         double headroomSourceCapFps{};
+        std::optional<double> applicationLayerShare;
 
         Harness(const uint32_t targetFps, const size_t maximumMultiplier,
                 const bool stableCadence = false,
@@ -346,7 +363,7 @@ namespace {
             this->now += interval;
             const auto plan = this->scheduler.planFrame(this->now, acquireBackoff,
                 std::nullopt, std::nullopt, this->queuedPresentationDeadline,
-                this->headroomSourceCapFps);
+                this->headroomSourceCapFps, this->applicationLayerShare);
             // Ordinary workload simulations deliver their plan. Fault tests
             // opt out before supplying their own missing/partial observation.
             if (reportDelivery)
@@ -375,7 +392,7 @@ namespace {
             }
             auto plan = this->scheduler.planFrame(this->now, false,
                 std::nullopt, std::nullopt, this->queuedPresentationDeadline,
-                this->headroomSourceCapFps);
+                this->headroomSourceCapFps, this->applicationLayerShare);
             if (delivered)
                 this->scheduler.reportGeneratedFrameDelivery({
                     plan.size(), *delivered ? plan.size() : 0,
@@ -5764,6 +5781,313 @@ namespace {
         }
     }
 
+    void testDynamicCadenceRepeatedRejectionsKeepConfiguredInterval() {
+        // Emulators and games that switch native rates rely on the configured
+        // interval to bound how long a hidden rise stays behind FIFO work.
+        // Without layer-share evidence that interval must never stretch.
+        for (const auto interval : {100ms, 500ms, 2000ms, 3000ms}) {
+            Harness harness(
+                60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, interval
+            );
+            harness.start();
+            std::optional<TimePoint> rejectedAt;
+            size_t rejections = 0;
+            const auto until = harness.now + 25s;
+            while (harness.now < until) {
+                const size_t recorded = harness.diagnostics.nativeProbes.size();
+                harness.deliveredFrameAtFps(30.0);
+                for (size_t index = recorded;
+                        index < harness.diagnostics.nativeProbes.size(); ++index) {
+                    const auto& probe = harness.diagnostics.nativeProbes[index];
+                    if (probe.operation == "dynamic-cadence-probe-start" && rejectedAt) {
+                        const auto waited = harness.now - *rejectedAt;
+                        require(waited >= interval && waited < interval + 34ms,
+                            "a rejected native probe did not retry at its configured interval");
+                    } else if (probe.operation == "dynamic-cadence-probe-rejected") {
+                        rejections++;
+                        rejectedAt = harness.now;
+                    }
+                }
+            }
+            require(rejections >= 5,
+                "precondition failed: true 30 FPS cadence produced too few rejected probes");
+            require(!harness.diagnostics.contains("dynamic-cadence-recovered"),
+                "repeated probes mistook a true 30 FPS source for recovery");
+        }
+    }
+
+    void testDynamicCadenceProbeReportsNativeOnlyCost() {
+        for (const bool bridged : {false, true}) {
+            // Unbridged probes cost one native frame. A captured bridge
+            // horizon also keeps its drain frames native.
+            Harness harness(bridged ? 120 : 60, 2, false,
+                AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms);
+            const double fps = bridged ? 60.0 : 30.0;
+            harness.start();
+            harness.runAtFps(fps, 8s);
+            size_t nativeRun = 0;
+            std::optional<TimePoint> nativeRunStartedAt;
+            // A probe that began before this loop has an unobserved prefix.
+            bool startObserved = false;
+            size_t rejections = 0;
+            for (size_t frame = 0; frame < 1200; ++frame) {
+                if (bridged)
+                    harness.queuedPresentationDeadline = harness.now + 34ms;
+                const size_t recorded = harness.diagnostics.nativeProbes.size();
+                const auto plan = harness.deliveredFrameAtFps(fps);
+                for (size_t index = recorded;
+                        index < harness.diagnostics.nativeProbes.size(); ++index) {
+                    const auto& probe = harness.diagnostics.nativeProbes[index];
+                    if (probe.operation == "dynamic-cadence-probe-start")
+                        startObserved = true;
+                    if (probe.operation != "dynamic-cadence-probe-rejected" ||
+                            !std::exchange(startObserved, false))
+                        continue;
+                    rejections++;
+                    require(!plan.empty() && nativeRunStartedAt &&
+                            probe.nativeFrames == nativeRun &&
+                            probe.nativeDuration == harness.now - *nativeRunStartedAt,
+                        "rejected native probe misreported its native-only frames");
+                    require(bridged ? nativeRun >= 2 && nativeRun <= 4 : nativeRun == 1,
+                        "rejected native probe cost differed from its transport drain");
+                }
+                if (plan.empty()) {
+                    if (nativeRun++ == 0)
+                        nativeRunStartedAt = harness.now;
+                } else {
+                    nativeRun = 0;
+                    nativeRunStartedAt.reset();
+                }
+            }
+            require(rejections >= 3, "precondition failed: too few rejected native probes");
+        }
+    }
+
+    // Probe operations after the first, as "operation/reason".
+    std::vector<std::string> nativeProbeSequence(const Harness& harness, size_t from) {
+        std::vector<std::string> sequence;
+        for (size_t index = from; index < harness.diagnostics.nativeProbes.size(); ++index) {
+            const auto& probe = harness.diagnostics.nativeProbes[index];
+            if (probe.operation == "dynamic-cadence-probe-start" ||
+                    probe.operation == "dynamic-cadence-probe-skipped")
+                sequence.push_back(probe.operation + "/" + probe.reason);
+        }
+        return sequence;
+    }
+
+    // Runs a capped source until the timer has just skipped a probe, so the
+    // next timer decision is a whole interval away.
+    AdaptiveFramePlan runCappedUntilProbeSkipped(Harness& harness) {
+        harness.applicationLayerShare = 0.02;
+        const size_t skipped = harness.diagnostics.count("dynamic-cadence-probe-skipped");
+        const auto deadline = harness.now + 20s;
+        AdaptiveFramePlan plan;
+        while (harness.diagnostics.count("dynamic-cadence-probe-skipped") == skipped) {
+            plan = harness.deliveredFrameAtFps(30.0);
+            require(harness.now < deadline,
+                "precondition failed: a capped source never skipped a probe");
+        }
+        return plan;
+    }
+
+    void testDynamicCadenceSkipsProbesForSelfCappedSource() {
+        for (const auto interval : {100ms, 500ms, 2000ms}) {
+            Harness harness(
+                60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, interval
+            );
+            harness.start();
+            harness.applicationLayerShare = 0.02;
+            while (!harness.diagnostics.contains("dynamic-cadence-probe-rejected"))
+                harness.deliveredFrameAtFps(30.0);
+            const size_t recorded = harness.diagnostics.nativeProbes.size();
+            const auto until = harness.now + 12 * interval;
+            while (harness.now < until)
+                harness.deliveredFrameAtFps(30.0);
+
+            const auto sequence = nativeProbeSequence(harness, recorded);
+            require(sequence.size() >= 8,
+                "precondition failed: too few native-probe decisions");
+            for (size_t index = 0; index < sequence.size(); ++index) {
+                const bool safetyProbe = index % 4 == 3;
+                require(sequence[index] == (safetyProbe
+                        ? "dynamic-cadence-probe-start/skip-limit"
+                        : "dynamic-cadence-probe-skipped/capped"),
+                    "a self-capped source did not skip three probes before each safety probe");
+            }
+            for (size_t index = recorded; index < harness.diagnostics.nativeProbes.size(); ++index) {
+                const auto& probe = harness.diagnostics.nativeProbes[index];
+                if (probe.operation == "dynamic-cadence-probe-skipped")
+                    require(probe.maximumLayerShare && *probe.maximumLayerShare < 0.03,
+                        "a skipped probe did not report the capped layer share");
+            }
+            require(!harness.diagnostics.contains("dynamic-cadence-recovered"),
+                "skipping probes mistook a true 30 FPS source for recovery");
+        }
+    }
+
+    void testDynamicCadenceProbesHeldSourceImmediately() {
+        Harness harness(60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true);
+        harness.start();
+        auto previous = runCappedUntilProbeSkipped(harness);
+        require(previous.size() == 1,
+            "precondition failed: capped 30 FPS cadence did not settle at 2x");
+
+        // The source can now run at 60 FPS. Generated FIFO work holds it at
+        // 30 while it waits inside MAKO; a native frame releases it.
+        const auto transitionAt = harness.now;
+        while (!harness.diagnostics.contains("dynamic-cadence-recovered")) {
+            harness.applicationLayerShare = previous.empty() ? 0.02 : 0.95;
+            previous = harness.deliveredFrameAtFps(previous.empty() ? 60.0 : 30.0);
+            require(harness.now - transitionAt <= 300ms,
+                "a held source waited for the probe interval instead of probing at once");
+        }
+        const auto& probes = harness.diagnostics.nativeProbes;
+        const auto started = std::find_if(probes.rbegin(), probes.rend(),
+            [](const auto& probe) { return probe.operation == "dynamic-cadence-probe-start"; });
+        require(started != probes.rend() && started->reason == "held",
+            "the immediate native probe did not report its held trigger");
+    }
+
+    void testDynamicCadenceHeldTriggerYieldsToVisibleRise() {
+        // A 60 to 119 FPS rise that ordinary Fractional planning can already
+        // observe must not be interrupted by a probe measured against the
+        // risen baseline; its rejection would restore the FIFO hold.
+        Harness harness(120, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, 3000ms);
+        harness.start();
+        harness.applicationLayerShare = 0.02;
+        const size_t skipped = harness.diagnostics.count("dynamic-cadence-probe-skipped");
+        while (harness.diagnostics.count("dynamic-cadence-probe-skipped") == skipped)
+            harness.deliveredFrameAtFps(60.0);
+        const size_t recorded = harness.diagnostics.nativeProbes.size();
+        harness.applicationLayerShare = 0.6;
+        double fps = 60.0;
+        const auto until = harness.now + 1500ms;
+        while (harness.now < until) {
+            fps = std::min(119.0, fps + 6.0);
+            harness.deliveredFrameAtFps(fps);
+        }
+        require(nativeProbeSequence(harness, recorded).empty() &&
+                !harness.diagnostics.contains("dynamic-cadence-probe-rejected"),
+            "the held trigger probed a source whose rise was already visible");
+        require(harness.deliveredFrameAtFps(119.0).empty(),
+            "a visible native rise did not reach native output without a probe");
+    }
+
+    void testDynamicCadenceHeldTriggerYieldsToRiseBeginningWhileCapped() {
+        // Gym's 60 to 119 FPS step first renders a few frames faster before
+        // FIFO work makes the source wait inside MAKO. Those capped frames
+        // must not carry the trigger's reference up with the rise.
+        Harness harness(120, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, 3000ms);
+        harness.start();
+        harness.applicationLayerShare = 0.02;
+        const size_t skipped = harness.diagnostics.count("dynamic-cadence-probe-skipped");
+        while (harness.diagnostics.count("dynamic-cadence-probe-skipped") == skipped)
+            harness.deliveredFrameAtFps(60.0);
+        const size_t recorded = harness.diagnostics.nativeProbes.size();
+        double fps = 60.0;
+        const auto risen = harness.now + 250ms;
+        while (harness.now < risen) {
+            fps = std::min(119.0, fps + 8.0);
+            harness.deliveredFrameAtFps(fps);
+        }
+        harness.applicationLayerShare = 0.6;
+        harness.runAtFps(119.0, 1500ms);
+        require(nativeProbeSequence(harness, recorded).empty() &&
+                !harness.diagnostics.contains("dynamic-cadence-probe-rejected"),
+            "capped frames at the start of a rise moved the held trigger's reference");
+        require(harness.deliveredFrameAtFps(119.0).empty(),
+            "a rise that began while capped did not reach native output without a probe");
+    }
+
+    void testDynamicCadenceRejectionResumesOrdinaryPlan() {
+        // Ordinary planning runs a 119 FPS source at a 120 FPS target almost
+        // natively. A rejected probe there must resume that plan unchanged:
+        // an added generated frame fills the FIFO slot that holds the source,
+        // as Gym's 60 to 119 FPS step showed.
+        Harness harness(120, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms,
+            std::nullopt, false);
+        harness.start();
+        harness.runAtFps(60.0, 8s);
+        harness.runAtFps(119.0, 2s);
+        const size_t rejected = harness.diagnostics.count("dynamic-cadence-probe-rejected");
+        size_t generated = 0;
+        const auto until = harness.now + 2s;
+        while (harness.now < until)
+            generated += harness.deliveredFrameAtFps(119.0).size();
+        require(harness.diagnostics.count("dynamic-cadence-probe-rejected") >= rejected + 10,
+            "precondition failed: the near-native source was not probed");
+        require(generated <= 4,
+            "rejected native-cadence probes added generated frames to a near-native plan");
+    }
+
+    void testDynamicCadenceKeepsIntervalWithoutCappedEvidence() {
+        constexpr auto interval = 500ms;
+        // Mid-band, held from the start, or partially unknown evidence must
+        // not skip a probe or retrigger one before the configured interval.
+        const std::vector<std::vector<std::optional<double>>> patterns{
+            {0.15},
+            {0.6},
+            {0.02, 0.02, std::nullopt},
+        };
+        for (const auto& pattern : patterns) {
+            Harness harness(
+                60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, interval
+            );
+            harness.start();
+            size_t frame = 0;
+            std::optional<TimePoint> rejectedAt;
+            size_t starts = 0;
+            const auto until = harness.now + 20s;
+            while (harness.now < until) {
+                harness.applicationLayerShare = pattern[frame++ % pattern.size()];
+                const size_t recorded = harness.diagnostics.nativeProbes.size();
+                harness.deliveredFrameAtFps(30.0);
+                for (size_t index = recorded;
+                        index < harness.diagnostics.nativeProbes.size(); ++index) {
+                    const auto& probe = harness.diagnostics.nativeProbes[index];
+                    require(probe.operation != "dynamic-cadence-probe-skipped",
+                        "a probe was skipped without capped evidence");
+                    if (probe.operation == "dynamic-cadence-probe-start") {
+                        starts++;
+                        require(probe.reason == "interval",
+                            "a probe without a capped-to-held transition did not use the interval");
+                        if (rejectedAt) {
+                            const auto waited = harness.now - *rejectedAt;
+                            require(waited >= interval && waited < interval + 34ms,
+                                "a probe without capped evidence left its configured interval");
+                        }
+                    } else if (probe.operation == "dynamic-cadence-probe-rejected") {
+                        rejectedAt = harness.now;
+                    }
+                }
+            }
+            require(starts >= 10, "precondition failed: too few native probes");
+        }
+    }
+
+    void testDynamicCadenceHeldTriggerRearmsOnlyAfterCappedFrames() {
+        // A held source that cannot rise, such as one limited by its own
+        // GPU load, must not convert the trigger into repeated probing.
+        Harness harness(60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true);
+        harness.start();
+        runCappedUntilProbeSkipped(harness);
+        const size_t recorded = harness.diagnostics.nativeProbes.size();
+        harness.applicationLayerShare = 0.9;
+        harness.runAtFps(30.0, 1500ms);
+        auto sequence = nativeProbeSequence(harness, recorded);
+        require(sequence == std::vector<std::string>{"dynamic-cadence-probe-start/held"},
+            "a held source that cannot rise probed more than once before its interval");
+
+        const size_t rearmed = harness.diagnostics.nativeProbes.size();
+        harness.applicationLayerShare = 0.02;
+        harness.runAtFps(30.0, 150ms);
+        harness.applicationLayerShare = 0.9;
+        harness.runAtFps(30.0, 150ms);
+        sequence = nativeProbeSequence(harness, rearmed);
+        require(sequence == std::vector<std::string>{"dynamic-cadence-probe-start/held"},
+            "a fresh capped period did not re-arm the held trigger");
+    }
+
     void testDynamicCadenceProbeRejectsTrueThirtyFpsCadence() {
         Harness harness(
             60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true
@@ -7103,6 +7427,15 @@ int main() {
         {"dynamic cadence bounds self-hidden recovery latency", testDynamicCadenceBoundsSelfHiddenRecoveryLatency},
         {"dynamic cadence probe interval updates live", testDynamicCadenceProbeIntervalUpdatesLive},
         {"dynamic cadence rejects true 30 FPS", testDynamicCadenceProbeRejectsTrueThirtyFpsCadence},
+        {"dynamic cadence repeated rejections keep the configured interval", testDynamicCadenceRepeatedRejectionsKeepConfiguredInterval},
+        {"dynamic cadence reports native-only probe cost", testDynamicCadenceProbeReportsNativeOnlyCost},
+        {"dynamic cadence skips probes for a self-capped source", testDynamicCadenceSkipsProbesForSelfCappedSource},
+        {"dynamic cadence probes a held source immediately", testDynamicCadenceProbesHeldSourceImmediately},
+        {"dynamic cadence held trigger yields to a visible rise", testDynamicCadenceHeldTriggerYieldsToVisibleRise},
+        {"dynamic cadence held trigger yields to a rise that begins while capped", testDynamicCadenceHeldTriggerYieldsToRiseBeginningWhileCapped},
+        {"dynamic cadence rejection resumes the ordinary plan", testDynamicCadenceRejectionResumesOrdinaryPlan},
+        {"dynamic cadence keeps its interval without capped evidence", testDynamicCadenceKeepsIntervalWithoutCappedEvidence},
+        {"dynamic cadence held trigger re-arms only after capped frames", testDynamicCadenceHeldTriggerRearmsOnlyAfterCappedFrames},
         {"dynamic cadence remains opt-in and SDR-only", testDynamicCadenceRecoveryIsOptInAndSdrOnly},
         {"Smooth Cadence resists oscillating-load chatter", testSmoothCadenceDoesNotChatterOnOscillatingLoad},
         {"validated workloads ignore ordinary gameplay slowdown", testValidatedWorkloadIgnoresOrdinaryGameplaySlowdown},

@@ -18,14 +18,24 @@ int main(int argc, char** argv) {
     try {
         QQmlApplicationEngine engine;
         const auto directory = QUrl::fromLocalFile(QString::fromUtf8(MAKO_UI_DIALOGS_DIRECTORY)).toString();
+        const auto widgets = QUrl::fromLocalFile(QString::fromUtf8(MAKO_UI_WIDGETS_DIRECTORY)).toString();
         engine.loadData((QStringLiteral(R"QML(
 import QtQuick
 import QtQuick.Controls
-import ")QML") + directory + QStringLiteral(R"QML("
+import ")QML") + directory + QStringLiteral("\"\nimport \"") + widgets + QStringLiteral(R"QML("
 ApplicationWindow {
     width: 700
     height: 400
     visible: true
+    ModelComboBox {
+        objectName: "model_picker"
+        model: ["MAKO FG", "LSFG Quality", "LSFG Performance"]
+        property int savedSelection: 0
+        property int writes: 0
+        selectionIndex: savedSelection
+        unavailableFromIndex: 1
+        onChoiceActivated: index => { savedSelection = index; writes++ }
+    }
     CenteredDialog {
         id: profile
         objectName: "profile_dialog"
@@ -44,6 +54,20 @@ ApplicationWindow {
 )QML")).toUtf8());
         require(!engine.rootObjects().empty(), "unable to load profile dialog fixture");
         application.processEvents();
+        auto* picker = engine.rootObjects().front()->findChild<QObject*>(QStringLiteral("model_picker"));
+        require(picker, "optional model picker is missing");
+        picker->setProperty("currentIndex", 2);
+        require(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 2)), "could not activate model picker");
+        require(picker->property("writes").toInt() == 0 && picker->property("currentIndex").toInt() == 0,
+            "an unavailable Lossless Scaling choice changed the selection");
+        picker->setProperty("unavailableFromIndex", -1);
+        require(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 2)), "could not activate available model");
+        require(picker->property("savedSelection").toInt() == 2 && picker->property("writes").toInt() == 1,
+            "installed Lossless Scaling could not be selected");
+        picker->setProperty("unavailableFromIndex", 1);
+        require(QMetaObject::invokeMethod(picker, "activated", Q_ARG(int, 0)), "could not select MAKO FG");
+        require(picker->property("savedSelection").toInt() == 0 && picker->property("writes").toInt() == 2,
+            "missing Lossless Scaling blocked the default MAKO model");
         auto* dialog = engine.rootObjects().front()->findChild<QObject*>(QStringLiteral("profile_dialog"));
         require(dialog && dialog->property("visible").toBool(), "profile dialog did not open");
         require(dialog->property("width").toDouble() <= 560, "profile dialog exceeds the minimum window width");

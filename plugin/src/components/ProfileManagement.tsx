@@ -25,6 +25,7 @@ import {
   PROFILE_KIND_GAME,
 } from "../config/configSchema";
 import { useProfileEditorModel } from "../hooks/useProfileEditorModel";
+import type { ProfilesSnapshot } from "../hooks/panelSnapshot";
 import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
 import {
   MakoFocusable,
@@ -117,6 +118,8 @@ interface ProfileManagementProps {
   sessionRunning?: boolean;
   profileRevision?: number;
   topMargin?: CSSProperties["marginTop"];
+  restoredProfiles?: ProfilesSnapshot | null;
+  onProfilesLoaded?: (profiles: ProfilesSnapshot | null) => void;
 }
 
 export function ProfileManagement({
@@ -127,6 +130,8 @@ export function ProfileManagement({
   topMargin,
   sessionRunning = false,
   profileRevision,
+  restoredProfiles,
+  onProfilesLoaded,
 }: ProfileManagementProps) {
   const [focusedAction, setFocusedAction] = useState<
     "create" | "edit" | "delete" | null
@@ -153,6 +158,8 @@ export function ProfileManagement({
     onProfileChange,
     mainRunningApp,
     profileRevision,
+    restoredProfiles,
+    onProfilesLoaded,
   });
 
   const showRenameProfile = () => {

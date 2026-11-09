@@ -158,8 +158,17 @@ preload_output="$(
     "$launcher" "$test_root/preload/probe" 2> "$test_root/preload/stderr"
 )" || fail "overlay-only preload launch failed"
 [[ "$preload_output" == 'overlay=0 retained=0' ]] || fail "overlay-only hooks survived exec"
-[[ "$(cat "$test_root/preload/stderr")" == *'operation=launch-environment'*'steam_overlay_preload_removed=1'* ]] ||
+[[ "$(cat "$test_root/preload/stderr")" == *'operation=launch-environment'*'steam_overlay_preload_removed=1 proton_log=0'* ]] ||
     fail "launch diagnostics did not report removal"
+# Proton sends the game's output to its own log; the record names that file.
+PROTON_LOG=1 SteamGameId=42 PROTON_LOG_DIR="$test_root/proton logs" \
+    GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
+    XDG_DATA_HOME="$test_data_home" \
+    MAKO_PRESENT_DIAGNOSTICS=1 \
+    "$launcher" "$test_root/preload/probe" > /dev/null 2> "$test_root/preload/stderr" ||
+    fail "Proton log launch failed"
+[[ "$(cat "$test_root/preload/stderr")" == *"proton_log=1 proton_log_file=$test_root/proton logs/steam-42.log"* ]] ||
+    fail "launch diagnostics did not name the Proton log"
 preload_output="$(
     GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
     XDG_DATA_HOME="$test_data_home" \

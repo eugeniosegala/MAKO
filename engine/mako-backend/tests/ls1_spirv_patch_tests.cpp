@@ -92,6 +92,23 @@ namespace {
         }
     }
 
+    void testUnknownFormatKeepsWriteWithoutFormat() {
+        auto shader = shaderWords();
+        mako::backend::detail::patchStorageImageFormat(shader, 0U);
+        require(readWord(shader, 8) == capabilityStorageImageWriteWithoutFormat,
+            "Unknown format dropped the write-without-format capability");
+        require(readWord(shader, 17) == 0U,
+            "Unknown format did not keep a format-less storage image");
+        auto declaredOnlyShader = shaderWithoutPatchableCapability();
+        try {
+            mako::backend::detail::patchStorageImageFormat(declaredOnlyShader, 0U);
+            throw std::runtime_error(
+                "Unknown format accepted a shader without write-without-format"
+            );
+        } catch (const ls::error&) {
+        }
+    }
+
     void testMissingExtendedFormatCapabilityFailsClosed() {
         auto shader = shaderWithoutPatchableCapability();
         try {
@@ -111,6 +128,7 @@ int main() {
         testRgba8Patch();
         testExtendedFormatPatch();
         testLsfgFormats();
+        testUnknownFormatKeepsWriteWithoutFormat();
         testMissingExtendedFormatCapabilityFailsClosed();
     } catch (const std::exception& error) {
         std::cerr << "LS1 SPIR-V patch test failed: " << error.what() << '\n';

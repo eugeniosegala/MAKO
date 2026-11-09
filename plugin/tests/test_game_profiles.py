@@ -1012,6 +1012,12 @@ class GameProfileTests(unittest.TestCase):
             "lutFile = adopted.cube\n",
             encoding="utf-8",
         )
+        # A launch before capture can already have reserved the Steam path.
+        self.service.vkbasalt_global_config_path.parent.mkdir(parents=True, exist_ok=True)
+        self.service.vkbasalt_global_config_path.write_text("effects = none\n")
+        (self.service.vkbasalt_profile_config_dir / "steam-12345.conf").symlink_to(
+            self.service.vkbasalt_global_config_path
+        )
 
         previous = configuration_module.detect_processes_for_steam_app
         configuration_module.detect_processes_for_steam_app = (
@@ -1213,7 +1219,7 @@ class GameProfileTests(unittest.TestCase):
                 str(self.service.mako_script_path),
                 "/bin/bash",
                 "-c",
-                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nVKBASALT_RELOAD=%s\\nIMPLICIT=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VKBASALT_CONFIG_RELOAD:-}" "${VK_IMPLICIT_LAYER_PATH:-}"',
+                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nVKBASALT_RELOAD=%s\\nIMPLICIT=%s\\nINSTANCE=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VKBASALT_CONFIG_RELOAD:-}" "${VK_IMPLICIT_LAYER_PATH:-}" "${VK_INSTANCE_LAYERS:-}"',
                 *command_arguments,
             ],
             check=True,
@@ -1352,7 +1358,13 @@ class GameProfileTests(unittest.TestCase):
             matched = self._run_wrapper("12345")
             unrelated = self._run_wrapper("67890")
 
+        # The explicit list orders MangoHud below the Renderer; its gate stays
+        # set for older loaders, and the directory order matches the list.
         self.assertEqual(matched["MANGOHUD"], "1")
+        self.assertEqual(
+            matched["INSTANCE"],
+            "VK_LAYER_MAKO_render:VK_LAYER_MANGOHUD_overlay_x86_64",
+        )
         self.assertEqual(matched["VKBASALT"], "")
         self.assertEqual(
             matched["IMPLICIT"],
@@ -1523,7 +1535,7 @@ class GameProfileTests(unittest.TestCase):
             Path(unrelated["VKBASALT_CONFIG"]).read_text(encoding="utf-8"),
         )
         self.assertEqual(
-            Path(unrelated["VKBASALT_CONFIG"]),
+            Path(unrelated["VKBASALT_CONFIG"]).resolve(),
             self.service.vkbasalt_global_config_path,
         )
         self.assertFalse(legacy_default_path.exists())
@@ -1745,6 +1757,108 @@ class GameProfileTests(unittest.TestCase):
             values["VKBASALT_CONFIG"],
             str(self.service.vkbasalt_global_config_path),
         )
+
+    def test_capture_keeps_the_running_games_shader_filename(self):
+        # Exercise real generated launchers, then keep reading the filename a
+        # running vkBasalt instance captured before the game profile existed.
+        self.service.config_dir = Path(self.temp_dir.name) / "config with spaces"
+        self.service.config_file_path = self.service.config_dir / "conf.toml"
+        self.service.wrapper_profile_settings_path = self.service.config_dir / "profile-wrapper-settings.json"
+        self.service.profile_metadata_path = self.service.config_dir / "profile-metadata.json"
+        self.service._save_profile_data(self.profile_data)
+        self.service.vkbasalt_layer_dir = Path(self.temp_dir.name) / "vkbasalt-layer"
+        self.service.vkbasalt_layer_dir.mkdir()
+        (self.service.vkbasalt_layer_dir / configuration_module.VKBASALT_MANIFEST_FILENAME_64).write_text("{}")
+        self.assertTrue(self.service.update_profile_config_fields("mako", {
+            "external_vulkan_layer": "vkbasalt", "vkbasalt_shader": "hdr_look",
+        })["success"])
+        default = self.service.vkbasalt_global_config_path
+        default.write_text(default.read_text() + "customOption = keep\n")
+        live_path = Path(self._run_wrapper("3737680422")["VKBASALT_CONFIG"])
+        other_path = Path(self._run_wrapper("67890")["VKBASALT_CONFIG"])
+        original_wrapper = self.service.mako_script_path.read_text()
+
+        self.assertNotEqual(live_path, default)
+        self.assertNotEqual(live_path, other_path)
+        self.assertEqual(live_path.read_text(), default.read_text())
+        # Default edits and unrelated profile writes must retain live aliases.
+        self.assertTrue(self.service.update_profile_config_fields("mako", {"vkbasalt_shader": "clarity"})["success"])
+        self.assertEqual(live_path.read_text(), default.read_text())
+        self.assertIn("effects = makoClarity:cas", live_path.read_text())
+        original = default.read_text()
+        with patch.object(configuration_module, "detect_processes_for_steam_app", return_value=["DNZHRecompiled"]):
+            captured = self.service.capture_game_profile("3737680422", "Duke Nukem: Zero Hour", "mako")
+        self.assertTrue(captured["success"], captured)
+        name = captured["profile_name"]
+        self.assertEqual(self.service._vkbasalt_config_path(name), live_path)
+        self.assertFalse(live_path.is_symlink())
+        self.assertTrue(self.service.update_profile_config_fields(name, {"vkbasalt_shader": "hdr_look:vibrance"})["success"])
+        self.assertIn("effects = makoHDRLook:makoVibrance:cas", live_path.read_text())
+        self.assertIn("customOption = keep", live_path.read_text())
+        self.assertEqual(default.read_text(), original)
+        self.assertEqual(other_path.read_text(), original)
+        self.assertTrue(self.service.reload_profile_shaders(name)["success"])
+        self.assertIn("makoReloadGeneration = 1", live_path.read_text())
+        self.assertNotIn("makoReloadGeneration", other_path.read_text())
+        self.assertEqual(Path(self._run_wrapper("3737680422")["VKBASALT_CONFIG"]), live_path)
+        # An already-starting launcher with the old profile table must not
+        # overwrite the captured file or put a symlink inside a directory.
+        captured_content = live_path.read_text()
+        self.service.mako_script_path.write_text(original_wrapper)
+        self.assertEqual(Path(self._run_wrapper("3737680422")["VKBASALT_CONFIG"]), live_path)
+        self.assertEqual(live_path.read_text(), captured_content)
+        self.assertFalse(live_path.is_symlink())
+
+    def test_default_shader_launch_alias_is_scoped_and_does_not_clobber_files(self):
+        from py_modules.mako_plugin.wrapper_generation import vkbasalt_profile_environment_lines
+
+        default = self.service.vkbasalt_global_config_path
+        default.parent.mkdir(parents=True)
+        default.write_text("effects = cas\n")
+        directory = self.service.vkbasalt_profile_config_dir
+        config = ConfigurationManager.get_defaults()
+        config["external_vulkan_layer"] = "vkbasalt"
+
+        def launch(environment, settings=config):
+            lines = vkbasalt_profile_environment_lines("mako", settings, default, directory)
+            result = subprocess.run(
+                ["bash", "-c", "\n".join(lines + ['printf "%s" "$mako_vkbasalt_config"'])],
+                env={"PATH": os.environ["PATH"], **environment},
+                check=True, capture_output=True, text=True,
+            )
+            return result.stdout
+
+        for environment in ({}, {"SteamAppId": "../escape"}, {"SteamAppId": "1;touch bad"},
+                            {"SteamAppId": "12345", "MAKO_PROFILE": "mako"}):
+            with self.subTest(environment=environment):
+                self.assertEqual(launch(environment), str(default))
+                self.assertFalse(directory.exists())
+        self.assertEqual(launch({"SteamAppId": "12345"}, ConfigurationManager.get_defaults()), "")
+        self.assertFalse(directory.exists())
+
+        expected = directory / "steam-12345.conf"
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            paths = list(executor.map(launch, [{"SteamGameId": "12345"}] * 8))
+        self.assertEqual(paths, [str(expected)] * 8)
+        self.assertEqual(expected.read_text(), default.read_text())
+        self.assertEqual(launch({"STEAM_COMPAT_APP_ID": "12345"}), str(expected))
+        self.assertEqual(launch({"SteamAppId": "12345", "SteamGameId": "67890"}), str(expected))
+
+        expected.unlink()
+        expected.mkdir()
+        self.assertEqual(launch({"SteamAppId": "12345"}), str(default))
+        self.assertEqual(list(expected.iterdir()), [])
+        expected.rmdir()
+        os.mkfifo(expected)
+        self.assertEqual(launch({"SteamAppId": "12345"}), str(default))
+        expected.unlink()
+        foreign = directory / "foreign.conf"
+        foreign.write_text("unrelated\n")
+        expected.symlink_to(foreign)
+        self.assertEqual(launch({"SteamAppId": "12345"}), str(default))
+        self.assertEqual(expected.readlink(), foreign)
+        self.assertEqual(foreign.read_text(), "unrelated\n")
+
 
     def test_process_name_selects_manual_launcher_profile_without_steam_id(self):
         game = dict(ConfigurationManager.get_defaults())

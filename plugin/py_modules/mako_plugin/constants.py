@@ -67,6 +67,11 @@ ACTIVE_RENDERER_STATE_FILENAME = "active-renderer.json"
 ACTIVE_RENDERER_STATE_SCHEMA_VERSION = 1
 ACTIVE_RENDERER_OWNER_DECKY = "decky"
 ACTIVE_RENDERER_OWNER_STANDALONE = "standalone"
+# What MAKO Decky last installed into each Flatpak runtime branch.
+FLATPAK_RUNTIME_STATE_FILENAME = "flatpak-runtimes.json"
+FLATPAK_RUNTIME_STATE_SCHEMA_VERSION = 1
+# Default prefix of the standalone archive installer, beside Decky's MAKO_ROOT.
+STANDALONE_INSTALL_PREFIX = ".local"
 STANDALONE_INSTALLER_STATE_RELATIVE_PATH = (
     f"{MAKO_ROOT}/installer/installed-files.sha256"
 )
@@ -98,6 +103,15 @@ ZINK_DRIVER_VALUE = "zink"
 SDL_AUDIO_DRIVER_ENV = "SDL_AUDIODRIVER"
 SDL_AUDIO_DRIVER_ALSA_VALUE = "alsa"
 WINE_DLL_OVERRIDES_ENV = "WINEDLLOVERRIDES"
+# Proton 9 renders a Vulkan window that has child windows offscreen and copies
+# it once per game frame, hiding generated frames. MAKO Renderer records a
+# per-profile marker when Wine's switch can draw the game directly; the wrapper
+# exports the switch on the next launch. Names match wine_compatibility.hpp.
+WINE_COMPATIBILITY_FIX_ENV = "MAKO_WINE_COMPATIBILITY_FIX"
+WINE_CHILD_WINDOW_SWITCH_ENV = "WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK"
+WINE_COMPATIBILITY_DIRNAME = "wine-compatibility"
+WINE_CHILD_WINDOW_MARKER_SUFFIX = ".vk-child-window"
+WINE_CHILD_WINDOW_INEFFECTIVE_SUFFIX = ".vk-child-window-ineffective"
 CONFIG_FILENAME = "conf.toml"
 # The engine reads conf.toml directly, so Decky-only launcher settings must be
 # stored separately rather than adding unknown keys to an upstream profile.
@@ -112,6 +126,13 @@ PROFILE_METADATA_FILENAME = "profile-metadata.json"
 # identity from remote_binary; self-contained local packages use
 # bundled_renderer so Decky Loader does not attempt an impossible download.
 LIB_FILENAME = "libmako-render.so"
+# MAKO FG's separate program and model. One 64-bit program serves both Renderer architectures.
+MAKO_FG_DIRECTORY = "mako-fg"
+MAKO_FG_HOST_FILENAME = "mako-fg-host"
+MAKO_FG_FILES = (
+    MAKO_FG_HOST_FILENAME, "version.json", "model/weights.bin", "model/ops.spv",
+    "model/transport.spv", "model/mixture.spv",
+)
 SPATIAL_SCALING_LIB_FILENAME = "libmako-render-scaling.so"
 MAKO_LAYER_NAME = "VK_LAYER_MAKO_render"
 MAKO_LAYER_ENABLE_ENV = "ENABLE_MAKO"
@@ -185,12 +206,20 @@ SPATIAL_SCALING_JSON32_FILENAME = (
 CLI_FILENAME = "mako-cli"
 SHADER_TOOL_FILENAME = "mako-shader-tool"
 VRR_LEASE_FILENAME = "mako-vrr-lease"
+# The Renderer helper binds Flatpak VRR discovery to this backend process ID.
+VRR_WATCH_PARENT_ENV = "MAKO_VRR_WATCH_PARENT"
 CLI_DIR = f"{MAKO_ROOT}/bin"
 
 # The standalone uninstaller mirrors this fixed list so removing MAKO Renderer
 # also removes a Decky-supplied native payload. A cross-component contract test
 # keeps the independently packaged Python and shell implementations aligned.
 DECKY_NATIVE_RENDERER_RELATIVE_PATHS = (
+    ".local/bin/mako-installer",
+    ".local/bin/mako-remote-play",
+    ".local/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop",
+    *(f"{MAKO_ROOT}/mako_remote_play/{name}" for name in (
+        "__init__.py", "remote_play_core.py", "remote_play_launch.py", "managed_files.py",
+    )),
     f"{MAKO_ROOT}/mako_remote_play/libmako-remote-play-sdr.so",
     f"{LOCAL_LIB}/{LIB_FILENAME}",
     f"{LOCAL_LIB32}/{LIB_FILENAME}",
@@ -198,6 +227,7 @@ DECKY_NATIVE_RENDERER_RELATIVE_PATHS = (
     f"{LOCAL_LIB32}/{SPATIAL_SCALING_LIB_FILENAME}",
     f"{VKBASALT_LIB_DIR}/{VKBASALT_LIB_FILENAME}",
     f"{VKBASALT_LIB32_DIR}/{VKBASALT_LIB_FILENAME}",
+    *(f"{LOCAL_LIB}/{MAKO_FG_DIRECTORY}/{name}" for name in MAKO_FG_FILES),
     f"{VULKAN_LAYER_DIR}/{JSON_FILENAME}",
     f"{VULKAN_LAYER_DIR}/{JSON32_FILENAME}",
     f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON_FILENAME}",
@@ -219,6 +249,8 @@ DECKY_NATIVE_RENDERER_RELATIVE_PATHS = (
     DIAGNOSTICS_SCRIPT_NAME,
     f"{USER_VULKAN_LAYER_DIR}/{JSON_FILENAME}",
     f"{USER_VULKAN_LAYER_DIR}/{JSON32_FILENAME}",
+    f"{USER_VULKAN_LAYER_DIR}/{SPATIAL_SCALING_JSON_FILENAME}",
+    f"{USER_VULKAN_LAYER_DIR}/{SPATIAL_SCALING_JSON32_FILENAME}",
 )
 
 BIN_DIR = "bin"

@@ -13,11 +13,11 @@ README = ROOT / "README.md"
 CONFIG = ROOT / "scripts/contributors.json"
 START = "<!-- mako-contributors:start -->"
 END = "<!-- mako-contributors:end -->"
-COAUTHOR = re.compile(r"^Co-authored-by:\s*([^\n<>]+?)\s*<[^\n<>]+>\s*$", re.IGNORECASE | re.MULTILINE)
+COAUTHOR = re.compile(r"^Co-authored-by:\s*([^\n<>]+?)\s*<([^\n<>]+)>\s*$", re.IGNORECASE | re.MULTILINE)
 LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?")
 
 
-def git_names():
+def git_names(nonhuman_coauthors):
     result = subprocess.run(
         ["git", "log", "--no-merges", "--format=%an%x1f%B%x1e", "HEAD"],
         cwd=ROOT,
@@ -31,12 +31,21 @@ def git_names():
             continue
         author_name, body = record.split("\x1f", 1)
         names.add(author_name.strip().casefold())
-        names.update(match.group(1).strip().casefold() for match in COAUTHOR.finditer(body))
+        for match in COAUTHOR.finditer(body):
+            identity = (match.group(1).strip().casefold(), match.group(2).strip().casefold())
+            if identity not in nonhuman_coauthors:
+                names.add(identity[0])
     return names
 
 
 def render():
     config = json.loads(CONFIG.read_text(encoding="utf-8"))
+    nonhuman_coauthors = set()
+    for identity in config.get("nonhuman_coauthors", []):
+        name, email = identity.get("name"), identity.get("email")
+        if not isinstance(name, str) or not name.strip() or not isinstance(email, str) or not email.strip():
+            raise ValueError("Nonhuman coauthors require a name and email")
+        nonhuman_coauthors.add((name.strip().casefold(), email.strip().casefold()))
     name_to_login = {}
     for login, aliases in config["login_to_names"].items():
         for alias in aliases:
@@ -44,7 +53,7 @@ def render():
             if name in name_to_login and name_to_login[name] != login:
                 raise ValueError(f"Commit name {alias!r} maps to multiple GitHub logins")
             name_to_login[name] = login
-    names = git_names()
+    names = git_names(nonhuman_coauthors)
     missing = names - name_to_login.keys()
     if missing:
         raise ValueError(

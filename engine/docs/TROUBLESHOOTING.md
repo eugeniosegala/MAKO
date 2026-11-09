@@ -23,7 +23,7 @@ Install Vulkan-tools if `vulkaninfo` is missing. If no layer appears, check the 
 ## The layer loads but a feature does not start
 
 - Enable the feature before launching and restart for options marked **Restart**.
-- For Frame Generation or LS1, install Lossless Scaling's default Steam version and check **Lossless.dll Path**. MAKO Scaler and Shaders work without it.
+- For the optional Lossless Scaling frame generation model or LS1, install Lossless Scaling's default Steam version and check **Lossless.dll Path**, or switch to MAKO FG or MAKO Scaler. MAKO FG, MAKO Scaler, and Shaders work without it.
 - Clear an unnecessary **GPU** override; Frame Generation must use the game's GPU.
 - For scaling, lower the in-game resolution and check the input/output sizes in diagnostics.
 - Compare V-Sync on/off and test features separately.
