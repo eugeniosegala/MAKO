@@ -1074,6 +1074,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         vk.physdev(), createInfo.surface, &caps);
     if (res != VK_SUCCESS)
         throw ls::vulkan_error(res, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed");
+    modification.surfaceMinImageCount = caps.minImageCount;
 
     // In the managed render -> Gamescope WSI -> spatial chain, the lower
     // capability owner deliberately returns the virtual source extent. The

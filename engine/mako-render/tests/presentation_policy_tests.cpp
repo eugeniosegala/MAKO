@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "presentation_policy.hpp"
+#include "swapchain/application_acquire_budget.hpp"
 
 #include <algorithm>
 #include <array>
@@ -13,6 +14,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -358,6 +360,70 @@ namespace {
                     handoff.active(),
                 "Steam menu focus retained earlier source-overrun evidence");
         }
+    }
+
+    void testApplicationAcquireBudgetHoldsZinkToItsRequest() {
+        // Zink sizes its acquire window from the images it sees. MAKO adds
+        // generated-frame images, so the window must follow the request.
+        expect(ApplicationAcquireBudget::windowFor(3, 3) == 1 &&
+                ApplicationAcquireBudget::windowFor(3, 2) == 2 &&
+                ApplicationAcquireBudget::windowFor(4, 2) == 3 &&
+                ApplicationAcquireBudget::windowFor(2, 3) == 1 &&
+                ApplicationAcquireBudget::windowFor(3, 0) == 4,
+            "application acquire window ignored the requested image count");
+
+        expect(applicationAcquireBudgetApplies("mesa zink", 3, 6, 3),
+            "a Zink swapchain with MAKO images received no acquire budget");
+        for (const std::string_view engine : {"DXVK", "vkd3d", "", "Unity",
+                "mesa zink 2", "Mesa Zink"}) {
+            expect(!applicationAcquireBudgetApplies(engine, 3, 6, 3),
+                "a non-Zink application received an acquire budget");
+        }
+        expect(!applicationAcquireBudgetApplies("mesa zink", 3, 3, 3) &&
+                !applicationAcquireBudgetApplies("mesa zink", 3, 6, 0),
+            "an acquire budget applied without MAKO images or a surface minimum");
+
+        using namespace std::chrono_literals;
+        ApplicationAcquireBudget budget(3, 3);
+        expect(budget.waitForSlot(0ms),
+            "an empty application window blocked its first acquire");
+        budget.acquired();
+        expect(!budget.waitForSlot(5ms),
+            "a full application window admitted another acquire");
+        // Zink presents on a worker thread while its GL thread waits.
+        std::thread worker([&budget] {
+            std::this_thread::sleep_for(20ms);
+            budget.presented();
+        });
+        const auto waitStarted = ApplicationAcquireBudget::Clock::now();
+        expect(budget.waitForSlot(5s) &&
+                ApplicationAcquireBudget::Clock::now() - waitStarted < 4s,
+            "an application present did not release a waiting acquire");
+        worker.join();
+        budget.presented();
+        expect(budget.heldImages() == 0,
+            "an extra application present underflowed the window");
+
+        budget.acquired();
+        std::thread destroyer([&budget] {
+            std::this_thread::sleep_for(20ms);
+            budget.close();
+        });
+        expect(budget.waitForSlot(5s),
+            "swapchain destruction left an acquire waiting");
+        destroyer.join();
+
+        expect(budget.firstFallback() && !budget.firstFallback(),
+            "an expired acquire budget wait was not reported exactly once");
+
+        // An image released without a present must not stall later acquires.
+        ApplicationAcquireBudget stale(3, 3);
+        stale.acquired();
+        expect(!stale.waitForSlot(5ms),
+            "precondition failed: a full window admitted another acquire");
+        stale.forgetHeldImages();
+        expect(stale.waitForSlot(0ms) && stale.heldImages() == 0,
+            "an expired acquire budget kept a stale image count");
     }
 }
 
@@ -1674,6 +1740,7 @@ int main() {
     testOrderedAcquireBackoffAndProbeAreFinite();
     testExternalInterruptionDiscardsOldFailure();
     testFifoSourceOverrunEndsTwoXHandoff();
+    testApplicationAcquireBudgetHoldsZinkToItsRequest();
     expect(!shouldRejectManagedMultiSwapchainPresent(1, true) &&
             !shouldRejectManagedMultiSwapchainPresent(2, false) &&
             shouldRejectManagedMultiSwapchainPresent(2, true),

@@ -10,6 +10,7 @@
 #include "mako-common/vulkan/device_features.hpp"
 #include "present_diagnostics.hpp"
 #include "swapchain/swapchain.hpp"
+#include "swapchain/application_acquire_budget.hpp"
 #include "swapchain/create_policy.hpp"
 #include "swapchain/retirement.hpp"
 #include "x11_presentation_target.hpp"
@@ -25,6 +26,7 @@
 #include <cstdint>
 #include <exception>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <new>
 #include <string_view>
@@ -108,6 +110,12 @@ namespace {
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
         std::unordered_set<VkSwapchainKHR> nativeSwapchains;
+        // Zink acquires on its GL thread and presents on a worker, so these
+        // budgets are shared across threads under their own lock.
+        std::mutex acquireBudgetsMutex;
+        std::unordered_map<VkSwapchainKHR,
+            std::shared_ptr<ApplicationAcquireBudget>> acquireBudgets;
+        std::atomic<bool> acquireBudgetsPresent{false};
         struct RetiredSwapchain {
             VkDevice device{VK_NULL_HANDLE};
             VkSurfaceKHR surface{VK_NULL_HANDLE};
@@ -3034,6 +3042,28 @@ namespace {
 
             instance_info->swapchains.emplace(*swapchain,
                 ls::R<vk::Vulkan>(it->second));
+            if (applicationAcquireBudgetApplies(instance_info->engineName,
+                    info->minImageCount, newInfo.minImageCount,
+                    modification.surfaceMinImageCount)) {
+                auto budget = std::make_shared<ApplicationAcquireBudget>(
+                    info->minImageCount, modification.surfaceMinImageCount
+                );
+                if (present_diagnostics::enabled()) {
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=application-acquire-budget"
+                              << " swapchain=" << *swapchain
+                              << " engine=zink"
+                              << " requested_images=" << info->minImageCount
+                              << " provisioned_images=" << newInfo.minImageCount
+                              << " surface_min_images="
+                              << modification.surfaceMinImageCount
+                              << " window=" << budget->window() << '\n';
+                }
+                const std::lock_guard lock(instance_info->acquireBudgetsMutex);
+                instance_info->acquireBudgets[*swapchain] = std::move(budget);
+                instance_info->acquireBudgetsPresent.store(
+                    true, std::memory_order_release);
+            }
 
             commitVariableSurfaceScaling();
             lowerSwapchainCreated = false;
@@ -3081,6 +3111,41 @@ namespace {
         return share;
     }
 
+    std::shared_ptr<ApplicationAcquireBudget> applicationAcquireBudget(
+            const VkSwapchainKHR swapchain) {
+        if (!instance_info->acquireBudgetsPresent.load(std::memory_order_acquire))
+            return nullptr;
+        const std::lock_guard lock(instance_info->acquireBudgetsMutex);
+        const auto found = instance_info->acquireBudgets.find(swapchain);
+        return found == instance_info->acquireBudgets.end()
+            ? nullptr : found->second;
+    }
+
+    // Only an infinite acquire waits for the window. Finite timeouts keep the
+    // driver's exact result: Zink retries them with growing timeouts and
+    // aborts after a bounded number, so a synthetic timeout is never safe.
+    template<typename Acquire>
+    VkResult acquireWithinApplicationBudget(const VkSwapchainKHR swapchain,
+            const uint64_t timeout, Acquire&& acquire) {
+        const auto budget = applicationAcquireBudget(swapchain);
+        if (!budget)
+            return acquire();
+        if (timeout == UINT64_MAX &&
+                !budget->waitForSlot(ApplicationAcquireBudget::fallbackWait())) {
+            budget->forgetHeldImages();
+            if (budget->firstFallback()) {
+                std::cerr << "MAKO Renderer: application acquire budget wait "
+                             "expired; acquiring without it"
+                          << " swapchain=" << swapchain
+                          << " window=" << budget->window() << '\n';
+            }
+        }
+        const VkResult result = acquire();
+        if (result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR)
+            budget->acquired();
+        return result;
+    }
+
     template<typename Acquire>
     VkResult timeApplicationAcquire(const VkSwapchainKHR swapchain,
             Acquire&& acquire) {
@@ -3101,6 +3166,21 @@ namespace {
         present_diagnostics::ApplicationPresentScope timingScope(
             queue, info->swapchainCount == 1 ? info->pSwapchains[0] : VK_NULL_HANDLE
         );
+        // Return each presented image to its application window only after
+        // MAKO's present work, so a waiting acquire carries MAKO's pacing.
+        struct ApplicationAcquireRelease {
+            std::vector<std::shared_ptr<ApplicationAcquireBudget>> budgets;
+            ~ApplicationAcquireRelease() {
+                for (const auto& budget : this->budgets)
+                    budget->presented();
+            }
+        } applicationAcquireRelease;
+        for (uint32_t i = 0; i < info->swapchainCount &&
+                instance_info->acquireBudgetsPresent.load(
+                    std::memory_order_acquire); ++i) {
+            if (auto budget = applicationAcquireBudget(info->pSwapchains[i]))
+                applicationAcquireRelease.budgets.push_back(std::move(budget));
+        }
         const auto presentEntered = std::chrono::steady_clock::now();
         const std::optional<double> applicationLayerShare =
             info->swapchainCount == 1
@@ -3438,9 +3518,12 @@ namespace {
         return present_diagnostics::observeApplicationAcquire(
             device, swapchain, present_diagnostics::ApplicationFrameApi::AcquireKhr,
             timeout, [&] {
-                return timeApplicationAcquire(swapchain, [&] {
-                    return mapping->second.get().df().AcquireNextImageKHR(
-                        device, swapchain, timeout, semaphore, fence, imageIndex);
+                return acquireWithinApplicationBudget(swapchain, timeout, [&] {
+                    return timeApplicationAcquire(swapchain, [&] {
+                        return mapping->second.get().df().AcquireNextImageKHR(
+                            device, swapchain, timeout, semaphore, fence,
+                            imageIndex);
+                    });
                 });
             });
     }
@@ -3461,8 +3544,11 @@ namespace {
         return present_diagnostics::observeApplicationAcquire(
             device, info->swapchain, present_diagnostics::ApplicationFrameApi::AcquireKhr2,
             info->timeout, [&] {
-                return timeApplicationAcquire(info->swapchain, [&] {
-                    return lower(device, info, imageIndex);
+                return acquireWithinApplicationBudget(info->swapchain,
+                        info->timeout, [&] {
+                    return timeApplicationAcquire(info->swapchain, [&] {
+                        return lower(device, info, imageIndex);
+                    });
                 });
             });
     }
@@ -3510,6 +3596,17 @@ namespace {
         auto context = layer_info->root.takeSwapchainContext(swapchain);
         instance_info->swapchainInfos.erase(swapchain);
         instance_info->swapchains.erase(swapchain);
+        {
+            const std::lock_guard lock(instance_info->acquireBudgetsMutex);
+            const auto budget = instance_info->acquireBudgets.find(swapchain);
+            if (budget != instance_info->acquireBudgets.end()) {
+                budget->second->close();
+                instance_info->acquireBudgets.erase(budget);
+                instance_info->acquireBudgetsPresent.store(
+                    !instance_info->acquireBudgets.empty(),
+                    std::memory_order_release);
+            }
+        }
         instance_info->nativeSwapchains.erase(swapchain);
 
         if (!native && context && context->presentRetirementEnabled()) {

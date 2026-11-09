@@ -61,6 +61,7 @@ namespace mako::layer {
         VkExtent2D applicationExtent{};
         VkExtent2D presentationExtent{};
         std::optional<VkExtent2D> gamescopePresentationTarget;
+        uint32_t surfaceMinImageCount{0};
     };
 
     /// Root context of the MAKO Renderer layer.
