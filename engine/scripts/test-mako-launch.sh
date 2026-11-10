@@ -344,22 +344,27 @@ printf '%s\n' \
     'enable_zink=1' \
     'force_alsa_audio=1' > "$launch_config"
 compatibility_output="$({
-    WINEDLLOVERRIDES='d3d11=n' \
+    WINEDLLOVERRIDES='d3d11=n' RADV_DEBUG='nohiz' \
         MAKO_LAUNCH_CONFIG="$launch_config" \
         "$launcher" bash -c '
             printf "%s\n" \
                 "${__GLX_VENDOR_LIBRARY_NAME:-unset}" \
                 "${MESA_LOADER_DRIVER_OVERRIDE:-unset}" \
                 "${GALLIUM_DRIVER:-unset}" \
+                "${RADV_DEBUG:-unset}" \
                 "${SDL_AUDIODRIVER:-unset}" \
                 "${WINEDLLOVERRIDES:-unset}" \
                 "${MAKO_LAUNCH_CONFIG:-unset}"
         '
 } 2>&1)" || fail "standalone compatibility launch failed: $compatibility_output"
-expected_compatibility=$'mesa\nzink\nzink\nalsa\nd3d11=n;winepulse.drv=d;winealsa.drv=b\nunset'
+expected_compatibility=$'mesa\nzink\nzink\nnohiz,nodisplaydcc\nalsa\nd3d11=n;winepulse.drv=d;winealsa.drv=b\nunset'
 if [[ "$compatibility_output" != "$expected_compatibility" ]]; then
     fail "standalone compatibility settings were not applied safely:\n$compatibility_output"
 fi
+repeated_zink_output="$(RADV_DEBUG='nodisplaydcc' MAKO_LAUNCH_CONFIG="$launch_config" \
+    "$launcher" bash -c 'printf "%s" "${RADV_DEBUG:-unset}"')"
+[[ "$repeated_zink_output" == "nodisplaydcc" ]] ||
+    fail "Zink repeated the RADV display-compression switch: $repeated_zink_output"
 
 for disable_hdr in 0 1; do
     printf '%s\n' 'version=1' "disable_hdr_exposure=$disable_hdr" > "$launch_config"

@@ -1219,7 +1219,7 @@ class GameProfileTests(unittest.TestCase):
                 str(self.service.mako_script_path),
                 "/bin/bash",
                 "-c",
-                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nVKBASALT_RELOAD=%s\\nIMPLICIT=%s\\nINSTANCE=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VKBASALT_CONFIG_RELOAD:-}" "${VK_IMPLICIT_LAYER_PATH:-}" "${VK_INSTANCE_LAYERS:-}"',
+                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nVKBASALT_RELOAD=%s\\nIMPLICIT=%s\\nINSTANCE=%s\\nZINK=%s\\nRADV=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VKBASALT_CONFIG_RELOAD:-}" "${VK_IMPLICIT_LAYER_PATH:-}" "${VK_INSTANCE_LAYERS:-}" "${GALLIUM_DRIVER:-}" "${RADV_DEBUG:-}"',
                 *command_arguments,
             ],
             check=True,
@@ -1232,6 +1232,35 @@ class GameProfileTests(unittest.TestCase):
             },
         )
         return dict(line.split("=", 1) for line in result.stdout.splitlines())
+
+    def test_wrapper_disables_radv_display_compression_only_for_zink_games(self):
+        game = dict(ConfigurationManager.get_defaults())
+        game["active_in"] = "CoolGame.exe"
+        profile_data = ProfileData(
+            current_profile="cool-game",
+            profiles={"mako": ConfigurationManager.get_defaults(), "cool-game": game},
+            global_config=self.profile_data["global_config"],
+        )
+        self.service._save_profile_data(profile_data)
+        self.service._write_profile_metadata({
+            "mako": {"display_name": "Default", "kind": "default", "steam_app_id": None},
+            "cool-game": {"display_name": "Cool Game", "kind": "game", "steam_app_id": "12345"},
+        })
+        self.service._write_wrapper_profile_settings({"cool-game": {"enable_zink": True}})
+        result = self.service.update_mako_script_from_profile_data(profile_data)
+        self.assertTrue(result["success"])
+
+        zink = self._run_wrapper("12345")
+        appended = self._run_wrapper("12345", {"RADV_DEBUG": "nohiz"})
+        repeated = self._run_wrapper("12345", {"RADV_DEBUG": "nohiz,nodisplaydcc"})
+        unrelated = self._run_wrapper("67890", {"RADV_DEBUG": "nohiz"})
+
+        self.assertEqual(zink["ZINK"], "zink")
+        self.assertEqual(zink["RADV"], "nodisplaydcc")
+        self.assertEqual(appended["RADV"], "nohiz,nodisplaydcc")
+        self.assertEqual(repeated["RADV"], "nohiz,nodisplaydcc")
+        self.assertEqual(unrelated["ZINK"], "")
+        self.assertEqual(unrelated["RADV"], "nohiz")
 
     def test_wrapper_applies_alsa_only_to_the_matching_game(self):
         game = dict(ConfigurationManager.get_defaults())

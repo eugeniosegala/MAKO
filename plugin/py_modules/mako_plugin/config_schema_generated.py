@@ -205,6 +205,12 @@ def get_script_generation_logic():
             lines.append("export __GLX_VENDOR_LIBRARY_NAME=mesa")
             lines.append("export MESA_LOADER_DRIVER_OVERRIDE=zink")
             lines.append("export GALLIUM_DRIVER=zink")
+            lines.extend([
+                'case ",${RADV_DEBUG:-}," in',
+                '    *",nodisplaydcc,"*) ;;',
+                '    *) export RADV_DEBUG="${RADV_DEBUG:+$RADV_DEBUG,}nodisplaydcc" ;;',
+                "esac",
+            ])
         if config.get("force_alsa_audio", False):
             lines.extend([
                 "export SDL_AUDIODRIVER=alsa",

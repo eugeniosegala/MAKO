@@ -100,6 +100,10 @@ ZINK_MESA_LOADER_ENV = "MESA_LOADER_DRIVER_OVERRIDE"
 ZINK_GALLIUM_DRIVER_ENV = "GALLIUM_DRIVER"
 ZINK_GLX_VENDOR_VALUE = "mesa"
 ZINK_DRIVER_VALUE = "zink"
+# Zink games showed colour speckles only while Gamescope scanned their images
+# out directly. Keep RADV's display compression off for them.
+ZINK_RADV_DEBUG_ENV = "RADV_DEBUG"
+ZINK_RADV_DEBUG_VALUE = "nodisplaydcc"
 SDL_AUDIO_DRIVER_ENV = "SDL_AUDIODRIVER"
 SDL_AUDIO_DRIVER_ALSA_VALUE = "alsa"
 WINE_DLL_OVERRIDES_ENV = "WINEDLLOVERRIDES"

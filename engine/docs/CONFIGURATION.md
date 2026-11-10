@@ -167,7 +167,7 @@ The Arch package uses `/usr/bin/mako-launch`. For a terminal launch, replace `%c
 
 The controls under **Launch Settings** apply globally to `mako-launch` games. **Disable Steam Overlay (Restart)** is on by default; it may reduce stutter but disables Steam's in-game overlay and FPS counter and may affect Steam Input. Gaming Mode menus and performance overlay remain available.
 
-**Zink** runs OpenGL through Vulkan. **Force ALSA** changes the audio path for compatibility problems. Steam Deck mode and Gamescope WSI controls are available in MAKO Decky.
+**Zink** runs OpenGL through Vulkan and turns off RADV's display compression for the game (`RADV_DEBUG=nodisplaydcc`), which otherwise showed as colour speckles while Gamescope sent Zink images straight to the display. **Force ALSA** changes the audio path for compatibility problems. Steam Deck mode and Gamescope WSI controls are available in MAKO Decky.
 
 **External Tools → Enable MangoHud (Restart)** applies to the selected profile and shares its saved selection with MAKO Decky. Install host MangoHud and Python 3, then use **Refresh MangoHud** if needed. Enabling MangoHud turns off Shaders; enabling Shaders turns off MangoHud. Copy the updated launch option to Steam after either change and restart the game. Flatpak games are unsupported. Both UIs use the optional [shared MangoHud layout](LAYER-CHAINING.md#shared-mangohud-layout).
 

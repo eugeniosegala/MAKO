@@ -310,6 +310,12 @@ if [[ "$mako_launch_enable_zink" == 1 ]]; then
     export __GLX_VENDOR_LIBRARY_NAME=mesa
     export MESA_LOADER_DRIVER_OVERRIDE=zink
     export GALLIUM_DRIVER=zink
+    # Zink games showed colour speckles only while Gamescope scanned their
+    # images out directly. Keep RADV's display compression off for them.
+    case ",${RADV_DEBUG:-}," in
+        *",nodisplaydcc,"*) ;;
+        *) export RADV_DEBUG="${RADV_DEBUG:+$RADV_DEBUG,}nodisplaydcc" ;;
+    esac
 fi
 if [[ "$mako_launch_force_alsa_audio" == 1 ]]; then
     export SDL_AUDIODRIVER=alsa

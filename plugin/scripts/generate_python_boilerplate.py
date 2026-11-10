@@ -27,6 +27,8 @@ from py_modules.mako_plugin.constants import (
     ZINK_GLX_VENDOR_ENV,
     ZINK_GLX_VENDOR_VALUE,
     ZINK_MESA_LOADER_ENV,
+    ZINK_RADV_DEBUG_ENV,
+    ZINK_RADV_DEBUG_VALUE,
 )
 
 
@@ -152,6 +154,18 @@ def generate_script_generation() -> str:
                     f'            lines.append("export {ZINK_GALLIUM_DRIVER_ENV}='
                     f'{ZINK_DRIVER_VALUE}")'
                 )
+                lines.append('            lines.extend([')
+                lines.append(
+                    f'                \'case ",${{{ZINK_RADV_DEBUG_ENV}:-}}," in\','
+                )
+                lines.append(f'                \'    *",{ZINK_RADV_DEBUG_VALUE},"*) ;;\',')
+                lines.append(
+                    f'                \'    *) export {ZINK_RADV_DEBUG_ENV}='
+                    f'"${{{ZINK_RADV_DEBUG_ENV}:+${ZINK_RADV_DEBUG_ENV},}}'
+                    f'{ZINK_RADV_DEBUG_VALUE}" ;;\','
+                )
+                lines.append('                "esac",')
+                lines.append('            ])')
             elif field_name == "force_alsa_audio":
                 # SDL honours the native ALSA driver. Wine/Proton honours the
                 # DLL override while retaining any caller-provided overrides.
