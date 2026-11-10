@@ -324,14 +324,14 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
         );
     if (this->gpuHeadroomResult.capFps > 0)
         handoffGenerationLimit.reset();
-    // A full FIFO queue shows as waits on MAKO's own generated-image
-    // acquires. Only Zink's worker-thread presents also end a handoff on them.
-    const auto presentationWait =
-        std::exchange(this->lastGeneratedAcquireWait, std::nullopt);
+    // Zink's worker-thread presents expose a full FIFO queue as waits on
+    // MAKO's own generated-image acquires. Other engines never read them.
+    const auto presentationWait = this->info.applicationAcquireWindow
+        ? std::exchange(this->lastGeneratedAcquireWait, std::nullopt)
+        : std::nullopt;
     const auto handoff = this->smoothCadencePacerHandoff.update(
         limiterArrival, handoffGenerationLimit, plannedVrrProbePause,
-        this->gamescopeRefreshHz,
-        this->info.applicationAcquireWindow ? presentationWait : std::nullopt
+        this->gamescopeRefreshHz, presentationWait
     );
     if (handoff.changed) {
         this->realFramePacer.reset();
@@ -373,24 +373,7 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
     auto limiterDeadline = this->realFramePacer.schedule(
         limiterArrival, baseFpsCap, this->gpuHeadroomResult.capFps > 0
     );
-    const bool ownedTimingControlsOutput = this->presentTiming.controlsOutput(
-        this->gamescopeRefreshHz.value_or(0));
-    auto sourceRefreshHz = this->gamescopeRefreshHz;
-#if defined(VK_EXT_present_timing) && defined(VK_KHR_present_id2)
-    if (!sourceRefreshHz && ownedTimingControlsOutput) {
-        const double refresh = this->presentTiming.refreshRate(0);
-        if (OrderedPresentTimeline::validRate(refresh))
-            sourceRefreshHz = static_cast<uint32_t>(std::round(refresh));
-    }
-#endif
-    // These transports already own an output clock. Preparing inside a
-    // target-matched automatic cap must not add another CPU output clock.
-    const bool compositorOutputTiming = this->info.gamescopeScalingSurface ||
-        displayTimingControlsOutput(this->wsiPresentTimingQuery != nullptr,
-            this->privateOrderedTransport, this->gamescopeRefreshHz.value_or(0)) ||
-        ownedTimingControlsOutput;
-    if (cappedFifoBacklogDrainApplies(this->info.applicationAcquireWindow,
-            this->privateOrderedTransport, compositorOutputTiming)) {
+    if (this->info.applicationAcquireWindow) {
         const auto drain = this->cappedFifoBacklogDrain.observe(
             limiterArrival, baseFpsCap, this->gamescopeRefreshHz,
             presentationWait
@@ -412,9 +395,23 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
                  << " refresh_hz=" << this->gamescopeRefreshHz.value_or(0) << '\n';
             std::cerr << line.str();
         }
-    } else {
-        this->cappedFifoBacklogDrain.reset();
     }
+    const bool ownedTimingControlsOutput = this->presentTiming.controlsOutput(
+        this->gamescopeRefreshHz.value_or(0));
+    auto sourceRefreshHz = this->gamescopeRefreshHz;
+#if defined(VK_EXT_present_timing) && defined(VK_KHR_present_id2)
+    if (!sourceRefreshHz && ownedTimingControlsOutput) {
+        const double refresh = this->presentTiming.refreshRate(0);
+        if (OrderedPresentTimeline::validRate(refresh))
+            sourceRefreshHz = static_cast<uint32_t>(std::round(refresh));
+    }
+#endif
+    // These transports already own an output clock. Preparing inside a
+    // target-matched automatic cap must not add another CPU output clock.
+    const bool compositorOutputTiming = this->info.gamescopeScalingSurface ||
+        displayTimingControlsOutput(this->wsiPresentTimingQuery != nullptr,
+            this->privateOrderedTransport, this->gamescopeRefreshHz.value_or(0)) ||
+        ownedTimingControlsOutput;
     const bool sourceDeadlinePreparation = limiterDeadline > limiterArrival &&
         baseCapPacesOutputs(
             this->profile, baseFpsCap,

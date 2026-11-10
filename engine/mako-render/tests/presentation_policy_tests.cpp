@@ -581,20 +581,6 @@ namespace {
                 drain.observe(at(20.1), 60.0, std::nullopt, 7ms).hold ==
                     Clock::duration::zero(),
             "an uncapped or unknown-refresh source held a real frame");
-
-        // Ordered SDR swapchains drain a capped backlog for every engine.
-        // The HDR transport never blocks an acquire, and the scaling bridge
-        // and owned display timing keep their own compositor queue reserve.
-        expect(cappedFifoBacklogDrainApplies(false, true, false),
-            "an ordered SDR swapchain kept a capped FIFO backlog");
-        expect(!cappedFifoBacklogDrainApplies(false, false, false) &&
-                !cappedFifoBacklogDrainApplies(false, true, true) &&
-                !cappedFifoBacklogDrainApplies(false, false, true),
-            "the HDR transport, a bridge, or owned display timing drained its queue");
-        expect(cappedFifoBacklogDrainApplies(true, true, false) &&
-                cappedFifoBacklogDrainApplies(true, true, true) &&
-                cappedFifoBacklogDrainApplies(true, false, false),
-            "a Zink acquire window lost its capped FIFO backlog drain");
     }
 
     void testZinkFifoBacklogEndsHandoff() {

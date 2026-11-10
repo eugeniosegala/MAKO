@@ -1771,17 +1771,18 @@ namespace mako::layer {
         Counts counts;
     };
 
-    /// A compositor stall can fill FIFO behind a source cap at the
-    /// refresh-limited rate; the cap then runs at the display's own rate and
-    /// never drains the queue. Every queued output adds one refresh of input
-    /// delay, and Zink's worker-thread presents also miss refreshes. While a
-    /// cap paces the swapchain, a half-second window in which most private
-    /// acquires waited proves that backlog: hold the next real frame one
-    /// refresh to retire one queued output. A higher multiplier queues more
-    /// outputs per real frame, so an episode may hold up to that many outputs
-    /// plus two before an uncleared backlog pauses the drain. A consumer
-    /// slower than refresh, such as Gamescope's frame limiter, also makes
-    /// acquires wait, but it holds the source below its cap.
+    /// Zink presents from a worker thread, and the application acquire window
+    /// makes the game wait for that worker. A compositor stall can fill FIFO
+    /// behind a source cap at the refresh-limited rate; the cap then runs at
+    /// the display's own rate and never drains the queue, and the worker's
+    /// added delay misses refreshes. While a cap paces such a swapchain, a
+    /// half-second window in which most private acquires waited proves that
+    /// backlog: hold the next real frame one refresh to retire one queued
+    /// output. A higher multiplier queues more outputs per real frame, so an
+    /// episode may hold up to that many outputs plus two before an uncleared
+    /// backlog pauses the drain. A consumer slower than refresh, such as
+    /// Gamescope's frame limiter, also makes acquires wait, but it holds the
+    /// source below its cap.
     class CappedFifoBacklogDrain {
     public:
         using Clock = std::chrono::steady_clock;
@@ -1890,19 +1891,6 @@ namespace mako::layer {
         PresentationWaitWindow window;
         size_t holds{0};
     };
-
-    /// The capped backlog drain needs blocking private acquires as queue
-    /// evidence and a CPU source cap that owns real-frame release. The ordered
-    /// SDR transport provides both. The HDR transport never blocks an acquire,
-    /// and the scaling bridge and owned display timing pace outputs in the
-    /// compositor with their own queue reserve. A Zink acquire window keeps
-    /// the drain wherever it applies.
-    [[nodiscard]] constexpr bool cappedFifoBacklogDrainApplies(
-            const bool applicationAcquireWindow, const bool privateOrderedTransport,
-            const bool compositorOutputTiming) noexcept {
-        return applicationAcquireWindow ||
-            (privateOrderedTransport && !compositorOutputTiming);
-    }
 
     /// Zink only: under an ordered-FIFO handoff, a source faster than the
     /// rung's admission rate waits on presentation and fills FIFO. Its rate
