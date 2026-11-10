@@ -78,7 +78,7 @@ Known launchers and helpers stay inactive while their child games can match. The
 | `adaptive_fractional_real_frame_priority` | `auto` | Fractional real-frame preference: `auto`, `low`, `medium`, `high`, or `very-high`. |
 | `adaptive_stable_cadence` | `true` | Favours a stable validated cadence when available. |
 | `gamescope_vrr_mode` | `follow-steam` | Per-profile live Gamescope VRR choice: `follow-steam`, `on`, or `off`. On and Off take effect only when Gamescope reports that the active display supports VRR; otherwise they are saved but leave the live setting untouched. |
-| `base_fps_cap` | `0` | Real-frame cap; `0` disables it. Fixed Zink swapchains then use the [refresh-limited rate](ADAPTIVE-VALIDATION.md#integer-pacing-handoffs). |
+| `base_fps_cap` | `0` | Real-frame cap; `0` disables it. Fixed Zink swapchains then use the [refresh-limited rate](ADAPTIVE-VALIDATION.md#integer-pacing-handoffs) unless `dynamic_cadence_recovery` is on. |
 | `frame_generation_refresh_threshold` | `0` | Pauses generation at or below a confirmed Gamescope refresh; `0` disables it. |
 | `dynamic_cadence_recovery` | `false` | Rechecks native cadence for games that switch rates between gameplay and menus. Temporarily reduces generated work while sampling; checks can lower output FPS or cause hitches under sustained GPU load. |
 | `dynamic_cadence_probe_interval_seconds` | `2.0` | Recovery interval from 0.1–3 seconds. |

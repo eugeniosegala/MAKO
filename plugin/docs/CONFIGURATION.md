@@ -55,7 +55,7 @@ Turn on **Enable Frame-gen (Restart)** before launching. **Real FPS** counts gam
 | **Steady Base Cap** | Favours even cadence by initially capping real FPS at half the target; may reduce responsiveness. |
 | **Fractional Adaptive** | Keeps more real frames through a changing mix of real and generated frames; may feel less even. |
 | **Real Frame Priority** | Low–Very High select a Fractional real-FPS cap; higher priority allows more real FPS. **Automatic** adds no priority cap. |
-| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. With Fixed, an OpenGL game through Zink is paced at the refresh rate divided by the multiplier while this is **Off**. |
+| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. With Fixed, an OpenGL game through Zink is paced at the refresh rate divided by the multiplier while this is **Off**, unless **Dynamic Cadence Recovery** is on. |
 | **Smooth Cadence** | Favours consistent delivery; compare on and off for responsiveness. |
 | **Gamescope VRR** | Follows Steam, or temporarily requests VRR on/off for a supported display during play. |
 | **Auto-disable by Refresh Rate / Refresh Rate Threshold** | Pauses generation and Adaptive caps at or below the chosen Gamescope refresh; a manual Base FPS Cap remains. |

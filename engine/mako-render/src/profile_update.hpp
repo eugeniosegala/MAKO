@@ -568,11 +568,13 @@ namespace mako::layer {
     /// misses refreshes: real frames alternate about 25 ms and 8 ms at an exact
     /// rate. Pace such a swapchain at the refresh divided by the multiplier,
     /// the rate FIFO already allows, so the capped path and its backlog drain
-    /// own it. Zero keeps the configured pacing.
+    /// own it. Dynamic Cadence Recovery clears base caps to measure the native
+    /// rate, so it keeps FIFO pacing. Zero keeps the configured pacing.
     [[nodiscard]] inline double zinkRefreshLimitedBaseFpsCap(
             const ls::GameConf& profile,
             const std::optional<uint32_t> gamescopeRefreshHz) {
-        if (profile.adaptive || profile.base_fps_cap > 0 || profile.multiplier < 2 ||
+        if (profile.adaptive || profile.base_fps_cap > 0 ||
+                profile.dynamic_cadence_recovery || profile.multiplier < 2 ||
                 !gamescopeRefreshHz || *gamescopeRefreshHz == 0 ||
                 !effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz))
             return 0.0;

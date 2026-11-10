@@ -2580,6 +2580,10 @@ int main() {
         adaptive.adaptive = true;
         expect(zinkRefreshLimitedBaseFpsCap(adaptive, 120) == 0.0,
             "Adaptive must keep its own caps and FIFO handoff");
+        auto recovery = zink;
+        recovery.dynamic_cadence_recovery = true;
+        expect(zinkRefreshLimitedBaseFpsCap(recovery, 120) == 0.0,
+            "Dynamic Cadence Recovery must keep the native rate measurable");
         auto native = zink;
         native.multiplier = 1;
         expect(zinkRefreshLimitedBaseFpsCap(native, 120) == 0.0,
