@@ -60,6 +60,8 @@ For comparisons, collect a separate report after each run and note which setting
 
 For timing-field meanings and the limits of log-based comparisons, see [Interpreting presentation records](WSI-ISOLATION.md#interpreting-presentation-records).
 
+For Zink pacing comparisons, also note Fixed or Fractional Adaptive mode, Smooth Cadence, Real Frame Priority and any FPS caps. The report retains automatic-cap changes and FIFO handoff/drain records; see [Zink FIFO pacing](ADAPTIVE-VALIDATION.md#zink-fifo-pacing) for their meaning.
+
 If the optional Lossless Scaling model cannot initialize, MAKO tries MAKO FG. See [model selection and fallback](MAKO-FG.md) for details.
 
 ## 4. Restore your settings

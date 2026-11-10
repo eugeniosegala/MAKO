@@ -51,6 +51,9 @@ MAKO Renderer: present diagnostics: operation=application-acquire-budget swapcha
 MAKO Renderer: application acquire budget wait expired; acquiring without it swapchain=1234 window=1
 MAKO Renderer: present diagnostics: operation=fifo-backlog-drain context=1 action=hold hold_ms=8.33333 holds=1 waited_frames=28 frames=31 source_cap_fps=60 refresh_hz=120
 MAKO Renderer: present diagnostics: operation=zink-refresh-limited-cap context=1 cap_fps=60 refresh_hz=120 multiplier=2
+MAKO Renderer: present diagnostics: operation=zink-refresh-limited-cap context=2 cap_fps=40 refresh_hz=120 multiplier=3
+MAKO Renderer: present diagnostics: operation=zink-refresh-limited-cap context=2 cap_fps=0 refresh_hz=120 multiplier=1
+MAKO Renderer: present diagnostics: operation=adaptive-smooth-cadence-pacer-restored generated_limit=1 baseline_base_fps=62.5 current_base_fps=60 reason=zink-refresh-limited-cap
 MAKO Renderer: present diagnostics: operation=gamescope-presentation-feedback context=1 vrr_enabled=1 vrr_capable=1 vrr_active=1 allow_tearing=0 pacing_owner=mako-target-clock action=reset-pacer-only scheduler_reset=0 recreation=0
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources spatial_scaling_pending=1 frame_generation_backend_pending=1 flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 available_generated_capacity=1 requested_generated_capacity=3 process_restart_required=0 action=signal-out-of-date-after-successful-present
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=2 state_revision=4 reason=frame-generation-resources flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 active_generated_capacity=1 requested_generated_capacity=4 action=prepare-private-context
@@ -724,6 +727,9 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("application acquire budget wait expired", result.stdout)
                     self.assertIn("operation=fifo-backlog-drain", result.stdout)
                     self.assertIn("operation=zink-refresh-limited-cap context=1 cap_fps=60", result.stdout)
+                    self.assertIn("operation=zink-refresh-limited-cap context=2 cap_fps=40", result.stdout)
+                    self.assertIn("operation=zink-refresh-limited-cap context=2 cap_fps=0", result.stdout)
+                    self.assertIn("reason=zink-refresh-limited-cap", result.stdout)
                     self.assertIn("Gamescope presentation feedback initialized", result.stdout)
                     self.assertIn("offscreen X11 presentation window: window=2560x1440; top_level=1x1", result.stdout)
                     self.assertIn("operation=gamescope-presentation-feedback", result.stdout)

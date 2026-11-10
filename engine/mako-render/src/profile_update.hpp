@@ -562,24 +562,60 @@ namespace mako::layer {
         return effectiveBaseFpsCap(profile, scheduler, gamescopeRefreshHz);
     }
 
-    /// Without a Base FPS Cap, Fixed leaves a game paced by FIFO backpressure,
-    /// which keeps the queue full. A Zink swapchain's acquire window then
-    /// makes every frame wait for Zink's present worker, and that hand-off
-    /// misses refreshes: real frames alternate about 25 ms and 8 ms at an exact
-    /// rate. Pace such a swapchain at the refresh divided by the multiplier,
-    /// the rate FIFO already allows, so the capped path and its backlog drain
-    /// own it. Dynamic Cadence Recovery clears base caps to measure the native
-    /// rate, so it keeps FIFO pacing. Zero keeps the configured pacing.
+    /// On a Zink swapchain with an application acquire window, a full FIFO
+    /// adds a worker-thread handoff to source pacing. Use the refresh-limited
+    /// source rate for Fixed and an accepted, target-matched Fractional
+    /// integer cadence, so the existing cap and backlog drain own pacing.
+    /// Ordinary Fractional probes, other transports and Dynamic Cadence Recovery keep
+    /// their established clocks. The caller verifies Zink's acquire window;
+    /// zero keeps the configured pacing.
     [[nodiscard]] inline double zinkRefreshLimitedBaseFpsCap(
             const ls::GameConf& profile,
-            const std::optional<uint32_t> gamescopeRefreshHz) {
-        if (profile.adaptive || profile.base_fps_cap > 0 ||
-                profile.dynamic_cadence_recovery || profile.multiplier < 2 ||
+            const std::optional<uint32_t> gamescopeRefreshHz,
+            const AdaptiveSchedulerSnapshot& scheduler = {},
+            const bool orderedFifoTransport = false,
+            const bool orderedAcquireRecoveryActive = false) {
+        if (profile.base_fps_cap > 0 || profile.dynamic_cadence_recovery ||
                 !gamescopeRefreshHz || *gamescopeRefreshHz == 0 ||
                 !effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz))
             return 0.0;
+        size_t multiplier = profile.multiplier;
+        if (profile.adaptive) {
+            if (!orderedFifoTransport || orderedAcquireRecoveryActive ||
+                    profile.adaptive_auto_base_fps_cap ||
+                    !profile.adaptive_stable_cadence ||
+                    fractionalRealFramePriorityActive(profile) ||
+                    !adaptiveTargetMatchesRefresh(
+                        profile.target_fps, gamescopeRefreshHz) ||
+                    scheduler.phase != AdaptiveSchedulerPhase::StableCadence ||
+                    !scheduler.stableCadenceLimit ||
+                    *scheduler.stableCadenceLimit == 0 ||
+                    *scheduler.stableCadenceLimit >= profile.adaptive_max_multiplier ||
+                    *scheduler.stableCadenceLimit > GeneratedFramePlan::capacity ||
+                    scheduler.validatedGenerationLimit < *scheduler.stableCadenceLimit ||
+                    scheduler.stableCadenceEvaluationActive)
+                return 0.0;
+            size_t generated = *scheduler.stableCadenceLimit;
+            if (scheduler.efficiencyProbeGenerationLimit) {
+                // The existing applied-pacing comparison measures the
+                // adjacent lower workload through its own integer cap.
+                // Ordinary efficiency probes still measure without this cap.
+                if (!scheduler.pacedLoadValidationPending ||
+                        *scheduler.efficiencyProbeGenerationLimit == 0 ||
+                        *scheduler.efficiencyProbeGenerationLimit >= generated)
+                    return 0.0;
+                generated = *scheduler.efficiencyProbeGenerationLimit;
+            } else if (scheduler.targetOutputClockActive) {
+                return 0.0;
+            }
+            if (scheduler.generationLimit < generated)
+                return 0.0;
+            multiplier = generated + 1;
+        }
+        if (multiplier < 2)
+            return 0.0;
         return static_cast<double>(*gamescopeRefreshHz) /
-            static_cast<double>(profile.multiplier);
+            static_cast<double>(multiplier);
     }
 
     [[nodiscard]] inline bool dynamicCadenceRecoveryEnabled(

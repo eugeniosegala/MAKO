@@ -149,7 +149,8 @@ void Swapchain::ensureHistoryWarmup(const bool restart) {
 
 Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         const DiagnosticsClock::time_point presentNow,
-        const bool orderedAcquireRecoveryProbe) {
+        const bool orderedAcquireRecoveryProbe,
+        const std::optional<size_t> integerBaseCapGenerationLimit) {
     PresentationFramePlan plan;
     plan.orderedAcquireRecoveryProbe = orderedAcquireRecoveryProbe;
     plan.historyWarmupActive =
@@ -164,9 +165,7 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             this->gamescopePresentationFeedback.variableRefreshRequested()
                 ? this->smoothCadencePacerHandoff.activeGenerationLimit()
                 : std::nullopt,
-            this->profile.adaptive && !this->smoothCadencePacerHandoff.active()
-                ? this->smoothCadenceBaseCap.activeGenerationLimit()
-                : std::nullopt,
+            integerBaseCapGenerationLimit,
             this->orderedPresentationDeadline,
             this->gpuHeadroomResult.capFps,
             this->applicationLayerShare

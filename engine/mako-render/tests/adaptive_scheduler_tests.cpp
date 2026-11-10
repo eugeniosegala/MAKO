@@ -4,6 +4,7 @@
 #include "generated_frame_delivery.hpp"
 #include "presentation_policy.hpp"
 #include "profile_update.hpp"
+#include "swapchain/application_acquire_budget.hpp"
 
 #include <algorithm>
 #include <array>
@@ -12,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <deque>
 #include <exception>
 #include <iostream>
 #include <limits>
@@ -3690,6 +3692,174 @@ namespace {
             "nonblocking HDR transport allowed a 2x convergence probe");
     }
 
+    void testZinkFractionalCadencePacesWithoutFifoHandoff() {
+        using Clock = AdaptiveScheduler::Clock;
+        const auto at = [](const double seconds) {
+            return TimePoint{} + std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(seconds));
+        };
+        const auto seconds = [](const TimePoint time) {
+            return std::chrono::duration<double>(time.time_since_epoch()).count();
+        };
+        constexpr double refresh = 1.0 / 120.0;
+        for (const bool zink : {false, true}) {
+            for (const bool vrr : {false, true}) {
+                ls::GameConf profile;
+                profile.frame_generation_provisioned = true;
+                profile.frame_generation_enabled = true;
+                profile.adaptive = true;
+                profile.adaptive_auto_base_fps_cap = false;
+                profile.target_fps = 120;
+                profile.adaptive_max_multiplier = 3;
+                profile.adaptive_stable_cadence = true;
+                const bool applicationWindow = applicationAcquireBudgetApplies(
+                    zink ? "mesa zink" : "DXVK", 3, 6, 3);
+                Harness harness(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+                    false, 2s, 120, true, false, true, true);
+                harness.start();
+                GamescopePresentationFeedback feedback{
+                    .vrrEnabled = vrr, .vrrCapable = true,
+                    .vrrActive = vrr, .allowTearing = false,
+                };
+                SmoothCadencePacerHandoff handoff;
+                CappedFifoBacklogDrain drain;
+                RealFramePacer pacer;
+                std::deque<double> fifo;
+                const auto retire = [&](const double now) {
+                    while (!fifo.empty() && fifo.front() <= now + 1e-9)
+                        fifo.pop_front();
+                };
+                const auto enqueue = [&](const double now) {
+                    retire(now);
+                    const double nextRefresh =
+                        (std::floor(now / refresh + 1e-8) + 1) * refresh;
+                    fifo.push_back(fifo.empty() ? nextRefresh
+                        : std::max(nextRefresh, fifo.back() + refresh));
+                };
+                double now = seconds(harness.now);
+                double nativeTick = now;
+                double workerDone = now;
+                double previousCadence = now;
+                Clock::duration lastWait{};
+                double lateWait = 0.0;
+                double maximumLateCadence = 0.0;
+                size_t lateFrames = 0;
+                size_t holds = 0;
+                size_t frame = 0;
+                while (now < 60.0) {
+                    nativeTick += 1.0 / 62.5;
+                    now = std::max(nativeTick, workerDone);
+                    retire(now);
+                    while (fifo.size() >= 6) {
+                        now = std::max(now, fifo.front());
+                        retire(now);
+                    }
+                    now += 0.00005;
+                    // Inject the same occasional worker/producer delay in
+                    // both controls, after the integer cadence qualifies.
+                    // This models source timing, not Vulkan or visible pixels.
+                    if (now > 12.0 && ++frame % 64 == 0)
+                        now += refresh;
+                    const double arrival = now;
+                    const auto snapshot = harness.scheduler.snapshot();
+                    const double zinkCap = applicationWindow
+                        ? zinkRefreshLimitedBaseFpsCap(
+                            profile, 120, snapshot, true, false) : 0.0;
+                    auto eligible = smoothCadencePacerHandoffGenerationLimit(
+                        profile, true, false, 120, snapshot, feedback,
+                        handoff.activeGenerationLimit());
+                    if (zinkCap > 0.0)
+                        eligible.reset();
+                    const auto decision = handoff.update(at(now), eligible,
+                        zinkCap > 0.0, 120,
+                        applicationWindow ? std::optional{lastWait} : std::nullopt);
+                    const double cap = zinkCap > 0.0 ? zinkCap :
+                        effectiveBaseFpsCap(profile, snapshot, feedback, 120);
+                    auto deadline = pacer.schedule(at(now), cap);
+                    if (applicationWindow) {
+                        const auto drainDecision = drain.observe(
+                            at(now), cap, 120, lastWait);
+                        if (drainDecision.hold > Clock::duration::zero()) {
+                            ++holds;
+                            deadline = pacer.hold(deadline, drainDecision.hold);
+                        }
+                    }
+                    const bool prepare = deadline > at(now) &&
+                        baseCapPacesOutputs(profile, cap, true, 120) &&
+                        orderedGeneratedBatchCanPrepareBeforeCap(3, 6, 2, false);
+                    if (!prepare)
+                        now = std::max(now, seconds(deadline));
+                    const double cadence = prepare
+                        ? std::max(now, seconds(deadline)) : now;
+                    const bool warmup = harness.scheduler.historyWarmupActive();
+                    AdaptiveFramePlan plan;
+                    if (warmup)
+                        harness.scheduler.consumeHistoryWarmupFrame(at(cadence));
+                    else
+                        plan = harness.scheduler.planFrame(at(cadence), false,
+                            vrr ? decision.generationLimit : std::nullopt,
+                            zinkCap > 0.0 ? snapshot.stableCadenceLimit : std::nullopt);
+                    const auto outputs = prepare && !warmup
+                        ? pacer.scheduleOutputs(at(now), deadline, 120,
+                            plan.size() + 1,
+                            harness.scheduler.snapshot().targetOutputClockActive)
+                        : std::nullopt;
+                    double privateWait = 0.0;
+                    for (size_t i = 0; i < plan.size(); ++i) {
+                        retire(now);
+                        // The application holds the original image while
+                        // MAKO acquires each generated output from the pool.
+                        if (fifo.size() + 1 >= 6) {
+                            const double begin = now;
+                            now = std::max(now, fifo.front());
+                            retire(now);
+                            privateWait += now - begin;
+                        }
+                        if (outputs)
+                            now = std::max(now, seconds(outputs->at(i)));
+                        enqueue(now);
+                        now += 0.0001;
+                    }
+                    if (outputs)
+                        now = std::max(now, seconds(outputs->at(outputs->count - 1)));
+                    else if (prepare)
+                        now = std::max(now, seconds(deadline));
+                    enqueue(now);
+                    now += 0.0001;
+                    if (prepare)
+                        now = std::max(now, seconds(deadline));
+                    workerDone = now + 0.0002;
+                    if (!warmup)
+                        harness.scheduler.reportGeneratedFrameDelivery({plan.size(), plan.size()});
+                    if (arrival > 40.0) {
+                        lateWait += privateWait;
+                        maximumLateCadence = std::max(
+                            maximumLateCadence, cadence - previousCadence);
+                        ++lateFrames;
+                    }
+                    previousCadence = cadence;
+                    lastWait = std::chrono::duration_cast<Clock::duration>(
+                        std::chrono::duration<double>(privateWait));
+                }
+                require(harness.scheduler.snapshot().stableCadenceLimit == 1 &&
+                        harness.scheduler.snapshot().validatedGenerationLimit == 1,
+                    "source pacing discarded the accepted 2x workload");
+                require(lateFrames > 1000,
+                    "the FIFO regression did not reach sustained gameplay");
+                if (zink) {
+                    require(lateWait / lateFrames < 0.0001 &&
+                            maximumLateCadence < 0.017 && holds > 0 && holds <= 4 &&
+                            !handoff.active(),
+                        "accepted Zink cadence retained FIFO pressure or competed with a handoff");
+                } else {
+                    require(lateWait / lateFrames > refresh / 2 &&
+                            maximumLateCadence > 0.024 && holds == 0,
+                        "the non-Zink control was changed or failed to reproduce the uncapped queue");
+                }
+            }
+        }
+    }
+
     void testVrrFullFifoUsesOnlyValidatedHigherRung() {
         Harness harness(
             120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
@@ -4512,6 +4682,77 @@ namespace {
             }
             require(harness.diagnostics.contains("adaptive-paced-load-accepted"),
                 "accepted uncapped Fractional cadence did not validate its FIFO pacing cost");
+        }
+    }
+
+    void testZinkCadencePreservesIntegerPacingCostValidation() {
+        for (const size_t multiplier : {3U, 4U, 5U}) {
+            for (const bool delayed : {false, true}) {
+                for (const bool paid : {false, true}) {
+                    if (!delayed && !paid)
+                        continue;
+                    Harness harness(120, multiplier, true,
+                        AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                        120, false, false, true);
+                    promoteForPacedLoadTest(harness, multiplier, 100.0);
+                    const double settledFps = 120.0 / multiplier;
+                    for (size_t frame = 0; frame < 500; ++frame) {
+                        harness.frameAtFps(settledFps);
+                        const auto snapshot = harness.scheduler.snapshot();
+                        if (snapshot.stableCadenceLimit == multiplier - 1 &&
+                                !snapshot.stableCadenceEvaluationActive)
+                            break;
+                    }
+                    require(harness.scheduler.snapshot().stableCadenceLimit == multiplier - 1 &&
+                            !harness.scheduler.snapshot().stableCadenceEvaluationActive,
+                        "Zink pacing fixture did not qualify its constant cadence");
+                    if (delayed)
+                        harness.runAtFps(settledFps, 12s);
+                    ls::GameConf profile;
+                    profile.frame_generation_provisioned = true;
+                    profile.frame_generation_enabled = true;
+                    profile.adaptive = true;
+                    profile.adaptive_auto_base_fps_cap = false;
+                    profile.target_fps = 120;
+                    profile.adaptive_max_multiplier = multiplier;
+                    profile.adaptive_stable_cadence = true;
+                    const auto rejected = [&] {
+                        const auto* result = harness.diagnostics.last("ramp-result");
+                        return result && !result->accepted &&
+                            result->reason == "paced-unpaid-real-frame-cost";
+                    };
+                    bool lowerProbeObserved = false;
+                    for (size_t frame = 0; frame < 300; ++frame) {
+                        const auto snapshot = harness.scheduler.snapshot();
+                        const double cap = zinkRefreshLimitedBaseFpsCap(
+                            profile, 120, snapshot, true, false);
+                        require(cap > 0.0,
+                            "Zink pacing lost its source cap during applied workload comparison");
+                        const auto pacedLimit = snapshot.efficiencyProbeGenerationLimit
+                            ? snapshot.efficiencyProbeGenerationLimit : snapshot.stableCadenceLimit;
+                        const bool lower = snapshot.efficiencyProbeGenerationLimit.has_value();
+                        lowerProbeObserved |= lower;
+                        const double sourceFps = lower
+                            ? std::min(cap, (paid ? 108.0 : 120.0) / (multiplier - 1))
+                            : cap;
+                        harness.now += std::chrono::duration_cast<TimePoint::duration>(
+                            std::chrono::duration<double>(1.0 / sourceFps));
+                        const auto plan = harness.scheduler.planFrame(
+                            harness.now, false, std::nullopt, pacedLimit);
+                        harness.scheduler.reportGeneratedFrameDelivery({plan.size(), plan.size()});
+                        if (harness.diagnostics.contains("adaptive-paced-load-accepted") ||
+                                rejected())
+                            break;
+                    }
+                    require((paid ? harness.diagnostics.contains("adaptive-paced-load-accepted")
+                            : rejected()) &&
+                            harness.scheduler.snapshot().validatedGenerationLimit ==
+                                (paid ? multiplier - 1 : multiplier - 2),
+                        "Zink source pacing bypassed the existing accepted/rejected workload-cost decision");
+                    require(!delayed || lowerProbeObserved,
+                        "Delayed Zink pacing skipped its fresh adjacent-load comparison");
+                }
+            }
         }
     }
 
@@ -7373,6 +7614,7 @@ int main() {
         {"Smooth Cadence converges Fractional 2x on matching refresh", testSmoothCadenceConvergesFractionalTwoXOnMatchingRefresh},
         {"Smooth Cadence rejects unproven 2x convergence", testSmoothCadenceRejectsTwoXThatDoesNotConverge},
         {"Smooth Cadence convergence requires matching ordered FIFO", testSmoothCadenceConvergenceRequiresTargetMatchedOrderedFifo},
+        {"Zink Fractional cadence paces without a FIFO handoff", testZinkFractionalCadencePacesWithoutFifoHandoff},
         {"VRR FIFO uses only a validated higher rung", testVrrFullFifoUsesOnlyValidatedHigherRung},
         {"integer pacing prefers delivered target at 3x through 5x", testIntegerPacingPrefersDeliveredTargetAcrossMultipliers},
         {"paced load needs fresh continuous evidence", testPacedLoadRequiresFreshContinuousEvidence},
@@ -7389,6 +7631,7 @@ int main() {
         {"fresh pacing probe keeps cadence qualification separate", testFreshPacingProbeKeepsCadenceQualificationSeparate},
         {"delayed Fractional handoff uses fresh probe", testDelayedFractionalHandoffUsesFreshProbe},
         {"accepted Fractional cadence checks VRR pacing cost", testAcceptedFractionalCadenceChecksVrrPacingCost},
+        {"Zink cadence preserves integer pacing cost validation", testZinkCadencePreservesIntegerPacingCostValidation},
         {"unreachable integer pacing does not delay higher loads", testUnreachableIntegerPacingDoesNotDelayHigherWorkloads},
         {"Headroom release rechecks Fractional generated load", testHeadroomReleaseRechecksFractionalGeneratedLoad},
         {"Headroom release handles low and invalid source evidence", testHeadroomReleaseHandlesLowAndInvalidSourceEvidence},

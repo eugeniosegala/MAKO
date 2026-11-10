@@ -535,7 +535,7 @@ namespace mako::layer {
         // consumed by the next present. Read only with an acquire window.
         std::optional<std::chrono::steady_clock::duration> lastGeneratedAcquireWait;
         CappedFifoBacklogDrain cappedFifoBacklogDrain;
-        // Fixed's implicit Zink cap at the last present, for its change record.
+        // The implicit Zink cap at the last present, for its change record.
         double zinkRefreshLimitedCap{};
         // A null-old replacement loses the driver's explicit WSI lineage.
         // Consume this exactly once before any private spatial submission.
@@ -614,7 +614,8 @@ namespace mako::layer {
         void ensureHistoryWarmup(bool restart = false);
         [[nodiscard]] PresentationFramePlan prepareFramePlan(
             std::chrono::steady_clock::time_point presentNow,
-            bool orderedAcquireRecoveryProbe);
+            bool orderedAcquireRecoveryProbe,
+            std::optional<size_t> integerBaseCapGenerationLimit);
         void reportAdaptiveDelivery(const PresentationFramePlan& plan,
             size_t acceptedForPresentation);
         [[nodiscard]] bool generationPipelineReady(

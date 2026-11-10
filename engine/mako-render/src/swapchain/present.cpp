@@ -198,6 +198,12 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
 
     const auto limiterArrival = DiagnosticsClock::now();
     this->applyGamescopeFocus(limiterArrival);
+    const bool ownedTimingControlsOutput = this->presentTiming.controlsOutput(
+        this->gamescopeRefreshHz.value_or(0));
+    const bool compositorOutputTiming = this->info.gamescopeScalingSurface ||
+        displayTimingControlsOutput(this->wsiPresentTimingQuery != nullptr,
+            this->privateOrderedTransport, this->gamescopeRefreshHz.value_or(0)) ||
+        ownedTimingControlsOutput;
     if (this->profile.gpu_headroom_percent > 0 || this->gpuHeadroomResult.state != "off") {
         const bool headroomEnabled = this->profile.gpu_headroom_percent > 0 &&
             !this->steamMenuSuspended && !this->destinationImages.empty() &&
@@ -311,6 +317,20 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
                 : "scheduler-or-transport-guard-restored"
         );
     }
+    const double zinkCap = this->info.applicationAcquireWindow && !this->steamMenuSuspended
+        ? zinkRefreshLimitedBaseFpsCap(this->profile, this->gamescopeRefreshHz,
+            schedulerSnapshot,
+            this->privateOrderedTransport && this->info.presentMode == VK_PRESENT_MODE_FIFO_KHR &&
+                !compositorOutputTiming && !hasPresentTiming(lowerNextChain),
+            this->recoveryState.orderedAcquireRecovery.active())
+        : 0.0;
+    const bool zinkPacesAdaptive = this->profile.adaptive && zinkCap > 0.0;
+    const auto zinkPacedGenerationLimit = zinkPacesAdaptive
+        ? std::optional{schedulerSnapshot.efficiencyProbeGenerationLimit.value_or(
+            schedulerSnapshot.stableCadenceLimit.value_or(0))}
+        : std::nullopt;
+    if (zinkPacesAdaptive)
+        handoffGenerationLimit.reset();
     const bool plannedVrrProbePause = this->gpuHeadroomResult.capFps <= 0 &&
         !handoffGenerationLimit &&
         smoothCadencePacerHandoffPlannedProbe(
@@ -330,7 +350,7 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
         ? std::exchange(this->lastGeneratedAcquireWait, std::nullopt)
         : std::nullopt;
     const auto handoff = this->smoothCadencePacerHandoff.update(
-        limiterArrival, handoffGenerationLimit, plannedVrrProbePause,
+        limiterArrival, handoffGenerationLimit, plannedVrrProbePause || zinkPacesAdaptive,
         this->gamescopeRefreshHz, presentationWait
     );
     if (handoff.changed) {
@@ -354,9 +374,11 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
                     ? "fifo-source-overrun"
                     : (handoff.presentationBacklog
                         ? "fifo-presentation-backlog"
-                        : (plannedVrrProbePause
-                            ? "planned-vrr-efficiency-probe"
-                            : "guard-restored-long-retry")))
+                        : (zinkPacesAdaptive
+                            ? "zink-refresh-limited-cap"
+                            : (plannedVrrProbePause
+                                ? "planned-vrr-efficiency-probe"
+                                : "guard-restored-long-retry"))))
         );
     }
     double baseFpsCap = this->steamMenuSuspended || handoff.active
@@ -368,19 +390,20 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
             )
         );
     if (this->info.applicationAcquireWindow && !this->steamMenuSuspended) {
-        const double zinkCap = baseFpsCap > 0.0
-            ? 0.0 : zinkRefreshLimitedBaseFpsCap(this->profile, this->gamescopeRefreshHz);
-        if (zinkCap > 0.0)
-            baseFpsCap = zinkCap;
-        if (std::exchange(this->zinkRefreshLimitedCap, zinkCap) != zinkCap &&
+        const double appliedZinkCap = baseFpsCap > 0.0 ? 0.0 : zinkCap;
+        if (appliedZinkCap > 0.0)
+            baseFpsCap = appliedZinkCap;
+        if (std::exchange(this->zinkRefreshLimitedCap, appliedZinkCap) != appliedZinkCap &&
                 presentDiagnosticsEnabled()) {
             std::ostringstream line;
             line.imbue(std::locale::classic());
             line << "MAKO Renderer: present diagnostics: operation=zink-refresh-limited-cap"
                  << " context=" << this->diagnosticsState.contextId
-                 << " cap_fps=" << zinkCap
+                 << " cap_fps=" << appliedZinkCap
                  << " refresh_hz=" << this->gamescopeRefreshHz.value_or(0)
-                 << " multiplier=" << this->profile.multiplier << '\n';
+                 << " multiplier=" << (this->profile.adaptive
+                    ? zinkPacedGenerationLimit.value_or(0) + 1
+                    : this->profile.multiplier) << '\n';
             std::cerr << line.str();
         }
     }
@@ -413,8 +436,6 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
             std::cerr << line.str();
         }
     }
-    const bool ownedTimingControlsOutput = this->presentTiming.controlsOutput(
-        this->gamescopeRefreshHz.value_or(0));
     auto sourceRefreshHz = this->gamescopeRefreshHz;
 #if defined(VK_EXT_present_timing) && defined(VK_KHR_present_id2)
     if (!sourceRefreshHz && ownedTimingControlsOutput) {
@@ -425,10 +446,6 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
 #endif
     // These transports already own an output clock. Preparing inside a
     // target-matched automatic cap must not add another CPU output clock.
-    const bool compositorOutputTiming = this->info.gamescopeScalingSurface ||
-        displayTimingControlsOutput(this->wsiPresentTimingQuery != nullptr,
-            this->privateOrderedTransport, this->gamescopeRefreshHz.value_or(0)) ||
-        ownedTimingControlsOutput;
     const bool sourceDeadlinePreparation = limiterDeadline > limiterArrival &&
         baseCapPacesOutputs(
             this->profile, baseFpsCap,
@@ -649,8 +666,12 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
     const auto& sourceImage = this->sourceImages.at(
         this->frameState.backendFrameIndex % 2
     );
+    std::optional<size_t> integerBaseCapGenerationLimit;
+    if (this->profile.adaptive && !handoff.active)
+        integerBaseCapGenerationLimit = zinkPacesAdaptive
+            ? zinkPacedGenerationLimit : this->smoothCadenceBaseCap.activeGenerationLimit();
     auto plan = this->prepareFramePlan(
-        cadenceNow, orderedAcquireRecoveryProbe
+        cadenceNow, orderedAcquireRecoveryProbe, integerBaseCapGenerationLimit
     );
     plan.boundedOrderedAcquireProbe = boundedOrderedAcquireProbe;
 

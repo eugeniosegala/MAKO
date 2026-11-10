@@ -2579,7 +2579,7 @@ int main() {
         auto adaptive = zink;
         adaptive.adaptive = true;
         expect(zinkRefreshLimitedBaseFpsCap(adaptive, 120) == 0.0,
-            "Adaptive must keep its own caps and FIFO handoff");
+            "Adaptive without an accepted cadence must keep its own pacing");
         auto recovery = zink;
         recovery.dynamic_cadence_recovery = true;
         expect(zinkRefreshLimitedBaseFpsCap(recovery, 120) == 0.0,
@@ -2597,6 +2597,117 @@ int main() {
         expect(zinkRefreshLimitedBaseFpsCap(threshold, 120) == 0.0 &&
                 zinkRefreshLimitedBaseFpsCap(threshold, 144) == 48.0,
             "The refresh threshold must disable the cap with Frame Generation");
+    }
+
+    {
+        auto fractional = adaptiveProfile();
+        fractional.frame_generation_provisioned = true;
+        fractional.adaptive_stable_cadence = true;
+        fractional.adaptive_max_multiplier = 5;
+        AdaptiveSchedulerSnapshot accepted{
+            .phase = AdaptiveSchedulerPhase::StableCadence,
+            .generationLimit = 4,
+            .validatedGenerationLimit = 4,
+            .stableCadenceLimit = 1,
+        };
+        const auto cap = [&](const ls::GameConf& profile,
+                const AdaptiveSchedulerSnapshot& snapshot,
+                const std::optional<uint32_t> refresh = 120) {
+            return zinkRefreshLimitedBaseFpsCap(
+                profile, refresh, snapshot, true, false);
+        };
+        for (const uint32_t refresh : {60U, 90U, 120U, 144U, 240U}) {
+            fractional.target_fps = refresh;
+            for (size_t multiplier = 2; multiplier <= 5; ++multiplier) {
+                accepted.stableCadenceLimit = multiplier - 1;
+                expect(cap(fractional, accepted, refresh) ==
+                        static_cast<double>(refresh) / multiplier,
+                    "The accepted Fractional cadence, not validated capacity or Fixed multiplier, owns the Zink cap");
+            }
+        }
+        fractional.target_fps = 120;
+        accepted.stableCadenceLimit = 1;
+        expect(cap(fractional, accepted) == 60.0 &&
+                cap(fractional, accepted, std::nullopt) == 0.0 &&
+                cap(fractional, accepted, 0) == 0.0 &&
+                cap(fractional, accepted, 90) == 0.0 &&
+                zinkRefreshLimitedBaseFpsCap(
+                    fractional, 120, accepted, false, false) == 0.0 &&
+                zinkRefreshLimitedBaseFpsCap(
+                    fractional, 120, accepted, true, true) == 0.0,
+            "Unknown/mismatched refresh, other transports and acquire recovery must not gain an Adaptive Zink cap");
+        for (const auto phase : {AdaptiveSchedulerPhase::Uninitialized,
+                AdaptiveSchedulerPhase::HistoryWarmup,
+                AdaptiveSchedulerPhase::Stabilizing,
+                AdaptiveSchedulerPhase::DiscontinuityRecovery,
+                AdaptiveSchedulerPhase::RescueMeasurement,
+                AdaptiveSchedulerPhase::RearmCooldown,
+                AdaptiveSchedulerPhase::RampEvaluation,
+                AdaptiveSchedulerPhase::Active,
+                AdaptiveSchedulerPhase::NativeCadenceProbe,
+                AdaptiveSchedulerPhase::NearTargetNative}) {
+            auto snapshot = accepted;
+            snapshot.phase = phase;
+            expect(cap(fractional, snapshot) == 0.0,
+                "An Adaptive phase without an accepted active cadence must release the Zink cap");
+        }
+        for (size_t guard = 0; guard < 8; ++guard) {
+            auto snapshot = accepted;
+            switch (guard) {
+                case 0: snapshot.stableCadenceLimit.reset(); break;
+                case 1: snapshot.stableCadenceLimit = 0; break;
+                case 2: snapshot.stableCadenceLimit = 5; break;
+                case 3: snapshot.validatedGenerationLimit = 0; break;
+                case 4: snapshot.generationLimit = 0; break;
+                case 5: snapshot.stableCadenceEvaluationActive = true; break;
+                case 6: snapshot.efficiencyProbeGenerationLimit = 1; break;
+                case 7: snapshot.targetOutputClockActive = true; break;
+            }
+            expect(cap(fractional, snapshot) == 0.0,
+                "Missing/invalid cadence, unvalidated work and active probes must release the Zink cap");
+        }
+        auto comparison = accepted;
+        comparison.stableCadenceLimit = 2;
+        comparison.pacedLoadValidationPending = true;
+        expect(cap(fractional, comparison) == 40.0,
+            "Applied integer-pacing validation must retain the accepted Zink cap while measuring it");
+        comparison.efficiencyProbeGenerationLimit = 1;
+        comparison.targetOutputClockActive = true;
+        expect(cap(fractional, comparison) == 60.0,
+            "The planned adjacent-load comparison must use its lower integer cap");
+        comparison.pacedLoadValidationPending = false;
+        expect(cap(fractional, comparison) == 0.0,
+            "Ordinary efficiency probes must not inherit an integer source cap");
+        comparison.pacedLoadValidationPending = true;
+        comparison.efficiencyProbeGenerationLimit = 0;
+        expect(cap(fractional, comparison) == 0.0,
+            "Native-rate probes must not inherit an integer source cap");
+        for (size_t guard = 0; guard < 9; ++guard) {
+            auto profile = fractional;
+            switch (guard) {
+                case 0: profile.base_fps_cap = 55; break;
+                case 1: profile.adaptive_auto_base_fps_cap = true; break;
+                case 2: profile.adaptive_stable_cadence = false; break;
+                case 3: profile.dynamic_cadence_recovery = true; break;
+                case 4: profile.frame_generation_enabled = false; break;
+                case 5: profile.frame_generation_provisioned = false; break;
+                case 6: profile.frame_generation_refresh_threshold = 120; break;
+                case 7: profile.adaptive_max_multiplier = 1; break;
+                case 8: profile.adaptive_fractional_real_frame_priority =
+                    ls::AdaptiveFractionalRealFramePriority::High; break;
+            }
+            expect(cap(profile, accepted) == 0.0,
+                "Explicit caps, Steady, Recovery and inactive generation must retain their existing pacing");
+        }
+
+        SmoothCadencePacerHandoff handoff;
+        const SmoothCadencePacerHandoff::TimePoint now{};
+        expect(handoff.update(now, 1).active,
+            "Precondition failed: an existing FIFO handoff did not activate");
+        expect(!handoff.update(now + std::chrono::seconds{1},
+                std::nullopt, true).active &&
+                handoff.update(now + std::chrono::seconds{2}, 1).active,
+            "A deliberate handoff pause for Zink source pacing must not create a failure cooldown");
     }
 
     std::cout << "profile update tests passed\n";

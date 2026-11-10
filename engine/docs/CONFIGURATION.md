@@ -51,11 +51,13 @@ Turn on **Enable Frame-gen (Restart)** before launching. **Real FPS** counts gam
 | **Steady Base Cap** | Initially caps real FPS at half the target for even cadence; may reduce responsiveness. |
 | **Fractional Adaptive** | Keeps more real frames, but delivery may feel less even. |
 | **Real Frame Priority** | Low–Very High select a Fractional real-FPS cap; higher priority allows more real FPS. **Automatic** adds no priority cap. |
-| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. Fixed Zink games have the refresh-based pacing described below. |
+| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. Eligible Zink games have the refresh-based pacing described below. |
 | **Smooth Cadence** | Favours consistent delivery; compare on/off for responsiveness. |
 | **Gamescope VRR** | Follows Steam, or temporarily requests VRR on/off on a supported display during play. |
 
-With Fixed Frame Generation through Zink and **Base FPS Cap** off, MAKO uses Gamescope's reported refresh divided by the multiplier: for example, 60 real FPS at 2x on a 120 Hz display. **Dynamic Cadence Recovery** disables this automatic cap so it can measure the game's native rate. Without refresh feedback, ordinary Fixed pacing applies. See [Zink FIFO pacing](ADAPTIVE-VALIDATION.md#zink-fifo-pacing) for eligibility and queue handling.
+With Fixed Frame Generation through Zink and **Base FPS Cap** off, MAKO automatically paces real frames at Gamescope's reported refresh divided by the multiplier: for example, 60 real FPS at 2x on a 120 Hz display. **Dynamic Cadence Recovery** disables this cap so it can measure the game's native rate. Without refresh feedback, ordinary Fixed pacing applies.
+
+Eligible Zink games use the same pacing with **Fractional Adaptive**, **Automatic** Real Frame Priority and **Smooth Cadence** once MAKO accepts a constant multiplier. The target must match display refresh, with **Base FPS Cap** and **Dynamic Cadence Recovery** off. VRR may be on or off. See [Zink FIFO pacing](ADAPTIVE-VALIDATION.md#zink-fifo-pacing) for supported presentation paths, probes and recovery.
 
 With **Fractional Adaptive** and **Automatic** Real Frame Priority, sustained native FPS can exceed **Target FPS** without generation when **Base FPS Cap** is off or at least the target. For example, a 60 FPS target on a 90 Hz display allows native 75 FPS gameplay with the cap off or set to 90; the manual cap still limits faster sources. Smooth Cadence can be on or off; below-target caps, explicit priorities and Steady keep their selected pacing.
 
