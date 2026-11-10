@@ -2559,6 +2559,42 @@ int main() {
     expect(fixedGeneratedFrameCount(5, 4) == 4,
         "Fixed 5x must use four reserved outputs");
 
+    {
+        auto zink = adaptiveProfile();
+        zink.adaptive = false;
+        zink.frame_generation_provisioned = true;
+        expect(zinkRefreshLimitedBaseFpsCap(zink, 120) == 60.0,
+            "Uncapped Fixed 2x on Zink must pace at the refresh-limited rate");
+        zink.multiplier = 3;
+        expect(zinkRefreshLimitedBaseFpsCap(zink, 120) == 40.0 &&
+                zinkRefreshLimitedBaseFpsCap(zink, 144) == 48.0,
+            "The refresh-limited Zink cap must follow the multiplier and refresh");
+        expect(zinkRefreshLimitedBaseFpsCap(zink, std::nullopt) == 0.0 &&
+                zinkRefreshLimitedBaseFpsCap(zink, 0) == 0.0,
+            "An unknown refresh must keep Fixed's configured pacing");
+        auto capped = zink;
+        capped.base_fps_cap = 50;
+        expect(zinkRefreshLimitedBaseFpsCap(capped, 120) == 0.0,
+            "An explicit Base FPS Cap must stay authoritative");
+        auto adaptive = zink;
+        adaptive.adaptive = true;
+        expect(zinkRefreshLimitedBaseFpsCap(adaptive, 120) == 0.0,
+            "Adaptive must keep its own caps and FIFO handoff");
+        auto native = zink;
+        native.multiplier = 1;
+        expect(zinkRefreshLimitedBaseFpsCap(native, 120) == 0.0,
+            "Without generated frames there is no refresh-limited cap");
+        auto disabled = zink;
+        disabled.frame_generation_enabled = false;
+        expect(zinkRefreshLimitedBaseFpsCap(disabled, 120) == 0.0,
+            "Disabled Frame Generation must keep native pacing");
+        auto threshold = zink;
+        threshold.frame_generation_refresh_threshold = 120;
+        expect(zinkRefreshLimitedBaseFpsCap(threshold, 120) == 0.0 &&
+                zinkRefreshLimitedBaseFpsCap(threshold, 144) == 48.0,
+            "The refresh threshold must disable the cap with Frame Generation");
+    }
+
     std::cout << "profile update tests passed\n";
     return 0;
 }

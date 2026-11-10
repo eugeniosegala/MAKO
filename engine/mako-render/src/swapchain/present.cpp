@@ -367,6 +367,23 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
                 this->gamescopePresentationFeedback, this->gamescopeRefreshHz
             )
         );
+    if (this->info.applicationAcquireWindow && !this->steamMenuSuspended) {
+        const double zinkCap = baseFpsCap > 0.0
+            ? 0.0 : zinkRefreshLimitedBaseFpsCap(this->profile, this->gamescopeRefreshHz);
+        if (zinkCap > 0.0)
+            baseFpsCap = zinkCap;
+        if (std::exchange(this->zinkRefreshLimitedCap, zinkCap) != zinkCap &&
+                presentDiagnosticsEnabled()) {
+            std::ostringstream line;
+            line.imbue(std::locale::classic());
+            line << "MAKO Renderer: present diagnostics: operation=zink-refresh-limited-cap"
+                 << " context=" << this->diagnosticsState.contextId
+                 << " cap_fps=" << zinkCap
+                 << " refresh_hz=" << this->gamescopeRefreshHz.value_or(0)
+                 << " multiplier=" << this->profile.multiplier << '\n';
+            std::cerr << line.str();
+        }
+    }
     if (this->gpuHeadroomResult.capFps > 0)
         baseFpsCap = baseFpsCap > 0 ? std::min(baseFpsCap, this->gpuHeadroomResult.capFps)
             : this->gpuHeadroomResult.capFps;

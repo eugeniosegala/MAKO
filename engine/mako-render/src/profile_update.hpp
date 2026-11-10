@@ -562,6 +562,24 @@ namespace mako::layer {
         return effectiveBaseFpsCap(profile, scheduler, gamescopeRefreshHz);
     }
 
+    /// Without a Base FPS Cap, Fixed leaves a game paced by FIFO backpressure,
+    /// which keeps the queue full. A Zink swapchain's acquire window then
+    /// makes every frame wait for Zink's present worker, and that hand-off
+    /// misses refreshes: real frames alternate about 25 ms and 8 ms at an exact
+    /// rate. Pace such a swapchain at the refresh divided by the multiplier,
+    /// the rate FIFO already allows, so the capped path and its backlog drain
+    /// own it. Zero keeps the configured pacing.
+    [[nodiscard]] inline double zinkRefreshLimitedBaseFpsCap(
+            const ls::GameConf& profile,
+            const std::optional<uint32_t> gamescopeRefreshHz) {
+        if (profile.adaptive || profile.base_fps_cap > 0 || profile.multiplier < 2 ||
+                !gamescopeRefreshHz || *gamescopeRefreshHz == 0 ||
+                !effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz))
+            return 0.0;
+        return static_cast<double>(*gamescopeRefreshHz) /
+            static_cast<double>(profile.multiplier);
+    }
+
     [[nodiscard]] inline bool dynamicCadenceRecoveryEnabled(
             const ls::GameConf& profile) {
         return profile.dynamic_cadence_recovery &&

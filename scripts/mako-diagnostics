@@ -241,8 +241,9 @@ add_pattern "^($steam_timestamp_prefix)?([[:alpha:]_][[:alnum:]_]*[#@][0-9]+|[[]
 add_pattern "$renderer_prefix present diagnostics: operation=(launch-environment|process-identity|swapchain-context-create|instance-engine|application-acquire-budget)"
 # An expired Zink acquire window explains a game that was briefly unthrottled.
 add_pattern "$renderer_prefix application acquire budget wait expired"
-# A Zink FIFO backlog drain explains a deliberately held real frame.
-add_pattern "$renderer_prefix present diagnostics: operation=fifo-backlog-drain"
+# A Zink FIFO backlog drain explains a deliberately held real frame, and the
+# refresh-limited Zink cap explains real-frame pacing with no configured cap.
+add_pattern "$renderer_prefix present diagnostics: operation=(fifo-backlog-drain|zink-refresh-limited-cap)"
 # Gamescope's explicit presentation properties are low-frequency environment
 # metadata. Keep the initial snapshot and any live pacing-owner transition in
 # every report without collecting unrelated compositor output.
