@@ -344,17 +344,32 @@ class CompositeLease:
         self.applied = False
         self.yielded = False
         self.hold_check_after: float | None = None
+        self.write_unverified_until: float | None = None
 
     def update(self) -> str:
         if self.yielded:
             return "yielded"
         now = time.monotonic()
-        if self.applied and self.hold_check_after is not None and now < self.hold_check_after:
+        if (self.applied and self.write_unverified_until is None and
+                self.hold_check_after is not None and now < self.hold_check_after):
             return "holding"
         current, status = read_composite_force()
         if current is None:
             return f"query-{status}"
         if self.applied:
+            if self.write_unverified_until is not None:
+                # A late readback of our own write must stay ours to restore.
+                if current:
+                    self.write_unverified_until = None
+                    self.hold_check_after = now + HOLD_CHECK_SECONDS
+                    print("MAKO Renderer: Gamescope composition lease applied value=1", file=sys.stderr)
+                    return "write-confirmed"
+                if now < self.write_unverified_until:
+                    return "awaiting-write-readback"
+                self.applied = False
+                self.write_unverified_until = None
+                self.yielded = True
+                return "write-not-applied"
             if not current:
                 self.applied = False
                 self.yielded = True
@@ -365,9 +380,10 @@ class CompositeLease:
         if current:
             self.yielded = True
             return "already-composited"
-        if not write_composite_force(True, False):
-            return "write-not-verified"
         self.applied = True
+        if not write_composite_force(True, False):
+            self.write_unverified_until = now + 2.0
+            return "write-not-verified"
         self.hold_check_after = now + HOLD_CHECK_SECONDS
         print("MAKO Renderer: Gamescope composition lease applied value=1", file=sys.stderr)
         return "write-confirmed"
@@ -382,9 +398,10 @@ class CompositeLease:
             if not write_composite_force(False, True):
                 return False
             print("MAKO Renderer: Gamescope composition lease restored previous value=0", file=sys.stderr)
-        else:
+        elif self.write_unverified_until is None:
             print("MAKO Renderer: Gamescope composition lease restoration skipped after external change", file=sys.stderr)
         self.applied = False
+        self.write_unverified_until = None
         return True
 
 

@@ -442,6 +442,47 @@ class VrrLeaseTests(unittest.TestCase):
             self.assertEqual(write.call_count, 1)
             self.assertFalse(state["value"])
 
+    def test_composite_lease_restores_its_own_late_confirmed_write(self):
+        state = {"value": False}
+        clock = {"now": 0.0}
+
+        def late_write(value, expected):
+            self.assertEqual(state["value"], expected)
+            state["value"] = value  # Gamescope applies it after the readback window.
+            return False
+
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")), \
+             patch.object(module, "write_composite_force", side_effect=late_write), \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "write-not-verified")
+            clock["now"] += module.POLL_SECONDS
+            self.assertEqual(lease.update(), "write-confirmed")
+            self.assertTrue(lease.applied)
+            self.assertFalse(lease.yielded)
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")), \
+             patch.object(module, "write_composite_force",
+                          side_effect=lambda value, expected: state.update(value=value) or True):
+            self.assertTrue(lease.restore())
+            self.assertFalse(state["value"])
+
+    def test_composite_lease_gives_up_a_write_that_never_lands(self):
+        clock = {"now": 0.0}
+        with patch.object(module, "read_composite_force", return_value=(False, "ok")), \
+             patch.object(module, "write_composite_force", return_value=False) as write, \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "write-not-verified")
+            clock["now"] += module.POLL_SECONDS
+            self.assertEqual(lease.update(), "awaiting-write-readback")
+            clock["now"] += 2.0
+            self.assertEqual(lease.update(), "write-not-applied")
+            self.assertTrue(lease.yielded)
+            self.assertTrue(lease.restore())
+            self.assertEqual(write.call_count, 1)
+
     def test_composite_lease_keeps_trying_until_gamescope_is_readable(self):
         with patch.object(module, "read_composite_force",
                           return_value=(None, "x-root-unverified")), \
