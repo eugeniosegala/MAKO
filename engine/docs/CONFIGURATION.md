@@ -51,9 +51,11 @@ Turn on **Enable Frame-gen (Restart)** before launching. **Real FPS** counts gam
 | **Steady Base Cap** | Initially caps real FPS at half the target for even cadence; may reduce responsiveness. |
 | **Fractional Adaptive** | Keeps more real frames, but delivery may feel less even. |
 | **Real Frame Priority** | Low–Very High select a Fractional real-FPS cap; higher priority allows more real FPS. **Automatic** adds no priority cap. |
-| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. With Fixed, an OpenGL game through Zink is paced at the refresh rate divided by the multiplier while this is **Off**, unless **Dynamic Cadence Recovery** is on. |
+| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. Fixed Zink games have the refresh-based pacing described below. |
 | **Smooth Cadence** | Favours consistent delivery; compare on/off for responsiveness. |
 | **Gamescope VRR** | Follows Steam, or temporarily requests VRR on/off on a supported display during play. |
+
+With Fixed Frame Generation through Zink and **Base FPS Cap** off, MAKO uses Gamescope's reported refresh divided by the multiplier: for example, 60 real FPS at 2x on a 120 Hz display. **Dynamic Cadence Recovery** disables this automatic cap so it can measure the game's native rate. Without refresh feedback, ordinary Fixed pacing applies. See [Zink FIFO pacing](ADAPTIVE-VALIDATION.md#zink-fifo-pacing) for eligibility and queue handling.
 
 With **Fractional Adaptive** and **Automatic** Real Frame Priority, sustained native FPS can exceed **Target FPS** without generation when **Base FPS Cap** is off or at least the target. For example, a 60 FPS target on a 90 Hz display allows native 75 FPS gameplay with the cap off or set to 90; the manual cap still limits faster sources. Smooth Cadence can be on or off; below-target caps, explicit priorities and Steady keep their selected pacing.
 
@@ -61,7 +63,7 @@ For games switching between 30 FPS cutscenes and 60 FPS gameplay on a 60 Hz disp
 
 #### Proton offscreen windows
 
-The launch command shown by the Qt UI uses MAKO's Renderer launcher, which automatically sets `WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1` before starting the game. On Proton 8 and 9, this bypasses an offscreen-window workaround that can hide generated frames. It applies on the first launch, without detection or a restart prompt. A game already running when the launcher is updated receives the new environment on its next launch.
+`mako-launch` automatically applies a Wine workaround that allows generated frames to reach the screen in affected Proton 8 and 9 games. It takes effect on the first launch with the updated launcher; restart an already running game to receive it.
 
 If this causes display problems, preserve the rest of your launch command and opt out with:
 
@@ -69,7 +71,7 @@ If this causes display problems, preserve the rest of your launch command and op
 WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=0 ~/.local/bin/mako-launch %command%
 ```
 
-Proton 7 lacks this switch, and later versions can use different offscreen paths. If MAKO still detects an offscreen window under a 1×1 parent, Frame Generation stays off and the log records `offscreen X11 presentation window`. Try another Proton version or window mode. The geometry guard cannot detect Proton 7 or 8's older redirection, so verify visible smoothness as well as FPS. Direct Flatpak setup supplies the variable through the [app environment](FLATPAK-GUIDE.md). See [Wine offscreen windows](WSI-ISOLATION.md#wine-offscreen-windows) for the implementation and limits.
+If Frame Generation remains unavailable or output looks unchanged despite a higher FPS counter, try another Proton version or window mode. Proton 7 lacks this switch, other versions can use different offscreen paths, and MAKO cannot detect every case. Direct Flatpak users must apply the [app environment setup](FLATPAK-GUIDE.md). See [Wine offscreen windows](WSI-ISOLATION.md#wine-offscreen-windows) for version and detection limits.
 
 ### Scaling
 
@@ -167,7 +169,9 @@ The Arch package uses `/usr/bin/mako-launch`. For a terminal launch, replace `%c
 
 The controls under **Launch Settings** apply globally to `mako-launch` games. **Disable Steam Overlay (Restart)** is on by default; it may reduce stutter but disables Steam's in-game overlay and FPS counter and may affect Steam Input. Gaming Mode menus and performance overlay remain available.
 
-**Zink** runs OpenGL through Vulkan and turns off RADV's display compression for the game (`RADV_DEBUG=nodisplaydcc`), which otherwise showed as colour speckles while Gamescope sent Zink images straight to the display. In Game Mode it also asks Gamescope to composite the game while it runs and restores Gamescope's setting afterwards, because direct scan-out tore Zink images even without MAKO. **Force ALSA** changes the audio path for compatibility problems. Steam Deck mode and Gamescope WSI controls are available in MAKO Decky.
+**Zink** runs OpenGL through Vulkan. It also disables RADV display compression and requests Gamescope composition during supported Game Mode launches to address colour speckles and tearing. The helper restores its change after the game exits when ownership can still be verified. See [Zink launch compatibility](WSI-ISOLATION.md#zink-launch-compatibility) for requirements and limits.
+
+**Force ALSA** changes the audio path for compatibility problems. Steam Deck mode and Gamescope WSI controls are available in MAKO Decky.
 
 **External Tools → Enable MangoHud (Restart)** applies to the selected profile and shares its saved selection with MAKO Decky. Install host MangoHud and Python 3, then use **Refresh MangoHud** if needed. Enabling MangoHud turns off Shaders; enabling Shaders turns off MangoHud. Copy the updated launch option to Steam after either change and restart the game. Flatpak games are unsupported. Both UIs use the optional [shared MangoHud layout](LAYER-CHAINING.md#shared-mangohud-layout).
 

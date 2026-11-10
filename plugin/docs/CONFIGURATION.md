@@ -55,10 +55,12 @@ Turn on **Enable Frame-gen (Restart)** before launching. **Real FPS** counts gam
 | **Steady Base Cap** | Favours even cadence by initially capping real FPS at half the target; may reduce responsiveness. |
 | **Fractional Adaptive** | Keeps more real frames through a changing mix of real and generated frames; may feel less even. |
 | **Real Frame Priority** | Low–Very High select a Fractional real-FPS cap; higher priority allows more real FPS. **Automatic** adds no priority cap. |
-| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. With Fixed, an OpenGL game through Zink is paced at the refresh rate divided by the multiplier while this is **Off**, unless **Dynamic Cadence Recovery** is on. |
+| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. Fixed Zink games have the refresh-based pacing described below. |
 | **Smooth Cadence** | Favours consistent delivery; compare on and off for responsiveness. |
 | **Gamescope VRR** | Follows Steam, or temporarily requests VRR on/off for a supported display during play. |
 | **Auto-disable by Refresh Rate / Refresh Rate Threshold** | Pauses generation and Adaptive caps at or below the chosen Gamescope refresh; a manual Base FPS Cap remains. |
+
+With Fixed Frame Generation through Zink and **Base FPS Cap** off, MAKO uses Gamescope's reported refresh divided by the multiplier: for example, 60 real FPS at 2x on a 120 Hz display. **Dynamic Cadence Recovery** disables this automatic cap so it can measure the game's native rate. Without refresh feedback, ordinary Fixed pacing applies. See [Zink FIFO pacing](../../engine/docs/ADAPTIVE-VALIDATION.md#zink-fifo-pacing) for eligibility and queue handling.
 
 The refresh-rate threshold reads display Hz, not the game's real FPS. A 50 Hz threshold allows generation on a 60 Hz display throughout both 30 FPS cutscenes and 60 FPS gameplay. Fractional Adaptive separately prefers native presentation near its output target.
 
@@ -68,11 +70,11 @@ For games switching between 30 FPS cutscenes and 60 FPS gameplay on a 60 Hz disp
 
 ### Proton offscreen windows
 
-MAKO's game wrapper automatically sets `WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1` before an enabled Renderer launch. On Proton 8 and 9, this bypasses an offscreen-window workaround that can hide generated frames. It applies on the first launch; there is no compatibility toggle or detection-and-restart cycle. Games already running receive the new environment on their next launch.
+MAKO's game wrapper automatically applies a Wine workaround that allows generated frames to reach the screen in affected Proton 8 and 9 games. It takes effect on the first enabled Renderer launch with the updated wrapper; restart an already running game to receive it.
 
 If this causes display problems, set `WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=0` before `mako-run` in the game's launch options, or in the game's environment settings in Heroic or Lutris. The wrapper preserves explicit values. Disabled Renderer launches do not add the variable.
 
-If the game still renders under a 1×1 offscreen parent, Frame Generation stays off and **Live Status** explains that generated frames cannot reach the screen. Try another Proton version or window mode. Proton 7 lacks the switch, and other versions can have different offscreen paths; neither the variable nor the geometry guard guarantees visible output on every version. See [Wine offscreen windows](../../engine/docs/WSI-ISOLATION.md#wine-offscreen-windows) for details.
+If **Live Status** reports unavailable presentation or output looks unchanged despite a higher FPS counter, try another Proton version or window mode. Proton 7 lacks this switch, other versions can use different offscreen paths, and MAKO cannot detect every case. See [Wine offscreen windows](../../engine/docs/WSI-ISOLATION.md#wine-offscreen-windows) for version and detection limits.
 
 ## GPU Headroom
 
@@ -157,7 +159,7 @@ Keep defaults unless a game needs a change.
 | **Mailbox Presentation (Restart)** | Games that hang or fail with Frame Generation's FIFO presentation; generated frames can be replaced before they are shown, which may reduce smoothness. |
 | **Disable MAKO Renderer on Next Launch** | Temporarily bypassing the Renderer for troubleshooting. |
 | **Disable Steam Deck Mode** | Exposing settings hidden by a game's handheld mode. |
-| **Zink** | Running OpenGL through Vulkan. It also turns off RADV's display compression for the game (`RADV_DEBUG=nodisplaydcc`), which otherwise showed as colour speckles while Gamescope sent Zink images straight to the display. In Game Mode it also asks Gamescope to composite the game while it runs, because direct scan-out tore Zink images even without MAKO. |
+| **Zink** | Runs OpenGL through Vulkan. Disables RADV display compression and requests Gamescope composition during supported Game Mode launches to address colour speckles and tearing; see [requirements and restoration limits](../../engine/docs/WSI-ISOLATION.md#zink-launch-compatibility). |
 | **Force ALSA** | Audio or Zink compatibility problems. |
 | **MangoHud (Restart)** | Host games only; requires installed MangoHud and cannot run alongside MAKO Shaders for the same profile. |
 | **Count Real Frames Only (Restart)** | Shown while MangoHud is enabled. Off counts every output frame, including generated ones; on shows the game's real FPS. See [MangoHud frame counting](../../engine/docs/LAYER-CHAINING.md#mangohud-frame-counting). |
