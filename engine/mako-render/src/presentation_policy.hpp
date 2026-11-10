@@ -1733,6 +1733,7 @@ namespace mako::layer {
         struct Counts {
             size_t frames{0};
             size_t waited{0};
+            Clock::duration elapsed{};
         };
 
         [[nodiscard]] static Clock::duration threshold(const uint32_t refreshHz) {
@@ -1753,7 +1754,8 @@ namespace mako::layer {
                 ++this->counts.waited;
             if (now - *this->start < length)
                 return std::nullopt;
-            const auto completed = this->counts;
+            auto completed = this->counts;
+            completed.elapsed = now - *this->start;
             this->start = now;
             this->counts = {};
             return completed;
@@ -1769,14 +1771,17 @@ namespace mako::layer {
         Counts counts;
     };
 
-    /// Zink presents from a worker thread, and the application acquire window
-    /// makes the game wait for that worker. A compositor stall can fill FIFO
-    /// behind a source cap at the refresh-limited rate; the cap then runs at
-    /// the display's own rate and never drains the queue, and the worker's
-    /// added delay misses refreshes. While a cap paces such a swapchain, a
-    /// half-second window in which most private acquires waited proves that
-    /// backlog: hold the next real frame one refresh to retire one queued
-    /// output. An episode that does not clear stops after a few holds.
+    /// A compositor stall can fill FIFO behind a source cap at the
+    /// refresh-limited rate; the cap then runs at the display's own rate and
+    /// never drains the queue. Every queued output adds one refresh of input
+    /// delay, and Zink's worker-thread presents also miss refreshes. While a
+    /// cap paces the swapchain, a half-second window in which most private
+    /// acquires waited proves that backlog: hold the next real frame one
+    /// refresh to retire one queued output. A higher multiplier queues more
+    /// outputs per real frame, so an episode may hold up to that many outputs
+    /// plus two before an uncleared backlog pauses the drain. A consumer
+    /// slower than refresh, such as Gamescope's frame limiter, also makes
+    /// acquires wait, but it holds the source below its cap.
     class CappedFifoBacklogDrain {
     public:
         using Clock = std::chrono::steady_clock;
@@ -1825,12 +1830,20 @@ namespace mako::layer {
                     this->holds = 0;
                 return {};
             }
-            if (this->holds >= maximumHolds()) {
-                // Waits that survive several holds are not a standing backlog.
-                // Stop paying a held frame for them.
+            // A backlog still retires one output per refresh, so the cap keeps
+            // its source at the cap's rate. No held refresh drains waits that
+            // hold the source below it.
+            const double sourceFps = static_cast<double>(counts->frames) /
+                std::chrono::duration<double>(counts->elapsed).count();
+            if (sourceFps < capFps * minimumCapShare())
+                return {};
+            const size_t holdLimit = maximumHolds(capFps, *refreshHz);
+            if (this->holds >= holdLimit) {
+                // Waits that survive every queued output being retired are not
+                // a standing backlog. Stop paying a held frame for them.
                 this->holds = 0;
                 this->suspendedUntil = now + suspension();
-                return {.suspended = true, .holds = maximumHolds(), .window = *counts};
+                return {.suspended = true, .holds = holdLimit, .window = *counts};
             }
             ++this->holds;
             return {
@@ -1853,12 +1866,20 @@ namespace mako::layer {
             return std::chrono::milliseconds{500};
         }
 
-        [[nodiscard]] static constexpr size_t maximumHolds() {
-            return 4;
+        /// A cap that fills FIFO delivers refresh/cap outputs per real frame.
+        [[nodiscard]] static size_t maximumHolds(const double capFps,
+                const uint32_t refreshHz) {
+            const double outputs = std::round(static_cast<double>(refreshHz) / capFps);
+            return static_cast<size_t>(std::clamp(outputs + 2.0, 4.0, 8.0));
         }
 
         [[nodiscard]] static constexpr std::chrono::seconds suspension() {
             return std::chrono::seconds{30};
+        }
+
+        /// Holds and arrival jitter keep a draining source near its cap.
+        [[nodiscard]] static constexpr double minimumCapShare() {
+            return 0.85;
         }
 
     private:
@@ -1869,6 +1890,19 @@ namespace mako::layer {
         PresentationWaitWindow window;
         size_t holds{0};
     };
+
+    /// The capped backlog drain needs blocking private acquires as queue
+    /// evidence and a CPU source cap that owns real-frame release. The ordered
+    /// SDR transport provides both. The HDR transport never blocks an acquire,
+    /// and the scaling bridge and owned display timing pace outputs in the
+    /// compositor with their own queue reserve. A Zink acquire window keeps
+    /// the drain wherever it applies.
+    [[nodiscard]] constexpr bool cappedFifoBacklogDrainApplies(
+            const bool applicationAcquireWindow, const bool privateOrderedTransport,
+            const bool compositorOutputTiming) noexcept {
+        return applicationAcquireWindow ||
+            (privateOrderedTransport && !compositorOutputTiming);
+    }
 
     /// Zink only: under an ordered-FIFO handoff, a source faster than the
     /// rung's admission rate waits on presentation and fills FIFO. Its rate

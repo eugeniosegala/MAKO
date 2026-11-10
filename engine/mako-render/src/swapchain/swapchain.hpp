@@ -126,8 +126,8 @@ namespace mako::layer {
         // Adaptive may use its bounded recovery guard.
         bool replacement{false};
         // Zink receives an application acquire window on this swapchain. Its
-        // worker-thread presents also read private acquire waits as FIFO
-        // backlog evidence; every other engine keeps ordinary pacing.
+        // worker-thread presents also end a full FIFO handoff and keep the
+        // capped backlog drain on any transport.
         bool applicationAcquireWindow{false};
     };
 
@@ -532,7 +532,7 @@ namespace mako::layer {
         SmoothCadenceBaseCap smoothCadenceBaseCap;
         SmoothCadencePacerHandoff smoothCadencePacerHandoff;
         // Private generated-image acquire wait of the last generated present,
-        // consumed by the next present. Read only with an acquire window.
+        // consumed by the next present as FIFO backlog evidence.
         std::optional<std::chrono::steady_clock::duration> lastGeneratedAcquireWait;
         CappedFifoBacklogDrain cappedFifoBacklogDrain;
         // A null-old replacement loses the driver's explicit WSI lineage.

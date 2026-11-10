@@ -460,15 +460,16 @@ namespace {
         };
         const auto run = [&](const uint32_t refreshHz, const size_t backlog,
                 const double seconds, const double waitedShare = 1.0,
-                const double capFps = 0.0) {
+                const double capFps = 0.0, const double sourceFps = 0.0) {
             CappedFifoBacklogDrain drain;
             const double period = 1.0 / refreshHz;
             const double cap = capFps > 0.0 ? capFps : refreshHz / 2.0;
+            const double source = sourceFps > 0.0 ? sourceFps : cap;
             size_t queued = backlog;
             size_t frame = 0;
             double accrued = 0.0;
             Run result;
-            for (double now = 0.0; now < seconds; now += 1.0 / cap, ++frame) {
+            for (double now = 0.0; now < seconds; now += 1.0 / source, ++frame) {
                 accrued += waitedShare;
                 const bool waits = queued > 0 && accrued >= 1.0;
                 if (waits)
@@ -478,7 +479,7 @@ namespace {
                 if (decision.hold > Clock::duration::zero()) {
                     expect(decision.hold == duration(period) &&
                             decision.holds >= 1 &&
-                            decision.holds <= CappedFifoBacklogDrain::maximumHolds(),
+                            decision.holds <= CappedFifoBacklogDrain::maximumHolds(cap, refreshHz),
                         "a FIFO backlog hold was not exactly one refresh");
                     ++result.holds;
                     if (queued != std::numeric_limits<size_t>::max() && queued > 0)
@@ -509,14 +510,49 @@ namespace {
                 "a minority of waiting frames held a real frame");
             // Waits that holds cannot clear stop after a bounded episode.
             const auto stubborn = run(refreshHz, std::numeric_limits<size_t>::max(), 40.0);
-            expect(stubborn.holds == 2 * CappedFifoBacklogDrain::maximumHolds() &&
-                    stubborn.suspensions == 2,
+            expect(stubborn.holds == 2 * 4 && stubborn.suspensions == 2,
                 "persistent acquire waits kept holding real frames");
         }
+        // Higher Fixed multipliers queue more outputs per real frame: a 5x cap
+        // of 12 FPS at 60 Hz can leave six outputs behind one stall.
+        for (const size_t multiplier : {size_t{3}, size_t{4}, size_t{5}}) {
+            const double cap = 60.0 / static_cast<double>(multiplier);
+            expect(CappedFifoBacklogDrain::maximumHolds(cap, 60) == multiplier + 2,
+                "a higher multiplier did not scale its FIFO backlog hold limit");
+            const auto deep = run(60, multiplier + 1, 60.0, 1.0, cap);
+            expect(deep.holds == multiplier + 1 && deep.suspensions == 0,
+                "a higher-multiplier FIFO backlog paused before it drained");
+            const auto stubborn = run(60, std::numeric_limits<size_t>::max(), 40.0, 1.0, cap);
+            expect(stubborn.holds == 2 * (multiplier + 2) && stubborn.suspensions == 2,
+                "persistent higher-multiplier acquire waits kept holding real frames");
+        }
+        expect(CappedFifoBacklogDrain::maximumHolds(120.0, 120) == 4 &&
+                CappedFifoBacklogDrain::maximumHolds(5.0, 240) == 8,
+            "the FIFO backlog hold limit left its bounds");
         // Below the refresh-limited rate the queue cannot fill; even a
         // waiting window is evidence of the cap, not missing data.
         expect(run(120, 2, 60.0, 1.0, 40.0).holds == 2,
             "a lower cap ignored a proven FIFO backlog");
+        // Arrival jitter a little below the cap still drains the backlog.
+        expect(run(120, 2, 60.0, 1.0, 60.0, 54.0).holds == 2,
+            "a source just below its cap kept its FIFO backlog");
+        // Gamescope's frame limiter consumes slower than refresh: every
+        // acquire waits, but the source falls below its cap, and no held
+        // refresh drains a queue the limiter keeps full.
+        struct Limited {
+            uint32_t refreshHz;
+            double cap;
+            double source;
+        };
+        for (const auto limiter : std::array{Limited{120, 30.0, 15.0},
+                Limited{120, 60.0, 30.0}, Limited{90, 45.0, 30.0},
+                Limited{60, 30.0, 10.0}}) {
+            const auto limited = run(limiter.refreshHz,
+                std::numeric_limits<size_t>::max(), 40.0, 1.0, limiter.cap,
+                limiter.source);
+            expect(limited.holds == 0 && limited.suspensions == 0,
+                "a frame limiter's full FIFO queue held real frames");
+        }
 
         CappedFifoBacklogDrain drain;
         for (double now = 0.0; now < 10.0; now += 1.0 / 60.0) {
@@ -545,6 +581,20 @@ namespace {
                 drain.observe(at(20.1), 60.0, std::nullopt, 7ms).hold ==
                     Clock::duration::zero(),
             "an uncapped or unknown-refresh source held a real frame");
+
+        // Ordered SDR swapchains drain a capped backlog for every engine.
+        // The HDR transport never blocks an acquire, and the scaling bridge
+        // and owned display timing keep their own compositor queue reserve.
+        expect(cappedFifoBacklogDrainApplies(false, true, false),
+            "an ordered SDR swapchain kept a capped FIFO backlog");
+        expect(!cappedFifoBacklogDrainApplies(false, false, false) &&
+                !cappedFifoBacklogDrainApplies(false, true, true) &&
+                !cappedFifoBacklogDrainApplies(false, false, true),
+            "the HDR transport, a bridge, or owned display timing drained its queue");
+        expect(cappedFifoBacklogDrainApplies(true, true, false) &&
+                cappedFifoBacklogDrainApplies(true, true, true) &&
+                cappedFifoBacklogDrainApplies(true, false, false),
+            "a Zink acquire window lost its capped FIFO backlog drain");
     }
 
     void testZinkFifoBacklogEndsHandoff() {
