@@ -225,7 +225,7 @@ performance_mode = true
         self.assertEqual(len(content.encode("utf-8")), 22419)
         self.assertEqual(
             _sha256(content),
-            "3b5a8840d16ca851dd292eb10560469c0e71b8b06a6f302037ae51ccfda9e412",
+            "667a4a97e9b7f714d971337919fde6692cd4b77780478c7f202255d87be79c56",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -295,7 +295,7 @@ performance_mode = true
         self.assertEqual(len(content.encode("utf-8")), 25458)
         self.assertEqual(
             _sha256(content),
-            "2e0f3b138343ff6ef562309035c958ff4d4e0e49a48b75635ab7e7addf868e1f",
+            "5710b00d1df54a465e96f36fb37bc975968b7f1f4e077e3f244901e675d58e88",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -391,7 +391,7 @@ performance_mode = true
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "f07642dcdf01831973f5e8304c8ee6079f70fcafd14f2f6c7776cabf921558af",
+            "a71c9f4bb9ea10d3c94b1e4cc6a98d66c398a9dd8152efe4227ae3dfd86cbca6",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):

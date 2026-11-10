@@ -1219,7 +1219,7 @@ class GameProfileTests(unittest.TestCase):
                 str(self.service.mako_script_path),
                 "/bin/bash",
                 "-c",
-                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nVKBASALT_RELOAD=%s\\nIMPLICIT=%s\\nINSTANCE=%s\\nZINK=%s\\nRADV=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VKBASALT_CONFIG_RELOAD:-}" "${VK_IMPLICIT_LAYER_PATH:-}" "${VK_INSTANCE_LAYERS:-}" "${GALLIUM_DRIVER:-}" "${RADV_DEBUG:-}"',
+                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nVKBASALT_RELOAD=%s\\nIMPLICIT=%s\\nINSTANCE=%s\\nZINK=%s\\nRADV=%s\\nCOMPOSITE=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VKBASALT_CONFIG_RELOAD:-}" "${VK_IMPLICIT_LAYER_PATH:-}" "${VK_INSTANCE_LAYERS:-}" "${GALLIUM_DRIVER:-}" "${RADV_DEBUG:-}" "${MAKO_GAMESCOPE_COMPOSITE_FORCE:-}"',
                 *command_arguments,
             ],
             check=True,
@@ -1257,10 +1257,12 @@ class GameProfileTests(unittest.TestCase):
 
         self.assertEqual(zink["ZINK"], "zink")
         self.assertEqual(zink["RADV"], "nodisplaydcc")
+        self.assertEqual(zink["COMPOSITE"], "1")
         self.assertEqual(appended["RADV"], "nohiz,nodisplaydcc")
         self.assertEqual(repeated["RADV"], "nohiz,nodisplaydcc")
         self.assertEqual(unrelated["ZINK"], "")
         self.assertEqual(unrelated["RADV"], "nohiz")
+        self.assertEqual(unrelated["COMPOSITE"], "")
 
     def test_wrapper_applies_alsa_only_to_the_matching_game(self):
         game = dict(ConfigurationManager.get_defaults())

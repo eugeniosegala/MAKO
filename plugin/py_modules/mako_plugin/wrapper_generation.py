@@ -72,7 +72,7 @@ from .profile_storage import (
 from .process_detection import is_matchable_process_name
 
 
-WRAPPER_FORMAT_VERSION = 85
+WRAPPER_FORMAT_VERSION = 86
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (

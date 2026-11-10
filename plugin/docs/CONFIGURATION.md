@@ -157,7 +157,7 @@ Keep defaults unless a game needs a change.
 | **Mailbox Presentation (Restart)** | Games that hang or fail with Frame Generation's FIFO presentation; generated frames can be replaced before they are shown, which may reduce smoothness. |
 | **Disable MAKO Renderer on Next Launch** | Temporarily bypassing the Renderer for troubleshooting. |
 | **Disable Steam Deck Mode** | Exposing settings hidden by a game's handheld mode. |
-| **Zink** | Running OpenGL through Vulkan. It also turns off RADV's display compression for the game (`RADV_DEBUG=nodisplaydcc`), which otherwise showed as colour speckles while Gamescope sent Zink images straight to the display. |
+| **Zink** | Running OpenGL through Vulkan. It also turns off RADV's display compression for the game (`RADV_DEBUG=nodisplaydcc`), which otherwise showed as colour speckles while Gamescope sent Zink images straight to the display. In Game Mode it also asks Gamescope to composite the game while it runs, because direct scan-out tore Zink images even without MAKO. |
 | **Force ALSA** | Audio or Zink compatibility problems. |
 | **MangoHud (Restart)** | Host games only; requires installed MangoHud and cannot run alongside MAKO Shaders for the same profile. |
 | **Count Real Frames Only (Restart)** | Shown while MangoHud is enabled. Off counts every output frame, including generated ones; on shows the game's real FPS. See [MangoHud frame counting](../../engine/docs/LAYER-CHAINING.md#mangohud-frame-counting). |

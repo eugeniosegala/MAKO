@@ -210,6 +210,7 @@ def get_script_generation_logic():
                 '    *",nodisplaydcc,"*) ;;',
                 '    *) export RADV_DEBUG="${RADV_DEBUG:+$RADV_DEBUG,}nodisplaydcc" ;;',
                 "esac",
+                "export MAKO_GAMESCOPE_COMPOSITE_FORCE=1",
             ])
         if config.get("force_alsa_audio", False):
             lines.extend([

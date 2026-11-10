@@ -352,12 +352,13 @@ compatibility_output="$({
                 "${MESA_LOADER_DRIVER_OVERRIDE:-unset}" \
                 "${GALLIUM_DRIVER:-unset}" \
                 "${RADV_DEBUG:-unset}" \
+                "${MAKO_GAMESCOPE_COMPOSITE_FORCE:-unset}" \
                 "${SDL_AUDIODRIVER:-unset}" \
                 "${WINEDLLOVERRIDES:-unset}" \
                 "${MAKO_LAUNCH_CONFIG:-unset}"
         '
 } 2>&1)" || fail "standalone compatibility launch failed: $compatibility_output"
-expected_compatibility=$'mesa\nzink\nzink\nnohiz,nodisplaydcc\nalsa\nd3d11=n;winepulse.drv=d;winealsa.drv=b\nunset'
+expected_compatibility=$'mesa\nzink\nzink\nnohiz,nodisplaydcc\n1\nalsa\nd3d11=n;winepulse.drv=d;winealsa.drv=b\nunset'
 if [[ "$compatibility_output" != "$expected_compatibility" ]]; then
     fail "standalone compatibility settings were not applied safely:\n$compatibility_output"
 fi

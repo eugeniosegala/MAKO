@@ -342,6 +342,7 @@ class VrrLeaseTests(unittest.TestCase):
             "XAUTHORITY": "/tmp/gamescope-test-xauthority",
             "XDG_RUNTIME_DIR": "/run/user/1000",
             "MAKO_CONFIG": "/tmp/mako-game.toml",
+            "MAKO_GAMESCOPE_COMPOSITE_FORCE": "1",
         }), patch.object(module.shutil, "which", return_value="/usr/bin/systemd-run"), \
              patch.object(Path, "stat", return_value=SimpleNamespace(
                  st_mode=0o140777, st_dev=12, st_ino=34)), \
@@ -356,7 +357,99 @@ class VrrLeaseTests(unittest.TestCase):
             self.assertIn("--setenv=DISPLAY=:1", command)
             self.assertIn("--setenv=XAUTHORITY=/tmp/gamescope-test-xauthority", command)
             self.assertIn("--setenv=MAKO_CONFIG=/tmp/mako-game.toml", command)
+            self.assertIn("--setenv=MAKO_GAMESCOPE_COMPOSITE_FORCE=1", command)
             self.assertEqual(command[-5:], ["123", "123-4-5", "9876", "12", "34"])
+
+    def test_composite_force_reads_a_missing_property_as_scanout(self):
+        with patch.object(module, "verified_root_properties", return_value=(
+                {"GAMESCOPE_PID": 1, "GAMESCOPE_XWAYLAND_SERVER_ID": 0}, "ok")):
+            self.assertEqual(module.read_composite_force(), (False, "ok"))
+        with patch.object(module, "verified_root_properties", return_value=(
+                {"GAMESCOPE_COMPOSITE_FORCE": 1}, "ok")):
+            self.assertEqual(module.read_composite_force(), (True, "ok"))
+        with patch.object(module, "verified_root_properties",
+                          return_value=(None, "x-root-unverified")):
+            self.assertEqual(module.read_composite_force(), (None, "x-root-unverified"))
+
+    def test_composite_force_write_uses_the_verified_root_property(self):
+        with patch.object(module, "XROOT_CACHE", (":2", 123, ":0")), \
+             patch.object(module, "read_composite_force",
+                          side_effect=[(False, "ok"), (True, "ok")]), \
+             patch.object(module.subprocess, "run", return_value=
+                          subprocess.CompletedProcess([], 0, "", "")) as run:
+            self.assertTrue(module.write_composite_force(True, False))
+            self.assertEqual(run.call_args.args[0], (
+                "xprop", "-display", ":0", "-root", "-f", "GAMESCOPE_COMPOSITE_FORCE",
+                "32c", "-set", "GAMESCOPE_COMPOSITE_FORCE", "1",
+            ))
+        with patch.object(module, "XROOT_CACHE", (":2", 123, ":0")), \
+             patch.object(module, "read_composite_force", return_value=(True, "ok")), \
+             patch.object(module.subprocess, "run") as run:
+            self.assertFalse(module.write_composite_force(True, False))
+            run.assert_not_called()
+
+    def test_composite_lease_holds_for_the_game_and_restores_scanout(self):
+        state = {"value": False}
+        clock = {"now": 0.0}
+
+        def write(value, expected):
+            self.assertEqual(state["value"], expected)
+            state["value"] = value
+            return True
+
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")) as read, \
+             patch.object(module, "write_composite_force", side_effect=write), \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "write-confirmed")
+            self.assertTrue(state["value"])
+            reads = read.call_count
+            self.assertEqual(lease.update(), "holding")
+            self.assertEqual(read.call_count, reads)
+            clock["now"] += module.HOLD_CHECK_SECONDS
+            self.assertEqual(lease.update(), "holding")
+            self.assertTrue(lease.restore())
+            self.assertFalse(state["value"])
+            self.assertFalse(lease.applied)
+
+    def test_composite_lease_never_takes_over_or_restores_an_external_value(self):
+        state = {"value": True}
+        clock = {"now": 0.0}
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")), \
+             patch.object(module, "write_composite_force") as write, \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "already-composited")
+            self.assertEqual(lease.update(), "yielded")
+            self.assertTrue(lease.restore())
+            write.assert_not_called()
+            self.assertTrue(state["value"])
+
+        state["value"] = False
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")), \
+             patch.object(module, "write_composite_force",
+                          side_effect=lambda value, expected: state.update(value=value) or True) as write, \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "write-confirmed")
+            state["value"] = False  # The user or Steam turned composition off.
+            clock["now"] += module.HOLD_CHECK_SECONDS
+            self.assertEqual(lease.update(), "yielded-to-external-change")
+            self.assertTrue(lease.restore())
+            self.assertEqual(write.call_count, 1)
+            self.assertFalse(state["value"])
+
+    def test_composite_lease_keeps_trying_until_gamescope_is_readable(self):
+        with patch.object(module, "read_composite_force",
+                          return_value=(None, "x-root-unverified")), \
+             patch.object(module, "write_composite_force") as write:
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "query-x-root-unverified")
+            self.assertFalse(lease.yielded)
+            write.assert_not_called()
 
     def test_restore_only_while_value_is_still_ours(self):
         state = {"value": True}

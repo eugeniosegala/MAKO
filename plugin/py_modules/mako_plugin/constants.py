@@ -104,6 +104,9 @@ ZINK_DRIVER_VALUE = "zink"
 # out directly. Keep RADV's display compression off for them.
 ZINK_RADV_DEBUG_ENV = "RADV_DEBUG"
 ZINK_RADV_DEBUG_VALUE = "nodisplaydcc"
+# Gamescope's direct scan-out also tore Zink images without MAKO. The launch
+# helper asks Gamescope to composite the game while it runs.
+ZINK_COMPOSITE_FORCE_ENV = "MAKO_GAMESCOPE_COMPOSITE_FORCE"
 SDL_AUDIO_DRIVER_ENV = "SDL_AUDIODRIVER"
 SDL_AUDIO_DRIVER_ALSA_VALUE = "alsa"
 WINE_DLL_OVERRIDES_ENV = "WINEDLLOVERRIDES"

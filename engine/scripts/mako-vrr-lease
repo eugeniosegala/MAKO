@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
-"""Hold a reversible Gamescope VRR override for one MAKO-wrapped game.
+"""Hold reversible Gamescope overrides for one MAKO-wrapped game.
+
+These are the per-profile VRR choice and, for Zink games, forced composition.
 
 The wrapper execs the game unchanged. This detached helper watches the
 Renderers' existing live status records and outlives an abruptly killed game.
@@ -34,6 +36,10 @@ X_CARDINAL = re.compile(r"^([A-Z_]+)\(CARDINAL\) = ([0-9]+)$", re.MULTILINE)
 VRR_DISPLAY_FLAG = 0x4
 PR_SET_PDEATHSIG = 1
 WATCH_OWNER_ENV = "MAKO_VRR_WATCH_PARENT"
+# Zink games showed speckles, black bands or tearing whenever Gamescope scanned
+# their images out directly, with or without MAKO. Composition avoids that path.
+COMPOSITE_FORCE_ENV = "MAKO_GAMESCOPE_COMPOSITE_FORCE"
+COMPOSITE_FORCE_PROPERTY = "GAMESCOPE_COMPOSITE_FORCE"
 STOP = False
 XROOT_CACHE: tuple[str, int, str] | None = None
 XROOT_RETRY_AFTER: tuple[str, int, float] | None = None
@@ -216,6 +222,7 @@ def xroot_properties(display: str, environment: dict[str, str] | None = None) ->
         result = subprocess.run((
             "xprop", "-display", display, "-root", "GAMESCOPE_PID",
             "GAMESCOPE_XWAYLAND_SERVER_ID", "GAMESCOPE_VRR_ENABLED",
+            COMPOSITE_FORCE_PROPERTY,
         ), capture_output=True, text=True, timeout=1.0, check=False, env=environment)
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -224,7 +231,7 @@ def xroot_properties(display: str, environment: dict[str, str] | None = None) ->
     return {name: int(value) for name, value in X_CARDINAL.findall(result.stdout)}
 
 
-def read_xroot_vrr() -> tuple[bool | None, str]:
+def verified_root_properties() -> tuple[dict[str, int] | None, str]:
     """Resolve server zero for this game's X display, as the Renderer does."""
     global XROOT_CACHE, XROOT_RETRY_AFTER
     current_display = os.environ.get("DISPLAY", "")
@@ -241,9 +248,7 @@ def read_xroot_vrr() -> tuple[bool | None, str]:
         properties = current if root_display == current_display else xroot_properties(root_display)
         if (properties and properties.get("GAMESCOPE_PID") == gamescope_pid and
                 properties.get("GAMESCOPE_XWAYLAND_SERVER_ID") == 0):
-            value = properties.get("GAMESCOPE_VRR_ENABLED")
-            return ((bool(value), "ok") if value in (0, 1)
-                    else (None, "x-vrr-unavailable"))
+            return properties, "ok"
         XROOT_CACHE = None
     if (XROOT_RETRY_AFTER and XROOT_RETRY_AFTER[:2] ==
             (current_display, gamescope_pid) and
@@ -257,50 +262,130 @@ def read_xroot_vrr() -> tuple[bool | None, str]:
                 properties.get("GAMESCOPE_XWAYLAND_SERVER_ID") == 0):
             XROOT_CACHE = (current_display, gamescope_pid, display)
             XROOT_RETRY_AFTER = None
-            value = properties.get("GAMESCOPE_VRR_ENABLED")
-            if value in (0, 1):
-                return bool(value), "ok"
-            return None, "x-vrr-unavailable"
+            return properties, "ok"
     XROOT_RETRY_AFTER = (current_display, gamescope_pid, time.monotonic() + 5.0)
     return None, "x-root-unverified"
+
+
+def read_xroot_vrr() -> tuple[bool | None, str]:
+    properties, status = verified_root_properties()
+    if properties is None:
+        return None, status
+    value = properties.get("GAMESCOPE_VRR_ENABLED")
+    return (bool(value), "ok") if value in (0, 1) else (None, "x-vrr-unavailable")
 
 
 def read_vrr() -> tuple[bool | None, str]:
     return read_xroot_vrr()
 
 
-def write_vrr(value: bool, expected: bool) -> bool:
-    current, _ = read_xroot_vrr()
+def write_root_flag(name: str, value: bool, expected: bool, current_reader,
+                    readback_reader) -> bool:
+    """Set one verified-root flag only while it still holds the expected value."""
+    current, _ = current_reader()
     if current != expected or XROOT_CACHE is None:
         return False
     try:
         result = subprocess.run((
             "xprop", "-display", XROOT_CACHE[2], "-root", "-f",
-            "GAMESCOPE_VRR_ENABLED", "32c", "-set", "GAMESCOPE_VRR_ENABLED",
-            "1" if value else "0",
+            name, "32c", "-set", name, "1" if value else "0",
         ), capture_output=True, text=True, timeout=1.0, check=False)
     except (OSError, subprocess.TimeoutExpired):
         return False
     if result.returncode:
         return False
     for attempt in range(5):
-        if read_vrr()[0] == value:
+        if readback_reader()[0] == value:
             return True
         if attempt < 4:
             time.sleep(0.1)
     return False
 
 
+def write_vrr(value: bool, expected: bool) -> bool:
+    return write_root_flag("GAMESCOPE_VRR_ENABLED", value, expected,
+                           read_xroot_vrr, read_vrr)
+
+
+def read_composite_force() -> tuple[bool | None, str]:
+    """Gamescope reads a missing property as zero: scan-out stays allowed."""
+    properties, status = verified_root_properties()
+    if properties is None:
+        return None, status
+    return properties.get(COMPOSITE_FORCE_PROPERTY, 0) != 0, "ok"
+
+
+def write_composite_force(value: bool, expected: bool) -> bool:
+    return write_root_flag(COMPOSITE_FORCE_PROPERTY, value, expected,
+                           read_composite_force, read_composite_force)
+
+
 class DecisionLog:
     """Record only changes in lease decisions, never one entry per poll."""
 
-    def __init__(self) -> None:
+    def __init__(self, lease: str = "VRR") -> None:
+        self.lease = lease
         self.last: str | None = None
 
     def record(self, decision: str) -> None:
         if decision != self.last:
-            print(f"MAKO Renderer: Gamescope VRR lease decision={decision}", file=sys.stderr)
+            print(f"MAKO Renderer: Gamescope {self.lease} lease decision={decision}", file=sys.stderr)
             self.last = decision
+
+
+class CompositeLease:
+    """Force Gamescope composition for one Zink game, then restore scan-out.
+
+    A value someone else already set, or a later external change, is never
+    taken over or restored: the user or Steam owns it from then on.
+    """
+
+    def __init__(self) -> None:
+        self.applied = False
+        self.yielded = False
+        self.hold_check_after: float | None = None
+
+    def update(self) -> str:
+        if self.yielded:
+            return "yielded"
+        now = time.monotonic()
+        if self.applied and self.hold_check_after is not None and now < self.hold_check_after:
+            return "holding"
+        current, status = read_composite_force()
+        if current is None:
+            return f"query-{status}"
+        if self.applied:
+            if not current:
+                self.applied = False
+                self.yielded = True
+                print("MAKO Renderer: Gamescope composition lease yielded to external change", file=sys.stderr)
+                return "yielded-to-external-change"
+            self.hold_check_after = now + HOLD_CHECK_SECONDS
+            return "holding"
+        if current:
+            self.yielded = True
+            return "already-composited"
+        if not write_composite_force(True, False):
+            return "write-not-verified"
+        self.applied = True
+        self.hold_check_after = now + HOLD_CHECK_SECONDS
+        print("MAKO Renderer: Gamescope composition lease applied value=1", file=sys.stderr)
+        return "write-confirmed"
+
+    def restore(self) -> bool:
+        if not self.applied:
+            return True
+        current, _ = read_composite_force()
+        if current is None:
+            return False
+        if current:
+            if not write_composite_force(False, True):
+                return False
+            print("MAKO Renderer: Gamescope composition lease restored previous value=0", file=sys.stderr)
+        else:
+            print("MAKO Renderer: Gamescope composition lease restoration skipped after external change", file=sys.stderr)
+        self.applied = False
+        return True
 
 
 class VrrLease:
@@ -387,7 +472,7 @@ class VrrLease:
             return "write-not-verified"
 
 
-def restore_on_exit(lease: VrrLease, decisions: DecisionLog,
+def restore_on_exit(lease: VrrLease | CompositeLease, decisions: DecisionLog,
                     original_display: tuple[int, int]) -> bool:
     """Retry transient readback failures without holding the session lock forever."""
     for attempt in range(RESTORE_ATTEMPTS):
@@ -402,13 +487,13 @@ def restore_on_exit(lease: VrrLease, decisions: DecisionLog,
     return False
 
 
-def session_lock() -> int | None:
+def session_lock(prefix: str = "mako-vrr") -> int | None:
     runtime = os.environ.get("XDG_RUNTIME_DIR")
     display = os.environ.get("GAMESCOPE_WAYLAND_DISPLAY")
     if not runtime or not display:
         return None
     suffix = hashlib.sha256(display.encode()).hexdigest()[:16]
-    return runtime_lock(Path(runtime), f"mako-vrr-{suffix}.lock")
+    return runtime_lock(Path(runtime), f"{prefix}-{suffix}.lock")
 
 
 def runtime_lock(directory: Path, name: str) -> int | None:
@@ -468,7 +553,7 @@ def start_service(parent: str, token: str) -> int:
     ]
     for key in ("GAMESCOPE_WAYLAND_DISPLAY", "WAYLAND_DISPLAY", "DISPLAY",
                 "XAUTHORITY", "XDG_RUNTIME_DIR", "XDG_CONFIG_HOME", "HOME",
-                "MAKO_CONFIG"):
+                "MAKO_CONFIG", COMPOSITE_FORCE_ENV):
         if key in os.environ:
             command.append(f"--setenv={key}={os.environ[key]}")
     command.extend((str(Path(__file__).resolve()), parent, token, str(identity[1]),
@@ -632,6 +717,15 @@ def main() -> int:
     owns_lock = False
     lease = VrrLease()
     decisions = DecisionLog()
+    composite = composite_lock = None
+    composite_decisions = DecisionLog("composition")
+    owns_composite_lock = False
+    if os.environ.get(COMPOSITE_FORCE_ENV) == "1":
+        composite_lock = session_lock("mako-composite")
+        if composite_lock is None:
+            composite_decisions.record("session-lock-unavailable")
+        else:
+            composite = CompositeLease()
     decisions.record("watching")
     capability_check_at = 0.0
     capable: bool | None = None
@@ -647,6 +741,19 @@ def main() -> int:
             if not parent_alive and not observed and time.monotonic() > startup_deadline:
                 decisions.record("game-ended")
                 break
+            # Composition belongs to the game process, whatever its VRR state.
+            if composite is not None and not composite.yielded:
+                if not owns_composite_lock:
+                    try:
+                        fcntl.flock(composite_lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                        owns_composite_lock = True
+                    except BlockingIOError:
+                        composite_decisions.record("lease-lock-busy")
+                if owns_composite_lock:
+                    composite_decisions.record(composite.update())
+                    if composite.yielded:
+                        fcntl.flock(composite_lock, fcntl.LOCK_UN)
+                        owns_composite_lock = False
             matched_mode = active_mode(path.parent / "runtime-state", parent,
                                        start_tick, token, observed)
             mode = matched_mode or "follow-steam"
@@ -700,6 +807,12 @@ def main() -> int:
             restoration_failed = not restore_on_exit(lease, decisions, original_display)
         decisions.record("stopped")
         os.close(lock_fd)
+        if composite_lock is not None:
+            if owns_composite_lock and display_identity() == original_display:
+                restoration_failed |= not restore_on_exit(
+                    composite, composite_decisions, original_display)
+            composite_decisions.record("stopped")
+            os.close(composite_lock)
     return 1 if restoration_failed else 0
 
 

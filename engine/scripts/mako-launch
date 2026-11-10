@@ -316,6 +316,9 @@ if [[ "$mako_launch_enable_zink" == 1 ]]; then
         *",nodisplaydcc,"*) ;;
         *) export RADV_DEBUG="${RADV_DEBUG:+$RADV_DEBUG,}nodisplaydcc" ;;
     esac
+    # Gamescope's direct scan-out also tore Zink images without MAKO. The
+    # launch helper asks Gamescope to composite this game while it runs.
+    export MAKO_GAMESCOPE_COMPOSITE_FORCE=1
 fi
 if [[ "$mako_launch_force_alsa_audio" == 1 ]]; then
     export SDL_AUDIODRIVER=alsa

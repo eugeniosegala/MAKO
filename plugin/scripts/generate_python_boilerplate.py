@@ -22,6 +22,7 @@ from py_modules.mako_plugin.constants import (
     SDL_AUDIO_DRIVER_ENV,
     STEAM_DECK_MODE_ENV,
     WINE_DLL_OVERRIDES_ENV,
+    ZINK_COMPOSITE_FORCE_ENV,
     ZINK_DRIVER_VALUE,
     ZINK_GALLIUM_DRIVER_ENV,
     ZINK_GLX_VENDOR_ENV,
@@ -165,6 +166,7 @@ def generate_script_generation() -> str:
                     f'{ZINK_RADV_DEBUG_VALUE}" ;;\','
                 )
                 lines.append('                "esac",')
+                lines.append(f'                "export {ZINK_COMPOSITE_FORCE_ENV}=1",')
                 lines.append('            ])')
             elif field_name == "force_alsa_audio":
                 # SDL honours the native ALSA driver. Wine/Proton honours the
