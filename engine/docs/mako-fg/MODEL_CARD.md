@@ -65,6 +65,23 @@ MAKO FG also runs standalone. Download the model and the prebuilt runtime from [
 4. Create `mfg::ExternalContext context(model, device_index, half_storage, width, height, source_a, source_b, outputs, timeline, flow_scale, mfg::Encoding::Sdr8)`. It takes ownership of the file descriptors. `half_storage = true` selects half-precision storage, `flow_scale` (0.25 to 1) the motion-analysis resolution.
 5. Keep a timeline value `v`, starting at 1. For each real frame: once the previous frame's generated frames are finished (`context.ready()`), write the frame into source A on even frames and source B on odd frames, signal the timeline to `v` after the write, and call `context.schedule(times)` with the generated times in increasing order between 0 and 1, for example `{0.5f}` for 2x or `{0.25f, 0.5f, 0.75f}` for 4x. Generated frame `i` (counting from 1) is in its output image when the timeline reaches `v + i`; then add `times.size() + 1` to `v`. The first frame only primes the model.
 
+**Motion-estimation frequency**
+
+After creating the context, call `setMotionPeriod(period)` before scheduling frames to select the same motion-estimation frequency as MAKO FG Mode. For example, to match MAKO's default Balanced preset:
+
+```cpp
+context.setMotionPeriod(2);
+```
+
+| MAKO FG Mode | Standalone call | Motion estimation at 2x and 3x |
+| --- | --- | --- |
+| Quality | `context.setMotionPeriod(1)` | Every real-frame pair |
+| Balanced (MAKO default) | `context.setMotionPeriod(2)` | One pair in two |
+| Performance | `context.setMotionPeriod(3)` | One pair in three |
+| Extra Performance | `context.setMotionPeriod(4)` | One pair in four |
+
+The standalone runtime defaults to `1` (Quality) when this method is not called. You can change the period between completed batches without recreating the context. Between solves, the runtime moves the previous motion field forward along itself and keeps the last HUD map; each output is still reconstructed from the current two real frames. Longer periods save GPU time and can add artifacts when motion changes quickly. A scene cut forces the next pair to solve, and batches with three or more generated frames (4x and above) always solve for the thin-object stage. The constructor's `flow_scale` independently controls motion-analysis resolution.
+
 `external.hpp` documents the full contract. Use outside MAKO must follow the licence below, including its non-commercial condition and attribution.
 
 ## Architecture
@@ -76,7 +93,7 @@ A compact model: one small learned stage surrounded by fixed, non-learned algori
 - **HUD.** A fixed stage keeps screen overlays that stay put, such as HUD text, crosshairs, health bars and subtitles, exactly as in the real frames, so they do not drag or double.
 - **Thin objects.** At 4x and above, a fixed stage places thin moving objects such as blades, poles and wires at each generated time and removes their ghosts.
 
-Motion is computed once per solved pair of real frames and shared by every frame generated between them. At 2x and 3x, MAKO FG Mode sets how many pairs solve: every pair, or one in two (the default), three or four. Pairs in between move the last motion forward along itself and keep the last HUD map, which frees GPU time and can add artifacts in fast changes of direction; a scene cut makes the next pair solve. Every generated pixel is a blend of pixels from the two real frames: there is no generative image prior, so the model cannot reproduce images from its training data.
+Motion is computed once per solved pair of real frames and shared by every frame generated between them. At 2x and 3x, MAKO FG Mode sets how many pairs solve: every pair, or one in two (the default in MAKO), three or four. Pairs in between move the last motion forward along itself and keep the last HUD map, which frees GPU time and can add artifacts in fast changes of direction; a scene cut makes the next pair solve. Every generated pixel is a blend of pixels from the two real frames: there is no generative image prior, so the model cannot reproduce images from its training data.
 
 ## Training
 
