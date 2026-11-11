@@ -23,6 +23,8 @@ An unavailable inspector produces a quiet compatibility-unverified status notice
 
 `StatusDisplay.tsx` keeps the Renderer status row readable when supplied status text is empty or whitespace: a ready row uses the localized installed label, and an unresolved row uses the localized checking label. Non-empty progress and failure messages remain authoritative. The Lossless Scaling row always labels the dependency as optional: a detected DLL shows a check and the installed label; an undetected DLL shows an X and the not-installed label. This row is informational and does not gate the editor. Advanced Details keeps the full detection result. These essential labels stay visible when R1 hides optional information, including after reopening the panel.
 
+`useInstallationActions.ts` keeps the Renderer completion notice visible for at least three seconds, then waits for `Content.tsx` to refresh installation status before unlocking actions. The post-installation check replaces the previous update requirement before the notice closes, so a completed update cannot briefly offer the same update again.
+
 `runtimeScalingUtils.ts` selects Live Status's scaling owner using the Renderer’s applied Scaling flag and active spatial work. An internal bridge display-size resize does not turn on Scaling or create a scaling-pending notice. Requested settings remain separate so enabling or disabling Scaling can still report a pending restart without misreporting the running feature.
 
 ## Settings navigation

@@ -21,8 +21,8 @@ const mocks = vi.hoisted(() => ({
   getMakoConfig: vi.fn(),
   getProfileConfig: vi.fn(),
   syncCurrentProfile: vi.fn(),
-  handleInstall: vi.fn(),
-  handleUninstall: vi.fn(),
+  installMako: vi.fn(),
+  uninstallMako: vi.fn(),
 }));
 function pass({ children }: { children: React.ReactNode }) {
   return <div>{children}</div>;
@@ -30,19 +30,33 @@ function pass({ children }: { children: React.ReactNode }) {
 function empty() {
   return null;
 }
+function button({
+  children,
+  onClick,
+  disabled,
+}: React.ButtonHTMLAttributes<HTMLButtonElement>) {
+  return (
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  );
+}
 vi.mock("@decky/ui", () => ({
   Router: mocks.router,
   Navigation: {},
   QuickAccessTab: {},
   PanelSection: pass,
   PanelSectionRow: pass,
-  ButtonItem: pass,
+  ButtonItem: button,
+  DialogButton: button,
   showModal: vi.fn(),
 }));
 vi.mock("../../src/api/makoApi", () => ({
   checkMakoInstalled: mocks.checkMakoInstalled,
   getMakoConfig: mocks.getMakoConfig,
   getProfileConfig: mocks.getProfileConfig,
+  installMako: mocks.installMako,
+  uninstallMako: mocks.uninstallMako,
 }));
 vi.mock("../../src/hooks/useMakoHooks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/hooks/useMakoHooks")>()),
@@ -59,15 +73,6 @@ vi.mock("../../src/hooks/useProfileManagement", () => ({
 vi.mock("../../src/hooks/useModelStatus", () => ({
   useModelStatus: () => ({}),
 }));
-vi.mock("../../src/hooks/useInstallationActions", () => ({
-  useInstallationActions: () => ({
-    isInstalling: false,
-    isUninstalling: false,
-    isInstallCompletionVisible: false,
-    handleInstall: mocks.handleInstall,
-    handleUninstall: mocks.handleUninstall,
-  }),
-}));
 vi.mock("../../src/components/InfoVisibility", () => ({
   InfoVisibility: pass,
 }));
@@ -75,10 +80,6 @@ vi.mock("../../src/components/MakoUi", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/components/MakoUi")>()),
   MakoButtonTheme: empty,
   MakoReleaseIdentity: empty,
-}));
-vi.mock("../../src/components/ContentNotices", () => ({
-  ContentNotices: ({ showWelcome }: { showWelcome: boolean }) =>
-    showWelcome ? <div>Welcome notice</div> : null,
 }));
 vi.mock("../../src/components/ProfileManagement", () => ({
   ProfileManagement: ({
@@ -169,6 +170,9 @@ vi.mock("../../src/components/AdvancedDetailsModal", () => ({
 vi.mock("../../src/components/FlatpaksModal", () => ({ FlatpaksModal: empty }));
 vi.mock("../../src/utils/toastUtils", () => ({
   showErrorToast: vi.fn(),
+  showInstallErrorToast: vi.fn(),
+  showUninstallSuccessToast: vi.fn(),
+  showUninstallErrorToast: vi.fn(),
   ToastMessages: {},
 }));
 vi.mock("../../src/i18n/i18n", () => ({
@@ -236,15 +240,12 @@ beforeEach(() => {
     game_running: true,
     profile_name: "game-123",
   });
-  mocks.handleInstall.mockImplementation(
-    async (setIsInstalled: (value: boolean) => void) => setIsInstalled(true),
-  );
-  mocks.handleUninstall.mockImplementation(
-    async (setIsInstalled: (value: boolean) => void) => setIsInstalled(false),
-  );
+  mocks.installMako.mockResolvedValue({ success: true });
+  mocks.uninstallMako.mockResolvedValue({ success: true });
 });
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -264,7 +265,7 @@ test("a reopened panel starts from the layout it last showed", async () => {
   mocks.checkGate = check.promise;
   mocks.loadGate = load.promise;
   render(<Content />);
-  expect(screen.getByText("Welcome notice")).toBeTruthy();
+  expect(screen.getByText("Hello from the MAKO Team!")).toBeTruthy();
   expect(screen.getByText("Editing game-123")).toBeTruthy();
   expect(screen.getByText("Target 45")).toBeTruthy();
   expect(screen.queryByText("Install Renderer")).toBeNull();
@@ -284,11 +285,11 @@ test("installation actions wait for the real check", async () => {
   mocks.checkGate = check.promise;
   render(<Content />);
   fireEvent.click(screen.getByText("Remove Renderer"));
-  expect(mocks.handleUninstall).not.toHaveBeenCalled();
+  expect(mocks.uninstallMako).not.toHaveBeenCalled();
 
   await act(async () => check.open());
   fireEvent.click(screen.getByText("Remove Renderer"));
-  expect(mocks.handleUninstall).toHaveBeenCalledOnce();
+  expect(mocks.uninstallMako).toHaveBeenCalledOnce();
 });
 
 test("removing the Renderer forgets the panel", async () => {
@@ -305,10 +306,11 @@ test("removing the Renderer forgets the panel", async () => {
   mocks.checkGate = gate().promise;
   render(<Content />);
   expect(screen.getByText("Install Renderer")).toBeTruthy();
-  expect(screen.queryByText("Welcome notice")).toBeNull();
+  expect(screen.queryByText("Hello from the MAKO Team!")).toBeNull();
 });
 
 test("installing forgets the old panel and remembers the new one", async () => {
+  vi.useFakeTimers();
   mocks.installed = false;
   const view = await openSettled();
   mocks.installed = true;
@@ -316,10 +318,58 @@ test("installing forgets the old panel and remembers the new one", async () => {
   await act(async () => {
     fireEvent.click(screen.getByText("Install Renderer"));
   });
-  await act(async () => {});
-  expect(mocks.handleInstall).toHaveBeenCalledOnce();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3000);
+  });
+  expect(mocks.installMako).toHaveBeenCalledOnce();
   expect(panelGeneration()).toBe(before + 2);
   expect(restorePanel("123")?.installation.installedEngineVersion).toBe("4.6");
+  view.unmount();
+});
+
+test("update completion stays visible until the installed Renderer is checked", async () => {
+  vi.useFakeTimers();
+  mocks.checkMakoInstalled.mockResolvedValueOnce({
+    installed: true,
+    engine_update_required: true,
+    installed_engine_version: "4.5",
+    expected_engine_version: "4.6",
+  });
+  const view = await openSettled();
+  const check = gate();
+  mocks.checkGate = check.promise;
+
+  await act(async () => {
+    fireEvent.click(
+      screen.getByRole("button", { name: "Update MAKO Renderer" }),
+    );
+  });
+  expect(
+    screen.getByText("Restarting your device is recommended."),
+  ).toBeTruthy();
+  expect(restorePanel("123")).toBeNull();
+
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(3500);
+  });
+  expect(mocks.checkMakoInstalled).toHaveBeenCalledTimes(2);
+  expect(
+    screen.queryByRole("button", { name: "Update MAKO Renderer" }),
+  ).toBeNull();
+  const completion = screen.getByRole("button", {
+    name: /Installation Complete/,
+  });
+  expect((completion as HTMLButtonElement).disabled).toBe(true);
+  expect(restorePanel("123")).toBeNull();
+
+  await act(async () => check.open());
+  expect(screen.queryByText("Installation Complete")).toBeNull();
+  expect(screen.queryByText("MAKO Renderer update required")).toBeNull();
+  expect(restorePanel("123")?.installation).toEqual({
+    engineUpdateRequired: false,
+    installedEngineVersion: "4.6",
+    expectedEngineVersion: "4.6",
+  });
   view.unmount();
 });
 

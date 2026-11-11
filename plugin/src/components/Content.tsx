@@ -239,17 +239,16 @@ export function Content() {
   const onInstall = async () => {
     if (!installationVerified) return;
     forgetPanel();
-    try {
-      await handleInstall(
-        setIsInstalled,
-        setInstallationStatus,
-        loadEditorConfig,
-        engineUpdateRequired ? "update" : "install",
-      );
-    } finally {
-      forgetPanel();
-    }
-    await checkInstallation();
+    await handleInstall(
+      setIsInstalled,
+      setInstallationStatus,
+      loadEditorConfig,
+      engineUpdateRequired ? "update" : "install",
+      async () => {
+        forgetPanel();
+        await checkInstallation();
+      },
+    );
   };
 
   const onUninstall = async () => {

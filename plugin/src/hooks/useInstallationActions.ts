@@ -19,6 +19,7 @@ export function useInstallationActions() {
     setInstallationStatus: (value: string) => void,
     reloadConfig?: () => Promise<void>,
     operation: "install" | "update" = "install",
+    refreshInstallation?: () => Promise<void>,
   ) => {
     setIsInstalling(true);
     setInstallationStatus(
@@ -46,7 +47,6 @@ export function useInstallationActions() {
           await completionDelay;
         }
 
-        setIsInstallCompletionVisible(false);
         setIsInstalled(true);
       } else {
         setInstallationStatus(
@@ -60,8 +60,14 @@ export function useInstallationActions() {
       );
       showInstallErrorToast(String(error));
     } finally {
-      setIsInstallCompletionVisible(false);
-      setIsInstalling(false);
+      try {
+        // Keep the completion notice and action lock until the old update
+        // requirement has been replaced by the post-installation check.
+        await refreshInstallation?.();
+      } finally {
+        setIsInstallCompletionVisible(false);
+        setIsInstalling(false);
+      }
     }
   };
 
