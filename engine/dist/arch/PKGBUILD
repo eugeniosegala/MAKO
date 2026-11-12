@@ -11,7 +11,7 @@
 # and sha256sums still match the release pinned in plugin/package.json.
 
 pkgname=mako-renderer-bin
-pkgver=4.6.0
+pkgver=5.0.0
 pkgrel=1
 pkgdesc="Frame generation and spatial scaling Vulkan layers for Linux games"
 arch=('x86_64')
@@ -72,7 +72,7 @@ provides=("mako-renderer=${pkgver}")
 conflicts=('mako-renderer')
 
 source=("MAKO-Renderer-v${pkgver}-linux.tar.xz::https://github.com/eugeniosegala/MAKO/releases/download/render-v${pkgver}/MAKO-Renderer-v${pkgver}-linux.tar.xz")
-sha256sums=('66224414e2d94f7cb019226735b3b6d26b9be7103c5334250522f7260213be56')
+sha256sums=('c59eda9681aab614474fc74a99194fe6445190fcea500eed89367e09b299fb9f')
 noextract=("MAKO-Renderer-v${pkgver}-linux.tar.xz")
 
 _mako_install_payload_file() {
