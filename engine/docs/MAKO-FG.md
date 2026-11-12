@@ -30,16 +30,26 @@ Compatible direct-image packages pool motion input and reconstruct the generated
 
 **MAKO FG Mode** sits under the model picker in MAKO Decky and the Qt app and sets how often MAKO FG solves motion for the selected profile. It applies live.
 
-| Mode | Motion solved | Use |
-| --- | --- | --- |
-| **Quality** | Every real-frame pair | A game that shows artifacts in the other modes |
-| **Balanced** (default) | One pair in two | Most games |
-| **Performance** | One pair in three | A game short of GPU time, or a low-power device |
-| **Extra Performance** | One pair in four | The most GPU time, with the most risk of artifacts |
+| Mode | Motion solved | Between solved pairs | Use |
+| --- | --- | --- | --- |
+| **Quality** | Every real-frame pair | — | A game that shows artifacts in the other modes |
+| **Balanced** (default) | One pair in two | Corrected | Most games |
+| **Performance** | One pair in three | Corrected | A game short of GPU time, or a low-power device |
+| **Extra Performance** | One pair in four | Moved forward while frames arrive evenly, corrected otherwise | The most GPU time, with the most risk of artifacts |
 
-Between solved pairs, MAKO FG moves the last motion field forward along its own motion, keeps the last static-overlay map and skips endpoint analysis. Each generated frame is still reconstructed from the two real frames. The longer motion is reused, the more a fast change of direction can show. A sparse frame comparison on every pair makes the next pair solve after a scene cut. From 4x, where the thin-structure layer runs, every pair solves.
+Between solved pairs, MAKO FG moves the last motion field forward along its own motion and keeps the last static-overlay map. A corrected pair then analyses its new real frame and refines that motion with the finest level of MAKO FG's motion search; a moved pair uses it as it is and skips that analysis. Each generated frame is still reconstructed from the two real frames. A sparse frame comparison on every pair makes the next pair solve after a scene cut. From 4x, where the thin-structure layer runs, every pair solves.
 
-Reused motion is right only while real frames arrive evenly, because a game moves its content by the time between frames. The Renderer therefore passes each real frame's interval since the previous one it gave MAKO FG, measured on the same cadence clock Adaptive uses (`mako_fg_protocol.hpp`, host protocol 3). MAKO FG reuses motion only while that interval and the three before it are even, the longest at most 1.1 times the shortest. Otherwise the pair solves as in Quality. A game held at a steady rate by Steady Base Cap, a manual cap or its own limiter keeps the full saving. An uncapped game at an uneven rate solves more pairs and keeps less of it, rather than showing judder, uneven speed and doubled edges in fast camera motion. A hitch or a change of rate makes the next four pairs solve. This needs a `mako-fg-host` that speaks protocol 3; packaging rejects an older one.
+Moved motion is right only while real frames arrive evenly and the camera keeps its speed and direction, because a game moves its content by its velocity times the time between frames. An uneven rate makes it fall short or overshoot, which fast camera motion shows as judder, uneven speed and doubled edges. Correction reads the frames, so it follows an uneven rate and gradual changes of speed or direction as closely as a solved pair, but it costs about 60% of one where moving costs about a quarter. A camera that reverses at full speed within one frame moves further than the correction reaches; in every mode but Quality that frame is wrong unless it falls on a solved pair.
+
+To choose, the Renderer passes each real frame's interval since the previous one it gave MAKO FG, measured on the same cadence clock Adaptive uses (`mako_fg_protocol.hpp`, host protocol 3). MAKO FG treats the last four intervals as even when the longest is at most 1.1 times the shortest and uneven up to 1.5 times; an even cadence corrects in one search pass and an uneven one in two. Beyond 1.5 times, as after a hitch, the next four pairs solve. This needs a `mako-fg-host` that speaks protocol 3; packaging rejects an older one.
+
+On MAKO FG's 1280×720 camera-pan sequences on a Navi 33 GPU at 2×, these modes save this much GPU time per real-frame pair against Quality (MAKO FG `docs/NATIVE.md` records the measurements):
+
+| Mode                  | Even frame rate | Uneven frame rate |
+| --------------------- | --------------- | ----------------- |
+| **Balanced**          | about 15–20%    | about 15%         |
+| **Performance**       | about 25%       | about 15–20%      |
+| **Extra Performance** | about 50%       | about 20–25%      |
 
 A game capped at its frame rate gains spare GPU time from a higher mode, not more frames, so start at Balanced and move up only if the game cannot hold its rate. Ultra Performance uses at least Performance and a 60% Flow Scale.
 

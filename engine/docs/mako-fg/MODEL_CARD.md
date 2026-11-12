@@ -1,8 +1,8 @@
 <p align="center"><img src="mako-fg-banner.webp" width="100%" alt="MAKO FG: video frame interpolation model" /></p>
 
-# MAKO FG V1.23
+# MAKO FG V1.24
 
-**Model card · Version V1.23 (1.23) · Released 2026-11-12**
+**Model card · Version V1.24 (1.24) · Released 2026-11-12**
 
 **Free, non-commercial research release.** Part of the training data is licensed for research and education or non-commercial use only: X4K1000FPS (X-TRAIN, reviewed subset). This model is released free of charge by a non-commercial research project and may not be used commercially.
 
@@ -76,11 +76,11 @@ context.setMotionPeriod(2);
 | MAKO FG Mode | Standalone call | Motion estimation at 2x and 3x |
 | --- | --- | --- |
 | Quality | `context.setMotionPeriod(1)` | Every real-frame pair |
-| Balanced (MAKO default) | `context.setMotionPeriod(2)` | One pair in two |
-| Performance | `context.setMotionPeriod(3)` | One pair in three |
-| Extra Performance | `context.setMotionPeriod(4)` | One pair in four |
+| Balanced (MAKO default) | `context.setMotionPeriod(2)` | One pair in two; the other corrected |
+| Performance | `context.setMotionPeriod(3)` | One pair in three; the others corrected |
+| Extra Performance | `context.setMotionPeriod(4)` | One pair in four; the others moved forward while frames arrive evenly and corrected otherwise |
 
-The standalone runtime defaults to `1` (Quality) when this method is not called. You can change the period between completed batches without recreating the context. Between solves, the runtime moves the previous motion field forward along itself and keeps the last HUD map; each output is still reconstructed from the current two real frames. Longer periods save GPU time and can add artifacts when motion changes quickly. Moved motion is right only while real frames arrive evenly, so with intervals a pair reuses it only when its interval and the three before it are within 1.1 times of each other; an interval of 0 keeps reuse as if frames were evenly spaced, which judders in fast motion at an uneven frame rate. A scene cut forces the next pair to solve, and batches with three or more generated frames (4x and above) always solve for the thin-object stage. The constructor's `flow_scale` independently controls motion-analysis resolution.
+The standalone runtime defaults to `1` (Quality) when this method is not called. You can change the period between completed batches without recreating the context. Between solves, the runtime moves the previous motion field forward along itself and keeps the last HUD map; each output is still reconstructed from the current two real frames. A corrected pair also analyses its new frame and refines the moved motion with the model's finest motion search, which costs about 60% of a fully estimated pair and matches it at an uneven frame rate and when motion speeds up, slows down or turns gradually. A moved pair costs about a quarter of one, and is right only while frames arrive evenly and motion keeps its speed and direction. Pass each real frame's interval to `schedule(times, interval)`: the runtime moves motion only when that interval and the three before it are within 1.1 times of each other, corrects up to 1.5 times, and fully estimates the pair after a larger change such as a hitch. An interval of 0 is treated as evenly spaced. No mode except Quality follows a reversal of fast motion within a single frame unless it falls on a fully estimated pair. A scene cut forces the next pair to solve, and batches with three or more generated frames (4x and above) always solve for the thin-object stage. The constructor's `flow_scale` independently controls motion-analysis resolution.
 
 `external.hpp` documents the full contract. Use outside MAKO must follow the licence below, including its non-commercial condition and attribution.
 
@@ -143,8 +143,8 @@ Benchmarks were recorded on one Steam Machine-class GPU (AMD RADV NAVI33, Mesa 2
 | Complete GPU time per real-frame pair | 1920x1080, 2x | Median | 0.95 ms | V1.15; full Flow Scale |
 | Complete GPU time per real-frame pair | 2560x1440, 2x | Median | 1.60 ms | V1.15; full Flow Scale; 1.35 ms at Flow Scale 0.8 |
 | Complete GPU time per real-frame pair | 2560x1440, 4x | Median | 3.13 ms | V1.15; full Flow Scale |
-| Complete GPU time per real-frame pair | 2560x1440, 2x, Balanced, Flow Scale 0.8 | Recorded GPU span | 1.02 ms | V1.16; motion solved on one pair in two; one RADV NAVI33 GPU. The same study recorded 1.34 ms with motion solved on every pair |
-| Complete GPU time per real-frame pair | 2560x1440, 3x, Balanced, Flow Scale 0.8 | Recorded GPU span | 1.60 ms | V1.16; motion solved on one pair in two; includes both generated frames. The same study recorded 1.92 ms with motion solved on every pair |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Balanced, Flow Scale 0.8 | Recorded GPU span | 1.02 ms | V1.16; motion solved on one pair in two and moved forward, without correction, on the other; one RADV NAVI33 GPU. The same study recorded 1.34 ms with motion solved on every pair. From V1.24 Balanced corrects the other pair, which costs more |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Balanced, Flow Scale 0.8 | Recorded GPU span | 1.60 ms | V1.16; motion solved on one pair in two and moved forward, without correction, on the other; includes both generated frames. The same study recorded 1.92 ms with motion solved on every pair. From V1.24 Balanced corrects the other pair, which costs more |
 | CPU time to prepare and submit a real-frame pair | 1280x800, 2x | Median | 0.05 ms | V1.18; on the game's presentation thread, through the separate MAKO FG program |
 | GPU output versus independent reference implementation | Six test cases, full and half precision | Maximum / mean absolute error | 8.5e-2 / 2.6e-4 | RGB in [0, 1]. One pixel of one small random-texture case differs by 0.085, where a frame-edge decision flips on rounding; every other pixel is within 4e-4. Along 10 consecutive real 2560x1440 staircase frames, each carrying its own motion from pair to pair, GPU and reference frames score within 0.07 dB |
 
@@ -181,7 +181,7 @@ MAKO FG learned from X4K1000FPS, the 4K, 1000 FPS video dataset created by Hyeon
 
 ## Release notes
 
-Balanced, Performance and Extra Performance no longer judder, change speed or double edges in fast camera motion when a game's frame rate is uneven: MAKO FG reuses motion only while real frames arrive evenly, and solves every pair otherwise. The model is unchanged from V1.22.
+Balanced and Performance now correct the motion they carry between fully estimated frames, so uneven frame rates and camera turns or speed changes look like Quality while keeping much of the GPU saving; Extra Performance corrects it whenever the frame rate is uneven. The model is unchanged from V1.23.
 
 ## Files and integrity
 
