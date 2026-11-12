@@ -39,6 +39,8 @@ Compatible direct-image packages pool motion input and reconstruct the generated
 
 Between solved pairs, MAKO FG moves the last motion field forward along its own motion, keeps the last static-overlay map and skips endpoint analysis. Each generated frame is still reconstructed from the two real frames. The longer motion is reused, the more a fast change of direction can show. A sparse frame comparison on every pair makes the next pair solve after a scene cut. From 4x, where the thin-structure layer runs, every pair solves.
 
+Reused motion is right only while real frames arrive evenly, because a game moves its content by the time between frames. The Renderer therefore passes each real frame's interval since the previous one it gave MAKO FG, measured on the same cadence clock Adaptive uses (`mako_fg_protocol.hpp`, host protocol 3). MAKO FG reuses motion only while that interval and the three before it are even, the longest at most 1.1 times the shortest. Otherwise the pair solves as in Quality. A game held at a steady rate by Steady Base Cap, a manual cap or its own limiter keeps the full saving. An uncapped game at an uneven rate solves more pairs and keeps less of it, rather than showing judder, uneven speed and doubled edges in fast camera motion. A hitch or a change of rate makes the next four pairs solve. This needs a `mako-fg-host` that speaks protocol 3; packaging rejects an older one.
+
 A game capped at its frame rate gains spare GPU time from a higher mode, not more frames, so start at Balanced and move up only if the game cannot hold its rate. Ultra Performance uses at least Performance and a 60% Flow Scale.
 
 ## Record test frames

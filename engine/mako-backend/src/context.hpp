@@ -1,14 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 #pragma once
 #include "mako-backend/mako.hpp"
+#include <chrono>
 namespace mako::backend {
 // Internal runtime boundary; the public handle remains opaque.
 class ContextImpl {
 public:
     virtual ~ContextImpl() = default;
     virtual void scheduleFrames() = 0;
-    virtual void scheduleFrames(std::span<const float>) = 0;
-    virtual void scheduleFrameHistory() = 0;
+    // The interval is the time between the batch's two real frames, zero when unknown (Instance::scheduleFrames).
+    virtual void scheduleFrames(std::span<const float>, std::chrono::nanoseconds realFrameInterval) = 0;
+    virtual void scheduleFrameHistory(std::chrono::nanoseconds realFrameInterval) = 0;
     virtual bool waitForIdle(uint64_t) const = 0;
     virtual void enableFrameProfiling() = 0;
     virtual FrameProfile readFrameProfile() const = 0;

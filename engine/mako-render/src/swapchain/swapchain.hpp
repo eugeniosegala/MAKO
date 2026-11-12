@@ -358,6 +358,21 @@ namespace mako::layer {
             size_t realFrameIndex{0};
             size_t backendFrameIndex{0};
             bool renderFenceInFlight{false};
+            // The cadence time of the last real frame the backend accepted.
+            // MAKO FG reuses motion only while the intervals between these
+            // stay even; a new context starts without one.
+            std::optional<std::chrono::steady_clock::time_point>
+                backendSourceCadence;
+
+            [[nodiscard]] std::chrono::nanoseconds backendSourceInterval(
+                    const std::chrono::steady_clock::time_point cadence) const {
+                if (!this->backendSourceCadence ||
+                        cadence <= *this->backendSourceCadence)
+                    return {};
+                return std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    cadence - *this->backendSourceCadence
+                );
+            }
         };
 
         struct RecoveryState {

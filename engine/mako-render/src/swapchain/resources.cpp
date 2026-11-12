@@ -261,6 +261,7 @@ void Swapchain::commitFrameGenerationResources(
 
     this->frameState.backendTimelineIndex = 1;
     this->frameState.backendFrameIndex = 0;
+    this->frameState.backendSourceCadence.reset();
     this->frameState.renderFenceInFlight = false;
     this->recoveryState.backendPending = false;
     this->recoveryState.generatedImageAdmission.reset();

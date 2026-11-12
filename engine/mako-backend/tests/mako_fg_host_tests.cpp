@@ -45,14 +45,20 @@ void useContext() {
     assert(host.supportsPackedHdr10());
     auto context=openContext(host);
     const std::array<float,2> two{0.25F,0.5F};const std::array<float,3> three{0.25F,0.5F,0.75F};
-    context->scheduleFrames(two);context->scheduleFrameHistory();context->scheduleFrames();
+    context->scheduleFrames(two,{});context->scheduleFrameHistory({});context->scheduleFrames();
     assert(context->waitForIdle(0));
     context->enableFrameProfiling();
     const auto profile=context->readFrameProfile();
     assert(profile.gpuSpanUs==125&&profile.gpuGeneratedUs.size()==2&&profile.gpuGeneratedUs[1]==7);
     // A failure the host reports is an ordinary error, and the context stays usable.
-    assert(failure([&]{context->scheduleFrames(three);})=="fake schedule failure");
-    context->scheduleFrames(two);
+    assert(failure([&]{context->scheduleFrames(three,{});})=="fake schedule failure");
+    context->scheduleFrames(two,{});
+    // Every batch, history-only included, carries the time between its two real frames in seconds. The fake refuses
+    // any nonzero interval with the value it received, so the last call proves a negative interval travels as unknown.
+    const std::array<float,1> one{0.5F};
+    assert(failure([&]{context->scheduleFrames(one,std::chrono::milliseconds(25));})=="fake interval 0.025 count 1");
+    assert(failure([&]{context->scheduleFrameHistory(std::chrono::microseconds(22222));})=="fake interval 0.022222 count 0");
+    context->scheduleFrames(two,-std::chrono::milliseconds(5));
 }
 void lostHost() {
     setenv("FAKE_HOST_MODE","crash",1);
@@ -61,8 +67,8 @@ void lostHost() {
     const std::array<float,3> three{0.25F,0.5F,0.75F};const std::array<float,1> one{0.5F};
     // The game keeps running: every later call fails at once, and closing the context does not hang.
     const auto start=std::chrono::steady_clock::now();
-    assert(failure([&]{context->scheduleFrames(three);})=="MAKO FG host stopped responding");
-    assert(failure([&]{context->scheduleFrames(one);})=="MAKO FG host stopped responding");
+    assert(failure([&]{context->scheduleFrames(three,{});})=="MAKO FG host stopped responding");
+    assert(failure([&]{context->scheduleFrames(one,{});})=="MAKO FG host stopped responding");
     // A lost host has no work left: gates that wait for idle continue, and nothing fails again.
     assert(context->lost()&&context->waitForIdle(0));
     // A replacement serves new contexts, a second report of the same loss starts nothing,
@@ -72,8 +78,8 @@ void lostHost() {
         assert(host.restart(*context));
         assert(host.restart(*context));
         auto replacement=openContext(host);
-        replacement->scheduleFrames(two);
-        assert(failure([&]{replacement->scheduleFrames(three);})=="MAKO FG host stopped responding");
+        replacement->scheduleFrames(two,{});
+        assert(failure([&]{replacement->scheduleFrames(three,{});})=="MAKO FG host stopped responding");
         context=std::move(replacement);
     }
     assert(!host.restart(*context));
@@ -87,17 +93,17 @@ void outageRecovery() {
     const std::array<float,3> three{0.25F,0.5F,0.75F};
     const std::array<float,2> two{0.25F,0.5F};
     auto first=openContext(host);
-    assert(failure([&]{first->scheduleFrames(three);})=="MAKO FG host stopped responding");
+    assert(failure([&]{first->scheduleFrames(three,{});})=="MAKO FG host stopped responding");
     const auto settled=std::chrono::steady_clock::now();
     while(std::chrono::steady_clock::now()-settled<std::chrono::milliseconds(50))std::this_thread::sleep_for(std::chrono::milliseconds(5));
     auto duringOutage=openContext(host);
-    duringOutage->scheduleFrames(two);
-    assert(failure([&]{duringOutage->scheduleFrames(three);})=="MAKO FG host stopped responding");
+    duringOutage->scheduleFrames(two,{});
+    assert(failure([&]{duringOutage->scheduleFrames(three,{});})=="MAKO FG host stopped responding");
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     // The first context is two programs old, and the program it would find is gone too.
     assert(host.restart(*first));
     auto replacement=openContext(host);
-    replacement->scheduleFrames(two);
+    replacement->scheduleFrames(two,{});
 }
 // Selecting HDR10's transport can be the first request a new swapchain sends to a program that has gone.
 void hdrDuringOutage() {
@@ -105,11 +111,11 @@ void hdrDuringOutage() {
     MakoFG host(picker,"/unused",false);
     const std::array<float,3> three{0.25F,0.5F,0.75F};
     auto context=openContext(host);
-    assert(failure([&]{context->scheduleFrames(three);})=="MAKO FG host stopped responding");
+    assert(failure([&]{context->scheduleFrames(three,{});})=="MAKO FG host stopped responding");
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     assert(host.supportsPackedHdr10());
     auto replacement=openContext(host);
-    replacement->scheduleFrames(std::array<float,2>{0.25F,0.5F});
+    replacement->scheduleFrames(std::array<float,2>{0.25F,0.5F},{});
 }
 // The program is 64-bit for every game, so a 32-bit game can reach it from another driver build.
 void driverIdentity() {

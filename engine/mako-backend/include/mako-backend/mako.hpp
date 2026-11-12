@@ -4,6 +4,7 @@
 
 #include "mako-backend/device_identity.hpp"
 
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -204,9 +205,13 @@ namespace mako::backend {
         ///
         /// @param context Context to use.
         /// @param timestamps Normalized positions between the previous and current real frame.
+        /// @param realFrameInterval Time between those two real frames, zero when unknown.
+        ///        MAKO FG reuses motion (MAKO FG Mode) only while these intervals stay even;
+        ///        zero keeps reuse as though real frames were evenly spaced. LSFG ignores it.
         /// @throws backend::error on failure
         ///
-        void scheduleFrames(Context& context, std::span<const float> timestamps);
+        void scheduleFrames(Context& context, std::span<const float> timestamps,
+            std::chrono::nanoseconds realFrameInterval = {});
 
         ///
         /// Update temporal model history without generating output frames.
@@ -217,8 +222,10 @@ namespace mako::backend {
         /// expensive per-output generation passes are skipped.
         ///
         /// @param context Context to advance.
+        /// @param realFrameInterval Time since the previous real frame, as for scheduleFrames.
         ///
-        void scheduleFrameHistory(Context& context);
+        void scheduleFrameHistory(Context& context,
+            std::chrono::nanoseconds realFrameInterval = {});
 
         /// Check whether the context's previously submitted work has completed
         /// without blocking.

@@ -145,10 +145,17 @@ namespace mako::backend {
 
         /// schedule a variable number of frames at explicit timestamps
         void scheduleFrames(std::span<const float> timestamps);
+        /// LSFG takes no real-frame interval.
+        void scheduleFrames(std::span<const float> timestamps, std::chrono::nanoseconds) override {
+            this->scheduleFrames(timestamps);
+        }
 
         /// update temporal history without generating output frames
         /// (see mako documentation)
         void scheduleFrameHistory();
+        void scheduleFrameHistory(std::chrono::nanoseconds) override {
+            this->scheduleFrameHistory();
+        }
 
         /// wait for this context's most recently submitted work only
         [[nodiscard]] bool waitForIdle(uint64_t timeoutNs) const;
@@ -945,7 +952,8 @@ FrameProfile LSFGContext::readFrameProfile() const {
     return result;
 }
 
-void Instance::scheduleFrames(Context& context, std::span<const float> timestamps) { // NOLINT (static)
+void Instance::scheduleFrames(Context& context, std::span<const float> timestamps, // NOLINT (static)
+        const std::chrono::nanoseconds realFrameInterval) {
     if (timestamps.empty())
         throw backend::error("At least one interpolation timestamp is required");
 #ifdef MAKO_TESTING_RENDERDOC
@@ -957,7 +965,7 @@ void Instance::scheduleFrames(Context& context, std::span<const float> timestamp
     }
 #endif
     try {
-        context.scheduleFrames(timestamps);
+        context.scheduleFrames(timestamps, realFrameInterval);
     } catch (const std::exception& e) {
         throw backend::error("Unable to schedule frames", e);
     }
@@ -971,8 +979,9 @@ void Instance::scheduleFrames(Context& context, std::span<const float> timestamp
 #endif
 }
 
-void Instance::scheduleFrameHistory(Context& context) { // NOLINT (static)
-    context.scheduleFrameHistory();
+void Instance::scheduleFrameHistory(Context& context, // NOLINT (static)
+        const std::chrono::nanoseconds realFrameInterval) {
+    context.scheduleFrameHistory(realFrameInterval);
 }
 
 bool Instance::contextReady(const Context& context) const {

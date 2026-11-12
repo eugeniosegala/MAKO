@@ -33,7 +33,11 @@ void serve(int socket,bool crash) {
             case Schedule:
                 if(request.count==3&&crash)_exit(9);
                 if(request.count==3)refuse(socket,"fake schedule failure");
-                else reply(socket);
+                else if(request.interval!=0) {
+                    // Reports the real-frame interval it received, so the test can check it arrives.
+                    char text[64];std::snprintf(text,sizeof text,"fake interval %g count %u",double(request.interval),request.count);
+                    refuse(socket,text);
+                } else reply(socket);
                 break;
             case Ready:reply(socket,1);break;
             case ReadProfile: {

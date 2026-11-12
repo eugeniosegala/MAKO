@@ -13,6 +13,7 @@
 #include <array>
 #include <atomic>
 #include <cerrno>
+#include <chrono>
 #include <cmath>
 #include <csignal>
 #include <cstddef>
@@ -48,6 +49,10 @@ constexpr ssize_t replyHeader=offsetof(Reply,text);
 void limitReplies(int socket,int seconds) {
     const timeval limit{seconds,0};
     if(setsockopt(socket,SOL_SOCKET,SO_RCVTIMEO,&limit,sizeof limit)!=0)throw error("Unable to bound MAKO FG host replies");
+}
+// The protocol carries an interval in seconds; zero or less is unknown.
+float seconds(std::chrono::nanoseconds interval) {
+    return interval.count()>0?std::chrono::duration<float>(interval).count():0.0F;
 }
 bool receive(int socket,Reply& reply) {
     ssize_t received;
@@ -182,12 +187,14 @@ public:
         for(size_t i=0;i<capacity;i++)request.times[i]=float(i+1)/float(capacity+1);
         call(request);
     }
-    void scheduleFrames(std::span<const float> times) override {
+    void scheduleFrames(std::span<const float> times,std::chrono::nanoseconds interval) override {
         if(times.size()>maxOutputs)throw error("Too many MAKO FG output timestamps");
-        Request request{};request.op=Schedule;request.count=uint32_t(times.size());
+        Request request{};request.op=Schedule;request.count=uint32_t(times.size());request.interval=seconds(interval);
         std::copy(times.begin(),times.end(),request.times);call(request);
     }
-    void scheduleFrameHistory() override {Request request{};request.op=Schedule;call(request);}
+    void scheduleFrameHistory(std::chrono::nanoseconds interval) override {
+        Request request{};request.op=Schedule;request.interval=seconds(interval);call(request);
+    }
     bool waitForIdle(uint64_t ns) const override {
         // A lost host has no work left, and every gate that waits for idle must be able to continue.
         if(lost())return true;

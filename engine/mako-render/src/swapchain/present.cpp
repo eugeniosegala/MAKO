@@ -838,7 +838,10 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
         const auto scheduleStarted = startPresentDiagnostic();
         try {
             this->instance->scheduleFrames(
-                this->ctx.get(), plan.scheduledGeneratedFrames.timestamps()
+                this->ctx.get(), plan.scheduledGeneratedFrames.timestamps(),
+                this->frameState.backendSourceInterval(
+                    invocation.cadenceStarted
+                )
             );
         } catch (const std::exception& error) {
             std::cerr << "MAKO Renderer: temporarily bypassing frame generation after "
@@ -871,6 +874,7 @@ VkResult Swapchain::presentFrame(const vk::Vulkan& vk,
             );
         }
         this->frameState.backendFrameIndex++;
+        this->frameState.backendSourceCadence = invocation.cadenceStarted;
         plan.scheduleFramesDuration = finishPresentDiagnostic(
             scheduleStarted
         );

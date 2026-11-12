@@ -6,13 +6,14 @@
 #include <cstddef>
 #include <cstdint>
 namespace mako::backend::fg_host {
-constexpr uint32_t hostProtocol=2;
+constexpr uint32_t hostProtocol=3;
 constexpr size_t maxOutputs=32;
 constexpr int hostDescriptor=3;
 enum Op:uint32_t {Hello=1,Devices,Supports,Open,Schedule,Ready,EnableProfiling,ReadProfile};
+// Schedule's `interval` is the time in seconds between the batch's two real frames, 0 when unknown.
 struct alignas(8) Request {
     uint32_t op,count;uint64_t timeout;int32_t device,encoding,period;uint32_t half,width,height;
-    float flow,times[maxOutputs];
+    float flow,times[maxOutputs],interval;
 };
 struct Reply {int32_t failed;uint32_t first,second;char text[4084];};
 struct GpuInfo {int32_t index;uint32_t vendor,id;char pci[32],name[256];uint8_t driverUuid[16],deviceUuid[16];};
