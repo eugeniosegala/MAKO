@@ -10,6 +10,7 @@ import {
   renameProfile,
 } from "../api/makoApi";
 import { DEFAULT_PROFILE_NAME } from "../config/configSchema";
+import type { ProfilesSnapshot } from "./panelSnapshot";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
 import t from "../i18n/i18n";
 
@@ -19,6 +20,10 @@ interface ProfileEditorModelOptions {
   onProfileChange?: (profileName: string) => void | Promise<void>;
   mainRunningApp?: AppOverview;
   profileRevision?: number;
+  // The list the panel last showed, until the first load replaces it.
+  restoredProfiles?: ProfilesSnapshot | null;
+  // null drops a restored list whose first live read failed.
+  onProfilesLoaded?: (profiles: ProfilesSnapshot | null) => void;
 }
 
 /**
@@ -35,14 +40,21 @@ export function useProfileEditorModel({
   onProfileChange,
   mainRunningApp,
   profileRevision,
+  restoredProfiles,
+  onProfilesLoaded,
 }: ProfileEditorModelOptions) {
-  const [profiles, setProfiles] = useState<string[]>([]);
-  const [profileDetails, setProfileDetails] = useState<ProfileDetails[]>([]);
+  const [profiles, setProfiles] = useState<string[]>(
+    restoredProfiles?.profiles ?? [],
+  );
+  const [profileDetails, setProfileDetails] = useState<ProfileDetails[]>(
+    restoredProfiles?.details ?? [],
+  );
   const [selectedProfile, setSelectedProfile] = useState(
     editingProfile || DEFAULT_PROFILE_NAME,
   );
   const editingProfileRef = useRef(editingProfile || DEFAULT_PROFILE_NAME);
   const [isLoading, setIsLoading] = useState(false);
+  const profilesVerifiedRef = useRef(false);
 
   const loadProfiles = async (preferredProfile?: string): Promise<string> => {
     try {
@@ -52,8 +64,13 @@ export function useProfileEditorModel({
           result.error || t("PROFILE_UNKNOWN_ERROR", "Unknown error"),
         );
       }
+      profilesVerifiedRef.current = true;
       setProfiles(result.profiles);
       setProfileDetails(result.profile_details || []);
+      onProfilesLoaded?.({
+        profiles: result.profiles,
+        details: result.profile_details || [],
+      });
       const resolvedProfile = result.profiles.includes(
         editingProfileRef.current,
       )
@@ -70,6 +87,13 @@ export function useProfileEditorModel({
       return resolvedProfile || DEFAULT_PROFILE_NAME;
     } catch (error) {
       console.error("Error loading profiles:", error);
+      // A restored list is not evidence: without a live one the panel shows
+      // what it shows without a snapshot.
+      if (!profilesVerifiedRef.current && restoredProfiles) {
+        setProfiles([]);
+        setProfileDetails([]);
+        onProfilesLoaded?.(null);
+      }
       showErrorToast(
         t("PROFILE_LOAD_FAILED", "Failed to load profiles"),
         String(error),

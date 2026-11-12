@@ -80,6 +80,7 @@ const baseProps = {
   isInstalling: false,
   isInstallCompletionVisible: false,
   isUninstalling: false,
+  installationVerified: true,
   onInstall: vi.fn(async () => undefined),
 };
 
@@ -131,9 +132,19 @@ describe("content status notices", () => {
       />,
     );
     expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("status").textContent).toContain(
+      "Unverified selections are unchanged.",
+    );
+    expect(
+      screen.queryByRole("button", { name: "Check for MAKO Decky updates" }),
+    ).toBeNull();
+    rerender(
+      <ContentNotices {...baseProps} modelStatus={{ ls1: null, lsfg: null }} />,
+    );
+    expect(screen.queryByRole("status")).toBeNull();
   });
 
-  test("a missing DLL explains both unavailable and independent features", () => {
+  test("a missing DLL explains automatic MAKO use without a manual model action", () => {
     const { rerender } = render(
       <ContentNotices
         {...baseProps}
@@ -142,26 +153,19 @@ describe("content status notices", () => {
         }}
       />,
     );
-    expect(screen.getByRole("alert").textContent).toContain("Not found:");
     expect(screen.getByRole("alert").textContent).toContain(
-      "Frame Generation and LS1 unavailable",
+      "Lossless Scaling unavailable.",
     );
     expect(screen.getByRole("alert").textContent).toContain(
-      "MAKO Scaler and Shaders available",
+      "Unavailable models switch to MAKO automatically.",
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Shaders remain available.",
     );
     expect(screen.queryByText("Check for MAKO Decky updates")).toBeNull();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Open Lossless Scaling in Steam" }),
-    );
-    expect(Navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
-      "https://store.steampowered.com/app/993090/Lossless_Scaling/",
-    );
-    rerender(
-      <ContentNotices {...baseProps} modelStatus={{ dllMissing: true }} />,
-    );
-    expect(screen.getByRole("alert").textContent).toContain(
-      "MAKO Scaler and Shaders available",
-    );
+    expect(screen.getByRole("alert").querySelector("button")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use MAKO FG" })).toBeNull();
+    expect(Navigation.NavigateToExternalWeb).not.toHaveBeenCalled();
     rerender(
       <ContentNotices
         {...baseProps}
@@ -209,7 +213,9 @@ describe("content status notices", () => {
     expect(screen.getByText("MAKO Renderer")).toBeTruthy();
     expect(screen.getByText(/^64-bit layer:/)).toBeTruthy();
     expect(screen.getByText(/^32-bit layer:/)).toBeTruthy();
-    expect(screen.getByText(/23\.08, 24\.08, 25\.08, 26\.08 deployed/)).toBeTruthy();
+    expect(
+      screen.getByText(/23\.08, 24\.08, 25\.08, 26\.08 deployed/),
+    ).toBeTruthy();
   });
 
   test("renders running and update notices with the existing install action", () => {
@@ -227,8 +233,26 @@ describe("content status notices", () => {
 
     expect(screen.getByText("Test Game")).toBeTruthy();
     expect(screen.getByText("MAKO Renderer update required")).toBeTruthy();
+    expect(screen.getByText(/This plugin expects:\s*2\.1\.0/)).toBeTruthy();
+    expect(screen.queryByText(/differ from this plugin's copies/)).toBeNull();
     fireEvent.click(screen.getByText("Update MAKO Renderer"));
     expect(onInstall).toHaveBeenCalledOnce();
+
+    rerender(
+      <ContentNotices
+        {...baseProps}
+        engineUpdateRequired={true}
+        installationVerified={false}
+        onInstall={onInstall}
+      />,
+    );
+    expect(
+      (
+        screen
+          .getByText("Update MAKO Renderer")
+          .closest("button") as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
 
     rerender(
       <ContentNotices
@@ -245,6 +269,22 @@ describe("content status notices", () => {
           .closest("button") as HTMLButtonElement
       ).disabled,
     ).toBe(true);
+  });
+
+  test("explains differing installed files when both versions match", () => {
+    render(
+      <ContentNotices
+        {...baseProps}
+        engineUpdateRequired={true}
+        installedEngineVersion="2.1.0"
+        expectedEngineVersion="2.1.0"
+      />,
+    );
+
+    expect(screen.getByText(/differ from this plugin's copies/)).toBeTruthy();
+    expect(screen.queryByText(/This plugin expects:/)).toBeNull();
+    expect(screen.queryByText(/then update runtime extensions/)).toBeNull();
+    expect(screen.getByText("Update MAKO Renderer")).toBeTruthy();
   });
 
   test("shows concise restart guidance and remembers when tips are collapsed", () => {

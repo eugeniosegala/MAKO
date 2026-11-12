@@ -5,6 +5,8 @@ import type {
   RuntimeScalingPipeline,
   RuntimeStatusResult,
 } from "../api/makoApi";
+import type { FrameGenerationModelChoice } from "../config/frameGenerationModelChoice";
+import t from "../i18n/i18n";
 
 export function scalingInactiveReason(
   status: RuntimeStatusResult,
@@ -31,11 +33,13 @@ export interface RuntimeScalingUiState {
   phase: RuntimeApplicationPhase;
   frameGenerationActive: boolean;
   frameGenerationEnabled: boolean;
+  frameGenerationModel: FrameGenerationModelChoice | null;
   frameGenerationMode: "off" | "fixed" | "adaptive";
   frameGenerationAdaptiveStyle: "fractional" | "steady" | null;
   frameGenerationTargetFps: number | null;
   frameGenerationMultiplier: number | null;
   frameGenerationPending: boolean;
+  frameGenerationUnavailableReason: string | null;
   gpuHeadroomState: string;
   gpuHeadroomPercent: number;
   scalingActive: boolean;
@@ -65,6 +69,8 @@ export const EMPTY_RUNTIME_SCALING_UI_STATE: RuntimeScalingUiState = {
   phase: "inactive",
   frameGenerationActive: false,
   frameGenerationEnabled: false,
+  frameGenerationUnavailableReason: null,
+  frameGenerationModel: null,
   frameGenerationMode: "off",
   frameGenerationAdaptiveStyle: null,
   frameGenerationTargetFps: null,
@@ -128,7 +134,7 @@ export function runtimeScalingUiState(
     (candidate) => candidate.requested.scaling_enabled,
   );
   const spatialContext =
-    // HDR display-size presentation can have a private spatial graph with
+    // Bridge display-size presentation can have a private spatial graph with
     // Scaling off. Use the applied feature flag, including restart-pending
     // edits, when selecting its user-visible owner.
     newestContext(
@@ -152,8 +158,17 @@ export function runtimeScalingUiState(
     phase: contexts.length > 0 ? status.phase : "inactive",
     frameGenerationActive: Boolean(frameContext?.frame_generation_active),
     frameGenerationEnabled,
+    frameGenerationUnavailableReason:
+      frameContext?.frame_generation_unavailable?.reason ?? null,
     gpuHeadroomState: frameContext?.gpu_headroom_state ?? "unavailable",
     gpuHeadroomPercent: appliedFrameProfile?.gpu_headroom_percent ?? 0,
+    frameGenerationModel: appliedFrameProfile
+      ? appliedFrameProfile.frame_generation_model === "mako-fg"
+        ? "mako-fg"
+        : appliedFrameProfile.effective_performance_mode
+          ? "lsfg-performance"
+          : "lsfg-quality"
+      : null,
     frameGenerationMode,
     frameGenerationAdaptiveStyle: appliedFrameProfile?.adaptive
       ? appliedFrameProfile.adaptive_auto_base_fps_cap
@@ -216,4 +231,16 @@ export function runtimeScalingUiState(
     ),
     fallbackReason: spatialContext?.spatial_scaling.fallback_reason ?? null,
   };
+}
+
+/** Explain why generated frames cannot reach the visible window. */
+export function frameGenerationUnavailableMessage(
+  reason: RuntimeScalingUiState["frameGenerationUnavailableReason"],
+): string | null {
+  return reason === "offscreen-x11-window"
+    ? t(
+        "LIVE_STATUS_FG_OFFSCREEN",
+        "Unavailable: the game renders offscreen, so generated frames cannot reach the screen. Try another Proton version or window mode.",
+      )
+    : null;
 }

@@ -1,15 +1,22 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "presentation_policy.hpp"
+#include "swapchain/application_acquire_budget.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
+#include <thread>
+#include <utility>
+#include <vector>
 
 using namespace mako::layer;
 using namespace std::chrono_literals;
@@ -145,6 +152,509 @@ namespace {
                 !decision.bypassGeneration &&
                 !decision.preacquireGeneratedFrame,
             "menu interruption resumed stale acquire recovery evidence");
+    }
+
+    void testFifoSourceOverrunEndsTwoXHandoff() {
+        using TimePoint = SmoothCadencePacerHandoff::TimePoint;
+        const TimePoint start{};
+        const auto at = [start](const double seconds) {
+            return start + std::chrono::duration_cast<TimePoint::duration>(
+                std::chrono::duration<double>(seconds)
+            );
+        };
+        // Deterministic arrival jitter keeps every sample repeatable.
+        uint32_t seed = 1;
+        const auto jitter = [&seed](const double maximum) {
+            seed = seed * 1664525U + 1013904223U;
+            return maximum * static_cast<double>(seed >> 8) /
+                static_cast<double>(1U << 24);
+        };
+
+        // A source that waits on presentation blocks while the 2x FIFO queue
+        // holds `queuedFrames` real frames; the display drains one every
+        // multiplier refreshes. Hitches and loading stalls drain the queue,
+        // after which the game refills it as fast as its frame work allows.
+        // The handoff starts from a nearly empty queue, and work below one
+        // admitted interval models a higher rung entering above that rate.
+        const auto pacedSourceRetainsHandoff = [&](const uint32_t reportedHz,
+                const double actualHz, const double workFraction,
+                const size_t queuedFrames, const size_t generationLimit = 1) {
+            SmoothCadencePacerHandoff handoff;
+            const double admitted =
+                static_cast<double>(generationLimit + 1) / actualHz;
+            double nextSlot = admitted;
+            double returned = 0.0;
+            size_t queued = 1;
+            for (size_t frame = 0; returned < 60.0; ++frame) {
+                double work = admitted * workFraction + jitter(admitted * 0.3);
+                if (frame % 47 == 0)
+                    work += admitted * 3.5;
+                if (frame % 997 == 500)
+                    work += 0.3;
+                const double arrival = returned + work;
+                for (; nextSlot <= arrival; nextSlot += admitted) {
+                    if (queued > 0)
+                        --queued;
+                }
+                const auto decision = handoff.update(
+                    at(arrival), generationLimit, false, reportedHz
+                );
+                if (!decision.active || decision.sourceOverrun)
+                    return false;
+                returned = arrival;
+                for (; queued >= queuedFrames; nextSlot += admitted) {
+                    returned = nextSlot;
+                    --queued;
+                }
+                ++queued;
+            }
+            return true;
+        };
+        // Steam Deck LCD 40-60 Hz, OLED 45-90 Hz, and desktop 120/144 Hz.
+        // Gamescope rounds the panel's millihertz refresh to the nearest
+        // hertz, so its report is at most 0.5 Hz slow; 2 Hz keeps a 4x margin.
+        for (const uint32_t refreshHz : {40U, 45U, 50U, 60U, 72U, 90U, 120U, 144U}) {
+            for (const double workFraction : {0.2, 0.7, 0.95}) {
+                for (const size_t queuedFrames : {size_t{2}, size_t{3}}) {
+                    expect(pacedSourceRetainsHandoff(
+                            refreshHz, refreshHz, workFraction, queuedFrames),
+                        "a FIFO-paced 2x source was treated as a source overrun");
+                    for (const double slowReportHz : {0.5, 2.0}) {
+                        expect(pacedSourceRetainsHandoff(refreshHz,
+                                refreshHz + slowReportHz, workFraction, queuedFrames),
+                            "a slow refresh report was treated as a source overrun");
+                    }
+                }
+            }
+        }
+        // VRR 3x-5x rungs, including sources entering up to 25% above their
+        // admission rate before FIFO pulls them down. Six output images hold
+        // at most two real frames at 3x.
+        for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+            for (const size_t generationLimit : {size_t{2}, size_t{3}, size_t{4}}) {
+                for (const double workFraction : {0.2, 0.8, 0.95}) {
+                    for (const size_t queuedFrames : {size_t{1}, size_t{2}}) {
+                        for (const double slowReportHz : {0.5, 3.0}) {
+                            expect(pacedSourceRetainsHandoff(refreshHz,
+                                    refreshHz + slowReportHz, workFraction,
+                                    queuedFrames, generationLimit),
+                                "a FIFO-paced higher rung was treated as a source overrun");
+                        }
+                    }
+                }
+            }
+        }
+
+        // A game with its own clock keeps delivering at that rate on average.
+        const auto overrunAfter = [&](SmoothCadencePacerHandoff& handoff,
+                const double sourceHz,
+                const std::optional<uint32_t> refreshHz,
+                const double from, const double seconds,
+                const size_t generationLimit = 1,
+                const double jitterFraction = 0.5) -> std::optional<double> {
+            const double interval = 1.0 / sourceHz;
+            double previous = from - interval;
+            for (double tick = 0.0; tick < seconds; tick += interval) {
+                const double arrival = std::max(
+                    from + tick + jitter(interval * jitterFraction),
+                    previous + 0.0005
+                );
+                previous = arrival;
+                const auto decision = handoff.update(
+                    at(arrival), generationLimit, false, refreshHz
+                );
+                if (decision.sourceOverrun) {
+                    expect(!decision.active && decision.changed &&
+                            decision.previousGenerationLimit == generationLimit,
+                        "a source overrun did not restore the rung's normal pacing");
+                    return arrival - from;
+                }
+            }
+            return std::nullopt;
+        };
+        // In-game limiters at half refresh whose timers round slightly fast,
+        // such as 33 ms at 60 Hz, 22 ms at 90 Hz, and 16.5 ms at 120 Hz.
+        for (const auto& [sourceHz, refreshHz] : std::array{
+                std::pair{1.0 / 0.033, 60U}, std::pair{1.0 / 0.022, 90U},
+                std::pair{1.0 / 0.0165, 120U}, std::pair{30.0, 60U},
+                std::pair{45.0, 90U}}) {
+            SmoothCadencePacerHandoff handoff;
+            expect(!overrunAfter(handoff, sourceHz, refreshHz, 0.0, 60.0) &&
+                    !overrunAfter(handoff, sourceHz, refreshHz, 60.0, 60.0, 1, 0.9) &&
+                    handoff.active(),
+                "a half-refresh in-game limiter was treated as a source overrun");
+        }
+
+        // Independent clocks that overfill 2x FIFO: id Tech 4's 62.5 Hz tick,
+        // a 30 ms tick at 60 Hz, and a 20 ms tick at 90 Hz.
+        for (const auto& [sourceHz, refreshHz] : std::array{
+                std::pair{62.5, 60U}, std::pair{62.5, 90U},
+                std::pair{62.5, 120U}, std::pair{1.0 / 0.030, 60U},
+                std::pair{50.0, 90U}}) {
+            for (const double jitterFraction : {0.5, 1.2}) {
+                SmoothCadencePacerHandoff handoff;
+                const auto overrun = overrunAfter(
+                    handoff, sourceHz, refreshHz, 0.0, 10.0, 1, jitterFraction
+                );
+                expect(overrun && *overrun > 3.0 && *overrun < 4.5,
+                    "an independent game clock did not end its 2x FIFO handoff after three windows");
+            }
+        }
+        for (const uint32_t refreshHz : {60U, 90U, 120U}) {
+            SmoothCadencePacerHandoff handoff;
+            const auto overrun = overrunAfter(handoff, 62.5, refreshHz, 0.0, 10.0);
+            expect(overrun && *overrun > 3.0 && *overrun < 4.0,
+                "a 62.5 Hz game clock did not end its 2x FIFO handoff after three windows");
+            auto decision = handoff.update(at(300.0), 1, false, refreshHz);
+            expect(!decision.active,
+                "an overrun 2x FIFO handoff retried against the same game clock");
+            decision = handoff.update(at(300.0), 2, false, refreshHz);
+            expect(decision.active && decision.generationLimit == 2,
+                "a 2x source overrun blocked a separately validated 3x rung");
+            handoff.reset();
+            decision = handoff.update(at(301.0), 1, false, refreshHz);
+            expect(decision.active && decision.changed,
+                "an explicit reset did not re-arm the 2x FIFO handoff");
+        }
+
+        // Higher VRR rungs use their own admission rate: refresh divided by
+        // outputs per real frame. A limiter exactly at that rate is retained.
+        for (const auto& [sourceHz, generationLimit] : std::array{
+                std::pair{40.0, size_t{2}}, std::pair{30.0, size_t{3}},
+                std::pair{24.0, size_t{4}}}) {
+            SmoothCadencePacerHandoff handoff;
+            expect(!overrunAfter(handoff, sourceHz, 120, 0.0, 60.0,
+                        generationLimit, 0.9) &&
+                    handoff.activeGenerationLimit() == generationLimit,
+                "a limiter at a higher rung's admission rate was treated as a source overrun");
+        }
+        // A 50 FPS clock at 3x, 40 at 4x, and 30 at 5x overfill 120 Hz FIFO.
+        for (const auto& [sourceHz, generationLimit] : std::array{
+                std::pair{50.0, size_t{2}}, std::pair{40.0, size_t{3}},
+                std::pair{30.0, size_t{4}}}) {
+            SmoothCadencePacerHandoff handoff;
+            const auto overrun = overrunAfter(
+                handoff, sourceHz, 120, 0.0, 10.0, generationLimit, 1.2
+            );
+            expect(overrun && *overrun > 3.0 && *overrun < 4.5,
+                "an independent game clock did not end its higher-rung FIFO handoff");
+            auto decision = handoff.update(at(300.0), generationLimit, false, 120);
+            expect(!decision.active,
+                "an overrun higher-rung FIFO handoff retried against the same game clock");
+            decision = handoff.update(at(300.0), 1, false, 120);
+            expect(decision.active && decision.generationLimit == 1,
+                "a higher-rung source overrun blocked the separately eligible 2x handoff");
+        }
+        {
+            SmoothCadencePacerHandoff handoff;
+            expect(!overrunAfter(handoff, 62.5, std::nullopt, 0.0, 10.0) &&
+                    handoff.active(),
+                "an unknown refresh rate ended a 2x FIFO handoff");
+        }
+        {
+            SmoothCadencePacerHandoff handoff;
+            expect(!overrunAfter(handoff, 62.5, 120, 0.0, 2.6),
+                "two surplus windows ended a 2x FIFO handoff");
+            handoff.pauseForExternalInterruption();
+            expect(!overrunAfter(handoff, 62.5, 120, 10.0, 2.6) &&
+                    handoff.active(),
+                "Steam menu focus retained earlier source-overrun evidence");
+        }
+    }
+
+    void testApplicationAcquireBudgetHoldsZinkToItsRequest() {
+        // Zink sizes its acquire window from the images it sees. MAKO adds
+        // generated-frame images, so the window must follow the request.
+        expect(ApplicationAcquireBudget::windowFor(3, 3) == 1 &&
+                ApplicationAcquireBudget::windowFor(3, 2) == 2 &&
+                ApplicationAcquireBudget::windowFor(4, 2) == 3 &&
+                ApplicationAcquireBudget::windowFor(2, 3) == 1 &&
+                ApplicationAcquireBudget::windowFor(3, 0) == 4,
+            "application acquire window ignored the requested image count");
+
+        expect(applicationAcquireBudgetApplies("mesa zink", 3, 6, 3),
+            "a Zink swapchain with MAKO images received no acquire budget");
+        for (const std::string_view engine : {"DXVK", "vkd3d", "", "Unity",
+                "mesa zink 2", "Mesa Zink"}) {
+            expect(!applicationAcquireBudgetApplies(engine, 3, 6, 3),
+                "a non-Zink application received an acquire budget");
+        }
+        expect(!applicationAcquireBudgetApplies("mesa zink", 3, 3, 3) &&
+                !applicationAcquireBudgetApplies("mesa zink", 3, 6, 0),
+            "an acquire budget applied without MAKO images or a surface minimum");
+
+        using namespace std::chrono_literals;
+        ApplicationAcquireBudget budget(3, 3);
+        expect(budget.waitForSlot(0ms),
+            "an empty application window blocked its first acquire");
+        budget.acquired();
+        expect(!budget.waitForSlot(5ms),
+            "a full application window admitted another acquire");
+        // Zink presents on a worker thread while its GL thread waits.
+        std::thread worker([&budget] {
+            std::this_thread::sleep_for(20ms);
+            budget.presented();
+        });
+        const auto waitStarted = ApplicationAcquireBudget::Clock::now();
+        expect(budget.waitForSlot(5s) &&
+                ApplicationAcquireBudget::Clock::now() - waitStarted < 4s,
+            "an application present did not release a waiting acquire");
+        worker.join();
+        budget.presented();
+        expect(budget.heldImages() == 0,
+            "an extra application present underflowed the window");
+
+        budget.acquired();
+        std::thread destroyer([&budget] {
+            std::this_thread::sleep_for(20ms);
+            budget.close();
+        });
+        expect(budget.waitForSlot(5s),
+            "swapchain destruction left an acquire waiting");
+        destroyer.join();
+
+        expect(budget.firstFallback() && !budget.firstFallback(),
+            "an expired acquire budget wait was not reported exactly once");
+
+        // An image released without a present must not stall later acquires.
+        ApplicationAcquireBudget stale(3, 3);
+        stale.acquired();
+        expect(!stale.waitForSlot(5ms),
+            "precondition failed: a full window admitted another acquire");
+        stale.forgetHeldImages();
+        expect(stale.waitForSlot(0ms) && stale.heldImages() == 0,
+            "an expired acquire budget kept a stale image count");
+    }
+
+    void testCappedFifoBacklogDrainRetiresZinkQueue() {
+        using Clock = CappedFifoBacklogDrain::Clock;
+        using TimePoint = CappedFifoBacklogDrain::TimePoint;
+        const TimePoint start{};
+        const auto at = [start](const double seconds) {
+            return start + std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(seconds));
+        };
+        const auto duration = [](const double seconds) {
+            return std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(seconds));
+        };
+
+        {
+            RealFramePacer pacer;
+            const auto origin = Clock::time_point{} + std::chrono::hours(100000);
+            static_cast<void>(pacer.schedule(origin, 60));
+            const auto deadline = pacer.schedule(origin + 2ms, 60);
+            const auto held = pacer.hold(deadline, duration(1.0 / 120.0));
+            const auto next = pacer.schedule(held, 60);
+            expect(held - deadline == duration(1.0 / 120.0) &&
+                    next - held == duration(1.0 / 60.0),
+                "a held real frame did not move the following cadence with it");
+        }
+
+        // A source capped at half refresh under 2x. Each hold retires one
+        // queued output; acquires wait for a release until the queue empties.
+        struct Run {
+            size_t holds{0};
+            size_t suspensions{0};
+            double clearedAt{-1.0};
+        };
+        const auto run = [&](const uint32_t refreshHz, const size_t backlog,
+                const double seconds, const double waitedShare = 1.0,
+                const double capFps = 0.0, const double sourceFps = 0.0) {
+            CappedFifoBacklogDrain drain;
+            const double period = 1.0 / refreshHz;
+            const double cap = capFps > 0.0 ? capFps : refreshHz / 2.0;
+            const double source = sourceFps > 0.0 ? sourceFps : cap;
+            size_t queued = backlog;
+            size_t frame = 0;
+            double accrued = 0.0;
+            Run result;
+            for (double now = 0.0; now < seconds; now += 1.0 / source, ++frame) {
+                accrued += waitedShare;
+                const bool waits = queued > 0 && accrued >= 1.0;
+                if (waits)
+                    accrued -= 1.0;
+                const auto decision = drain.observe(at(now), cap, refreshHz,
+                    duration(waits ? period * 0.6 : 0.00005));
+                if (decision.hold > Clock::duration::zero()) {
+                    expect(decision.hold == duration(period) &&
+                            decision.holds >= 1 &&
+                            decision.holds <= CappedFifoBacklogDrain::maximumHolds(cap, refreshHz),
+                        "a FIFO backlog hold was not exactly one refresh");
+                    ++result.holds;
+                    if (queued != std::numeric_limits<size_t>::max() && queued > 0)
+                        --queued;
+                    if (queued == 0 && result.clearedAt < 0.0)
+                        result.clearedAt = now;
+                }
+                if (decision.suspended)
+                    ++result.suspensions;
+            }
+            return result;
+        };
+        // Steam Deck LCD 60 Hz, OLED 90 Hz, and 120/144 Hz displays.
+        for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+            expect(run(refreshHz, 0, 120.0).holds == 0,
+                "an unfilled FIFO queue paid a held frame");
+            for (const size_t backlog : {size_t{1}, size_t{2}, size_t{3}}) {
+                const auto drained = run(refreshHz, backlog, 60.0);
+                expect(drained.holds == backlog && drained.clearedAt > 0.0 &&
+                        drained.clearedAt < 0.6 * static_cast<double>(backlog) &&
+                        drained.suspensions == 0,
+                    "a capped FIFO backlog was not retired one refresh at a time");
+            }
+            // A bimodal majority of waiting frames still proves the backlog.
+            expect(run(refreshHz, 2, 60.0, 0.55).holds == 2,
+                "half-waiting windows did not drain a capped FIFO backlog");
+            expect(run(refreshHz, 2, 60.0, 0.4).holds == 0,
+                "a minority of waiting frames held a real frame");
+            // Waits that holds cannot clear stop after a bounded episode.
+            const auto stubborn = run(refreshHz, std::numeric_limits<size_t>::max(), 40.0);
+            expect(stubborn.holds == 2 * 4 && stubborn.suspensions == 2,
+                "persistent acquire waits kept holding real frames");
+        }
+        // Higher Fixed multipliers queue more outputs per real frame: a 5x cap
+        // of 12 FPS at 60 Hz can leave six outputs behind one stall.
+        for (const size_t multiplier : {size_t{3}, size_t{4}, size_t{5}}) {
+            const double cap = 60.0 / static_cast<double>(multiplier);
+            expect(CappedFifoBacklogDrain::maximumHolds(cap, 60) == multiplier + 2,
+                "a higher multiplier did not scale its FIFO backlog hold limit");
+            const auto deep = run(60, multiplier + 1, 60.0, 1.0, cap);
+            expect(deep.holds == multiplier + 1 && deep.suspensions == 0,
+                "a higher-multiplier FIFO backlog paused before it drained");
+            const auto stubborn = run(60, std::numeric_limits<size_t>::max(), 40.0, 1.0, cap);
+            expect(stubborn.holds == 2 * (multiplier + 2) && stubborn.suspensions == 2,
+                "persistent higher-multiplier acquire waits kept holding real frames");
+        }
+        expect(CappedFifoBacklogDrain::maximumHolds(120.0, 120) == 4 &&
+                CappedFifoBacklogDrain::maximumHolds(5.0, 240) == 8,
+            "the FIFO backlog hold limit left its bounds");
+        // Below the refresh-limited rate the queue cannot fill; even a
+        // waiting window is evidence of the cap, not missing data.
+        expect(run(120, 2, 60.0, 1.0, 40.0).holds == 2,
+            "a lower cap ignored a proven FIFO backlog");
+        // Arrival jitter a little below the cap still drains the backlog.
+        expect(run(120, 2, 60.0, 1.0, 60.0, 54.0).holds == 2,
+            "a source just below its cap kept its FIFO backlog");
+        // Gamescope's frame limiter consumes slower than refresh: every
+        // acquire waits, but the source falls below its cap, and no held
+        // refresh drains a queue the limiter keeps full.
+        struct Limited {
+            uint32_t refreshHz;
+            double cap;
+            double source;
+        };
+        for (const auto limiter : std::array{Limited{120, 30.0, 15.0},
+                Limited{120, 60.0, 30.0}, Limited{90, 45.0, 30.0},
+                Limited{60, 30.0, 10.0}}) {
+            const auto limited = run(limiter.refreshHz,
+                std::numeric_limits<size_t>::max(), 40.0, 1.0, limiter.cap,
+                limiter.source);
+            expect(limited.holds == 0 && limited.suspensions == 0,
+                "a frame limiter's full FIFO queue held real frames");
+        }
+
+        CappedFifoBacklogDrain drain;
+        for (double now = 0.0; now < 10.0; now += 1.0 / 60.0) {
+            expect(drain.observe(at(now), 60.0, 120U, std::nullopt).hold ==
+                    Clock::duration::zero(),
+                "a present without a generated acquire was counted as waiting");
+        }
+        const auto partialThen = [&](const double gap, const double cap) {
+            CappedFifoBacklogDrain partial;
+            double now = 0.0;
+            for (; now < 0.45; now += 1.0 / 60.0)
+                static_cast<void>(partial.observe(at(now), 60.0, 120U, 7ms));
+            now += gap;
+            Clock::duration held{};
+            for (const double end = now + 0.2; now < end; now += 1.0 / 60.0)
+                held += partial.observe(at(now), cap, 120U, 7ms).hold;
+            return held;
+        };
+        expect(partialThen(0.0, 60.0) > Clock::duration::zero(),
+            "precondition failed: continuous waits did not complete a window");
+        expect(partialThen(0.3, 60.0) == Clock::duration::zero(),
+            "a source stall kept partial FIFO backlog evidence");
+        expect(partialThen(0.0, 59.0) == Clock::duration::zero(),
+            "a cap change kept partial FIFO backlog evidence");
+        expect(drain.observe(at(20.0), 0.0, 120U, 7ms).hold == Clock::duration::zero() &&
+                drain.observe(at(20.1), 60.0, std::nullopt, 7ms).hold ==
+                    Clock::duration::zero(),
+            "an uncapped or unknown-refresh source held a real frame");
+    }
+
+    void testZinkFifoBacklogEndsHandoff() {
+        using TimePoint = SmoothCadencePacerHandoff::TimePoint;
+        using Clock = SmoothCadencePacerHandoff::Clock;
+        const TimePoint start{};
+        const auto at = [start](const double seconds) {
+            return start + std::chrono::duration_cast<TimePoint::duration>(
+                std::chrono::duration<double>(seconds));
+        };
+        const auto backlogAfter = [&](SmoothCadencePacerHandoff& handoff,
+                const uint32_t refreshHz, const double from, const double seconds,
+                const std::optional<double> waitFraction,
+                const double waitedShare = 1.0) -> std::optional<double> {
+            const double interval = 2.0 / refreshHz;
+            double accrued = 0.0;
+            for (double tick = 0.0; tick < seconds; tick += interval) {
+                std::optional<Clock::duration> wait;
+                if (waitFraction) {
+                    accrued += waitedShare;
+                    const bool waits = accrued >= 1.0;
+                    if (waits)
+                        accrued -= 1.0;
+                    wait = std::chrono::duration_cast<Clock::duration>(
+                        std::chrono::duration<double>(
+                            waits ? *waitFraction / refreshHz : 0.00005));
+                }
+                const auto decision = handoff.update(
+                    at(from + tick), 1, false, refreshHz, wait);
+                expect(!decision.sourceOverrun,
+                    "a FIFO-paced Zink source was treated as a source overrun");
+                if (decision.presentationBacklog) {
+                    expect(!decision.active && decision.changed &&
+                            decision.previousGenerationLimit == 1,
+                        "a Zink FIFO backlog did not restore the rung's normal pacing");
+                    return tick;
+                }
+            }
+            return std::nullopt;
+        };
+        for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+            SmoothCadencePacerHandoff handoff;
+            const auto ended = backlogAfter(handoff, refreshHz, 0.0, 10.0, 0.6);
+            expect(ended && *ended > 3.0 && *ended < 4.5,
+                "a full Zink FIFO queue did not end the handoff after three windows");
+            auto decision = handoff.update(at(300.0), 1, false, refreshHz, 0ms);
+            expect(!decision.active,
+                "a Zink FIFO backlog handoff retried against the same game clock");
+            handoff.reset();
+            decision = handoff.update(at(301.0), 1, false, refreshHz, 0ms);
+            expect(decision.active && decision.changed,
+                "an explicit reset did not re-arm the Zink FIFO handoff");
+        }
+        for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+            // Other engines never supply a wait, however long it would be.
+            SmoothCadencePacerHandoff other;
+            expect(!backlogAfter(other, refreshHz, 0.0, 60.0, std::nullopt) &&
+                    other.active(),
+                "a swapchain without an acquire window ended its handoff on waits");
+            SmoothCadencePacerHandoff unfilled;
+            expect(!backlogAfter(unfilled, refreshHz, 0.0, 60.0, 0.2) &&
+                    unfilled.active(),
+                "sub-threshold Zink acquire waits ended the handoff");
+            SmoothCadencePacerHandoff minority;
+            expect(!backlogAfter(minority, refreshHz, 0.0, 60.0, 0.6, 0.4) &&
+                    minority.active(),
+                "a minority of waiting Zink frames ended the handoff");
+        }
+        SmoothCadencePacerHandoff paused;
+        expect(!backlogAfter(paused, 120, 0.0, 2.6, 0.6),
+            "two backlog windows ended a Zink FIFO handoff");
+        paused.pauseForExternalInterruption();
+        expect(!backlogAfter(paused, 120, 10.0, 2.6, 0.6) && paused.active(),
+            "Steam menu focus retained earlier Zink FIFO backlog evidence");
     }
 }
 
@@ -723,6 +1233,330 @@ void testFixedUsesExistingSourceDeadline() {
     }
 }
 
+void testSourceIntervalSpacing() {
+    using Spacing = SourceIntervalOutputSpacing;
+    using Clock = Spacing::Clock;
+    using Transition = Spacing::Transition;
+    const auto start = Clock::time_point{100s};
+    static constexpr auto prepare = 2ms;
+
+    // An application model: `period` is its own cadence and `work` the time
+    // it needs after its present returns. A throughput-bound game has no own
+    // cadence; a timer-driven one waits for its next slot when late.
+    struct Source {
+        Clock::duration period{};
+        Clock::duration work{};
+        bool throughputBound{false};
+        bool timerSlots{false};
+    };
+    struct Run {
+        Spacing spacing;
+        Clock::time_point arrival;
+        Clock::time_point due;
+        size_t count{2};
+        std::vector<Spacing::Observation> transitions;
+        size_t frames{};
+        size_t held{};
+        size_t unspaced{};
+
+        void until(const Clock::time_point end, const Source& source) {
+            while (this->arrival < end) {
+                const auto observed = this->spacing.observe(this->arrival, true);
+                if (observed.transition != Transition::None)
+                    this->transitions.push_back(observed);
+                auto returned = this->arrival + prepare;
+                const bool engaged = this->spacing.engaged();
+                if (const auto batch = this->spacing.schedule(returned, this->count)) {
+                    ++this->held;
+                    returned = batch->at(this->count - 1);
+                } else if (engaged) {
+                    ++this->unspaced;
+                }
+                ++this->frames;
+                const auto ready = returned + source.work;
+                if (source.throughputBound) {
+                    this->arrival = this->due = ready;
+                    continue;
+                }
+                this->due += source.period;
+                if (source.timerSlots) {
+                    while (this->due < ready)
+                        this->due += source.period;
+                } else {
+                    this->due = std::max(this->due, ready);
+                }
+                this->arrival = this->due;
+            }
+        }
+    };
+
+    // A heavier scene can make every interval exceed twice the old baseline.
+    // This is sustained work, not an endless sequence of isolated hitches.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 3s, {.period = 25ms, .work = 5ms});
+        expect(run.spacing.engaged(), "the light scene did not engage spacing");
+        const auto changed = run.arrival;
+        const auto heldBefore = run.held;
+        run.until(changed + 1s, {.work = 55ms, .throughputBound = true});
+        expect(run.transitions.size() == 2 &&
+                run.transitions.back().transition == Transition::Slowed &&
+                run.transitions.back().retryAfter == 5s && !run.spacing.engaged(),
+            "sustained intervals above twice the baseline kept spacing engaged");
+        expect(run.held - heldBefore <= Spacing::windowSize,
+            "a heavier scene was held for more than one observation window");
+        const auto unspacedAt = run.arrival;
+        const auto framesBefore = run.frames;
+        run.until(unspacedAt + 1s, {.work = 55ms, .throughputBound = true});
+        expect((run.arrival - unspacedAt) /
+                static_cast<int64_t>(run.frames - framesBefore) == prepare + 55ms,
+            "a released heavy scene retained a spacing delay");
+    }
+
+    // Probe at the 20 FPS boundary, but keep slower sources uninterrupted.
+    for (const auto period : {50ms, 51ms, 200ms}) {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 60s, {.period = period, .work = 1ms});
+        expect(run.transitions.size() == 1 &&
+                run.transitions[0].transition == Transition::Engaged &&
+                run.transitions[0].sourceInterval == period,
+            "a steady source released its spacing at the probe-rate boundary");
+        const size_t expectedProbes = period == 50ms ? 5 : 0;
+        expect(run.unspaced == expectedProbes &&
+                run.held == run.frames - Spacing::windowSize - expectedProbes,
+            "recovery probes disturbed a source below 20 FPS or skipped the boundary");
+    }
+
+    // A 5 FPS video at 5x: after one stable window every output, the real
+    // frame included, is 40 ms after the previous one across batches.
+    {
+        Spacing spacing;
+        std::optional<Clock::time_point> previous;
+        int64_t engagedAt = -1;
+        for (int64_t frame = 0; frame < 200; ++frame) {
+            const auto arrival = start + frame * 200ms;
+            const auto observed = spacing.observe(arrival, true);
+            if (observed.transition == Transition::Engaged) {
+                expect(engagedAt < 0 && observed.sourceInterval == 200ms,
+                    "video spacing engaged twice or at the wrong interval");
+                engagedAt = frame;
+            } else {
+                expect(observed.transition == Transition::None,
+                    "a steady video released its spacing");
+            }
+            const auto batch = spacing.schedule(arrival + prepare, 5);
+            expect(batch.has_value() == (engagedAt >= 0),
+                "video-rate spacing left a batch unspaced");
+            if (!batch)
+                continue;
+            expect(batch->at(4) < arrival + 200ms,
+                "the real frame borrowed the next source interval");
+            for (size_t output = 0; output < batch->count; ++output) {
+                if (previous)
+                    expect(batch->at(output) - *previous == 40ms,
+                        "video outputs lost uniform 40 ms spacing");
+                previous = batch->at(output);
+            }
+        }
+        expect(engagedAt == static_cast<int64_t>(Spacing::windowSize),
+            "spacing did not engage after one stable window");
+    }
+
+    // A game held at 40 FPS by its own limiter keeps its cadence while
+    // spaced; only the game-rate probe leaves one frame unspaced per 10 s.
+    {
+        Run run{.arrival = start, .due = start, .count = 3};
+        run.until(start + 60s, {.period = 25ms, .work = 5ms});
+        expect(run.transitions.size() == 1 &&
+                run.transitions[0].transition == Transition::Engaged &&
+                run.transitions[0].sourceInterval == 25ms,
+            "a frame-limited game did not keep its spacing");
+        expect(run.unspaced == 5 && run.held == run.frames - Spacing::windowSize - 5,
+            "game-rate spacing probed more often than every 10 s");
+    }
+
+    // A game running flat out loses frame rate to any wait. The guard
+    // releases it within one window, backs off 5/15/30/60 s, then leaves an
+    // unchanged cadence alone; a changed cadence earns one more attempt.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 600s, {.work = 23ms, .throughputBound = true});
+        std::vector<Clock::duration> retries;
+        for (const auto& transition : run.transitions)
+            if (transition.transition == Transition::Slowed)
+                retries.push_back(transition.retryAfter);
+        expect(retries == std::vector<Clock::duration>{5s, 15s, 30s, 60s},
+            "throughput-bound retries did not back off and stop");
+        expect(run.held <= retries.size() * Spacing::windowSize,
+            "the slowdown guard held a throughput-bound game for more than a window");
+        expect((run.arrival - start) / static_cast<int64_t>(run.frames) < 25ms + 50us,
+            "spacing cost a throughput-bound game its frame rate");
+
+        const auto changed = run.arrival;
+        run.until(changed + 120s, {.work = 40ms, .throughputBound = true});
+        size_t slowed = 0;
+        for (const auto& transition : run.transitions)
+            slowed += transition.transition == Transition::Slowed;
+        expect(slowed == 5 && run.transitions.back().retryAfter == 60s,
+            "a changed throughput-bound cadence was not retried exactly once");
+    }
+
+    // An emulator only just keeping its 62.5 FPS cadence loses 3% to the
+    // wait (16.5 ms instead of 16 ms); the guard releases it.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 2s, {.period = 16ms, .work = 6500us});
+        expect(run.transitions.size() == 2 &&
+                run.transitions[0].sourceInterval == 16ms &&
+                run.transitions[1].transition == Transition::Slowed,
+            "a 3% emulator slowdown kept its spacing");
+    }
+
+    // A source that speeds up presents as soon as the wait returns; the
+    // median sees the shorter interval and spacing requalifies at once.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 3s, {.period = 32ms, .work = 1ms});
+        run.until(start + 4s, {.period = 16ms, .work = 1ms});
+        expect(run.transitions.size() == 3 &&
+                run.transitions[1].transition == Transition::Faster &&
+                run.transitions[2].transition == Transition::Engaged &&
+                run.transitions[2].sourceInterval == 16ms,
+            "a faster source stayed throttled by the old spacing");
+    }
+
+    // A timer-driven emulator that switches 30 -> 60 FPS waits for its next
+    // slot, so the old wait hides the new cadence until the next probe.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 3s, {.period = 32ms, .work = 1ms, .timerSlots = true});
+        const auto switched = run.arrival;
+        run.until(switched + 12s, {.period = 16ms, .work = 1ms, .timerSlots = true});
+        expect(run.transitions.size() == 3 &&
+                run.transitions[1].transition == Transition::Faster &&
+                run.transitions[2].sourceInterval == 16ms,
+            "the game-rate probe missed a hidden 30 -> 60 FPS switch");
+    }
+
+    // A source that qualifies too fast to space (120 FPS at 2x is under the
+    // 240 Hz floor) and then settles at 60 FPS replaces its stale baseline
+    // without a penalty and is spaced at the settled cadence.
+    {
+        Run run{.arrival = start, .due = start};
+        run.until(start + 1s, {.period = 8ms, .work = 1ms});
+        expect(run.spacing.engaged() && run.held == 0,
+            "an unspaceable cadence was spaced");
+        run.until(start + 2s, {.period = 16ms, .work = 1ms});
+        expect(run.transitions.size() == 3 &&
+                run.transitions[1].transition == Transition::Changed &&
+                run.transitions[2].transition == Transition::Engaged &&
+                run.transitions[2].sourceInterval == 16ms && run.held > 0,
+            "a stale unspaced baseline blocked spacing at the settled cadence");
+    }
+
+    // Playback that qualifies on a slightly slow start-up cadence settles to
+    // its real cadence within one window instead of leaving a short last gap.
+    {
+        Spacing spacing;
+        auto arrival = start;
+        for (size_t frame = 0; frame <= Spacing::windowSize; ++frame, arrival += 215ms)
+            static_cast<void>(spacing.observe(arrival, true));
+        arrival -= 215ms;
+        for (size_t frame = 0; frame < 2 * Spacing::windowSize; ++frame) {
+            expect(spacing.schedule(arrival + prepare, 5).has_value(),
+                "settling video spacing skipped a batch");
+            arrival += 200ms;
+            expect(spacing.observe(arrival, true).transition == Transition::None,
+                "a slightly faster settled cadence released spacing");
+        }
+        const auto batch = spacing.schedule(arrival + prepare, 5);
+        expect(batch && batch->interval == 40ms,
+            "spacing kept a slow start-up baseline after settling");
+    }
+
+    // One hitch, even above twice the baseline, keeps spacing; a loading
+    // stall releases it without a penalty.
+    for (const auto [period, hitch] : std::array{
+            std::pair{25ms, 75ms}, std::pair{200ms, 240ms}}) {
+        Spacing spacing;
+        auto arrival = start;
+        for (size_t frame = 0; frame <= Spacing::windowSize; ++frame, arrival += period)
+            static_cast<void>(spacing.observe(arrival, true));
+        arrival -= period;
+        expect(spacing.engaged(), "steady video did not engage");
+        for (size_t frame = 0; frame < 20; ++frame) {
+            expect(spacing.schedule(arrival + prepare, 5).has_value(),
+                "engaged video spacing skipped a batch");
+            arrival += frame == 10 ? hitch : period;
+            expect(spacing.observe(arrival, true).transition == Transition::None,
+                "one hitch released video spacing");
+        }
+        arrival += 300ms;
+        expect(spacing.observe(arrival, true).transition == Transition::Stalled,
+            "a loading stall kept stale spacing");
+        for (size_t frame = 0; frame < Spacing::windowSize; ++frame) {
+            arrival += period;
+            static_cast<void>(spacing.observe(arrival, true));
+        }
+        expect(spacing.engaged(), "a stall imposed a retry penalty");
+    }
+
+    // An irregular source is never spaced.
+    {
+        Spacing spacing;
+        auto arrival = start;
+        for (size_t frame = 0; frame < 200; ++frame) {
+            arrival += frame % 2 ? 22ms : 28ms;
+            expect(spacing.observe(arrival, true).transition == Transition::None &&
+                    !spacing.schedule(arrival + prepare, 2),
+                "an irregular source was spaced");
+        }
+    }
+
+    // Ineligible frames release spacing but keep the retry penalty; a slowed
+    // attempt is forgiven only after 10 s of clean spacing.
+    {
+        // Engaged after 8 x 25 ms, then slowed after 8 x 37.5 ms: 500 ms.
+        Run run{.arrival = start, .due = start};
+        run.until(start + 510ms, {.work = 23ms, .throughputBound = true});
+        const auto slowedAt = start + 500ms;
+        expect(run.transitions.size() == 2 &&
+                run.transitions.back().transition == Transition::Slowed &&
+                run.transitions.back().retryAfter == 5s,
+            "throughput-bound attempt was not released");
+        for (size_t frame = 0; frame < 4; ++frame, run.arrival += 25ms)
+            static_cast<void>(run.spacing.observe(run.arrival, false));
+        run.due = run.arrival;
+        run.until(slowedAt + 4s, {.period = 25ms, .work = 5ms});
+        expect(!run.spacing.engaged(), "an ineligible interval cleared the retry delay");
+        run.until(slowedAt + 20s, {.period = 25ms, .work = 5ms});
+        expect(run.spacing.engaged(), "a source-paced game was not spaced after its retry");
+        run.until(slowedAt + 21s, {.work = 23ms, .throughputBound = true});
+        expect(run.transitions.back().transition == Transition::Slowed &&
+                run.transitions.back().retryAfter == 5s,
+            "clean spacing did not forgive an earlier slowdown");
+        run.spacing.reset();
+        expect(!run.spacing.engaged(), "reset kept spacing engaged");
+    }
+
+    // Batches that cannot be spaced keep ordinary delivery.
+    {
+        Spacing spacing;
+        auto arrival = start;
+        for (size_t frame = 0; frame <= Spacing::windowSize; ++frame, arrival += 10ms)
+            static_cast<void>(spacing.observe(arrival, true));
+        arrival -= 10ms;
+        expect(spacing.engaged() && spacing.schedule(arrival + prepare, 2) &&
+                !spacing.schedule(arrival + prepare, 3),
+            "outputs closer than a 240 Hz refresh were spaced");
+        expect(!spacing.schedule(arrival + prepare, 1) &&
+                !spacing.schedule(arrival + prepare, GeneratedFramePlan::capacity + 2),
+            "a native frame or oversized batch was spaced");
+        expect(!spacing.schedule(arrival + 6ms, 2),
+            "late preparation pushed the real frame past the next source frame");
+    }
+}
+
 void testFractionalUsesExistingSourceDeadline() {
     using Clock = RealFramePacer::Clock;
     const auto start = Clock::time_point{10s};
@@ -948,6 +1782,161 @@ void testBridgeStagedReadiness() {
         "V2 ring expiry retained phantom occupancy or accepted stale feedback");
 }
 
+void testBridgeQueuedRefreshRealignment() {
+    using Timeline = OrderedPresentTimeline;
+    using Clock = Timeline::Clock;
+    const auto tick = std::chrono::duration_cast<Clock::duration>(
+        std::chrono::duration<double>(1.0 / 120.0));
+    struct Output {
+        uint32_t id;
+        Timeline::Slot slot;
+    };
+    // A 60 FPS source at 2x: one real and one generated output per batch.
+    struct Bridge {
+        Timeline timeline;
+        uint32_t id{};
+        uint64_t batch{};
+        Clock::time_point arrival{10s};
+        Clock::time_point now{10s};
+        std::array<Output, 2> produce(Clock::duration tickDuration) {
+            arrival = std::max(arrival + 2 * tickDuration, now);
+            now = arrival;
+            timeline.observeSourceBatch(arrival, ++batch);
+            std::array<Output, 2> outputs{};
+            for (auto& output : outputs) {
+                const auto slot = timeline.schedule(now, 120, 120, 2);
+                timeline.submitted(++id, slot->presentAt, slot->submitAt);
+                output = {id, *slot};
+                now = std::max(now, slot->submitAt);
+            }
+            return outputs;
+        }
+    };
+    const auto display = [](Bridge& bridge, const Output& output, Clock::duration lateness) {
+        bridge.timeline.feedback(output.id, output.slot.presentAt, {}, {},
+            output.slot.presentAt + lateness);
+    };
+
+    // A missed refresh leaves every later output shown one whole refresh late.
+    {
+        Bridge bridge;
+        std::array<Output, 2> last{};
+        for (size_t batch = 0; batch < 6; ++batch) {
+            last = bridge.produce(tick);
+            for (const auto& output : last)
+                display(bridge, output, tick + 1ms);
+        }
+        const auto realigned = bridge.produce(tick);
+        expect(realigned[0].slot.realignment == tick &&
+                realigned[0].slot.presentAt >= last[1].slot.presentAt + 2 * tick,
+            "queued refresh was not drained from the next output target");
+        expect(realigned[1].slot.realignment == Clock::duration::zero() &&
+                realigned[1].slot.presentAt - realigned[0].slot.presentAt == tick,
+            "realignment changed spacing after its single drained slot");
+        // Feedback for outputs requested before the realignment still shows
+        // the old queue and must not remove a second refresh.
+        for (size_t batch = 0; batch < 6; ++batch) {
+            const auto outputs = bridge.produce(tick);
+            for (const auto& output : last)
+                display(bridge, output, tick + 1ms);
+            static_cast<void>(outputs);
+        }
+        expect(bridge.produce(tick)[0].slot.realignment == Clock::duration::zero(),
+            "pre-realignment feedback removed the same queued refresh twice");
+    }
+
+    // Timing phase alone stays below one refresh and never moves deadlines.
+    {
+        Bridge bridge;
+        bool moved = false;
+        for (size_t batch = 0; batch < 20; ++batch) {
+            for (const auto& output : bridge.produce(tick)) {
+                moved |= output.slot.realignment > Clock::duration::zero();
+                display(bridge, output, tick - 50us);
+            }
+        }
+        expect(!moved, "timing phase within one refresh was treated as a queue");
+    }
+
+    // One output shown within a refresh disproves the queue and restarts evidence.
+    {
+        Bridge bridge;
+        bool moved = false;
+        size_t index = 0;
+        for (size_t batch = 0; batch < 10; ++batch) {
+            for (const auto& output : bridge.produce(tick)) {
+                moved |= output.slot.realignment > Clock::duration::zero();
+                display(bridge, output, ++index % 10 == 0 ? 1ms : tick + 1ms);
+            }
+        }
+        expect(!moved, "a transient late output was treated as a persistent queue");
+    }
+
+    // Two queued refreshes drain together.
+    {
+        Bridge bridge;
+        std::array<Output, 2> last{};
+        for (size_t batch = 0; batch < 6; ++batch) {
+            last = bridge.produce(tick);
+            for (const auto& output : last)
+                display(bridge, output, 2 * tick + 1ms);
+        }
+        expect(bridge.produce(tick)[0].slot.realignment == 2 * tick,
+            "two queued refreshes were not drained together");
+    }
+
+    // A source pause rebases deadlines and discards pending queue evidence.
+    {
+        Bridge bridge;
+        for (size_t batch = 0; batch < 6; ++batch)
+            for (const auto& output : bridge.produce(tick))
+                display(bridge, output, tick + 1ms);
+        bridge.arrival += 2s;
+        bridge.now = bridge.arrival;
+        expect(bridge.produce(tick)[0].slot.realignment == Clock::duration::zero(),
+            "a pause applied queue evidence from before the rebase");
+    }
+
+    const auto countRealignments = [&](Bridge& bridge, size_t batches,
+            Clock::duration lateness) {
+        size_t realignments = 0;
+        for (size_t batch = 0; batch < batches; ++batch) {
+            for (const auto& output : bridge.produce(tick)) {
+                realignments += output.slot.realignment > Clock::duration::zero();
+                display(bridge, output, lateness);
+            }
+        }
+        return realignments;
+    };
+
+    // Compositor latency of a whole refresh is not a queue: the realigned
+    // output stays late, so repeating the delay would hold a refresh every
+    // evidence window. One test realignment is allowed, then none.
+    {
+        Bridge bridge;
+        expect(countRealignments(bridge, 30, tick + 1ms) == 1,
+            "constant compositor latency repeatedly held a refresh as a queue");
+        // A pause or timing reset re-arms realignment for a new queue.
+        bridge.arrival += 2s;
+        bridge.now = bridge.arrival;
+        expect(countRealignments(bridge, 7, tick + 1ms) == 1,
+            "a timing reset did not re-arm realignment after a disproved one");
+    }
+
+    // A realignment that drained its queue keeps later queues eligible.
+    {
+        Bridge bridge;
+        expect(countRealignments(bridge, 6, tick + 1ms) == 0,
+            "queue evidence realigned before it was complete");
+        expect(countRealignments(bridge, 4, 1ms) == 1,
+            "queued refresh was not drained");
+        expect(countRealignments(bridge, 6, tick + 1ms) == 0,
+            "a drained queue was realigned again");
+        expect(countRealignments(bridge, 1, 1ms) == 1,
+            "a proven realignment disabled draining a later queue");
+    }
+}
+
 int main() {
     {
         mako::layer::RealFramePacer pacer;
@@ -970,15 +1959,21 @@ int main() {
     testLongSessionDeadlineBounds();
     testFractionalUsesExistingSourceDeadline();
     testFixedUsesExistingSourceDeadline();
+    testSourceIntervalSpacing();
     testSmoothCadenceCapFollowsActivePlan();
     testOrderedPresentationTimeline();
     testBridgeCompositorReadiness();
     testBridgeCompletionReturnDoesNotDrift();
     testBridgeStagedReadiness();
+    testBridgeQueuedRefreshRealignment();
     testBridgeSourceDeadlinePreservesDisplayClock();
     testOrderedAcquireUsesExplicitFailureOnly();
     testOrderedAcquireBackoffAndProbeAreFinite();
     testExternalInterruptionDiscardsOldFailure();
+    testFifoSourceOverrunEndsTwoXHandoff();
+    testApplicationAcquireBudgetHoldsZinkToItsRequest();
+    testCappedFifoBacklogDrainRetiresZinkQueue();
+    testZinkFifoBacklogEndsHandoff();
     expect(!shouldRejectManagedMultiSwapchainPresent(1, true) &&
             !shouldRejectManagedMultiSwapchainPresent(2, false) &&
             shouldRejectManagedMultiSwapchainPresent(2, true),

@@ -67,8 +67,8 @@ const features = [
   {
     index: '02',
     code: 'SR',
-    title: 'LS1 + MAKO spatial scaling',
-    text: 'Choose proprietary LS1 Quality or Performance, or the built-in open MAKO Scaler, before Fixed or Adaptive generation.',
+    title: 'MAKO + LS1 spatial scaling',
+    text: 'Use the built-in open MAKO Scaler by default, or optional LS1 Quality or Performance, before Fixed or Adaptive generation.',
     stat: '1-2×',
     label: 'scale factor',
     tone: 'violet',
@@ -156,7 +156,7 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow"><span /> Frame generation + spatial scaling + shaders / Linux</p>
             <h1>Frames. Scaling.<br /><em>Shaders.</em></h1>
-            <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. LSFG frame generation and LS1 require a separate Lossless Scaling purchase; the open MAKO Scaler and bundled shaders work without it.</p>
+            <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. MAKO FG and the open MAKO Scaler are the defaults and, with bundled shaders, work without Lossless Scaling. Only the optional Lossless Scaling frame generation model (LSFG) and LS1 scaling need a separate Lossless Scaling purchase.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
               <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Contribute. Fork it. Change it. Make it yours.</span></span>
@@ -175,7 +175,7 @@ export default function Home() {
               <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
             <div className="hero-meta">
-              <span><b>1-2×</b> LS1 or MAKO Scaler</span>
+              <span><b>1-2×</b> MAKO Scaler or LS1</span>
               <span><b>30-240</b> adaptive FPS target</span>
               <span><b>2-5×</b> generation ceiling</span>
               <span><b>LIVE</b> per-game shader effects</span>
@@ -247,8 +247,8 @@ export default function Home() {
               <h3>MAKO Renderer</h3>
               <p>A private Vulkan pipeline for spatial reconstruction, frame synthesis, deterministic scheduling, and presentation recovery, with optional bundled shader effects.</p>
               <ul>
-                <li><span /> Proprietary LS1 or built-in open MAKO Scaler</li>
-                <li><span /> Lossless Scaling frame-generation models</li>
+                <li><span /> Built-in open MAKO Scaler or optional LS1</li>
+                <li><span /> MAKO FG or optional Lossless Scaling models</li>
                 <li><span /> Adaptive generated-frame planning</li>
               </ul>
               <a href={links.rendererDownload} {...newTabProps}>Download Linux archive <span>→</span></a>
@@ -398,7 +398,7 @@ export default function Home() {
             <ol className="steps">
               <li>
                 <span>01</span>
-                <div><strong>Choose your pipeline</strong><p>The open MAKO Scaler and bundled shaders run independently. For frame generation or LS1 scaling, purchase and install Lossless Scaling separately through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
+                <div><strong>Choose your pipeline</strong><p>MAKO FG, the open MAKO Scaler, and bundled shaders work without Lossless Scaling. For the optional Lossless Scaling frame generation model (LSFG) or LS1 scaling, purchase and install Lossless Scaling separately through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
               </li>
               <li>
                 <span>02</span>
@@ -456,8 +456,8 @@ export default function Home() {
           </div>
 
           <div className="requirement-note">
-            <span>IMPORTANT / LICENSED INPUT</span>
-            <p>MAKO is independent and unaffiliated with Lossless Scaling. Frame generation and LS1 require your own separately purchased <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO Scaler does not. MAKO does not distribute Lossless Scaling or its proprietary resources, alter your DLL, or save extracted resources as standalone files. Your copy’s terms apply. See <a href={`${links.repository}/blob/main/THIRD_PARTY_NOTICES.md`} {...newTabProps}>third-party notices</a>.</p>
+            <span>OPTIONAL / LICENSED INPUT</span>
+            <p>MAKO is independent and unaffiliated with Lossless Scaling. MAKO FG, the open MAKO Scaler, and bundled shaders do not need it. Only the optional Lossless Scaling frame generation model (LSFG) and LS1 scaling require your own separately purchased <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation. MAKO does not distribute Lossless Scaling or its proprietary resources, alter your DLL, or save extracted resources as standalone files. Your copy’s terms apply. See <a href={`${links.repository}/blob/main/THIRD_PARTY_NOTICES.md`} {...newTabProps}>third-party notices</a>.</p>
           </div>
         </section>
 
@@ -473,11 +473,11 @@ export default function Home() {
             </details>
             <details>
               <summary><span>02</span> Does MAKO include Lossless Scaling?<i>+</i></summary>
-              <p>No. MAKO does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling require a separate Lossless Scaling purchase and installation from Steam, then MAKO discovers or lets you select its local DLL. The open MAKO Scaler does not need it.</p>
+              <p>No. MAKO does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. MAKO FG, the open MAKO Scaler, and bundled shaders work without it. Only the optional Lossless Scaling frame generation model (LSFG) and LS1 scaling require a separate Lossless Scaling purchase and installation from Steam, then MAKO discovers or lets you select its local DLL.</p>
             </details>
             <details>
               <summary><span>03</span> Can frame generation, scaling, and shaders run together?<i>+</i></summary>
-              <p>Yes. Scale with LS1 or the open MAKO Scaler, feed reconstructed real frames into Fixed or Adaptive frame generation, and apply per-game shader effects in the same profile. The downloads above track MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion} from canonical release metadata.</p>
+              <p>Yes. Scale with the open MAKO Scaler or optional LS1, feed reconstructed real frames into Fixed or Adaptive frame generation, and apply per-game shader effects in the same profile. The downloads above track MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion} from canonical release metadata.</p>
             </details>
             <details>
               <summary><span>04</span> What hardware is published today?<i>+</i></summary>

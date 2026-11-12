@@ -375,7 +375,10 @@ VkResult Swapchain::presentHistoryOnly(
 
     const auto historyScheduleStarted = startPresentDiagnostic();
     try {
-        this->instance->scheduleFrameHistory(this->ctx.get());
+        this->instance->scheduleFrameHistory(
+            this->ctx.get(),
+            this->frameState.backendSourceInterval(invocation.cadenceStarted)
+        );
     } catch (const std::exception& error) {
         phases.schedule = finishPresentDiagnostic(historyScheduleStarted);
         // The fallback copy is already queued and signals fallbackSemaphore.
@@ -417,6 +420,7 @@ VkResult Swapchain::presentHistoryOnly(
     phases.schedule = finishPresentDiagnostic(historyScheduleStarted);
 
     this->frameState.backendFrameIndex++;
+    this->frameState.backendSourceCadence = invocation.cadenceStarted;
     if (plan.requestedGeneratedFrames.size() >
             plan.admittedGeneratedFrameCount) {
         logPresentFallback(

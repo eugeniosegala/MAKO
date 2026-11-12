@@ -22,6 +22,9 @@ VKBASALT_CONFIG_FILE=/absolute/path/vkBasalt.conf selects an optional config.
 Enable installed host MangoHud (exclusive with Shaders; requires Python 3):
   MANGOHUD=1 mako-launch COMMAND [ARG ...]
 
+MangoHud counts every output frame, including generated ones. To count only
+the game's own frames, add MAKO_MANGOHUD_REAL_FRAMES=1.
+
 A readable ~/.config/mako-render/mangohud.conf supplies the shared HUD layout.
 XDG_CONFIG_HOME is respected. Check host availability without changing files:
   mako-launch --check-mangohud
@@ -307,6 +310,15 @@ if [[ "$mako_launch_enable_zink" == 1 ]]; then
     export __GLX_VENDOR_LIBRARY_NAME=mesa
     export MESA_LOADER_DRIVER_OVERRIDE=zink
     export GALLIUM_DRIVER=zink
+    # Zink games showed colour speckles only while Gamescope scanned their
+    # images out directly. Keep RADV's display compression off for them.
+    case ",${RADV_DEBUG:-}," in
+        *",nodisplaydcc,"*) ;;
+        *) export RADV_DEBUG="${RADV_DEBUG:+$RADV_DEBUG,}nodisplaydcc" ;;
+    esac
+    # Gamescope's direct scan-out also tore Zink images without MAKO. The
+    # launch helper asks Gamescope to composite this game while it runs.
+    export MAKO_GAMESCOPE_COMPOSITE_FORCE=1
 fi
 if [[ "$mako_launch_force_alsa_audio" == 1 ]]; then
     export SDL_AUDIODRIVER=alsa
@@ -337,6 +349,12 @@ case "$mako_mangohud_requested" in
     0|1) ;;
     *) echo "MAKO Renderer: MANGOHUD must be 0 or 1." >&2; exit 2 ;;
 esac
+mako_mangohud_real_frames="${MAKO_MANGOHUD_REAL_FRAMES:-0}"
+case "$mako_mangohud_real_frames" in
+    0|1) ;;
+    *) echo "MAKO Renderer: MAKO_MANGOHUD_REAL_FRAMES must be 0 or 1." >&2; exit 2 ;;
+esac
+unset MAKO_MANGOHUD_REAL_FRAMES
 if [[ "$mako_mangohud_requested" == 1 && "$mako_vkbasalt_requested" == 1 ]]; then
     echo "MAKO Renderer: MangoHud and Shaders cannot be enabled together; select one." >&2
     exit 2
@@ -500,6 +518,7 @@ elif [[ "$mako_vkbasalt_enabled" != 1 ]]; then
         unset VK_INSTANCE_LAYERS
     fi
 fi
+mako_mangohud_gates=0
 if [[ "$mako_mangohud_requested" == 1 && "${DISABLE_MAKO:-0}" != 1 ]]; then
     if [[ -n "${FLATPAK_ID:-}" || "$mako_flatpak_launch" == 1 ]]; then
         echo "MAKO Renderer: host MangoHud is unavailable for Flatpak; continuing without MangoHud." >&2
@@ -507,16 +526,39 @@ if [[ "$mako_mangohud_requested" == 1 && "${DISABLE_MAKO:-0}" != 1 ]]; then
         mako_implicit_layer_path="$mako_implicit_layer_path:$mako_mangohud_directory"
         export MANGOHUD=1
         unset DISABLE_MANGOHUD
-        # Match Decky's 64-bit explicit ordering. The guarded 32-bit manifest
-        # stays implicit and is admitted only to a matching 32-bit process.
+        # Match Decky's explicit ordering: MangoHud below the Renderer counts
+        # every output frame; above it, the game's own presents. The list owns
+        # both guarded identities, and the loader skips the one whose
+        # library_arch does not match. Older loaders, such as 1.3.239, never
+        # enable an implicit layer from the list alone, so both activation
+        # gates stay set when MangoHud is the list's only reason. With gates
+        # set, the Steam Linux Runtime's loader uses discovery order instead,
+        # so the guarded directories follow the list. A 32-bit-only
+        # installation stays implicit.
         if [[ -r "$mako_mangohud_directory/MangoHud.x86_64.json" ]]; then
+            mako_mangohud_layers=VK_LAYER_MANGOHUD_overlay_x86_64
+            if [[ -r "$mako_mangohud_directory/MangoHud.x86.json" ]]; then
+                mako_mangohud_layers="$mako_mangohud_layers:VK_LAYER_MANGOHUD_overlay_x86"
+            fi
             mako_mangohud_chain=":${VK_INSTANCE_LAYERS:-}:"
             while [[ "$mako_mangohud_chain" == *":VK_LAYER_MAKO_render:"* ]]; do
                 mako_mangohud_chain="${mako_mangohud_chain/:VK_LAYER_MAKO_render:/:}"
             done
             mako_mangohud_chain="${mako_mangohud_chain#:}"
             mako_mangohud_chain="${mako_mangohud_chain%:}"
-            export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:VK_LAYER_MANGOHUD_overlay_x86_64${mako_mangohud_chain:+:$mako_mangohud_chain}"
+            if [[ "$mako_mangohud_real_frames" == 1 ]]; then
+                export VK_INSTANCE_LAYERS="$mako_mangohud_layers:VK_LAYER_MAKO_render${mako_mangohud_chain:+:$mako_mangohud_chain}"
+            else
+                export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:$mako_mangohud_layers${mako_mangohud_chain:+:$mako_mangohud_chain}"
+            fi
+            if [[ -z "$mako_steam_overlay_layers" ]]; then
+                mako_mangohud_gates=1
+                if [[ "$mako_mangohud_real_frames" == 1 ]]; then
+                    mako_implicit_layer_path="$mako_mangohud_directory:${mako_implicit_layer_path%:"$mako_mangohud_directory"}"
+                fi
+            else
+                unset MANGOHUD
+            fi
         fi
         mako_mangohud_config="${XDG_CONFIG_HOME:-$HOME/.config}/mako-render/mangohud.conf"
         if [[ -f "$mako_mangohud_config" && -r "$mako_mangohud_config" ]]; then
@@ -527,7 +569,8 @@ if [[ "$mako_mangohud_requested" == 1 && "${DISABLE_MAKO:-0}" != 1 ]]; then
     fi
 fi
 unset mako_mangohud_requested mako_mangohud_directory mako_mangohud_config
-unset mako_mangohud_chain mako_mangohud_layer
+unset mako_mangohud_chain mako_mangohud_layer mako_mangohud_layers
+unset mako_mangohud_real_frames
 export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"
 unset VK_ADD_IMPLICIT_LAYER_PATH
 # Apply the saved process-start Performance setting before application exec.
@@ -573,8 +616,15 @@ if [[ "$mako_steam_overlay_preload_filter_requested" == 1 ]]; then
 fi
 # END MAKO_STEAM_OVERLAY_PRELOAD_POLICY
 if [[ "${MAKO_PRESENT_DIAGNOSTICS:-0}" != 0 ]]; then
-    printf 'MAKO Renderer: present diagnostics: operation=launch-environment pid=%s steam_overlay_preload_filter_requested=%s steam_overlay_preload_removed=%s\n' \
-        "$$" "$mako_steam_overlay_preload_filter_requested" "$mako_steam_overlay_preload_removed" >&2
+    # With PROTON_LOG set and a Steam game ID, Proton sends the game's output,
+    # MAKO's records included, to its own log file instead.
+    mako_proton_log=0
+    if [[ -n "${PROTON_LOG:-}" && "$PROTON_LOG" != 0 && -n "${SteamGameId+set}" ]]; then
+        mako_proton_log="1 proton_log_file=${PROTON_LOG_DIR-$HOME}/steam-$SteamGameId.log"
+    fi
+    printf 'MAKO Renderer: present diagnostics: operation=launch-environment pid=%s steam_overlay_preload_filter_requested=%s steam_overlay_preload_removed=%s proton_log=%s\n' \
+        "$$" "$mako_steam_overlay_preload_filter_requested" "$mako_steam_overlay_preload_removed" "$mako_proton_log" >&2
+    unset mako_proton_log
 fi
 unset mako_steam_overlay_preload_removed
 unset mako_steam_overlay_preload_filter_requested mako_disable_steam_overlay
@@ -601,13 +651,21 @@ else
     unset DXVK_HDR
 fi
 unset mako_disable_hdr_exposure
-if [[ "$mako_vkbasalt_enabled" == 1 || -n "${VK_INSTANCE_LAYERS:-}" &&
-        ":${VK_INSTANCE_LAYERS}:" == *":VK_LAYER_MAKO_render:"* ]]; then
+if [[ "$mako_mangohud_gates" != 1 && ( "$mako_vkbasalt_enabled" == 1 ||
+        -n "${VK_INSTANCE_LAYERS:-}" &&
+        ":${VK_INSTANCE_LAYERS}:" == *":VK_LAYER_MAKO_render:"* ) ]]; then
     unset ENABLE_MAKO
 else
     export ENABLE_MAKO=1
 fi
-unset mako_vkbasalt_enabled
+unset mako_vkbasalt_enabled mako_mangohud_gates
+
+# Bypass Wine's offscreen child-window copy before its X11 driver starts.
+# Keep caller overrides, including 0, and leave disabled launches untouched.
+if [[ "${DISABLE_MAKO:-0}" != 1 &&
+        -z "${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK+set}" ]]; then
+    export WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=1
+fi
 
 if [[ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" &&
         ( -z "${WAYLAND_DISPLAY:-}" ||

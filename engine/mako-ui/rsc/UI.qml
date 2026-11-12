@@ -268,28 +268,44 @@ ApplicationWindow {
                 spacing: 12
 
                 Group {
+                    id: lossless_scaling_warning
                     objectName: "lossless_scaling_warning"
                     name: t.losslessWarningTitle
-                    visible: backend.lossless_scaling_missing
+                    visible: backend.lossless_scaling_fallback || backend.model_inspection_unavailable
 
-                    RowLayout {
+                    Label {
                         Layout.fillWidth: true
-                        Label {
-                            Layout.fillWidth: true
-                            text: "• " + t.losslessWarningRequired
-                            textFormat: Text.PlainText
-                            wrapMode: Text.WordWrap
-                        }
-                        Button {
-                            text: t.losslessWarningInstallAction
-                            Accessible.name: t.losslessWarningOpenSteam
-                            onClicked: Qt.openUrlExternally("https://store.steampowered.com/app/993090/Lossless_Scaling/")
-                        }
+                        visible: backend.lossless_scaling_fallback
+                        text: "• " + (backend.lossless_scaling_missing
+                            ? t.losslessWarningRequired : t.losslessModelWarning)
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: backend.model_inspection_unavailable
+                        text: t.losslessInspectionWarning
+                        textFormat: Text.PlainText
+                        wrapMode: Text.WordWrap
                     }
                 }
 
                 Group {
                     name: t.globalSettings
+
+                    GroupEntry {
+                        title: t.allowFp16
+                        description: t.allowFp16Desc
+                        compactRestartMarker: true
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.allow_fp16
+                            onToggled: backend.allow_fp16 = checked
+                        }
+                    }
 
                     GroupEntry {
                         title: t.losslessDllPath
@@ -307,19 +323,6 @@ ApplicationWindow {
                             onUpdate: text => backend.dll = text
                         }
                     }
-
-                    GroupEntry {
-                        title: t.allowFp16
-                        description: t.allowFp16Desc
-                        compactRestartMarker: true
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.allow_fp16
-                            onToggled: backend.allow_fp16 = checked
-                        }
-                    }
                 }
 
                 Group {
@@ -329,15 +332,21 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.separatePowerModes
                         description: t.powerProfilesDesc
+
                         CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
                             checked: backend.separate_power_modes
                             onToggled: backend.separate_power_modes = checked
                         }
                     }
+
                     GroupEntry {
                         title: t.editPowerMode
                         visible: backend.separate_power_modes
+
                         ComboBox {
+                            Layout.fillWidth: true
                             model: [t.powerShared, t.powerHandheld, t.powerDocked]
                             currentIndex: backend.power_mode
                             onActivated: backend.power_mode = currentIndex
@@ -420,6 +429,64 @@ ApplicationWindow {
                                     );
                             }
                             onValueModified: backend.base_fps_cap = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.fgModel
+                        description: t.fgModelDesc
+                        visible: backend.frame_generation_provisioned
+                        compactRestartMarker: true
+
+                        ModelComboBox {
+                            id: fg_model_picker
+                            // LSFG Quality and Performance share the restart-bound
+                            // Lossless Scaling model and differ by the live lighter
+                            // variant, which Ultra Performance always forces.
+                            readonly property var choices: backend.ultra_performance
+                                ? ["mako-fg", "lsfg-performance"]
+                                : ["mako-fg", "lsfg-quality", "lsfg-performance"]
+                            readonly property var labels: ({
+                                "mako-fg": "MAKO FG",
+                                "lsfg-quality": t.fgModelLsfgQuality,
+                                "lsfg-performance": t.fgModelLsfgPerformance
+                            })
+                            Layout.fillWidth: true
+                            model: choices.map(choice => labels[choice])
+                            function savedIndex() { return choices.indexOf(backend.frame_generation_model === "mako-fg"
+                                ? "mako-fg"
+                                : backend.performance_mode ? "lsfg-performance" : "lsfg-quality") }
+                            selectionIndex: savedIndex()
+                            unavailableFromIndex: backend.lsfg_unavailable ? 1 : -1
+                            onChoiceActivated: index => {
+                                const choice = choices[index]
+                                backend.frame_generation_model = choice === "mako-fg" ? "mako-fg" : "lossless-scaling"
+                                if (choice !== "mako-fg")
+                                    backend.performance_mode = choice === "lsfg-performance"
+                            }
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.makoFgMode
+                        description: t.makoFgModeDesc
+                        visible: backend.frame_generation_provisioned && backend.frame_generation_model === "mako-fg"
+
+                        ComboBox {
+                            Layout.alignment: Qt.AlignRight
+                            // Ultra Performance uses at least Performance.
+                            readonly property var values: backend.ultra_performance
+                                ? ["performance", "extra-performance"]
+                                : ["quality", "balanced", "performance", "extra-performance"]
+                            readonly property var labels: ({
+                                "quality": t.makoFgModeQuality,
+                                "balanced": t.makoFgModeBalanced,
+                                "performance": t.makoFgModePerformance,
+                                "extra-performance": t.makoFgModeExtraPerformance
+                            })
+                            model: values.map(value => labels[value])
+                            currentIndex: Math.max(values.indexOf(backend.mako_fg_mode), 0)
+                            onActivated: backend.mako_fg_mode = values[index]
                         }
                     }
 
@@ -586,20 +653,6 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: t.performanceMode
-                        description: t.performanceModeDesc
-                        visible: backend.frame_generation_provisioned
-                        enabled: !backend.ultra_performance
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.performance_mode
-                            onToggled: backend.performance_mode = checked
-                        }
-                    }
-
-                    GroupEntry {
                         title: t.gpu
                         description: t.gpuDesc
                         visible: backend.frame_generation_provisioned
@@ -639,11 +692,16 @@ ApplicationWindow {
                         visible: backend.scaling_enabled
                         enabled: backend.scaling_enabled && !backend.ultra_performance
 
-                        ComboBox {
+                        ModelComboBox {
                             Layout.fillWidth: true
                             model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
-                            currentIndex: backend.ultra_performance ? 3 : backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1
-                            onActivated: index => backend.scaling_method = index === 0 ? "native" : index === 2 ? "ls1" : index === 3 ? "ls1-performance" : "mako"
+                            id: scaling_model_picker
+                            function savedIndex() { return backend.ultra_performance ? 1 : backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1 }
+                            selectionIndex: savedIndex()
+                            unavailableFromIndex: backend.ls1_unavailable ? 2 : -1
+                            onChoiceActivated: index => {
+                                backend.scaling_method = index === 0 ? "native" : index === 2 ? "ls1" : index === 3 ? "ls1-performance" : "mako"
+                            }
                         }
                     }
 
@@ -930,27 +988,43 @@ ApplicationWindow {
                         }
                     }
 
-                    Label {
+                    ColumnLayout {
                         Layout.fillWidth: true
+                        Layout.topMargin: 4
                         visible: backend.enable_vkbasalt
-                        wrapMode: Text.Wrap
-                        text: t.shaderAdvancedNote
-                        color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
-                    }
+                        spacing: 2
 
-                    Button {
-                        Layout.fillWidth: true
-                        visible: backend.enable_vkbasalt
-                        flat: true
-                        onClicked: backend.openVkBasaltConfig()
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.bottomMargin: 10
+                            implicitHeight: 1
+                            color: palette.mid
+                        }
 
-                        contentItem: Label {
-                            text: backend.vkbasalt_config_path
-                            color: palette.link
-                            font.underline: true
-                            wrapMode: Text.WrapAnywhere
-                            horizontalAlignment: Text.AlignLeft
-                            verticalAlignment: Text.AlignVCenter
+                        Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.Wrap
+                            text: t.shaderAdvancedNote
+                            font.pixelSize: 12
+                            color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                        }
+
+                        Button {
+                            Layout.fillWidth: true
+                            flat: true
+                            leftPadding: 0
+                            rightPadding: 0
+                            onClicked: backend.openVkBasaltConfig()
+
+                            contentItem: Label {
+                                text: backend.vkbasalt_config_path
+                                font.pixelSize: 12
+                                color: palette.link
+                                font.underline: true
+                                wrapMode: Text.WrapAnywhere
+                                horizontalAlignment: Text.AlignLeft
+                                verticalAlignment: Text.AlignVCenter
+                            }
                         }
                     }
                 }
@@ -1039,6 +1113,19 @@ ApplicationWindow {
 
                             checked: backend.swapchain_image_count_compatibility
                             onToggled: backend.swapchain_image_count_compatibility = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.mailboxPresentation
+                        description: t.mailboxPresentationDesc + "\n\n" + t.mailboxPresentationWarning
+                        compactRestartMarker: true
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.mailbox_presentation_compatibility
+                            onToggled: backend.mailbox_presentation_compatibility = checked
                         }
                     }
 
@@ -1135,6 +1222,20 @@ ApplicationWindow {
                                      (backend.mangohud_available || backend.enable_mangohud)
                             checked: backend.enable_mangohud
                             onToggled: backend.enable_mangohud = checked
+                        }
+                    }
+                    GroupEntry {
+                        visible: backend.enable_mangohud
+                        title: t.mangoHudCountRealFrames
+                        description: t.mangoHudCountRealFramesDesc
+                        compactRestartMarker: true
+
+                        CheckBox {
+                            objectName: "mangoHudCountRealFrames"
+                            Layout.alignment: Qt.AlignRight
+                            enabled: backend.available
+                            checked: backend.mangohud_count_real_frames
+                            onToggled: backend.mangohud_count_real_frames = checked
                         }
                     }
                     Label {

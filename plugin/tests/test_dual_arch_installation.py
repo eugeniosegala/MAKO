@@ -4,6 +4,7 @@ import io
 import hashlib
 import json
 import os
+import subprocess
 from pathlib import Path
 import re
 import sys
@@ -63,9 +64,15 @@ from py_modules.mako_plugin.config_schema import (  # noqa: E402
     DEFAULT_PROFILE_NAME,
 )
 from py_modules.mako_plugin.installation import InstallationService  # noqa: E402
+from py_modules.mako_plugin import base_service as base_service_module
 from py_modules.mako_plugin import installation as installation_module  # noqa: E402
 from py_modules.mako_plugin import managed_files as managed_files_module  # noqa: E402
 from py_modules.mako_plugin import host_environment as host_environment_module  # noqa: E402
+from py_modules.mako_plugin.development_renderer import (  # noqa: E402
+    RECEIPT_PATH, record_development_files,
+)
+from py_modules.mako_plugin.remote_play_core import RemotePlayOverride  # noqa: E402
+from py_modules.mako_plugin.remote_play_launch import SDR_HELPER_MARKER  # noqa: E402
 
 
 class DualArchInstallationTests(unittest.TestCase):
@@ -145,6 +152,12 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.user_vulkan_layer_dir = registered_dir
         self.service.registered_json_file = registered_dir / JSON_FILENAME
         self.service.registered_json32_file = registered_dir / JSON32_FILENAME
+        self.service.registered_spatial_scaling_json_file = (
+            registered_dir / SPATIAL_SCALING_JSON_FILENAME
+        )
+        self.service.registered_spatial_scaling_json32_file = (
+            registered_dir / SPATIAL_SCALING_JSON32_FILENAME
+        )
         self.service.cli_file = self.root / "bin/mako-cli"
         self.service.vrr_lease_file = self.root / "bin/mako-vrr-lease"
         self.service.remote_play_sdr_file = self.root / 'share/mako-render/mako_remote_play/libmako-remote-play-sdr.so'
@@ -234,7 +247,7 @@ class DualArchInstallationTests(unittest.TestCase):
             },
         }).encode("utf-8")
 
-    def _archive(self, include_32bit: bool = True, include_sdr_helper: bool = False, include_shader_tool: bool = False) -> Path:
+    def _archive(self, include_32bit: bool = True, include_mako_fg: bool = False, include_sdr_helper: bool = False, include_shader_tool: bool = False, include_uninstaller: bool = False) -> Path:
         archive_path = self.root / "engine.tar.xz"
         members = {
             "bin/mako-vrr-lease": b"#!/usr/bin/env python3\n",
@@ -312,10 +325,22 @@ class DualArchInstallationTests(unittest.TestCase):
                 ),
             })
 
+        if include_mako_fg:
+            members["lib/mako-fg/mako-fg-host"] = b"packaged MAKO FG program"
+            members["lib/mako-fg/version.json"] = b"{}"
+            for name in ("weights.bin", "ops.spv", "transport.spv", "mixture.spv"):
+                members[f"lib/mako-fg/model/{name}"] = b"packaged " + name.encode()
         if include_shader_tool:
             members["bin/mako-shader-tool"] = b"packaged shader helper"
         if include_sdr_helper:
             members['share/mako-render/mako_remote_play/libmako-remote-play-sdr.so'] = b'packaged SDR helper'
+        if include_uninstaller:
+            root = Path(__file__).resolve().parents[2]
+            members["bin/mako-installer"] = (root / "engine/scripts/mako-installer").read_bytes()
+            members["bin/mako-remote-play"] = (root / "engine/scripts/mako-remote-play").read_bytes()
+            for name in ("__init__.py", "remote_play_core.py", "remote_play_launch.py", "managed_files.py"):
+                members[f"share/mako-render/mako_remote_play/{name}"] = (root / "engine/scripts/mako_remote_play" / name).read_bytes()
+            members["share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"] = b'[Desktop Entry]\nExec=mako-installer --uninstall\n'
         with tarfile.open(archive_path, "w:xz") as archive:
             for name, content in members.items():
                 info = tarfile.TarInfo(name)
@@ -785,6 +810,19 @@ class DualArchInstallationTests(unittest.TestCase):
         )
         self.assertFalse(self.service.vkbasalt_manifest.exists())
 
+    def test_installs_one_runnable_mako_fg_program_beside_the_64bit_renderer(self):
+        self.service._extract_and_install_files(self._archive(include_mako_fg=True))
+        program = self.service.lib_file.parent / "mako-fg/mako-fg-host"
+        self.assertEqual(program.read_bytes(), b"packaged MAKO FG program")
+        self.assertEqual(program.stat().st_mode & 0o777, 0o755)
+        self.assertEqual((program.parent / "model/ops.spv").read_bytes(), b"packaged ops.spv")
+        self.assertFalse((self.service.lib32_file.parent / "mako-fg").exists())
+
+    def test_renderer_archives_install_without_mako_fg(self):
+        self.service._extract_and_install_files(self._archive())
+        self.assertTrue(self.service.lib_file.exists())
+        self.assertFalse((self.service.lib_file.parent / "mako-fg").exists())
+
     def test_installs_64bit_only_archive_and_removes_stale_32bit_files(self):
         self.service.lib32_file.parent.mkdir(parents=True, exist_ok=True)
         self.service.lib32_file.write_bytes(b"stale")
@@ -823,6 +861,35 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertFalse(self.service.spatial_scaling_json32_file.exists())
         self.assertFalse(self.service.vkbasalt_lib32_file.exists())
         self.assertFalse(self.service.vkbasalt_manifest32.exists())
+
+    def test_decky_selection_retires_standalone_public_scaling_registration(self):
+        standalone_registrations = (
+            self.service.registered_spatial_scaling_json_file,
+            self.service.registered_spatial_scaling_json32_file,
+        )
+        for registration in standalone_registrations:
+            registration.parent.mkdir(parents=True, exist_ok=True)
+            registration.write_text("standalone", encoding="utf-8")
+        managed = self.service._decky_renderer_files()
+        for registration in standalone_registrations:
+            self.assertIn(registration, managed)
+
+        archive = self._archive()
+        with self.assertRaisesRegex(OSError, "late failure"):
+            with managed_files_module.managed_install_transaction(
+                managed, self.service.log,
+            ):
+                self.service._extract_and_install_files(archive)
+                self.service._register_layer_manifests()
+                raise OSError("late failure")
+        for registration in standalone_registrations:
+            self.assertEqual(registration.read_text(), "standalone")
+
+        self.service._extract_and_install_files(archive)
+        self.service._register_layer_manifests()
+        self.assertTrue(self.service.registered_json_file.exists())
+        for registration in standalone_registrations:
+            self.assertFalse(registration.exists())
 
     def test_rejects_payload_without_build_marker(self):
         archive_path = self._archive()
@@ -1104,6 +1171,310 @@ class DualArchInstallationTests(unittest.TestCase):
                 self.assertEqual(
                     status["engine_update_required"], expected_update
                 )
+
+    def test_standalone_payload_identity_detects_same_version_rebuilds(self):
+        self._touch_minimal_standalone_64bit_installation()
+        self.service.standalone_installer_state_file.parent.mkdir(parents=True, exist_ok=True)
+        self.service.standalone_installer_state_file.touch()
+        metadata = dict(name="renderer.tar.xz", version="3.0.0-local.test",
+                        sha256hash="a" * 64, payload_sha256hash="b" * 64,
+                        architectures=["64"], host_architectures=["x86_64"])
+        for fingerprint, expected_update in ((None, True), ("a" * 64, True), ("b" * 64, False)):
+            with self.subTest(fingerprint=fingerprint):
+                state = dict(schema_version=1, owner="standalone", version="3.0.0")
+                if fingerprint is not None:
+                    state["payload_sha256hash"] = fingerprint
+                self.service.active_renderer_state_file.write_text(json.dumps(state))
+                with (patch.object(self.service, "_bundled_archive_metadata", return_value=metadata),
+                      patch.object(self.service, "_host_compatibility", return_value=("x86_64", True, None))):
+                    status = self.service.check_installation()
+                self.assertTrue(status["installed"])
+                self.assertEqual(status["engine_update_required"], expected_update)
+
+    def _install_checksummed_bundle(self):
+        source = self._archive(include_mako_fg=True)
+        with tarfile.open(source, "r:xz") as archive:
+            members = {entry.name: archive.extractfile(entry).read()
+                       for entry in archive.getmembers() if entry.isfile()}
+        manifest = "".join(f"{hashlib.sha256(content).hexdigest()}  {name}\n"
+                           for name, content in sorted(members.items())).encode()
+        package = self.root / "package"
+        (package / "bin").mkdir(parents=True)
+        bundled = package / "bin" / "engine.tar.xz"
+        with tarfile.open(bundled, "w:xz") as archive:
+            for name, content in {**members, "./MAKO-Renderer-install-manifest.txt": manifest}.items():
+                info = tarfile.TarInfo(name)
+                info.size = len(content)
+                archive.addfile(info, io.BytesIO(content))
+        metadata = dict(name=bundled.name, version="test", sha256hash="a" * 64,
+                        payload_sha256hash=hashlib.sha256(manifest).hexdigest(),
+                        architectures=["64", "32"], host_architectures=["x86_64"])
+        self.service._extract_and_install_files(bundled)
+        self.service._register_layer_manifests()
+        # This fixture's directories do not share the installed relative
+        # layout, so select the Decky library explicitly.
+        self.service.json_file.write_text(json.dumps(
+            {"layer": {"library_path": str(self.service.lib_file)}}), encoding="utf-8")
+        self.service.mako_script_path.parent.mkdir(parents=True, exist_ok=True)
+        self.service.mako_script_path.touch()
+        self.service._write_active_renderer_state(metadata)
+        (package / "package.json").write_text(json.dumps({"bundled_renderer": metadata}))
+        return package, metadata, bundled
+
+    def test_decky_check_compares_installed_files_with_the_bundled_payload(self):
+        # Decky's record alone cannot see a file replaced outside Decky or a
+        # partly applied install; the payload manifest checksums each file.
+        package, metadata, bundled = self._install_checksummed_bundle()
+        weights = self.service.lib_file.parent / "mako-fg/model/weights.bin"
+
+        def update_required() -> bool:
+            with (patch.object(installation_module, "PLUGIN_ROOT", package),
+                  patch.object(self.service, "_bundled_archive_metadata", return_value=metadata),
+                  patch.object(self.service, "_host_compatibility", return_value=("x86_64", True, None))):
+                status = self.service.check_installation()
+            self.assertTrue(status["installed"])
+            return status["engine_update_required"]
+
+        self.assertFalse(update_required())
+        original = self.service.lib32_file.read_bytes()
+        self.service.lib32_file.write_bytes(original + b" rebuilt elsewhere")
+        self.assertTrue(update_required())
+        self.service.lib32_file.write_bytes(original)
+        self.assertFalse(update_required())
+        model = weights.read_bytes()
+        weights.unlink()
+        self.assertTrue(update_required())
+        weights.write_bytes(model)
+        self.assertFalse(update_required())
+        # A package whose manifest no longer matches its fingerprint, or whose
+        # archive is gone, offers nothing to compare: the record decides.
+        self.service.lib32_file.write_bytes(original + b" rebuilt elsewhere")
+        with patch.dict(metadata, payload_sha256hash="c" * 64):
+            self.service._write_active_renderer_state(metadata)
+            self.assertFalse(update_required())
+        self.service._write_active_renderer_state(metadata)
+        bundled.unlink()
+        self.assertFalse(update_required())
+
+    def test_verified_development_files_do_not_offer_a_bundled_update(self):
+        package, metadata, _bundled = self._install_checksummed_bundle()
+        weights = self.service.lib_file.parent / "mako-fg/model/weights.bin"
+        updated = [self.service.lib_file, self.service.spatial_scaling_lib_file,
+                   self.service.vkbasalt_lib_file, weights]
+        bundled_contents = {path: path.read_bytes() for path in updated}
+        copies = []
+        for index, path in enumerate(updated):
+            source = self.root / f"development-{index}"
+            source.write_bytes(path.read_bytes() + b" local rebuild")
+            path.write_bytes(source.read_bytes())
+            copies.append((source, path))
+        record_development_files(package, self.service.active_renderer_state_file, copies)
+        receipt_path = package / RECEIPT_PATH
+        original_receipt = receipt_path.read_bytes()
+
+        def check(expected):
+            status = self.service.check_installation()
+            self.assertTrue(status["installed"])
+            self.assertEqual(status["engine_update_required"], expected)
+
+        with (patch.object(installation_module, "PLUGIN_ROOT", package),
+              patch.object(installation_module, "LOCAL_DEVELOPMENT_BUILD", True),
+              patch.object(self.service, "_bundled_archive_metadata", return_value=metadata),
+              patch.object(self.service, "_host_compatibility", return_value=("x86_64", True, None))):
+            check(False)
+            for source, path in copies:
+                with self.subTest(damaged=path):
+                    path.write_bytes(b"damaged")
+                    check(True)
+                    path.write_bytes(source.read_bytes())
+                    check(False)
+            weights.unlink()
+            check(True)
+            weights.write_bytes(copies[-1][0].read_bytes())
+            # A 64-bit overlay never accepts unrelated changes to 32-bit files.
+            original32 = self.service.lib32_file.read_bytes()
+            self.service.lib32_file.write_bytes(original32 + b" unrelated")
+            check(True)
+            self.service.lib32_file.write_bytes(original32)
+            check(False)
+            with patch.object(installation_module, "LOCAL_DEVELOPMENT_BUILD", False):
+                check(True)
+            for bad_receipt in (b"invalid", b"[]", b"{}",
+                                original_receipt.replace(b'"schema_version": 1', b'"schema_version": 2')):
+                receipt_path.write_bytes(bad_receipt)
+                check(True)
+            receipt_path.write_bytes(original_receipt)
+            package_file = package / "package.json"
+            original_package = package_file.read_bytes()
+            package_file.write_bytes(original_package + b"\n")
+            check(True)
+            package_file.write_bytes(original_package)
+            # A different native baseline also invalidates the receipt.
+            state = self.service.active_renderer_state_file
+            original_state = state.read_bytes()
+            state.write_bytes(original_state + b"\n")
+            check(True)
+            state.write_bytes(original_state)
+            check(False)
+            # Restoring the package remains healthy even with an old receipt.
+            for path, content in bundled_contents.items():
+                path.write_bytes(content)
+            check(False)
+
+    def test_failed_development_copy_cannot_replace_a_verified_receipt(self):
+        package, _metadata, _bundled = self._install_checksummed_bundle()
+        source = self.root / "development-layer"
+        source.write_bytes(self.service.lib_file.read_bytes())
+        copies = [(source, self.service.lib_file)]
+        record_development_files(package, self.service.active_renderer_state_file, copies)
+        previous = (package / RECEIPT_PATH).read_bytes()
+        source.write_bytes(b"copy was not installed")
+        with self.assertRaisesRegex(ValueError, "differs from its source"):
+            record_development_files(package, self.service.active_renderer_state_file, copies)
+        self.assertEqual((package / RECEIPT_PATH).read_bytes(), previous)
+
+    def test_system_package_notice_does_not_block_explicit_local_setup(self):
+        system_record = self.root / "system-renderer-version.txt"
+        system_record.write_text("4.6.0")
+        metadata = dict(name="missing-renderer.tar.xz", version="4.6.0",
+                        sha256hash="a" * 64, architectures=["64"], host_architectures=["x86_64"])
+        with (patch.object(installation_module, "SYSTEM_RENDERER_VERSION_FILE", system_record),
+              patch.object(installation_module, "PLUGIN_ROOT", self.root),
+              patch.object(self.service, "_bundled_archive_metadata", return_value=metadata),
+              patch.object(self.service, "_host_compatibility", return_value=("x86_64", True, None))):
+            status = self.service.check_installation()
+            self.assertFalse(status["installed"])
+            self.assertIsNone(status["error"])
+            self.assertIn("separate user-local", status["system_renderer_notice"])
+            # Setup proceeds to the selected payload instead of requiring
+            # removal of the independent system package.
+            result = self.service.install()
+            self.assertFalse(result["success"])
+            self.assertIn("archive not found", result["error"])
+            self.assertNotIn("pacman", result["error"])
+            self._touch_minimal_64bit_installation()
+            self.assertIsNone(self.service._system_renderer_notice())
+            self.assertTrue(self.service.uninstall()["success"])
+            self.assertEqual(system_record.read_text(), "4.6.0")
+
+    def test_decky_supplies_independent_uninstaller_and_remote_play_command(self):
+        self.service._extract_and_install_files(self._archive(include_32bit=False, include_uninstaller=True))
+        prefix = self.service.standalone_install_prefix
+        self.assertTrue((prefix / "bin/mako-installer").stat().st_mode & 0o100)
+        self.assertTrue((prefix / "bin/mako-remote-play").stat().st_mode & 0o100)
+        desktop = prefix / "share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
+        self.assertIn(f'Exec="{prefix}/bin/mako-installer" --uninstall', desktop.read_text())
+        for name in ("__init__.py", "remote_play_core.py", "remote_play_launch.py", "managed_files.py"):
+            self.assertTrue((prefix / "share/mako-render/mako_remote_play" / name).is_file())
+        self.service.cleanup_on_uninstall()
+        self.assertTrue(desktop.is_file())
+
+    def test_installed_uninstaller_works_after_decky_removal_without_standalone_ledger(self):
+        home = self.root / "independent-home"
+        home.mkdir()
+        with patch.object(base_service_module, "resolve_user_home", return_value=home):
+            service = InstallationService(logger=_Logger())
+        service._extract_and_install_files(self._archive(include_32bit=False, include_uninstaller=True))
+        service._write_active_renderer_state(dict(name="test.tar.xz", version="test", sha256hash="a" * 64,
+                                                 architectures=["64"], host_architectures=["x86_64"]))
+        service.config_file_path.parent.mkdir(parents=True)
+        service.config_file_path.write_text('version=2\ncurrent_profile="mako"\n[[profile]]\nname="mako"\n')
+        service.mako_script_path.write_text("#!/bin/sh\n# MAKO_LAUNCH_RENDERER_REQUIRED\n")
+        service.mako_script_path.chmod(0o755)
+        original_client = b"\x7fELF\x02\x01" + b"\0" * 12 + b"\x3e\0" + b"synthetic client"
+        service.remote_play_sdr_file.write_bytes(original_client[:16] + b"\x03\0\x3e\0" + SDR_HELPER_MARKER)
+        remote = RemotePlayOverride(home, service.mako_script_path, config_file=service.config_file_path)
+        remote.proc_root = home / "proc"
+        remote.proc_root.mkdir()
+        remote.client.parent.mkdir(parents=True)
+        remote.client.write_bytes(original_client)
+        remote.client.chmod(0o750)
+        remote.install()
+        wrapper = remote.client.read_bytes()
+        service.cleanup_on_uninstall()
+        self.assertEqual(remote.client.read_bytes(), wrapper)
+        self.assertFalse(service.standalone_installer_state_file.exists())
+        result = subprocess.run(
+            [str(home / ".local/bin/mako-installer"), "--uninstall"],
+            env={**os.environ, "HOME": str(home), "XDG_CONFIG_HOME": str(home / ".config"),
+                 "MAKO_INSTALLER_ASSUME_YES": "1", "MAKO_INSTALL_PREFIX": str(home / ".local")},
+            capture_output=True, text=True,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(remote.client.read_bytes(), original_client)
+        self.assertFalse(remote.state.exists())
+        for path in service._decky_renderer_files():
+            self.assertFalse(path.exists(), str(path))
+        self.assertTrue(service.config_file_path.exists())
+        self.assertFalse((home / ".local/share/mako-render").exists())
+
+    def test_legacy_decky_install_gets_removal_tools_without_a_native_update(self):
+        self._touch_minimal_64bit_installation()
+        original = self.service.lib_file.read_bytes()
+        metadata = dict(name="engine.tar.xz", version="test", architectures=["64"], host_architectures=["x86_64"])
+        archive = self._archive(include_32bit=False, include_uninstaller=True)
+        metadata["sha256hash"] = hashlib.sha256(archive.read_bytes()).hexdigest()
+        package = self.root / "package"
+        (package / "bin").mkdir(parents=True)
+        (package / "bin/engine.tar.xz").write_bytes(archive.read_bytes())
+        with (patch.object(installation_module, "PLUGIN_ROOT", package),
+              patch.object(self.service, "_bundled_archive_metadata", return_value=metadata)):
+            install_file = self.service._install_archive_file
+            def fail_late(source, destination, filename):
+                if filename == "remote_play_launch.py":
+                    raise OSError("late management-tool failure")
+                install_file(source, destination, filename)
+            with patch.object(self.service, "_install_archive_file", side_effect=fail_late):
+                with self.assertRaisesRegex(OSError, "late management-tool failure"):
+                    self.service.ensure_native_uninstaller_if_needed()
+            self.assertFalse((self.service.standalone_install_prefix / "bin/mako-installer").exists())
+            self.assertEqual(self.service.lib_file.read_bytes(), original)
+            self.assertTrue(self.service.ensure_native_uninstaller_if_needed())
+            self.assertFalse(self.service.ensure_native_uninstaller_if_needed())
+        self.assertEqual(self.service.lib_file.read_bytes(), original)
+        self.assertFalse(self.service.active_renderer_state_file.exists())
+        self.assertTrue((self.service.standalone_install_prefix / "bin/mako-installer").is_file())
+
+    def test_plugin_management_bundle_repairs_old_installer_without_replacing_renderer(self):
+        self._touch_minimal_64bit_installation()
+        original = self.service.lib_file.read_bytes()
+        package = self.root / "management-package"
+        management = self.service._management_destinations()
+        source_archive = self._archive(include_32bit=False, include_uninstaller=True)
+        with tarfile.open(source_archive, "r:xz") as archive:
+            for name in management:
+                member = archive.extractfile(name)
+                target = package / "bin/renderer-management" / name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(member.read())
+        installed = self.service.standalone_install_prefix / "bin/mako-installer"
+        installed.parent.mkdir(parents=True, exist_ok=True)
+        installed.write_text("old installer")
+        with patch.object(installation_module, "PLUGIN_ROOT", package):
+            self.assertTrue(self.service.ensure_native_uninstaller_if_needed())
+            identity = installed.stat().st_ino
+            with patch.object(installation_module, "managed_install_transaction") as backups:
+                self.assertFalse(self.service.ensure_native_uninstaller_if_needed())
+                backups.assert_not_called()
+            self.assertEqual(installed.stat().st_ino, identity)
+        self.assertEqual(installed.read_bytes(), (package / "bin/renderer-management/bin/mako-installer").read_bytes())
+        self.assertEqual(self.service.lib_file.read_bytes(), original)
+        self.assertFalse(self.service.active_renderer_state_file.exists())
+
+    def test_payload_metadata_requires_a_valid_present_fingerprint(self):
+        package = self.root / "metadata"
+        package.mkdir()
+        binary = dict(name="engine.tar.xz", version="test", sha256hash="a" * 64)
+        for fingerprint, valid in (("B" * 64, True), (None, False), ("broken", False), (7, False)):
+            with self.subTest(fingerprint=fingerprint):
+                (package / "package.json").write_text(json.dumps({"bundled_renderer": {
+                    **binary, "payload_sha256hash": fingerprint,
+                }}))
+                if valid:
+                    self.assertEqual(self.service._bundled_archive_metadata(package)["payload_sha256hash"], "b" * 64)
+                else:
+                    with self.assertRaises(OSError):
+                        self.service._bundled_archive_metadata(package)
 
     def test_legacy_decky_engine_state_remains_readable(self):
         self._touch_minimal_64bit_installation()

@@ -8,9 +8,13 @@ import tarfile
 import tempfile
 import json
 import hashlib
+import fcntl
+import os
+import stat
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict, Optional, TypedDict, cast
+from typing import Any, Dict, Iterator, Optional, TypedDict, cast
 
 from .base_service import BaseService
 from .constants import (
@@ -33,6 +37,9 @@ from .constants import (
     VKBASALT_LAYER_NAME_64, VKBASALT_MANIFEST_FILENAME_64,
     VKBASALT_LAYER_NAME_32, VKBASALT_MANIFEST_FILENAME_32,
     VKBASALT_LIB_FILENAME,
+    MAKO_FG_DIRECTORY,
+    MAKO_FG_FILES,
+    MAKO_FG_HOST_FILENAME,
     VKBASALT_SHADER_DIR, VKBASALT_SHADER_ASSET_FILENAMES,
     VKBASALT_LAYER_ENABLE_ENV, VKBASALT_LAYER_DISABLE_ENV,
     HOST_SYSTEM_IMPLICIT_LAYER_DIR,
@@ -48,6 +55,8 @@ from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
 from .remote_play_launch import SDR_HELPER_RELATIVE_PATH
 from .host_environment import detect_host_environment
 from .layer_manifests import manifest_owner
+from .build_flavor import LOCAL_DEVELOPMENT_BUILD
+from .development_renderer import read_development_receipt
 from .managed_files import (
     copy_managed_file_atomically,
     managed_install_transaction,
@@ -55,8 +64,10 @@ from .managed_files import (
 )
 from .types import InstallationResponse, UninstallationResponse, InstallationCheckResponse
 
+SYSTEM_RENDERER_VERSION_FILE = Path("/usr/share/doc/mako-renderer-bin/MAKO-Renderer-version.txt")
 
-class RendererArchiveMetadata(TypedDict):
+
+class RendererArchiveMetadataRequired(TypedDict):
     """Validated Renderer payload metadata consumed by installation."""
 
     name: str
@@ -64,6 +75,12 @@ class RendererArchiveMetadata(TypedDict):
     sha256hash: str
     architectures: list[str]
     host_architectures: list[str]
+
+
+class RendererArchiveMetadata(RendererArchiveMetadataRequired, total=False):
+    """Package identity, including the portable native payload fingerprint."""
+
+    payload_sha256hash: str
 
 
 class InstalledEngineStateRequired(TypedDict):
@@ -81,13 +98,19 @@ class InstalledEngineState(InstalledEngineStateRequired, total=False):
     host_architectures: list[str]
 
 
-class ActiveRendererState(TypedDict, total=False):
+class ActiveRendererStateRequired(TypedDict):
     """Identity of the native Renderer selected by the latest installer."""
 
     schema_version: int
     owner: str
     version: str
+
+
+class ActiveRendererState(ActiveRendererStateRequired, total=False):
+    """Optional fingerprints added without invalidating older native records."""
+
     sha256hash: str
+    payload_sha256hash: str
 
 
 @dataclass(frozen=True)
@@ -111,6 +134,39 @@ class RendererFileInventory:
 class InstallationService(BaseService):
     """Service for handling MAKO Renderer installation and uninstallation"""
 
+    @contextmanager
+    def native_installation_lock(self) -> Iterator[None]:
+        """Serialize the two user-local native installers without a stale lock."""
+        self.standalone_install_prefix.mkdir(parents=True, exist_ok=True)
+        path = self.standalone_install_prefix / ".mako-render-install.lock"
+        descriptor = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
+        with os.fdopen(descriptor, "r+") as lock:
+            identity = os.fstat(lock.fileno())
+            if not stat.S_ISREG(identity.st_mode) or identity.st_nlink != 1:
+                raise OSError("MAKO Renderer installation lock must be a private regular file")
+            # Decky can run as root; the native user must be able to lock it too.
+            owner = self.user_home.stat()
+            os.fchown(lock.fileno(), owner.st_uid, owner.st_gid)
+            os.fchmod(lock.fileno(), 0o600)
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError as error:
+                raise OSError("Another MAKO Renderer installation or removal is in progress") from error
+            yield
+
+    def _system_renderer_notice(self) -> Optional[str]:
+        """Explain the independent system owner before an explicit local install."""
+        if (SYSTEM_RENDERER_VERSION_FILE.is_file()
+                and not self.lib_file.is_file()
+                and not self.standalone_lib_file.is_file()):
+            return (
+                "MAKO Renderer is installed through pacman. Selecting Install creates a "
+                "separate user-local Renderer for MAKO Decky; pacman continues to manage "
+                "the system package. Both use your saved profiles, so keep their Renderer "
+                "versions aligned."
+            )
+        return None
+
     def __init__(self, logger=None):
         super().__init__(logger)
 
@@ -124,6 +180,13 @@ class InstallationService(BaseService):
         )
         self.json_file = self.local_share_dir / JSON_FILENAME
         self.json32_file = self.local_share_dir / JSON32_FILENAME
+        # Only the standalone archive registers its scaling layer publicly.
+        self.registered_spatial_scaling_json_file = (
+            self.user_vulkan_layer_dir / SPATIAL_SCALING_JSON_FILENAME
+        )
+        self.registered_spatial_scaling_json32_file = (
+            self.user_vulkan_layer_dir / SPATIAL_SCALING_JSON32_FILENAME
+        )
         self.gamescope_wsi_compatibility_manifest = (
             self.gamescope_wsi_compatibility_dir /
             GAMESCOPE_WSI_MANIFEST_FILENAME_64
@@ -160,7 +223,12 @@ class InstallationService(BaseService):
         self.active_renderer_state_file = (
             self.local_lib_dir.parent / ACTIVE_RENDERER_STATE_FILENAME
         )
-        self.standalone_install_prefix = self.user_home / ".local"
+        # The installation check runs on every panel open; reread the bundled
+        # manifest and rehash installed files only when they change.
+        self._payload_manifest_cache: Optional[
+            tuple[tuple[str, int, int, str], dict[str, str]]
+        ] = None
+        self._file_checksum_cache: dict[Path, tuple[tuple[int, int, int], str]] = {}
         self.standalone_lib_file = (
             self.standalone_install_prefix / "lib" / LIB_FILENAME
         )
@@ -193,6 +261,13 @@ class InstallationService(BaseService):
         )
 
     def install(self) -> InstallationResponse:
+        try:
+            with self.native_installation_lock():
+                return self._install_locked()
+        except OSError as error:
+            return self._error_response(InstallationResponse, str(error), message="")
+
+    def _install_locked(self) -> InstallationResponse:
         """Install the bundled MAKO Renderer archive into this plugin's private storage.
 
         Returns:
@@ -212,6 +287,12 @@ class InstallationService(BaseService):
                 archive_path,
                 archive_metadata["sha256hash"],
             )
+            if "payload_sha256hash" in archive_metadata:
+                checksum = hashlib.sha256(
+                    self._read_payload_manifest(archive_path)
+                ).hexdigest()
+                if checksum != archive_metadata["payload_sha256hash"]:
+                    raise OSError("Bundled MAKO Renderer payload manifest checksum mismatch")
 
             self._ensure_directories()
 
@@ -219,6 +300,7 @@ class InstallationService(BaseService):
                 self._decky_renderer_files() + [self.config_file_path], self.log,
             ):
                 self._extract_and_install_files(archive_path)
+                self._sync_packaged_management_tools()
 
                 # Register a uniquely named, wrapper-scoped manifest in Vulkan's normal
                 # per-user discovery directory. Steam's Pressure Vessel snapshots
@@ -251,6 +333,101 @@ class InstallationService(BaseService):
             self.log.error(error_msg)
             return self._error_response(InstallationResponse, str(e), message="")
 
+    @staticmethod
+    def _read_payload_manifest(archive_path: Path) -> bytes:
+        """Return the archive's per-file SHA-256 install manifest."""
+        with tarfile.open(archive_path, "r:xz") as archive:
+            member = next((entry for entry in archive.getmembers()
+                           if entry.name.removeprefix("./") == "MAKO-Renderer-install-manifest.txt"
+                           and entry.isfile()), None)
+            source = archive.extractfile(member) if member is not None else None
+            if source is None:
+                raise OSError("Bundled MAKO Renderer payload manifest is missing")
+            with source:
+                return source.read()
+
+    def _bundled_payload_checksums(
+            self, archive_path: Path, payload_checksum: str) -> Optional[dict[str, str]]:
+        """Return the bundled per-file checksums the payload fingerprint vouches for."""
+        try:
+            archive_stat = archive_path.stat()
+        except OSError:
+            return None
+        key = (str(archive_path), archive_stat.st_size,
+               archive_stat.st_mtime_ns, payload_checksum)
+        if self._payload_manifest_cache and self._payload_manifest_cache[0] == key:
+            return self._payload_manifest_cache[1]
+        try:
+            manifest = self._read_payload_manifest(archive_path)
+        except (OSError, tarfile.TarError):
+            return None
+        if hashlib.sha256(manifest).hexdigest() != payload_checksum:
+            return None
+        checksums: dict[str, str] = {}
+        for line in manifest.decode("utf-8", "replace").splitlines():
+            digest, separator, member = line.partition("  ")
+            if separator and len(digest) == 64:
+                checksums[member.removeprefix("./")] = digest.lower()
+        self._payload_manifest_cache = (key, checksums)
+        return checksums
+
+    def _cached_file_sha256(self, path: Path) -> Optional[str]:
+        """Return a file's SHA-256, reusing it while size, time and inode hold."""
+        try:
+            file_stat = path.stat()
+        except OSError:
+            return None
+        key = (file_stat.st_size, file_stat.st_mtime_ns, file_stat.st_ino)
+        cached = self._file_checksum_cache.get(path)
+        if cached and cached[0] == key:
+            return cached[1]
+        try:
+            checksum = self._file_sha256(path)
+        except OSError:
+            return None
+        self._file_checksum_cache[path] = (key, checksum)
+        return checksum
+
+    def _installed_payload_differences(
+            self, archive_metadata: RendererArchiveMetadata) -> list[Path]:
+        """Return installed Renderer binaries that differ from the bundled payload.
+
+        Decky's own record cannot see files replaced outside Decky or an
+        interrupted install. Layer libraries and MAKO FG files are copied
+        verbatim, so the bundled manifest checksums them directly; generated
+        and rewritten files are not compared. Without a payload fingerprint or
+        a readable archive there is nothing trustworthy to compare against.
+        Local development builds also accept exact copies verified by direct
+        deployment against this package and native identity; other files keep
+        the bundled checksums and ordinary installs ignore the receipt.
+        """
+        payload_checksum = archive_metadata.get("payload_sha256hash")
+        if payload_checksum is None:
+            return []
+        checksums = self._bundled_payload_checksums(
+            PLUGIN_ROOT / BIN_DIR / archive_metadata["name"], payload_checksum
+        )
+        if not checksums:
+            return []
+        inventory = self._renderer_file_inventory()
+        destinations = {
+            **inventory.required_archive,
+            **inventory.optional_32bit_archive,
+            **inventory.optional_archive,
+        }
+        receipt = (read_development_receipt(PLUGIN_ROOT, self.active_renderer_state_file)
+                   if LOCAL_DEVELOPMENT_BUILD else None)
+        development_files = receipt["files"] if receipt else {}
+        return [
+            destination
+            for member, destination in destinations.items()
+            if member.startswith(("lib/", "lib32/"))
+            and member in checksums
+            and self._cached_file_sha256(destination) != checksums[member]
+            and (str(destination) not in development_files
+                 or self._cached_file_sha256(destination) != development_files[str(destination)])
+        ]
+
     def _bundled_archive_metadata(
             self, plugin_dir: Path) -> RendererArchiveMetadata:
         """Return the versioned host payload metadata from package.json."""
@@ -278,6 +455,7 @@ class InstallationService(BaseService):
             archive_name = binary.get("name")
             version = binary.get("version")
             checksum = binary.get("sha256hash")
+            payload_checksum = binary.get("payload_sha256hash")
             architectures = binary.get("architectures", ["64", "32"])
             host_architectures = binary.get("host_architectures", ["x86_64"])
             if not isinstance(archive_name, str) or Path(archive_name).name != archive_name:
@@ -313,13 +491,20 @@ class InstallationService(BaseService):
                     f"{metadata_name} host_architectures must contain supported native "
                     "host names"
                 )
-            return {
+            metadata: RendererArchiveMetadata = {
                 "name": archive_name,
                 "version": version,
-                "sha256hash": checksum,
+                "sha256hash": checksum.lower(),
                 "architectures": architectures,
                 "host_architectures": host_architectures,
             }
+            if "payload_sha256hash" in binary:
+                if (not isinstance(payload_checksum, str)
+                        or len(payload_checksum) != 64
+                        or any(c not in "0123456789abcdefABCDEF" for c in payload_checksum)):
+                    raise ValueError(f"{metadata_name} payload_sha256hash must be a SHA-256 checksum")
+                metadata["payload_sha256hash"] = payload_checksum.lower()
+            return metadata
         except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
             raise OSError(f"Could not read bundled MAKO Renderer metadata from {manifest_path}: {exc}") from exc
 
@@ -418,6 +603,8 @@ class InstallationService(BaseService):
             "version": archive_metadata["version"],
             "sha256hash": archive_metadata["sha256hash"],
         }
+        if "payload_sha256hash" in archive_metadata:
+            state["payload_sha256hash"] = archive_metadata["payload_sha256hash"]
         write_managed_text_atomically(
             self.active_renderer_state_file,
             json.dumps(state, indent=2) + "\n",
@@ -447,16 +634,16 @@ class InstallationService(BaseService):
                 return None
             if not isinstance(state.get("version"), str) or not state["version"]:
                 return None
-            checksum = state.get("sha256hash")
-            if checksum is not None and (
-                not isinstance(checksum, str)
-                or len(checksum) != 64
-                or any(
-                    character not in "0123456789abcdefABCDEF"
-                    for character in checksum
-                )
-            ):
-                return None
+            for key in ("sha256hash", "payload_sha256hash"):
+                checksum = state.get(key)
+                if key in state and (
+                    not isinstance(checksum, str)
+                    or len(checksum) != 64
+                    or any(character not in "0123456789abcdefABCDEF" for character in checksum)
+                ):
+                    return None
+                if checksum is not None:
+                    state[key] = checksum.lower()
             return cast(ActiveRendererState, state)
         except (OSError, json.JSONDecodeError, TypeError):
             return None
@@ -470,6 +657,12 @@ class InstallationService(BaseService):
         if self._active_manifest_owner() == ACTIVE_RENDERER_OWNER_STANDALONE:
             return self.standalone_lib_file
         return self.lib_file
+
+    def selected_vrr_lease_file(self) -> Path:
+        """Return the VRR lease helper shipped with the selected native Renderer."""
+        if self._active_manifest_owner() == ACTIVE_RENDERER_OWNER_STANDALONE:
+            return self.standalone_vrr_lease_file
+        return self.vrr_lease_file
 
     def _native_payload_exists(
             self, owner: str, expects_32bit: bool) -> bool:
@@ -569,11 +762,28 @@ class InstallationService(BaseService):
             optional_32bit_archive=optional_32bit_destinations,
             # Published 4.0 archives predate native Remote Play. They remain
             # installable; enabling the override requires the current helper.
-            optional_archive={f"bin/{CLI_FILENAME}": self.cli_file,
+            # MAKO FG is a separate program: the Renderer works without it.
+            optional_archive={**{
+                                  f"lib/{MAKO_FG_DIRECTORY}/{name}":
+                                      self.lib_file.parent / MAKO_FG_DIRECTORY / name
+                                  for name in MAKO_FG_FILES
+                              },
+                              f"bin/{CLI_FILENAME}": self.cli_file,
                               f"bin/{SHADER_TOOL_FILENAME}": self.cli_file.with_name(SHADER_TOOL_FILENAME),
-                              SDR_HELPER_RELATIVE_PATH: self.remote_play_sdr_file},
+                              SDR_HELPER_RELATIVE_PATH: self.remote_play_sdr_file,
+                              "bin/mako-installer": self.standalone_install_prefix / "bin/mako-installer",
+                              "bin/mako-remote-play": self.standalone_install_prefix / "bin/mako-remote-play",
+                              "share/applications/io.github.eugeniosegala.mako.uninstaller.desktop":
+                                  self.standalone_install_prefix / "share/applications/io.github.eugeniosegala.mako.uninstaller.desktop",
+                              **{
+                                  f"share/mako-render/mako_remote_play/{filename}":
+                                      self.standalone_install_prefix / "share/mako-render/mako_remote_play" / filename
+                                  for filename in ("__init__.py", "remote_play_core.py", "remote_play_launch.py", "managed_files.py")
+                              }},
             generated=(
                 self.registered_json_file, self.registered_json32_file,
+                self.registered_spatial_scaling_json_file,
+                self.registered_spatial_scaling_json32_file,
                 self.gamescope_wsi_compatibility_manifest,
                 self.gamescope_wsi_compatibility_library,
                 self.mangohud_manifest, self.mangohud_manifest32,
@@ -581,6 +791,112 @@ class InstallationService(BaseService):
                 self.mako_script_path, self.diagnostics_script_path,
             ),
         )
+
+    def _uninstaller_desktop_text(self, source: Path) -> str:
+        """Use the standalone installer's desktop quoting and path checks."""
+        executable = str(self.standalone_install_prefix / "bin/mako-installer")
+        if "\n" in executable or "\r" in executable:
+            raise OSError("The MAKO installation path cannot contain a line break")
+        executable = executable.replace("\\", "\\\\").replace('"', '\\"').replace("`", "\\`").replace("$", "\\$").replace("%", "%%")
+        content = source.read_text(encoding="utf-8")
+        if sum(line.startswith("Exec=") for line in content.splitlines()) != 1:
+            raise OSError("The MAKO Renderer uninstaller desktop entry must contain one Exec line")
+        return "\n".join(
+            f'Exec="{executable}" --uninstall' if line.startswith("Exec=") else line
+            for line in content.splitlines()
+        ) + "\n"
+
+    def _install_archive_file(self, source: Path, destination: Path, filename: str) -> None:
+        """Publish a non-layer archive entry, including its desktop command."""
+        if filename == "io.github.eugeniosegala.mako.uninstaller.desktop":
+            write_managed_text_atomically(destination, self._uninstaller_desktop_text(source), 0o644, self.log)
+        else:
+            copy_managed_file_atomically(
+                source, destination,
+                0o755 if filename in (CLI_FILENAME, VRR_LEASE_FILENAME, SHADER_TOOL_FILENAME, MAKO_FG_HOST_FILENAME, "mako-installer", "mako-remote-play") else 0o644,
+                self.log,
+            )
+
+    def _management_destinations(self) -> dict[str, Path]:
+        return {
+            name: path for name, path in self._renderer_file_inventory().optional_archive.items()
+            if name not in (f"bin/{CLI_FILENAME}", f"bin/{SHADER_TOOL_FILENAME}", SDR_HELPER_RELATIVE_PATH)
+            and f"/{MAKO_FG_DIRECTORY}/" not in name
+        }
+
+    def _packaged_management_updates(self) -> list[tuple[Path, Path]]:
+        """Prepare only changed management destinations before acquiring backups."""
+        root = PLUGIN_ROOT / BIN_DIR / "renderer-management"
+        if not root.exists():
+            return []
+        management = self._management_destinations()
+        if not all((root / name).is_file() for name in management):
+            raise OSError("Packaged MAKO Renderer management tools are incomplete")
+        updates = []
+        for name, destination in management.items():
+            source = root / name
+            content = (self._uninstaller_desktop_text(source).encode("utf-8")
+                       if name.endswith(".desktop") else source.read_bytes())
+            owner_mode = 0o700 if name.startswith("bin/") else 0o600
+            if (not destination.is_file() or destination.is_symlink()
+                    or destination.read_bytes() != content
+                    or destination.stat().st_mode & owner_mode != owner_mode):
+                updates.append((source, destination))
+        return updates
+
+    def _sync_packaged_management_tools(
+            self, updates: Optional[list[tuple[Path, Path]]] = None) -> bool:
+        """Called inside the native lock/transaction; never replace layer bytes."""
+        if updates is None:
+            updates = self._packaged_management_updates()
+        for source, destination in updates:
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            self._install_archive_file(source, destination, source.name)
+        return bool(updates)
+
+    def ensure_native_uninstaller_if_needed(self) -> bool:
+        """Give legacy Decky-only installs an exit path without replacing layers."""
+        if (self._active_manifest_owner() != ACTIVE_RENDERER_OWNER_DECKY
+                or not self.lib_file.is_file()):
+            return False
+        management = self._management_destinations()
+        if (PLUGIN_ROOT / BIN_DIR / "renderer-management").exists():
+            with self.native_installation_lock():
+                if self._active_manifest_owner() != ACTIVE_RENDERER_OWNER_DECKY:
+                    return False
+                updates = self._packaged_management_updates()
+                if not updates:
+                    return False
+                with managed_install_transaction([destination for _source, destination in updates], self.log):
+                    return self._sync_packaged_management_tools(updates)
+        # Compatibility for older plugin packages that supply tools only in
+        # their native archive. Current packaging always carries current tools.
+        if all(path.is_file() and (not name.startswith("bin/") or os.access(path, os.X_OK))
+               for name, path in management.items()):
+            return False
+        metadata = self._bundled_archive_metadata(PLUGIN_ROOT)
+        archive_path = PLUGIN_ROOT / BIN_DIR / metadata["name"]
+        self._validate_archive_checksum(archive_path, metadata["sha256hash"])
+        with self.native_installation_lock(), tarfile.open(archive_path, "r:xz") as archive:
+            if self._active_manifest_owner() != ACTIVE_RENDERER_OWNER_DECKY:
+                return False
+            entries = {entry.name.removeprefix("./"): entry for entry in archive.getmembers() if entry.isfile()}
+            # Old release archives do not provide these optional management tools.
+            if not any(name in entries for name in management):
+                return False
+            if not all(name in entries for name in management):
+                raise OSError("Bundled MAKO Renderer management tools are incomplete")
+            with tempfile.TemporaryDirectory(prefix=".mako-management-", dir=self.standalone_install_prefix) as temporary:
+                with managed_install_transaction(list(management.values()), self.log):
+                    for index, (name, destination) in enumerate(management.items()):
+                        source = archive.extractfile(entries[name])
+                        assert source is not None
+                        staged = Path(temporary) / str(index)
+                        with source, staged.open("wb") as output:
+                            shutil.copyfileobj(source, output)
+                        destination.parent.mkdir(parents=True, exist_ok=True)
+                        self._install_archive_file(staged, destination, Path(name).name)
+        return True
 
     def _extract_and_install_files(self, archive_path: Path) -> None:
         """Install validated archive members at their managed destinations."""
@@ -755,15 +1071,7 @@ class InstallationService(BaseService):
                             },
                         )
                     else:
-                        # Replace the entry only after the complete file and its
-                        # safe owner mode are ready. This avoids modifying a stale
-                        # file or following a stale symlink in place.
-                        copy_managed_file_atomically(
-                            temp_file,
-                            destination,
-                            0o755 if filename in (CLI_FILENAME, VRR_LEASE_FILENAME, SHADER_TOOL_FILENAME) else 0o644,
-                            self.log,
-                        )
+                        self._install_archive_file(temp_file, destination, filename)
                     self.log.info("Installed %s to %s", filename, destination)
 
                 shader_tool = self.cli_file.with_name(SHADER_TOOL_FILENAME)
@@ -870,6 +1178,10 @@ class InstallationService(BaseService):
             )
         else:
             self._remove_if_exists(self.registered_json32_file)
+        # Decky's wrapper uses its private scaling manifests. Selecting Decky
+        # must not leave a standalone public registration on the old payload.
+        self._remove_if_exists(self.registered_spatial_scaling_json_file)
+        self._remove_if_exists(self.registered_spatial_scaling_json32_file)
 
     def migrate_gamescope_wsi_compatibility_manifest_if_needed(self) -> bool:
         """Validate and stage the host WSI manifest for installed Renderers.
@@ -1147,7 +1459,9 @@ class InstallationService(BaseService):
         from .configuration import ConfigurationService
         config_service = ConfigurationService(logger=self.log)
         config_service.user_home = self.user_home
+        config_service.local_lib_dir = self.local_lib_dir
         config_service.local_share_dir = self.local_share_dir
+        config_service.standalone_install_prefix = self.standalone_install_prefix
         config_service.spatial_scaling_layer_dir = (
             self.spatial_scaling_layer_dir
         )
@@ -1297,6 +1611,25 @@ class InstallationService(BaseService):
                         and active_checksum != expected["sha256hash"]
                     )
                 )
+                if "payload_sha256hash" in expected:
+                    # A version label cannot identify rebuilt binaries or an
+                    # MAKO FG change. Compare the native manifest,
+                    # independent of archive compression and installer owner.
+                    update_required = installed and (
+                        active_state.get("payload_sha256hash")
+                        != expected["payload_sha256hash"]
+                    )
+                if (installed and not update_required
+                        and active_state["owner"] == ACTIVE_RENDERER_OWNER_DECKY):
+                    # The record matches; confirm the files still do too.
+                    differences = self._installed_payload_differences(expected)
+                    if differences:
+                        self.log.warning(
+                            "Installed MAKO Renderer files differ from the "
+                            "bundled payload; offering an update: %s",
+                            ", ".join(str(path) for path in differences),
+                        )
+                        update_required = True
             elif manifest_owner == ACTIVE_RENDERER_OWNER_STANDALONE:
                 # Standalone installers predating active-renderer.json still
                 # replace this shared manifest. Their exact version is unknown,
@@ -1342,6 +1675,7 @@ class InstallationService(BaseService):
                 "engine_update_required": update_required,
                 "host_architecture": host_architecture,
                 "host_architecture_supported": host_supported,
+                "system_renderer_notice": self._system_renderer_notice() if not installed else None,
                 "error": host_error,
             }
 
@@ -1362,6 +1696,7 @@ class InstallationService(BaseService):
                 "engine_update_required": False,
                 "host_architecture": None,
                 "host_architecture_supported": False,
+                "system_renderer_notice": None,
                 "error": str(e)
             }
 
@@ -1483,9 +1818,26 @@ class InstallationService(BaseService):
                 except OSError:
                     break
                 directory = directory.parent
+        # Keep the standard per-user bin, lib and share roots, which login PATH
+        # setup and other software rely on. Only the multilib root is MAKO's.
+        try:
+            (prefix / "lib32").rmdir()
+            self.log.info("Removed empty Renderer directory %s", prefix / "lib32")
+        except OSError:
+            pass
 
     def uninstall(self) -> UninstallationResponse:
+        try:
+            with self.native_installation_lock():
+                return self.uninstall_locked()
+        except OSError as error:
+            return self._error_response(UninstallationResponse, str(error), message="", removed_files=None)
+
+    def uninstall_locked(self) -> UninstallationResponse:
         """Uninstall the managed native Renderer while preserving profiles.
+
+        The caller holds native_installation_lock() through any Remote Play
+        restoration and native monitor shutdown preceding this file cleanup.
 
         MAKO Decky and the standalone archive select one active native Renderer.
         Removing it therefore cleans files supplied by either managed installer,
@@ -1497,13 +1849,20 @@ class InstallationService(BaseService):
         try:
             standalone_entries = self._standalone_installer_entries()
             decky_files = self._decky_renderer_files()
-            removed_files: list[str] = []
+            if self._active_manifest_owner() == ACTIVE_RENDERER_OWNER_DECKY:
+                # The selected Decky payload has legitimately replaced these
+                # shared files since the standalone ledger was written.
+                standalone_entries = [(checksum, path) for checksum, path in standalone_entries
+                                      if path not in decky_files]
+            removed_files = self._remove_standalone_renderer_files(standalone_entries)
+            # Shared destinations can also be checksum-owned by the standalone
+            # installer. Do not bypass its modified-file protection below.
+            preserved = {path for _checksum, path in standalone_entries if path.exists() or path.is_symlink()}
             for file_path in decky_files:
+                if file_path in preserved:
+                    continue
                 if self._remove_if_exists(file_path):
                     removed_files.append(str(file_path))
-            removed_files.extend(
-                self._remove_standalone_renderer_files(standalone_entries)
-            )
             self._remove_empty_renderer_directories(
                 decky_files
                 + [path for _checksum, path in standalone_entries]
@@ -1527,63 +1886,12 @@ class InstallationService(BaseService):
                                       message="", removed_files=None)
 
     def cleanup_on_uninstall(self) -> None:
-        """Remove the managed native Renderer when MAKO Decky is uninstalled.
-
-        Profiles and configuration remain available for a later reinstall.
-        """
-        try:
-            self.log.info("Checking for MAKO Renderer files to clean up:")
-            self.log.info(f"  64-bit library file: {self.lib_file}")
-            self.log.info(f"  32-bit library file: {self.lib32_file}")
-            self.log.info(f"  64-bit JSON file: {self.json_file}")
-            self.log.info(f"  32-bit JSON file: {self.json32_file}")
-            self.log.info(f"  Config file: {self.config_file_path} (preserved)")
-            self.log.info(f"  CLI file: {self.cli_file}")
-            self.log.info(f"  Launch script: {self.mako_script_path}")
-            self.log.info(f"  Diagnostics helper: {self.diagnostics_script_path}")
-
-            try:
-                standalone_entries = self._standalone_installer_entries()
-            except OSError as error:
-                standalone_entries = []
-                self.log.error(
-                    "Could not validate standalone Renderer ownership: %s",
-                    error,
-                )
-
-            decky_files = self._decky_renderer_files()
-            removed_files: list[str] = []
-            for file_path in decky_files:
-                try:
-                    if self._remove_if_exists(file_path):
-                        removed_files.append(str(file_path))
-                except OSError as e:
-                    self.log.error(f"Failed to remove {file_path}: {e}")
-
-            try:
-                removed_files.extend(
-                    self._remove_standalone_renderer_files(standalone_entries)
-                )
-            except OSError as error:
-                self.log.error(
-                    "Failed to remove standalone Renderer files: %s",
-                    error,
-                )
-
-            self._remove_empty_renderer_directories(
-                decky_files
-                + [path for _checksum, path in standalone_entries]
-                + [self.standalone_installer_state_file]
-            )
-
-            if removed_files:
-                self.log.info(f"Cleaned up {len(removed_files)} MAKO Renderer files during plugin uninstall: {removed_files}")
-            else:
-                self.log.info("No MAKO Renderer files found to clean up during plugin uninstall")
-
-        except Exception as e:
-            self.log.error(f"Error cleaning up MAKO Renderer files during uninstall: {str(e)}")
-            self.log.error(f"Traceback: {traceback.format_exc()}")
+        """Leave the independent native Renderer available after Decky removal."""
+        self.log.info(
+            "MAKO Decky removed; preserving MAKO Renderer, launchers, profiles, "
+            "and the native Remote Play override. Use Uninstall MAKO Renderer "
+            "or mako-installer --uninstall for explicit Renderer removal."
+        )
 
     def _merge_config_with_defaults(self, existing_profile_data, dll_service):
         """Merge existing user config with current schema defaults

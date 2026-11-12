@@ -19,13 +19,26 @@ import {
 interface RemotePlaySectionProps {
   onPrepare?: () => Promise<void>;
   onChanged?: () => void;
+  // The status the panel last showed, displayed until the first poll answers
+  // and dropped if that poll fails; the action always waits for a live status.
+  restoredStatus?: RemotePlayResult | null;
+  // null drops a restored status whose first live read failed.
+  onStatus?: (status: RemotePlayResult | null) => void;
 }
 
 export function RemotePlaySection({
   onPrepare,
   onChanged,
+  restoredStatus,
+  onStatus,
 }: RemotePlaySectionProps) {
   const [status, setStatus] = useState<RemotePlayResult>();
+  const [restoredDropped, setRestoredDropped] = useState(false);
+  const shownStatus =
+    status ?? (restoredDropped ? undefined : restoredStatus) ?? undefined;
+  const statusVerified = useRef(false);
+  const onStatusRef = useRef(onStatus);
+  onStatusRef.current = onStatus;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const busyRef = useRef(false);
@@ -46,12 +59,19 @@ export function RemotePlaySection({
           request === generation.current &&
           !busyRef.current
         ) {
+          statusVerified.current = true;
           setStatus(result);
           setError(result.error || "");
+          onStatusRef.current?.(result);
         }
       } catch (failure) {
-        if (mounted.current && request === generation.current)
+        if (mounted.current && request === generation.current) {
           setError(String(failure));
+          if (!statusVerified.current) {
+            setRestoredDropped(true);
+            onStatusRef.current?.(null);
+          }
+        }
       } finally {
         inFlight = false;
       }
@@ -79,6 +99,7 @@ export function RemotePlaySection({
       if (mounted.current) {
         setStatus(result);
         setError(result.error || "");
+        onStatusRef.current?.(result);
         if (result.success) onChanged?.();
       }
     } catch (failure) {
@@ -89,23 +110,23 @@ export function RemotePlaySection({
     }
   };
 
-  const notice = busy ? "" : error || status?.message || "";
+  const notice = busy ? "" : error || shownStatus?.message || "";
   const attention = Boolean(
-    notice || status?.conflict || status?.success === false,
+    notice || shownStatus?.conflict || shownStatus?.success === false,
   );
   const state = busy
     ? "working"
     : attention
       ? "attention"
-      : !status
+      : !shownStatus
         ? "checking"
-        : status.frame_generation_active
+        : shownStatus.frame_generation_active
           ? "active"
-          : status.running
+          : shownStatus.running
             ? "streaming"
-            : status.installed
+            : shownStatus.installed
               ? "ready"
-              : !status.available
+              : !shownStatus.available
                 ? "unavailable"
                 : "disabled";
   const statusText =
@@ -158,7 +179,7 @@ export function RemotePlaySection({
             }}
           >
             <div
-              className={`Mako_BrandButton${status?.managed ? " Mako_BrandButton--danger" : ""}`}
+              className={`Mako_BrandButton${shownStatus?.managed ? " Mako_BrandButton--danger" : ""}`}
               style={{ width: "100%" }}
             >
               <ButtonItem
@@ -190,7 +211,7 @@ export function RemotePlaySection({
               >
                 {busy
                   ? t("REMOTE_PLAY_WORKING", "Working…")
-                  : status?.managed
+                  : shownStatus?.managed
                     ? t("REMOTE_PLAY_REMOVE", "Remove Remote Play Override")
                     : t("REMOTE_PLAY_INSTALL", "Override Remote Play")}
               </ButtonItem>

@@ -15,12 +15,17 @@ namespace {
     constexpr uint32_t capabilityShader = 1;
     constexpr uint32_t capabilityStorageImageExtendedFormats = 49;
     constexpr uint32_t capabilityStorageImageWriteWithoutFormat = 56;
+    constexpr uint32_t imageFormatUnknown = 0;
     constexpr uint32_t imageFormatRgb10A2 = 11;
     constexpr uint32_t imageFormatR8 = 15;
     constexpr uint32_t imageFormatR8Snorm = 20;
 
+    /// Unknown keeps the translator's format-less write, which a direct
+    /// presentation target needs because its view supplies the format.
     [[nodiscard]] uint32_t storageImageCapability(
             const uint32_t imageFormat) {
+        if (imageFormat == imageFormatUnknown)
+            return capabilityStorageImageWriteWithoutFormat;
         return (imageFormat == imageFormatRgb10A2 || imageFormat == imageFormatR8 || imageFormat == imageFormatR8Snorm)
             ? capabilityStorageImageExtendedFormats
             : capabilityShader;
@@ -67,7 +72,7 @@ void mako::backend::detail::patchStorageImageFormat(
             if (capability == capabilityStorageImageWriteWithoutFormat) {
                 const uint32_t replacement = storageImageCapability(imageFormat);
                 writeWord(i + 1, replacement);
-                if (replacement == capabilityStorageImageExtendedFormats)
+                if (replacement != capabilityShader)
                     hasRequiredFormatCapability = true;
             }
         }

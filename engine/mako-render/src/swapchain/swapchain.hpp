@@ -24,11 +24,13 @@
 #include "spatial_scaling_policy.hpp"
 #include "spatial_command_recording.hpp"
 #include "present_timing.hpp"
+#include "frame_recorder.hpp"
 
 #include <array>
 #include <chrono>
 #include <cstdint>
 #include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -53,8 +55,13 @@ namespace mako::layer {
         // application has not selected its own timing-feedback namespace.
         bool gamescopeDisplayTiming{false};
         bool ownedPresentTiming{false};
+        // Any Gamescope signal at creation. Without one, a desktop compositor
+        // may need MAKO to space generated outputs itself.
+        bool gamescopeSession{false};
         VkFormat format;
         VkColorSpaceKHR colorSpace;
+        // Final usage of the lower images; test recordings need transfer reads.
+        VkImageUsageFlags imageUsage{0};
         // Preserve the application's requested minimum separately from the
         // bounded minimum forwarded by MAKO and the actual returned count in
         // `images`. These values expose the selected launch policy and support
@@ -81,10 +88,13 @@ namespace mako::layer {
         // change later, but Vulkan present mode/pNext compatibility cannot be
         // reinterpreted without replacing the game-owned swapchain.
         bool privateOrderedTransport{false};
+        // Frame generation cannot reach the screen through this surface, so
+        // it stays off whatever the colour pipeline later allows.
+        bool frameGenerationSurfaceUnavailable{false};
         bool spatialScalingActive{false};
         // Requested internal native output resize, including a memory-rejected
         // candidate eligible for retry; the saved Scaling toggle stays off.
-        bool hdrDisplayResize{false};
+        bool bridgeDisplayResize{false};
         // Variable WSI surfaces retain the source extent and select a larger
         // lower presentation envelope. Factor edits which remain above an
         // already active ceiling can therefore be applied without replacing
@@ -115,6 +125,10 @@ namespace mako::layer {
         // owner-driven replacement rather than a cold process start, so
         // Adaptive may use its bounded recovery guard.
         bool replacement{false};
+        // Zink receives an application acquire window on this swapchain. Its
+        // worker-thread presents also read private acquire waits as FIFO
+        // backlog evidence; every other engine keeps ordinary pacing.
+        bool applicationAcquireWindow{false};
     };
 
     /// modify the swapchain create info based on the profile pre-swapchain creation
@@ -127,7 +141,8 @@ namespace mako::layer {
         bool gamescopeDetected,
         const PresentationEnvironmentPolicy& presentationEnvironment,
         bool frameGenerationInteropEnabled,
-        bool spatialScalingActive);
+        bool spatialScalingActive,
+        bool directSpatialOutput = false);
 
     /// swapchain context for a layer instance
     class Swapchain {
@@ -171,6 +186,11 @@ namespace mako::layer {
             VkQueue queue, VkSwapchainKHR swapchain,
             void* next_chain, uint32_t imageIdx,
             std::span<const VkSemaphore> semaphores);
+        /// Share of the previous source interval the application spent in
+        /// MAKO's acquire and present calls, or unknown when not observed.
+        void observeApplicationLayerShare(std::optional<double> share) {
+            this->applicationLayerShare = share;
+        }
         /// stable identifier used to correlate this context's diagnostics
         [[nodiscard]] uint64_t diagnosticsId() const {
             return this->diagnosticsState.contextId;
@@ -249,6 +269,11 @@ namespace mako::layer {
         /// Stop generation in place when the active profile disappears.
         void disableFrameGeneration();
     private:
+        /// present one real frame after any test-recording copy
+        VkResult presentFrame(const vk::Vulkan& vk,
+            VkQueue queue, VkSwapchainKHR swapchain,
+            void* next_chain, uint32_t imageIdx,
+            std::span<const VkSemaphore> semaphores);
         void applyGamescopeFocus(std::chrono::steady_clock::time_point now);
         GamescopeFocusFeedback gamescopeFocus;
         GenerationPolicyResetGate generationPolicyResetGate;
@@ -264,7 +289,10 @@ namespace mako::layer {
         [[nodiscard]] static SwapchainColorPipeline initialColorPipeline(
             VkFormat format, VkColorSpaceKHR colorSpace,
             std::optional<bool> gamescopeHdrActive, bool gamescopeDetected,
-            bool hdrExposureDisabled);
+            bool hdrExposureDisabled, bool frameGenerationSurfaceUnavailable);
+        /// Apply this surface's own frame-generation limit to a classified pipeline.
+        [[nodiscard]] static SwapchainColorPipeline surfaceColorPipeline(
+            SwapchainColorPipeline pipeline, bool frameGenerationSurfaceUnavailable);
         static void selectPackedHdr10Transport(const vk::Vulkan& vk,
             backend::Instance& backendInstance, SwapchainColorPipeline& pipeline,
             bool& applicationSupported, bool& backendSupported);
@@ -330,6 +358,21 @@ namespace mako::layer {
             size_t realFrameIndex{0};
             size_t backendFrameIndex{0};
             bool renderFenceInFlight{false};
+            // The cadence time of the last real frame the backend accepted.
+            // MAKO FG reuses motion only while the intervals between these
+            // stay even; a new context starts without one.
+            std::optional<std::chrono::steady_clock::time_point>
+                backendSourceCadence;
+
+            [[nodiscard]] std::chrono::nanoseconds backendSourceInterval(
+                    const std::chrono::steady_clock::time_point cadence) const {
+                if (!this->backendSourceCadence ||
+                        cadence <= *this->backendSourceCadence)
+                    return {};
+                return std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    cadence - *this->backendSourceCadence
+                );
+            }
         };
 
         struct RecoveryState {
@@ -338,6 +381,9 @@ namespace mako::layer {
             PipelineBusyRecovery pipelineBusyRecovery;
             ReplacementBackendStabilization replacementBackendStabilization;
             bool backendPending{false};
+            std::optional<std::chrono::steady_clock::time_point> lostBackendRetryAt;
+            bool lostBackendStopped{false};
+            uint32_t lostBackendFailures{0};
             size_t historyWarmupRemaining{0};
         };
 
@@ -380,12 +426,8 @@ namespace mako::layer {
             friend bool operator==(
                     const FrameGenerationResourceRequest& left,
                     const FrameGenerationResourceRequest& right) {
-                return ls::effectiveFlowScale(left.profile) ==
-                        ls::effectiveFlowScale(right.profile) &&
-                    ls::hdrApproximateGeneration(left.profile.hdr_quality) ==
-                        ls::hdrApproximateGeneration(right.profile.hdr_quality) &&
-                    ls::effectivePerformanceMode(left.profile) ==
-                        ls::effectivePerformanceMode(right.profile) &&
+                return frameGenerationContextSettings(left.profile) ==
+                        frameGenerationContextSettings(right.profile) &&
                     generatedFrameCapacityForProfile(left.profile) ==
                         generatedFrameCapacityForProfile(right.profile);
             }
@@ -431,6 +473,8 @@ namespace mako::layer {
             SpatialCommandRecording recording;
         };
         std::optional<SpatialScaler> spatialScaler;
+        // Test recordings of real frames (frame-generation layer only).
+        std::unique_ptr<FrameRecorder> frameRecorder;
         std::optional<bool> shaderHdrReducedPrecision;
         std::vector<SpatialScalingPass> spatialScalingPasses;
         SpatialFramePipelinePlacement spatialFramePipelinePlacement{
@@ -480,6 +524,7 @@ namespace mako::layer {
         GamescopePresentationFeedback gamescopePresentationFeedback;
         FixedRefreshBudget fixedRefreshBudget;
         RealFramePacer realFramePacer;
+        SourceIntervalOutputSpacing sourceIntervalSpacing;
         std::shared_ptr<present_diagnostics::GpuLoadMonitor> gpuLoadMonitor;
         bool gpuLoadMonitorInitialized{false};
         GpuHeadroomController gpuHeadroom;
@@ -492,6 +537,7 @@ namespace mako::layer {
         // Last deadline scheduled by an owned output timeline. Recovery may
         // sample native cadence only after this earlier queue has cleared.
         std::optional<std::chrono::steady_clock::time_point> orderedPresentationDeadline;
+        std::optional<double> applicationLayerShare;
         OrderedPresentTimeline wsiPresentTimeline;
         OwnedPresentTiming presentTiming;
         bool presentTimingInitialized{false};
@@ -500,6 +546,12 @@ namespace mako::layer {
         bool wsiPresentTimingLogged{false};
         SmoothCadenceBaseCap smoothCadenceBaseCap;
         SmoothCadencePacerHandoff smoothCadencePacerHandoff;
+        // Private generated-image acquire wait of the last generated present,
+        // consumed by the next present. Read only with an acquire window.
+        std::optional<std::chrono::steady_clock::duration> lastGeneratedAcquireWait;
+        CappedFifoBacklogDrain cappedFifoBacklogDrain;
+        // The implicit Zink cap at the last present, for its change record.
+        double zinkRefreshLimitedCap{};
         // A null-old replacement loses the driver's explicit WSI lineage.
         // Consume this exactly once before any private spatial submission.
         bool replacementWsiPrimePending{false};
@@ -528,6 +580,11 @@ namespace mako::layer {
             std::span<const vk::Image> outputs,
             std::string_view reason) noexcept;
         void clearDirectSpatialFrameGenerationOutputs() noexcept;
+        /// Bind this swapchain's images for direct reconstruction when they
+        /// were created with storage usage; otherwise keep the copy.
+        void configureDirectSpatialPresentationOutputs(
+            const vk::Vulkan& vk, SpatialScaler& scaler,
+            std::string_view reason) noexcept;
         void publishRuntimeStatus(std::string_view reason) noexcept;
         [[nodiscard]] static std::optional<uint64_t>
             generatedImageAcquireTimeoutNs();
@@ -568,10 +625,12 @@ namespace mako::layer {
 
         // Frame planning, resource readiness, and generated-image admission.
         [[nodiscard]] bool recoverBackendIfReady(const vk::Vulkan& vk);
+        [[nodiscard]] bool recoverLostBackend(const vk::Vulkan& vk);
         void ensureHistoryWarmup(bool restart = false);
         [[nodiscard]] PresentationFramePlan prepareFramePlan(
             std::chrono::steady_clock::time_point presentNow,
-            bool orderedAcquireRecoveryProbe);
+            bool orderedAcquireRecoveryProbe,
+            std::optional<size_t> integerBaseCapGenerationLimit);
         void reportAdaptiveDelivery(const PresentationFramePlan& plan,
             size_t acceptedForPresentation);
         [[nodiscard]] bool generationPipelineReady(

@@ -94,6 +94,24 @@ void TimelineSemaphore::signal(const vk::Vulkan& vk, uint64_t value) const {
         throw ls::vulkan_error(res, "vkSignalSemaphore() failed");
 }
 
+std::function<void()> TimelineSemaphore::releaser(const vk::Vulkan& vk) const {
+    // Above any value a session can wait for, and within every driver's allowed
+    // difference between timeline values. Vulkan forbids passing a queue signal
+    // that is still pending, and the next frame's copy can sit behind the wait
+    // this ends. A dead helper leaves only that or a frozen game, and the
+    // rebuild that follows discards this semaphore.
+    constexpr uint64_t releaseValue = uint64_t{1} << 30;
+    return [device = vk.dev(), signal = vk.df().SignalSemaphoreKHR,
+            semaphore = *this->semaphore] {
+        const VkSemaphoreSignalInfo signalInfo{
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
+            .semaphore = semaphore,
+            .value = releaseValue
+        };
+        static_cast<void>(signal(device, &signalInfo));
+    };
+}
+
 bool TimelineSemaphore::wait(const vk::Vulkan& vk, uint64_t value, uint64_t timeout) const {
     const VkSemaphoreWaitInfo waitInfo{
         .sType = VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,

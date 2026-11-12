@@ -9,7 +9,7 @@ Apply MAKO on the **receiving device** when using Steam's native **Stream** acti
 3. Select a saved profile and choose Frame Generation, Scaling, and/or Shaders.
 4. Start streaming through Steam.
 
-The override applies to all native Steam streams until removed. MAKO Scaler and Shaders work without Lossless Scaling; Frame Generation and LS1 require it.
+The override applies to all native Steam streams until removed. MAKO FG, MAKO Scaler, and Shaders work without Lossless Scaling; only the optional Lossless Scaling frame generation model and LS1 require it.
 
 ## Profiles
 

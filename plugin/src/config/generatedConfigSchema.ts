@@ -87,6 +87,7 @@ export type ScalingMethod = (typeof SCALING_METHOD_VALUES)[number];
 export const SCALING_SHARPNESS_MIN = 0.0 as const;
 export const SCALING_SHARPNESS_MAX = 1.0 as const;
 export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.7 as const;
+export const ULTRA_PERFORMANCE_MAKO_FG_FLOW_SCALE = 0.6 as const;
 export const FIXED_MULTIPLIER_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MAX = 5 as const;
@@ -147,6 +148,8 @@ export enum ConfigFieldType {
 }
 
 // Field name constants for type-safe access
+export const FRAME_GENERATION_MODEL = "frame_generation_model" as const;
+export const MAKO_FG_MODE = "mako_fg_mode" as const;
 export const DLL = "dll" as const;
 export const ALLOW_FP16 = "allow_fp16" as const;
 export const SCALING_ENABLED = "scaling_enabled" as const;
@@ -181,7 +184,9 @@ export const HDR_QUALITY = "hdr_quality" as const;
 export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
 export const GAMESCOPE_WSI_COMPATIBILITY = "gamescope_wsi_compatibility" as const;
 export const SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY = "swapchain_image_count_compatibility" as const;
+export const MAILBOX_PRESENTATION_COMPATIBILITY = "mailbox_presentation_compatibility" as const;
 export const EXTERNAL_VULKAN_LAYER = "external_vulkan_layer" as const;
+export const MANGOHUD_COUNT_REAL_FRAMES = "mangohud_count_real_frames" as const;
 export const VKBASALT_SHARPENING = "vkbasalt_sharpening" as const;
 export const VKBASALT_SHARPNESS = "vkbasalt_sharpness" as const;
 export const VKBASALT_DLS_DENOISE = "vkbasalt_dls_denoise" as const;
@@ -203,6 +208,18 @@ export interface ConfigField {
 
 // Configuration schema - auto-generated from Python
 export const CONFIG_SCHEMA: Record<string, ConfigField> = {
+  frame_generation_model: {
+    name: "frame_generation_model",
+    fieldType: ConfigFieldType.STRING,
+    default: "mako-fg",
+    description: "per-game frame generation model: lossless-scaling or mako-fg; requires a game restart"
+  },
+  mako_fg_mode: {
+    name: "mako_fg_mode",
+    fieldType: ConfigFieldType.STRING,
+    default: "balanced",
+    description: "how often MAKO FG solves motion: quality, balanced, performance or extra-performance; higher modes free GPU time and can add artifacts"
+  },
   dll: {
     name: "dll",
     fieldType: ConfigFieldType.STRING,
@@ -224,7 +241,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   scaling_method: {
     name: "scaling_method",
     fieldType: ConfigFieldType.STRING,
-    default: "ls1",
+    default: "mako",
     description: "live spatial selection inside a provisioned engine: Native Resolution, MAKO Scaler, LS1 Quality, or LS1 Performance"
   },
   scaling_factor: {
@@ -345,7 +362,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "ultra_performance",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 70% flow scale, the lighter FG model and active-policy resource allocation while respecting the global precision choice; compatible controls remain available after startup"
+    description: "restart-bound low-power preset for either FG model with 60% flow scale for MAKO FG and 70% for Lossless Scaling, active-policy resource allocation, the lighter LSFG model for Lossless Scaling and MAKO Scaler when scaling is enabled, while respecting the global precision choice; compatible controls remain available after startup"
   },
   flow_scale: {
     name: "flow_scale",
@@ -407,11 +424,23 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: false,
     description: "preserve the application's requested swapchain image minimum for games that cannot start with generated-output headroom"
   },
+  mailbox_presentation_compatibility: {
+    name: "mailbox_presentation_compatibility",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "present Frame Generation through MAILBOX instead of ordered FIFO for games that cannot run with FIFO backpressure"
+  },
   external_vulkan_layer: {
     name: "external_vulkan_layer",
     fieldType: ConfigFieldType.STRING,
     default: "",
     description: "optional guarded post-process Vulkan layer: MangoHud or vkBasalt"
+  },
+  mangohud_count_real_frames: {
+    name: "mangohud_count_real_frames",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "order 64-bit MangoHud above MAKO so it counts the game's own frames instead of every output frame"
   },
   vkbasalt_sharpening: {
     name: "vkbasalt_sharpening",
@@ -477,6 +506,8 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
 
 // Type-safe configuration data structure
 export interface ConfigurationData {
+  frame_generation_model: string;
+  mako_fg_mode: string;
   dll: string;
   allow_fp16: boolean;
   scaling_enabled: boolean;
@@ -511,7 +542,9 @@ export interface ConfigurationData {
   disable_hdr_exposure: boolean;
   gamescope_wsi_compatibility: boolean;
   swapchain_image_count_compatibility: boolean;
+  mailbox_presentation_compatibility: boolean;
   external_vulkan_layer: string;
+  mangohud_count_real_frames: boolean;
   vkbasalt_sharpening: string;
   vkbasalt_sharpness: number;
   vkbasalt_dls_denoise: number;
@@ -534,10 +567,12 @@ export function getFieldNames(): string[] {
 
 export function getDefaults(): ConfigurationData {
   return {
+    frame_generation_model: "mako-fg",
+    mako_fg_mode: "balanced",
     dll: "",
     allow_fp16: true,
     scaling_enabled: false,
-    scaling_method: "ls1",
+    scaling_method: "mako",
     scaling_factor: 1.5,
     scaling_supersampling: false,
     scaling_sharpness: 0.8,
@@ -568,7 +603,9 @@ export function getDefaults(): ConfigurationData {
     disable_hdr_exposure: true,
     gamescope_wsi_compatibility: false,
     swapchain_image_count_compatibility: false,
+    mailbox_presentation_compatibility: false,
     external_vulkan_layer: "",
+    mangohud_count_real_frames: false,
     vkbasalt_sharpening: "cas",
     vkbasalt_sharpness: 0.5,
     vkbasalt_dls_denoise: 0.2,
@@ -584,6 +621,8 @@ export function getDefaults(): ConfigurationData {
 
 export function getFieldTypes(): Record<string, ConfigFieldType> {
   return {
+    frame_generation_model: ConfigFieldType.STRING,
+    mako_fg_mode: ConfigFieldType.STRING,
     dll: ConfigFieldType.STRING,
     allow_fp16: ConfigFieldType.BOOLEAN,
     scaling_enabled: ConfigFieldType.BOOLEAN,
@@ -618,7 +657,9 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     disable_hdr_exposure: ConfigFieldType.BOOLEAN,
     gamescope_wsi_compatibility: ConfigFieldType.BOOLEAN,
     swapchain_image_count_compatibility: ConfigFieldType.BOOLEAN,
+    mailbox_presentation_compatibility: ConfigFieldType.BOOLEAN,
     external_vulkan_layer: ConfigFieldType.STRING,
+    mangohud_count_real_frames: ConfigFieldType.BOOLEAN,
     vkbasalt_sharpening: ConfigFieldType.STRING,
     vkbasalt_sharpness: ConfigFieldType.FLOAT,
     vkbasalt_dls_denoise: ConfigFieldType.FLOAT,

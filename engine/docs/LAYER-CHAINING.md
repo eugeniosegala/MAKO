@@ -49,6 +49,8 @@ For manual native or Proton activation:
 MANGOHUD=1 ~/.local/bin/mako-launch %command%
 ```
 
+MangoHud counts every output frame, including generated ones. To count only the game's own frames, enable **Count Real Frames Only (Restart)** or add `MAKO_MANGOHUD_REAL_FRAMES=1` to a manual command; see [MangoHud frame counting](#mangohud-frame-counting).
+
 MangoHud and Shaders are mutually exclusive. The UI switches the selected integration without deleting shader settings; a manual command requesting both is rejected. Host MangoHud is not enabled inside Flatpak or for a direct `flatpak run` command.
 
 `mako-launch --check-mangohud` reports availability as JSON without writing files. Native launch checks only the named `MangoHud.x86_64.json` and `MangoHud.x86.json` manifests in the standard XDG configuration/data locations. It verifies each layer's identity, architecture, library path and activation gates, resolves relative library paths, and stages only validated manifests under `$XDG_CACHE_HOME/mako-render/mangohud` (normally `~/.cache/mako-render/mangohud`). The directory is private to the user; concurrent launches are serialized during staging and unchanged files are not rewritten. Missing or invalid installations leave the game running without MangoHud and produce a diagnostic. The launcher never adds the host's full implicit-layer directory.
@@ -67,7 +69,7 @@ Save or select the game's profile, enable **Shaders** in its tab or **MangoHud**
 
 MangoHud and Shaders cannot run together. MangoHud requires a host installation and is unavailable inside Flatpak games. Shaders use bundled vkBasalt; prepare Flatpak apps in **Flatpak Setup** first.
 
-Shader selections apply live after activation. More effects cost more GPU time; **HDR Look (SDR)** does not enable HDR. Use **Refresh** after editing shader files. See [configuration](CONFIGURATION.md#qt-shaders-and-compatibility-controls) for controls and custom shaders.
+Shader selections apply live after activation. More effects cost more GPU time; **HDR Look (SDR)** does not enable HDR. Use **Refresh** after editing shader files. See [MAKO Decky configuration](../../plugin/docs/CONFIGURATION.md#shaders) for controls and custom shaders.
 
 ## Shared MangoHud layout
 
@@ -89,7 +91,20 @@ The shared file replaces any inherited `MANGOHUD_CONFIGFILE`, including Gaming M
 /home/deck/.local/bin/mako-run env MANGOHUD_CONFIGFILE=/absolute/path/to/game.conf %command%
 ```
 
-For standalone launches, use `MANGOHUD=1 ~/.local/bin/mako-launch env MANGOHUD_CONFIGFILE=/absolute/path/to/game.conf %command%`. Quote paths containing spaces. The shared file does not enable MangoHud by itself or add Flatpak or simultaneous Shader support. Choosing a layout adds no MAKO per-frame work. MangoHud's own cost depends on its metrics, and its FPS counter is not a guaranteed measurement of pre-generation game FPS; that depends on the active layer chain.
+For standalone launches, use `MANGOHUD=1 ~/.local/bin/mako-launch env MANGOHUD_CONFIGFILE=/absolute/path/to/game.conf %command%`. Quote paths containing spaces. The shared file does not enable MangoHud by itself or add Flatpak or simultaneous Shader support. Choosing a layout adds no MAKO per-frame work. MangoHud's own cost depends on its metrics.
+
+## MangoHud frame counting
+
+MangoHud's position relative to MAKO Renderer decides what it counts. **Count Real Frames Only (Restart)**, shown under MangoHud in both MAKO Decky and the Qt UI, selects it per profile:
+
+| Setting | MangoHud position | Counter | HUD |
+| --- | --- | --- | --- |
+| Off (default) | Below MAKO | Every output frame, generated ones included | Drawn on each output frame at output resolution |
+| On | Above MAKO | The game's own frames; pair it with Steam's performance overlay or top bar, which report MAKO's output rate | Drawn into the game's frame, so it passes through Frame Generation and Scaling. Changing numbers and graphs can show Frame Generation artifacts, and Scaling upscales the HUD from the game's rendering resolution |
+
+A MangoHud `fps_limit` follows the same side: below MAKO it caps MAKO's output, above MAKO it caps the game's frames. The Qt UI adds `MAKO_MANGOHUD_REAL_FRAMES=1` to the copied launch option when the setting is on.
+
+Whenever the Renderer is active and a 64-bit MangoHud manifest is available, both launchers list MangoHud and MAKO explicitly in `VK_INSTANCE_LAYERS`, including the guarded 32-bit identity when installed. When MangoHud is the list's only reason, they also keep `ENABLE_MAKO=1` and `MANGOHUD=1` and put MangoHud's guarded directory on the matching side of MAKO's in `VK_IMPLICIT_LAYER_PATH`. Older Vulkan loaders, such as 1.3.239 in Steam's older runtimes or a game's bundled copy, never enable an implicit layer from the list alone; 1.4.309 and newer do. With the gates set, the Steam Linux Runtime's loader orders these layers by discovery instead of by the list, which the directory order matches. A loader that ignores `VK_IMPLICIT_LAYER_PATH`, as 1.3.239 does, keeps MangoHud below MAKO, so **Count Real Frames Only** counts every output frame there. Gamescope WSI and kept Desktop Steam overlay chains keep both gates off and need a loader that enables implicit layers from the list. A 32-bit-only MangoHud installation, Flatpak games, and launches without an active Renderer keep implicit activation. MAKO Decky Remote Play launches use the setting saved in the generated `mako-run`. Shaders (vkBasalt) stay below MAKO so effects apply to every output frame.
 
 ## Support boundaries
 

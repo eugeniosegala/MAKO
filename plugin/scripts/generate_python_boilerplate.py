@@ -22,11 +22,14 @@ from py_modules.mako_plugin.constants import (
     SDL_AUDIO_DRIVER_ENV,
     STEAM_DECK_MODE_ENV,
     WINE_DLL_OVERRIDES_ENV,
+    ZINK_COMPOSITE_FORCE_ENV,
     ZINK_DRIVER_VALUE,
     ZINK_GALLIUM_DRIVER_ENV,
     ZINK_GLX_VENDOR_ENV,
     ZINK_GLX_VENDOR_VALUE,
     ZINK_MESA_LOADER_ENV,
+    ZINK_RADV_DEBUG_ENV,
+    ZINK_RADV_DEBUG_VALUE,
 )
 
 
@@ -127,6 +130,12 @@ def generate_script_generation() -> str:
                 # the launch policy consumes it without exporting it to games.
                 lines.append('        lines.append("mako_disable_steam_overlay=" +')
                 lines.append('            ("1" if config.get("disable_steam_overlay", True) else "0"))')
+            elif field_name == "mangohud_count_real_frames":
+                # wrapper_generation.py orders MangoHud against the Renderer.
+                # Always set the local value so no caller or other profile
+                # can select the order.
+                lines.append('        lines.append("mako_mangohud_real_frames=" +')
+                lines.append('            ("1" if config.get("mangohud_count_real_frames", False) else "0"))')
             elif field_name == "disable_steamdeck_mode":
                 # Special case: disable_steamdeck_mode=True should export SteamDeck=0
                 lines.append(f'        if config.get("{field_name}", False):')
@@ -146,6 +155,19 @@ def generate_script_generation() -> str:
                     f'            lines.append("export {ZINK_GALLIUM_DRIVER_ENV}='
                     f'{ZINK_DRIVER_VALUE}")'
                 )
+                lines.append('            lines.extend([')
+                lines.append(
+                    f'                \'case ",${{{ZINK_RADV_DEBUG_ENV}:-}}," in\','
+                )
+                lines.append(f'                \'    *",{ZINK_RADV_DEBUG_VALUE},"*) ;;\',')
+                lines.append(
+                    f'                \'    *) export {ZINK_RADV_DEBUG_ENV}='
+                    f'"${{{ZINK_RADV_DEBUG_ENV}:+${ZINK_RADV_DEBUG_ENV},}}'
+                    f'{ZINK_RADV_DEBUG_VALUE}" ;;\','
+                )
+                lines.append('                "esac",')
+                lines.append(f'                "export {ZINK_COMPOSITE_FORCE_ENV}=1",')
+                lines.append('            ])')
             elif field_name == "force_alsa_audio":
                 # SDL honours the native ALSA driver. Wine/Proton honours the
                 # DLL override while retaining any caller-provided overrides.

@@ -94,6 +94,7 @@ class RuntimeStateTests(unittest.TestCase):
             },
             "applied_generated_capacity": 1,
             "frame_generation_active": role == "frame-generation",
+            "frame_generation_unavailable": None,
             "spatial_scaling": {
                 "active": role == "spatial-scaling",
                 "activation_supported": True,
@@ -143,6 +144,25 @@ class RuntimeStateTests(unittest.TestCase):
         self.assertEqual(context["applied"]["gpu_headroom_percent"], 15)
         record["gpu_headroom_state"] = 42
         self._write("headroom.json", record)
+        self.assertIsNone(self.service._read_context(path))
+
+    def test_frame_generation_unavailable_is_nullable_and_validated(self):
+        record = self._record()
+        path = self._write("offscreen.json", record)
+        context = self.service._read_context(path)
+        self.assertIsNotNone(context)
+        self.assertIsNone(context["frame_generation_unavailable"])
+        record["frame_generation_unavailable"] = {"reason": "offscreen-x11-window"}
+        self._write("offscreen.json", record)
+        context = self.service._read_context(path)
+        self.assertEqual(context["frame_generation_unavailable"], {
+            "reason": "offscreen-x11-window",
+        })
+        record["frame_generation_unavailable"]["reason"] = 123
+        self._write("offscreen.json", record)
+        self.assertIsNone(self.service._read_context(path))
+        record["frame_generation_unavailable"] = "offscreen"
+        self._write("offscreen.json", record)
         self.assertIsNone(self.service._read_context(path))
 
     def test_valid_contexts_are_filtered_sorted_and_aggregated(self):

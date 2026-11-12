@@ -53,6 +53,27 @@ namespace mako::layer {
         void clearDirectFrameGenerationOutputs();
         [[nodiscard]] size_t directFrameGenerationOutputCount() const;
 
+        /// Whether a reconstruction pass can write this swapchain's images
+        /// directly: the format supports format-less storage writes on this
+        /// device, the surface and image format permit storage usage, and a
+        /// direct write stores exactly the pixels the copy-back would at the
+        /// method's arithmetic precision. Other swapchains keep the private
+        /// output and its copy-back.
+        [[nodiscard]] static bool directPresentationOutputSupported(
+            const vk::Vulkan& vk, const VkSwapchainCreateInfoKHR& createInfo,
+            VkImageUsageFlags surfaceUsage, bool fp16Arithmetic);
+
+        /// Bind a swapchain's images so record() and
+        /// recordSourceToPresentation() write them directly, saving the
+        /// presentation-sized copy-back. Reconstruction methods need a
+        /// storage-capable swapchain; Native Resolution blits into a
+        /// transfer-capable one. Returns how many were bound: zero for an
+        /// incompatible format.
+        size_t configureDirectPresentationOutputs(const vk::Vulkan& vk,
+            std::span<const VkImage> images, VkFormat format);
+        void clearDirectPresentationOutputs();
+        [[nodiscard]] size_t directPresentationOutputCount() const;
+
         /// Reconstruct the application's low-resolution rectangle, write the
         /// native-resolution result back into its image, and optionally copy
         /// the same result to MAKO's exported FG source. Production WSI uses

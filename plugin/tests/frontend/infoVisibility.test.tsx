@@ -13,8 +13,7 @@ import { Navigation, type GamepadEvent } from "@decky/ui";
 
 const panelNavigation = vi.hoisted(() => ({
   scroll: undefined as
-    | ((node: { Element?: HTMLElement | null }) => boolean)
-    | undefined,
+    ((node: { Element?: HTMLElement | null }) => boolean) | undefined,
   owner: undefined as boolean | "force" | undefined,
 }));
 
@@ -34,7 +33,9 @@ vi.mock("@decky/ui", () => ({
     onButtonDown?: (event: GamepadEvent) => void;
     onGamepadFocus?: (event: GamepadEvent) => void;
     onGamepadBlur?: (event: GamepadEvent) => void;
-    fnScrollIntoViewHandler?: (node: { Element?: HTMLElement | null }) => boolean;
+    fnScrollIntoViewHandler?: (node: {
+      Element?: HTMLElement | null;
+    }) => boolean;
     scrollIntoViewWhenChildFocused?: boolean | "force";
     "flow-children"?: string;
   }) => {
@@ -848,7 +849,8 @@ test("tab entry recognizes controls rendered in a separate Steam window", () => 
       scrollHeight: { value: 1400 },
       clientHeight: { value: 240 },
     });
-    const group = targetDocument.querySelector<HTMLElement>('[role="tablist"]')!;
+    const group =
+      targetDocument.querySelector<HTMLElement>('[role="tablist"]')!;
     vi.spyOn(group, "getBoundingClientRect").mockImplementation(
       () => new DOMRect(0, 700 - scroller.scrollTop, 280, 100),
     );
@@ -1072,6 +1074,7 @@ test.each(["welcome", "development"])(
     render(
       <InfoVisibility>
         <ContentNotices
+          installationVerified={true}
           developmentBuildInfo={{
             generatedAt: "2026-09-13T10:00:00Z",
             plugin: {
@@ -1095,7 +1098,6 @@ test.each(["welcome", "development"])(
         <UsageInstructions />
         <StatusDisplay
           dllDetected
-          dllDetectionStatus="Lossless Scaling installed"
           isInstalled
           installationStatus="MAKO Renderer installed"
         />
@@ -1127,7 +1129,7 @@ test.each(["welcome", "development"])(
       expect(screen.queryByText(text)).toBeNull();
     }
     for (const text of [
-      "Lossless Scaling installed",
+      "Lossless Scaling installed (optional)",
       "MAKO Renderer installed",
     ]) {
       expect(isDisplayed(screen.getByText(text))).toBe(true);
@@ -1168,13 +1170,12 @@ test.each(["", " \n\t"])(
   (blank) => {
     const panel = (
       ready: boolean,
-      dllDetectionStatus = blank,
       installationStatus = blank,
+      dllDetected = ready,
     ) => (
       <InfoVisibility>
         <StatusDisplay
-          dllDetected={ready}
-          dllDetectionStatus={dllDetectionStatus}
+          dllDetected={dllDetected}
           isInstalled={ready}
           installationStatus={installationStatus}
         />
@@ -1185,8 +1186,11 @@ test.each(["", " \n\t"])(
         expect(isDisplayed(screen.getByText(label))).toBe(true);
       }
     };
-    const checking = ["Checking Lossless Scaling…", "Checking MAKO Renderer…"];
-    const installed = ["Lossless Scaling installed", "MAKO Renderer installed"];
+    const installed = [
+      "MAKO Renderer installed",
+      "Lossless Scaling installed (optional)",
+    ];
+    const losslessMissing = "Lossless Scaling not installed (optional)";
     const { rerender, unmount } = render(panel(true));
     expectVisible(...installed);
     const ribbon = screen.getByRole("button", { name: "Hide info" });
@@ -1195,38 +1199,30 @@ test.each(["", " \n\t"])(
     expect(screen.getByRole("button", { name: "Show info" })).toBeTruthy();
     expectVisible(...installed);
 
-    rerender(panel(true, installed[0], "Updating MAKO Renderer..."));
-    expectVisible(installed[0], "Updating MAKO Renderer...");
-    expect(screen.queryByText(installed[1])).toBeNull();
-    rerender(
-      panel(
-        true,
-        "Unable to check Lossless Scaling.",
-        "Installation failed: offline",
-      ),
-    );
-    expectVisible(
-      "Unable to check Lossless Scaling.",
-      "Installation failed: offline",
-    );
+    rerender(panel(true, "Updating MAKO Renderer..."));
+    expectVisible("Updating MAKO Renderer...", installed[1]);
+    expect(screen.queryByText(installed[0])).toBeNull();
+    rerender(panel(true, "Installation failed: offline", false));
+    expectVisible("Installation failed: offline", losslessMissing);
     expect(screen.queryByText(installed[0])).toBeNull();
     expect(screen.queryByText(installed[1])).toBeNull();
 
     rerender(panel(false));
-    expectVisible(...checking);
+    expectVisible("Checking MAKO Renderer…", losslessMissing);
     expect(screen.queryByText(installed[0])).toBeNull();
-    expect(screen.queryByText(installed[1])).toBeNull();
+    rerender(panel(true, blank, false));
+    expectVisible(installed[0], losslessMissing);
     rerender(panel(true));
     expectVisible(...installed);
     expect(localStorage.getItem("mako-info-hidden")).toBe("true");
     unmount();
 
-    render(panel(true));
+    render(panel(true, blank, false));
     expect(screen.getByRole("button", { name: "Show info" })).toBeTruthy();
-    expectVisible(...installed);
+    expectVisible(installed[0], losslessMissing);
     fireEvent.click(screen.getByRole("button", { name: "Show info" }));
     expect(screen.getByRole("button", { name: "Hide info" })).toBeTruthy();
-    expectVisible(...installed);
+    expectVisible(installed[0], losslessMissing);
   },
 );
 
@@ -1235,6 +1231,7 @@ test("a new model failure appears while info is hidden, without restoring welcom
   const panel = (failed: boolean) => (
     <InfoVisibility>
       <ContentNotices
+        installationVerified={true}
         developmentBuildInfo={null}
         showWelcome
         engineUpdateRequired={false}
@@ -1270,7 +1267,8 @@ test.each<{ name: string; status: ModelWarningProps; message: string }>([
   {
     name: "LSFG",
     status: { lsfg: { compatible: false, reason: "lsfg-unavailable" } },
-    message: "Frame Generation unavailable for this model/precision.",
+    message:
+      "Lossless Scaling Frame Generation unavailable for this model/precision. MAKO FG selected automatically; a game restart applies the model change.",
   },
   {
     name: "LS1",
@@ -1324,7 +1322,7 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
     screen.getAllByRole("listitem").map((item) => item.textContent),
   ).toEqual([
     "LS1 unavailable for this model; MAKO Scaler fallback.",
-    "Frame Generation unavailable for this model/precision.",
+    "Lossless Scaling Frame Generation unavailable for this model/precision. MAKO FG selected automatically; a game restart applies the model change.",
   ]);
   const update = screen.getByRole("button", {
     name: "Check for MAKO Decky updates",
@@ -1344,7 +1342,7 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
   expect(screen.getByRole("alert")).toBe(warning);
   expect(screen.getAllByRole("listitem")).toHaveLength(2);
   expect(warning.textContent).toContain(
-    "LS1 unavailable; MAKO Scaler active. LS1 selection kept.",
+    "LS1 unavailable; MAKO Scaler active.",
   );
   expect(warning.textContent).not.toContain(
     "LS1 unavailable for this model; MAKO Scaler fallback.",
@@ -1355,7 +1353,7 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
 
   rerender(panel({ ls1: { compatible: true, reason: null }, lsfg: failed }));
   expect(screen.getByRole("listitem").textContent).toContain(
-    "Frame Generation unavailable for this model/precision.",
+    "Lossless Scaling Frame Generation unavailable for this model/precision. MAKO FG selected automatically; a game restart applies the model change.",
   );
   rerender(
     panel({
@@ -1402,31 +1400,25 @@ test.each<{ name: string; status: ModelWarningProps }>([
     expect(screen.getAllByRole("alert")).toHaveLength(1);
     expect(screen.getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByRole("alert").textContent).toContain(
-      "MAKO Scaler and Shaders available",
+      "Shaders remain available.",
     );
-    expect(
-      screen.getByRole("button", { name: "Open Lossless Scaling in Steam" }),
-    ).toBeTruthy();
-    expect(
-      screen.queryByRole("button", { name: "Check for MAKO Decky updates" }),
-    ).toBeNull();
+    expect(screen.getByRole("alert").querySelector("button")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Use MAKO FG" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Hide info" }));
     expect(screen.getByRole("alert").getAttribute("data-mako-info")).not.toBe(
       "true",
     );
     expect(screen.getByRole("alert").textContent).toContain(
-      "MAKO Scaler and Shaders available",
+      "Shaders remain available.",
     );
     rerender(
-      panel({ lsfg: { compatible: false, reason: "lsfg-unavailable" } }),
+      panel({
+        lsfg: { compatible: false, reason: "lsfg-unavailable" },
+      }),
     );
-    expect(
-      screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
-    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Use MAKO FG" })).toBeNull();
     rerender(panel(status));
-    expect(
-      screen.getByRole("button", { name: "Open Lossless Scaling in Steam" }),
-    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Use MAKO FG" })).toBeNull();
     rerender(panel({}));
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByTestId("navigation-row")).toBeNull();

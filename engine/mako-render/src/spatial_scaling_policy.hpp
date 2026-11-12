@@ -95,6 +95,85 @@ namespace mako::layer {
             : baseUsage;
     }
 
+    /// Swapchain formats a reconstruction pass can write directly through a
+    /// storage view, without its private output and the copy-back, storing
+    /// exactly the pixels the copy-back would. sRGB formats lack storage
+    /// support. FP32 arithmetic reaches packed 10-bit images through the
+    /// half-float private output, whose rounding a direct write would skip,
+    /// so those keep the copy-based path.
+    [[nodiscard]] constexpr bool directSpatialPresentationFormat(
+            const VkFormat format, const bool fp16Arithmetic) noexcept {
+        switch (format) {
+            case VK_FORMAT_R8G8B8A8_UNORM:
+            case VK_FORMAT_B8G8R8A8_UNORM:
+            case VK_FORMAT_R16G16B16A16_SFLOAT:
+                return true;
+            case VK_FORMAT_A2B10G10R10_UNORM_PACK32:
+            case VK_FORMAT_A2R10G10B10_UNORM_PACK32:
+                return fp16Arithmetic;
+            default:
+                return false;
+        }
+    }
+
+    /// A direct write must store the same values the copy-back would: 8-bit
+    /// working images into 8-bit UNORM, half-float working images into
+    /// half-float or packed 10-bit presentation images.
+    [[nodiscard]] constexpr bool directSpatialPresentationFormatCompatible(
+            const VkFormat workingFormat,
+            const VkFormat presentationFormat,
+            const bool fp16Arithmetic) noexcept {
+        if (!directSpatialPresentationFormat(presentationFormat, fp16Arithmetic))
+            return false;
+        const bool eightBit =
+            presentationFormat == VK_FORMAT_R8G8B8A8_UNORM ||
+            presentationFormat == VK_FORMAT_B8G8R8A8_UNORM;
+        return workingFormat == VK_FORMAT_R8G8B8A8_UNORM
+            ? eightBit
+            : workingFormat == VK_FORMAT_R16G16B16A16_SFLOAT && !eightBit;
+    }
+
+    /// Native Resolution can blit straight into the presentation image when
+    /// the copy-back it replaces is lossless: 8-bit working images into 8-bit
+    /// UNORM RGBA/BGRA, half-float into half-float. Packed 10-bit and sRGB
+    /// presentation keep the copy, whose intermediate rounding a single blit
+    /// would skip. A blit needs only transfer usage on the swapchain.
+    [[nodiscard]] constexpr bool directNativePresentationFormatCompatible(
+            const VkFormat workingFormat,
+            const VkFormat presentationFormat) noexcept {
+        if (workingFormat == VK_FORMAT_R8G8B8A8_UNORM)
+            return presentationFormat == VK_FORMAT_R8G8B8A8_UNORM ||
+                presentationFormat == VK_FORMAT_B8G8R8A8_UNORM;
+        return workingFormat == VK_FORMAT_R16G16B16A16_SFLOAT &&
+            presentationFormat == VK_FORMAT_R16G16B16A16_SFLOAT;
+    }
+
+    /// Storage usage is requested only for a swapchain a reconstruction pass
+    /// will write: MAKO Scaler at a usable precision, or LS1. Native Resolution
+    /// and MAKO's display resize keep transfer usage, as does a shader layer
+    /// below MAKO that cannot keep its own views valid with storage usage.
+    [[nodiscard]] constexpr bool directSpatialPresentationRequested(
+            const bool spatialScalingActive, const bool scalingRequested,
+            const ls::ScalingMethod method, const bool fp16Usable,
+            const bool shaderLayerBlocksStorage) noexcept {
+        return spatialScalingActive && scalingRequested &&
+            method != ls::ScalingMethod::Native &&
+            (method != ls::ScalingMethod::Mako || fp16Usable) &&
+            !shaderLayerBlocksStorage;
+    }
+
+    /// Storage usage can have narrower image limits than transfer usage.
+    /// A successful format query alone does not prove this swapchain fits.
+    [[nodiscard]] constexpr bool directSpatialPresentationImageSupported(
+            const VkExtent2D extent, const VkImageFormatProperties& properties) noexcept {
+        return extent.width > 0 && extent.height > 0 &&
+            extent.width <= properties.maxExtent.width &&
+            extent.height <= properties.maxExtent.height &&
+            properties.maxExtent.depth >= 1 && properties.maxMipLevels >= 1 &&
+            properties.maxArrayLayers >= 1 &&
+            (properties.sampleCounts & VK_SAMPLE_COUNT_1_BIT) != 0;
+    }
+
     [[nodiscard]] constexpr bool directSpatialFrameGenerationOutputEligible(
             const SpatialFramePipelinePlacement placement,
             const bool spatialScalingActive,
@@ -127,16 +206,19 @@ namespace mako::layer {
         bool preserveFrameGenerationSource{false};
     };
 
-    /// Reuse native post-FG resizing for isolated HDR presentation to
+    /// Reuse native post-FG resizing on the HDR-capable isolated bridge to
     /// fill a proven display target without changing the saved scaling choice.
+    /// SDR and HDR content both qualify: a source-sized SDR image would make
+    /// Gamescope rescale every refresh, delaying bridge frames into missed
+    /// refreshes that the Adaptive scheduler then reads as a lower base rate.
     /// Geometry, format and memory admission still belong to the ordinary
     /// scaling create policy. Unequal aspect ratios remain on the native path.
     [[nodiscard]] inline std::optional<SpatialScalingPolicy>
-    hdrBridgeDisplayResizePolicy(const ls::GameConf& profile,
-            const bool isolatedVariableBridge, const bool hdr,
-            const bool hdrAllowed, const bool frameGenerationProvisioned,
+    bridgeDisplayResizePolicy(const ls::GameConf& profile,
+            const bool isolatedVariableBridge, const bool hdrAllowed,
+            const bool frameGenerationProvisioned,
             const VkExtent2D source, const std::optional<VkExtent2D> target) {
-        if (profile.scaling_enabled || !isolatedVariableBridge || !hdr ||
+        if (profile.scaling_enabled || !isolatedVariableBridge ||
                 !hdrAllowed || !frameGenerationProvisioned || !target ||
                 source.width == 0 || source.height == 0 ||
                 target->width <= source.width || target->height <= source.height ||
@@ -155,13 +237,13 @@ namespace mako::layer {
         };
     }
 
-    /// Only MAKO's internal HDR display resize changes the sharpener footprint.
-    /// Explicit scaling and native-sized/SDR paths retain their existing shader
-    /// sampling. The decision uses admitted extents, not requested geometry.
-    [[nodiscard]] constexpr bool hdrBridgeSharpenSourceRequired(
-            const bool hdrDisplayResize, const bool spatialScalingActive,
+    /// Only MAKO's internal bridge display resize changes the sharpener
+    /// footprint. Explicit scaling and native-sized paths retain their existing
+    /// shader sampling. The decision uses admitted extents, not requested geometry.
+    [[nodiscard]] constexpr bool bridgeDisplayResizeSharpenSourceRequired(
+            const bool bridgeDisplayResize, const bool spatialScalingActive,
             const VkExtent2D source, const VkExtent2D presentation) noexcept {
-        return hdrDisplayResize && spatialScalingActive &&
+        return bridgeDisplayResize && spatialScalingActive &&
             source.width > 0 && source.height > 0 &&
             presentation.width > source.width &&
             presentation.height > source.height &&

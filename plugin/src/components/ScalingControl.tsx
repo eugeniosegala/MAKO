@@ -1,11 +1,6 @@
 import type { ConfigurationControlProps } from "./settings/types";
-import {
-  Dropdown,
-  Field,
-  PanelSectionRow,
-  SliderField,
-  ToggleField,
-} from "@decky/ui";
+import { ModelDropdown } from "./ModelDropdown";
+import { Field, PanelSectionRow, SliderField, ToggleField } from "@decky/ui";
 import {
   SCALING_ENABLED,
   SCALING_FACTOR,
@@ -26,6 +21,7 @@ import { effectiveScalingMethod as resolveScalingMethod } from "../config/ultraP
 import { MakoExperimentalSettingLabel, MakoInlineTip } from "./MakoUi";
 
 interface ScalingControlProps extends ConfigurationControlProps {
+  losslessAvailable?: boolean;
   disabled?: boolean;
   runtimeActivationSupported?: boolean | null;
   runtimeInactiveReason?: string | null;
@@ -34,6 +30,7 @@ interface ScalingControlProps extends ConfigurationControlProps {
 
 export function ScalingControl({
   config,
+  losslessAvailable = true,
   disabled = false,
   runtimeActivationSupported = null,
   runtimeInactiveReason = null,
@@ -79,10 +76,12 @@ export function ScalingControl({
     },
     {
       data: SCALING_METHOD_LS1,
+      disabled: !losslessAvailable,
       label: t("SCALING_METHOD_LS1", "LS1 Quality"),
     },
     {
       data: SCALING_METHOD_LS1_PERFORMANCE,
+      disabled: !losslessAvailable,
       label: t("SCALING_METHOD_LS1_PERFORMANCE", "LS1 Performance"),
     },
   ];
@@ -148,7 +147,8 @@ export function ScalingControl({
               childrenLayout="below"
               childrenContainerWidth="max"
             >
-              <Dropdown
+              <ModelDropdown
+                menuLabel={t("SCALING_METHOD", "Scaling Method")}
                 rgOptions={scalingMethodOptions}
                 selectedOption={effectiveScalingMethod}
                 disabled={disabled || config.ultra_performance}

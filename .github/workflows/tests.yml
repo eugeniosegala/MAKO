@@ -24,13 +24,17 @@ jobs:
         os: [ubuntu-latest, macos-latest]
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Set up portable Python runtime
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
       - name: Reject protected licensed inputs and binary payloads
         run: ./scripts/test-protected-inputs.sh
+      - name: Keep private branches off public remotes
+        run: ./scripts/test-private-push-guard.sh
+      - name: Check contributor identity handling
+        run: python3 scripts/test-update-contributors.py
       - name: Exercise safe capture staging and sanitization
         run: ./scripts/test-capture-trace.sh
       - name: Check local release-candidate verification
@@ -42,7 +46,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install pnpm
         uses: pnpm/action-setup@v6
@@ -57,7 +61,7 @@ jobs:
           cache-dependency-path: plugin/pnpm-lock.yaml
 
       - name: Set up Decky Python runtime
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.11"
 
@@ -121,7 +125,7 @@ jobs:
       CXX: ${{ matrix.cxx }}
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install Renderer build dependencies
         run: |
@@ -168,7 +172,7 @@ jobs:
       MAKO_ENABLE_SANITIZERS: ON
     steps:
       - name: Check out source
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Confirm hosted sanitizer toolchain
         run: |

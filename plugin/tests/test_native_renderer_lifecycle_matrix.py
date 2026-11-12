@@ -1,6 +1,7 @@
 """End-to-end filesystem matrix for managed native Renderer lifecycles."""
 
 import hashlib
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -24,6 +25,7 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     ACTIVE_RENDERER_STATE_SCHEMA_VERSION,
     VKBASALT_SHADER_ASSET_FILENAMES,
 )
+from py_modules.mako_plugin.configuration import ConfigurationService  # noqa: E402
 from py_modules.mako_plugin.installation import InstallationService  # noqa: E402
 from py_modules.mako_plugin import base_service as base_service_module  # noqa: E402
 
@@ -94,6 +96,7 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
         prefix = service.standalone_install_prefix
         standalone_files = [
             prefix / "lib/libmako-render.so",
+            prefix / "lib32/libmako-render.so",
             prefix / "lib/libmako-render-scaling.so",
             service.standalone_vkbasalt_lib_file,
             prefix / "bin/mako-ui",
@@ -158,9 +161,8 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
             "HOME": str(home),
             "XDG_CONFIG_HOME": str(home / ".config"),
             "MAKO_INSTALLER_ASSUME_YES": "1",
+            "MAKO_INSTALL_PREFIX": str(prefix or home / ".local"),
         })
-        if prefix is not None:
-            environment["MAKO_INSTALL_PREFIX"] = str(prefix)
         result = subprocess.run(
             [str(STANDALONE_INSTALLER), "--uninstall"],
             check=False,
@@ -259,7 +261,23 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
                 result = service.uninstall()
                 self.assertTrue(result["success"], result.get("error"))
             elif uninstaller == "decky_plugin_cleanup":
+                before = {
+                    path: path.read_bytes()
+                    for path in {*decky_files, *standalone_files,
+                                 service.active_renderer_state_file,
+                                 service.standalone_installer_state_file}
+                    if path.is_file()
+                }
+                before_status = self._status(service)
                 service.cleanup_on_uninstall()
+                self.assertEqual(before_status, self._status(self._service(home)))
+                for path, content in before.items():
+                    self.assertEqual(path.read_bytes(), content, str(path))
+                # Decky Loader removes its plugin directory. Native removal
+                # remains available without reinstalling the plugin first.
+                plugin_manifest.unlink()
+                self._run_standalone_uninstaller(home)
+                plugin_manifest.write_text("{}", encoding="utf-8")
             elif uninstaller == "standalone":
                 self._run_standalone_uninstaller(home)
             else:
@@ -278,6 +296,11 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
                 service.local_lib_dir.parent.exists(),
                 "managed Renderer data directory remains after uninstall",
             )
+            # Every uninstaller prunes MAKO's multilib root but keeps the
+            # standard per-user roots that login PATH setup relies on.
+            self.assertFalse((home / ".local/lib32").exists())
+            self.assertTrue((home / ".local/bin").is_dir())
+            self.assertTrue((home / ".local/share").is_dir())
             self.assertTrue(plugin_manifest.exists())
             self.assertTrue(service.config_file_path.exists())
             self.assertTrue(flatpak_marker.exists())
@@ -285,6 +308,7 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
     def test_every_managed_install_order_and_uninstaller_combination(self):
         scenarios = (
             ("decky_only", "decky_renderer"),
+            ("decky_only", "standalone"),
             ("decky_only", "decky_plugin_cleanup"),
             ("standalone_only", "decky_renderer"),
             ("standalone_only", "decky_plugin_cleanup"),
@@ -302,6 +326,58 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
                 uninstaller=uninstaller,
             ):
                 self._run_scenario(install_order, uninstaller)
+
+    def test_explicit_uninstall_preserves_modified_shared_standalone_files(self):
+        for uninstaller in ("decky", "standalone"):
+            with self.subTest(uninstaller=uninstaller), tempfile.TemporaryDirectory() as temporary:
+                home = Path(temporary) / "home"
+                home.mkdir()
+                service = self._service(home)
+                self._install_standalone(service)
+                service.registered_json_file.write_bytes(b"user-edited registration")
+                if uninstaller == "decky":
+                    self.assertTrue(service.uninstall()["success"])
+                else:
+                    self._run_standalone_uninstaller(home)
+                self.assertEqual(service.registered_json_file.read_bytes(), b"user-edited registration")
+                self.assertFalse(service.standalone_lib_file.exists())
+                self.assertFalse(service.active_renderer_state_file.exists())
+
+    def test_uninstall_uses_selected_manifest_when_active_state_is_stale(self):
+        for uninstaller in ("decky", "standalone"):
+            for owner in ("decky", "standalone"):
+                for relative_library in (False, True):
+                    with self.subTest(uninstaller=uninstaller, owner=owner, relative=relative_library), tempfile.TemporaryDirectory() as temporary:
+                        home = Path(temporary) / "home"
+                        home.mkdir()
+                        service = self._service(home)
+                        if owner == "decky":
+                            self._install_standalone(service)
+                            self._install_decky(service)
+                        else:
+                            self._install_decky(service)
+                            self._install_standalone(service)
+                            service.registered_json_file.write_bytes(b"user-edited registration")
+                        if relative_library:
+                            library = service.lib_file if owner == "decky" else service.standalone_lib_file
+                            service.json_file.write_text(json.dumps({"layer": {
+                                "library_path": os.path.relpath(library, service.json_file.parent),
+                            }}))
+                        service.active_renderer_state_file.write_text(json.dumps({
+                            "schema_version": 1,
+                            "owner": "standalone" if owner == "decky" else "decky",
+                            "version": "stale",
+                        }))
+                        if uninstaller == "decky":
+                            self.assertTrue(service.uninstall()["success"])
+                        else:
+                            self._run_standalone_uninstaller(home)
+                        if owner == "standalone":
+                            self.assertEqual(service.registered_json_file.read_bytes(), b"user-edited registration")
+                        else:
+                            self.assertFalse(service.registered_json_file.exists())
+                        self.assertFalse(service.lib_file.exists())
+                        self.assertFalse(service.standalone_lib_file.exists())
 
     def test_decky_can_reinstall_after_renderer_removal(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -336,6 +412,31 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
             self.assertFalse(service.standalone_installer_state_file.exists())
             self.assertTrue(service.config_file_path.exists())
 
+    def test_both_installers_reject_a_concurrent_native_operation(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            home = Path(temporary_directory) / "home"
+            home.mkdir()
+            service = self._service(home)
+            self._install_decky(service)
+            before = service.lib_file.read_bytes()
+            lock_path = service.standalone_install_prefix / ".mako-render-install.lock"
+            with lock_path.open("a+") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                for action in (service.install, service.uninstall):
+                    result = action()
+                    self.assertFalse(result["success"])
+                    self.assertIn("in progress", result["error"])
+                result = subprocess.run(
+                    [str(STANDALONE_INSTALLER), "--uninstall"],
+                    env={**os.environ, "HOME": str(home), "MAKO_INSTALLER_ASSUME_YES": "1"},
+                    capture_output=True, text=True,
+                )
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn("in progress", result.stderr)
+                self.assertEqual(service.lib_file.read_bytes(), before)
+            self.assertTrue(service.uninstall()["success"])
+            self.assertTrue(lock_path.is_file())
+
     def test_decky_can_reinstall_after_plugin_cleanup(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             home = Path(temporary_directory) / "home"
@@ -350,10 +451,13 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
             self._install_standalone(service)
 
             service.cleanup_on_uninstall()
-            self.assertFalse(self._status(service)["installed"])
-            self.assertFalse(service.local_lib_dir.parent.exists())
+            self.assertTrue(self._status(service)["installed"])
+            self.assertEqual(self._status(service)["installed_engine_version"], STANDALONE_VERSION)
 
             reinstalled_service = self._service(home)
+            self.assertEqual(self._status(service), self._status(reinstalled_service))
+            # Reinstalling the plugin discovers the selected Renderer; only
+            # an explicit Renderer update changes the payload owner/version.
             self._install_decky(reinstalled_service)
             status = self._status(reinstalled_service)
             self.assertTrue(status["installed"])
@@ -361,6 +465,8 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
             self.assertFalse(status["engine_update_required"])
 
             reinstalled_service.cleanup_on_uninstall()
+            self.assertTrue(self._status(reinstalled_service)["installed"])
+            self.assertTrue(reinstalled_service.uninstall()["success"])
             self.assertFalse(self._status(reinstalled_service)["installed"])
             self.assertFalse(reinstalled_service.local_lib_dir.parent.exists())
             self.assertFalse(
@@ -370,6 +476,54 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
                 reinstalled_service.standalone_installer_state_file.exists()
             )
             self.assertTrue(reinstalled_service.config_file_path.exists())
+
+    def test_launch_helpers_follow_the_selected_renderer(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            home = Path(temporary_directory) / "home"
+            home.mkdir()
+            service = self._service(home)
+            with patch.object(
+                base_service_module,
+                "resolve_user_home",
+                return_value=home,
+            ):
+                configuration = ConfigurationService(logger=_Logger())
+            service.config_file_path.parent.mkdir(parents=True)
+            service.config_file_path.write_text(
+                "version = 2\n",
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                service.selected_vrr_lease_file(), service.vrr_lease_file
+            )
+
+            def assert_wrapper_uses(helper: Path) -> None:
+                self.assertEqual(service.selected_vrr_lease_file(), helper)
+                self.assertIn(
+                    f"{helper} --start",
+                    service.mako_script_path.read_text(encoding="utf-8"),
+                )
+
+            self._install_decky(service)
+            service._create_mako_launch_script()
+            assert_wrapper_uses(service.vrr_lease_file)
+            self.assertFalse(configuration.migrate_launch_script_if_needed())
+
+            # The standalone installer selects its Renderer without
+            # regenerating Decky's wrapper; startup must follow it.
+            self._install_standalone(service)
+            self.assertTrue(configuration.migrate_launch_script_if_needed())
+            assert_wrapper_uses(service.standalone_vrr_lease_file)
+            self.assertFalse(configuration.migrate_launch_script_if_needed())
+
+            service.json_file.write_text(
+                json.dumps({
+                    "layer": {"library_path": str(service.lib_file)},
+                }),
+                encoding="utf-8",
+            )
+            self.assertTrue(configuration.migrate_launch_script_if_needed())
+            assert_wrapper_uses(service.vrr_lease_file)
 
     def test_matching_standalone_renderer_is_adopted_without_update(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

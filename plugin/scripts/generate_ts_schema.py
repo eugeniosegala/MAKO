@@ -60,6 +60,7 @@ from shared_config import (
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
     ULTRA_PERFORMANCE_FLOW_SCALE,
+    ULTRA_PERFORMANCE_MAKO_FG_FLOW_SCALE,
     VKBASALT_ANTIALIASING_FXAA,
     VKBASALT_ANTIALIASING_NONE,
     VKBASALT_ANTIALIASING_SMAA,
@@ -220,6 +221,8 @@ def generate_typescript_schema():
         f"{SCALING_SHARPNESS_MAX} as const;",
         "export const ULTRA_PERFORMANCE_FLOW_SCALE = "
         f"{ULTRA_PERFORMANCE_FLOW_SCALE} as const;",
+        "export const ULTRA_PERFORMANCE_MAKO_FG_FLOW_SCALE = "
+        f"{ULTRA_PERFORMANCE_MAKO_FG_FLOW_SCALE} as const;",
         f"export const FIXED_MULTIPLIER_MIN = {FIXED_MULTIPLIER_MIN} as const;",
         "export const FIXED_MULTIPLIER_UI_MIN = "
         f"{FIXED_MULTIPLIER_UI_MIN} as const;",

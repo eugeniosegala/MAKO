@@ -25,6 +25,49 @@ namespace ls {
         bool allow_fp16{true};
     };
 
+    /// Frame-generation backend selected at process startup.
+    enum class FrameGenerationModel : uint8_t { LosslessScaling, MakoFg };
+
+    [[nodiscard]] constexpr const char* frameGenerationModelName(
+            FrameGenerationModel model) noexcept {
+        return model == FrameGenerationModel::MakoFg ? "mako-fg" : "lossless-scaling";
+    }
+
+    [[nodiscard]] constexpr std::optional<FrameGenerationModel>
+    frameGenerationModelFromName(std::string_view name) noexcept {
+        if (name == "lossless-scaling") return FrameGenerationModel::LosslessScaling;
+        if (name == "mako-fg") return FrameGenerationModel::MakoFg;
+        return std::nullopt;
+    }
+
+    /// How often MAKO FG solves motion. Pairs between solved ones carry the last
+    /// motion forward, so higher modes trade motion accuracy for GPU time.
+    enum class MakoFgMode : uint8_t { Quality, Balanced, Performance, ExtraPerformance };
+
+    [[nodiscard]] constexpr const char* makoFgModeName(MakoFgMode mode) noexcept {
+        switch (mode) {
+            case MakoFgMode::Quality: return "quality";
+            case MakoFgMode::Performance: return "performance";
+            case MakoFgMode::ExtraPerformance: return "extra-performance";
+            case MakoFgMode::Balanced: break;
+        }
+        return "balanced";
+    }
+
+    [[nodiscard]] constexpr std::optional<MakoFgMode>
+    makoFgModeFromName(std::string_view name) noexcept {
+        if (name == "quality") return MakoFgMode::Quality;
+        if (name == "balanced") return MakoFgMode::Balanced;
+        if (name == "performance") return MakoFgMode::Performance;
+        if (name == "extra-performance") return MakoFgMode::ExtraPerformance;
+        return std::nullopt;
+    }
+
+    /// One real-frame pair in this many solves motion: 1, 2, 3 or 4.
+    [[nodiscard]] constexpr int makoFgMotionPeriod(MakoFgMode mode) noexcept {
+        return static_cast<int>(mode) + 1;
+    }
+
     /// pacing methods
     enum class Pacing : uint8_t {
         /// do not perform any pacing (vsync+novrr)
@@ -186,12 +229,15 @@ namespace ls {
 
     /// Renderer defaults used when a game profile omits fields
     struct GameConfDefaults {
+        static constexpr FrameGenerationModel frameGenerationModel = FrameGenerationModel::MakoFg;
+        static constexpr MakoFgMode makoFgMode = MakoFgMode::Balanced;
         static constexpr size_t multiplier = 2;
         static constexpr bool frameGenerationProvisioned = true;
         static constexpr bool frameGenerationEnabled = true;
         static constexpr bool scalingEnabled = false;
         static constexpr bool swapchainImageCountCompatibility = false;
-        static constexpr ScalingMethod scalingMethod = ScalingMethod::Ls1;
+        static constexpr bool mailboxPresentationCompatibility = false;
+        static constexpr ScalingMethod scalingMethod = ScalingMethod::Mako;
         static constexpr float scalingFactor = 1.5F;
         static constexpr bool scalingSupersampling = false;
         static constexpr float scalingSharpness = 0.8F;
@@ -214,6 +260,7 @@ namespace ls {
         static constexpr float dynamicCadenceProbeIntervalSeconds = 2.0F;
         static constexpr bool ultraPerformance = false;
         static constexpr float ultraPerformanceFlowScale = 0.7F;
+        static constexpr float ultraPerformanceMakoFgFlowScale = 0.6F;
         static constexpr float flowScale = 0.8F;
         static constexpr bool performanceMode = false;
         static constexpr Pacing pacing = Pacing::None;
@@ -269,11 +316,18 @@ namespace ls {
         };
         /// allow frame synthesis to be toggled live without changing its mode
         bool frame_generation_enabled{GameConfDefaults::frameGenerationEnabled};
+        FrameGenerationModel frame_generation_model{GameConfDefaults::frameGenerationModel};
+        /// how often MAKO FG solves motion; Lossless Scaling ignores it
+        MakoFgMode mako_fg_mode{GameConfDefaults::makoFgMode};
         /// provision the scaling engine independently from frame synthesis
         bool scaling_enabled{GameConfDefaults::scalingEnabled};
         /// preserve the application's requested swapchain image minimum
         bool swapchain_image_count_compatibility{
             GameConfDefaults::swapchainImageCountCompatibility
+        };
+        /// present ordered Frame Generation through MAILBOX instead of FIFO
+        bool mailbox_presentation_compatibility{
+            GameConfDefaults::mailboxPresentationCompatibility
         };
         /// spatial reconstruction implementation
         ScalingMethod scaling_method{GameConfDefaults::scalingMethod};
@@ -351,12 +405,12 @@ namespace ls {
     }
 
     /// Spatial model selected after applying cross-feature presets. Ultra
-    /// Performance keeps a disabled scaling engine dormant, but uses the
-    /// lower-cost licensed model whenever that engine is provisioned.
+    /// Performance keeps a disabled scaling engine dormant, but uses MAKO
+    /// Scaler whenever that engine is provisioned, with either FG model.
     [[nodiscard]] constexpr ScalingMethod effectiveScalingMethod(
             const GameConf& profile) noexcept {
         return profile.scaling_enabled && profile.ultra_performance
-            ? ScalingMethod::Ls1Performance
+            ? ScalingMethod::Mako
             : profile.scaling_method;
     }
 
@@ -368,16 +422,31 @@ namespace ls {
     }
 
     /// Flow scale selected for backend construction after applying presets.
+    /// Ultra Performance locks each FG model at its own Flow Scale.
     [[nodiscard]] constexpr float effectiveFlowScale(
             const GameConf& profile) noexcept {
-        return profile.ultra_performance
-            ? GameConfDefaults::ultraPerformanceFlowScale
-            : profile.flow_scale;
+        if (!profile.ultra_performance) return profile.flow_scale;
+        return profile.frame_generation_model == FrameGenerationModel::MakoFg
+            ? GameConfDefaults::ultraPerformanceMakoFgFlowScale
+            : GameConfDefaults::ultraPerformanceFlowScale;
     }
 
-    /// Model selected for backend construction after applying presets.
+    /// MAKO FG mode for backend construction after applying presets. Ultra
+    /// Performance raises it to at least Performance; other models use neither.
+    [[nodiscard]] constexpr MakoFgMode effectiveMakoFgMode(
+            const GameConf& profile) noexcept {
+        if (profile.frame_generation_model != FrameGenerationModel::MakoFg)
+            return MakoFgMode::Quality;
+        return profile.ultra_performance && profile.mako_fg_mode < MakoFgMode::Performance
+            ? MakoFgMode::Performance : profile.mako_fg_mode;
+    }
+
+    /// Model selected for backend construction after applying presets. MAKO FG
+    /// has no lighter variant, so only LSFG uses it.
     [[nodiscard]] constexpr bool effectivePerformanceMode(
             const GameConf& profile) noexcept {
+        if (profile.frame_generation_model == FrameGenerationModel::MakoFg)
+            return false;
         return profile.ultra_performance || profile.performance_mode;
     }
 

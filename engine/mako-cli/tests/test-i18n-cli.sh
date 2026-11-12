@@ -105,6 +105,14 @@ run_failure "$cli" spatial-profile --method mako --factor nan
 [[ $command_output == 'error: --factor requires a valid finite number: nan' ]] ||
     fail "non-finite spatial profile factor did not fail cleanly: $command_output"
 
+run_failure "$cli" spatial-profile --method mako --warmup-ms 60001
+[[ $command_output == 'error: spatial profile warm-up time must be at most 60000 ms' ]] ||
+    fail "unbounded spatial profile warm-up time was accepted: $command_output"
+
+run_failure "$cli" spatial-profile --method mako --warmup-ms nope
+[[ $command_output == 'error: --warmup-ms requires a valid finite number: nope' ]] ||
+    fail "invalid spatial profile warm-up time did not fail cleanly: $command_output"
+
 run_failure "$cli" combined-quality-regression --method unknown-method
 [[ $command_output == 'error: unknown combined quality spatial method: unknown-method' ]] ||
     fail "unknown combined spatial method did not fail closed: $command_output"

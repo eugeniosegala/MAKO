@@ -15,6 +15,7 @@
 #include "mako-common/vulkan/sampler.hpp"
 #include "mako-common/vulkan/shader.hpp"
 #include "shaders/spatial_scaling_spirv.hpp"
+#include "spatial_scaling_policy.hpp"
 
 #include <array>
 #include <cstddef>
@@ -50,6 +51,13 @@ namespace {
                     "unsupported spatial-scaling working format"
                 );
         }
+    }
+
+    /// The direct variant writes through the view's own storage format.
+    std::span<const uint32_t> directScalingShader(const bool fp16) {
+        if (fp16)
+            return mako::layer::embedded::spatialScalingDirectFp16Spirv;
+        return mako::layer::embedded::spatialScalingDirectSpirv;
     }
 
     VkExtent2D doubledExtent(const VkExtent2D extent) {
@@ -117,15 +125,145 @@ namespace {
         };
     }
 
+    /// Copy the application's source rectangle into the private input image;
+    /// every spatial graph starts with this step.
+    void recordSourceCopy(const vk::Vulkan& vk, const VkCommandBuffer handle,
+            const VkImage sourceImage, const VkImageLayout sourceLayout,
+            const vk::Image& input, const VkExtent2D sourceSize) {
+        const std::array inputBarriers{
+            imageBarrier(
+                sourceImage, VK_ACCESS_MEMORY_WRITE_BIT,
+                VK_ACCESS_TRANSFER_READ_BIT, sourceLayout,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+            ),
+            imageBarrier(
+                input.handle(), VK_ACCESS_NONE,
+                VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+            ),
+        };
+        vk.df().CmdPipelineBarrier(
+            handle, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
+            static_cast<uint32_t>(inputBarriers.size()), inputBarriers.data()
+        );
+        const auto sourceCopy = blitRegion(sourceSize, sourceSize);
+        vk.df().CmdBlitImage(
+            handle, sourceImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            input.handle(), VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &sourceCopy, VK_FILTER_NEAREST
+        );
+    }
+
+    /// A storage-only view of an application-owned swapchain image. The usage
+    /// restriction keeps the view valid when the swapchain is mutable-format.
+    ls::owned_ptr<VkImageView> createStorageView(const vk::Vulkan& vk,
+            const VkImage image, const VkFormat format) {
+        const VkImageViewUsageCreateInfo usage{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_USAGE_CREATE_INFO,
+            .usage = VK_IMAGE_USAGE_STORAGE_BIT,
+        };
+        const VkImageViewCreateInfo viewInfo{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .pNext = &usage,
+            .image = image,
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = format,
+            .subresourceRange = {
+                .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+                .baseMipLevel = 0,
+                .levelCount = 1,
+                .baseArrayLayer = 0,
+                .layerCount = 1,
+            },
+        };
+        VkImageView handle{};
+        const auto result = vk.df().CreateImageView(
+            vk.dev(), &viewInfo, VK_NULL_HANDLE, &handle);
+        if (result != VK_SUCCESS)
+            throw ls::vulkan_error(result, "vkCreateImageView() failed for a spatial presentation target");
+        return ls::owned_ptr<VkImageView>(
+            new VkImageView(handle),
+            [dev = vk.dev(), destroy = vk.df().DestroyImageView](VkImageView& view) {
+                destroy(dev, view, VK_NULL_HANDLE);
+            }
+        );
+    }
+
+    /// Bind a final pass's inputs and one presentation target view, using the
+    /// common layout: buffer 0, sampler 16, sampled images from 32, storage 48.
+    /// Sets are released with their pool.
+    VkDescriptorSet allocatePresentationSet(const vk::Vulkan& vk,
+            const vk::DescriptorPool& pool, const vk::Shader& shader,
+            const vk::Buffer* parameters, const vk::Sampler& sampler,
+            const std::span<const VkImageView> sampled, const VkImageView target) {
+        const VkDescriptorSetAllocateInfo allocation{
+            .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO,
+            .descriptorPool = pool.handle(),
+            .descriptorSetCount = 1,
+            .pSetLayouts = &shader.descriptorlayout(),
+        };
+        VkDescriptorSet set{};
+        const auto result = vk.df().AllocateDescriptorSets(vk.dev(), &allocation, &set);
+        if (result != VK_SUCCESS)
+            throw ls::vulkan_error(result, "vkAllocateDescriptorSets() failed for a spatial presentation target");
+        std::vector<VkDescriptorImageInfo> imageInfos;
+        imageInfos.reserve(sampled.size() + 2);
+        std::vector<VkWriteDescriptorSet> writes;
+        writes.reserve(sampled.size() + 3);
+        VkDescriptorBufferInfo bufferInfo{};
+        if (parameters) {
+            bufferInfo = {.buffer = parameters->handle(), .range = parameters->length()};
+            writes.push_back({
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = set, .dstBinding = 0, .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .pBufferInfo = &bufferInfo,
+            });
+        }
+        writes.push_back({
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set, .dstBinding = 16, .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+            .pImageInfo = &imageInfos.emplace_back(VkDescriptorImageInfo{
+                .sampler = sampler.handle(),
+            }),
+        });
+        for (size_t index = 0; index < sampled.size(); ++index) {
+            writes.push_back({
+                .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+                .dstSet = set, .dstBinding = static_cast<uint32_t>(32 + index),
+                .descriptorCount = 1,
+                .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+                .pImageInfo = &imageInfos.emplace_back(VkDescriptorImageInfo{
+                    .imageView = sampled[index],
+                    .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                }),
+            });
+        }
+        writes.push_back({
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = set, .dstBinding = 48, .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo = &imageInfos.emplace_back(VkDescriptorImageInfo{
+                .imageView = target,
+                .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+            }),
+        });
+        vk.df().UpdateDescriptorSets(vk.dev(),
+            static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
+        return set;
+    }
+
+
     void bindAndDispatch(const vk::Vulkan& vk,
             const VkCommandBuffer commandBuffer,
             const vk::Shader& shader,
-            const vk::DescriptorSet& descriptorSet,
+            const VkDescriptorSet descriptor,
             const VkExtent2D extent) {
         vk.df().CmdBindPipeline(
             commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shader.pipeline()
         );
-        const auto descriptor = descriptorSet.handle();
         vk.df().CmdBindDescriptorSets(
             commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
             shader.pipelinelayout(), 0, 1, &descriptor, 0, nullptr
@@ -134,6 +272,14 @@ namespace {
             commandBuffer, (extent.width + 15) / 16,
             (extent.height + 15) / 16, 1
         );
+    }
+
+    void bindAndDispatch(const vk::Vulkan& vk,
+            const VkCommandBuffer commandBuffer,
+            const vk::Shader& shader,
+            const vk::DescriptorSet& descriptorSet,
+            const VkExtent2D extent) {
+        bindAndDispatch(vk, commandBuffer, shader, descriptorSet.handle(), extent);
     }
 
     class Pipeline {
@@ -152,6 +298,22 @@ namespace {
             VkImage directOutput = VK_NULL_HANDLE
         ) const = 0;
         [[nodiscard]] virtual uint32_t modelVariant() const { return 0; }
+        /// Bind application-owned presentation images that reconstruction
+        /// writes directly. Pipelines without that path keep the copy-back.
+        virtual bool configureDirectPresentationOutputs(const vk::Vulkan&,
+                std::span<const VkImage>, VkFormat) {
+            return false;
+        }
+        virtual void clearDirectPresentationOutputs() {}
+        [[nodiscard]] virtual size_t directPresentationOutputCount() const { return 0; }
+        [[nodiscard]] virtual bool hasDirectPresentationOutput(VkImage) const { return false; }
+        /// Reconstruct straight into a bound presentation image after the
+        /// source copy, transitioning it from the layout it holds,
+        /// initialLayout, and leaving it in finalLayout.
+        virtual void recordDirectPresentation(const vk::Vulkan&, VkCommandBuffer,
+                VkImage, VkImageLayout, VkImageLayout) const {
+            throw ls::vulkan_error("spatial pipeline has no direct presentation output");
+        }
     };
 
     [[nodiscard]] std::optional<size_t> directOutputIndex(
@@ -164,6 +326,54 @@ namespace {
         return std::nullopt;
     }
 
+    /// Storage views and descriptor sets for the swapchain images one final
+    /// pass writes directly. Sets are released with the pool.
+    struct PresentationTargets {
+        std::optional<vk::DescriptorPool> pool;
+        std::vector<ls::owned_ptr<VkImageView>> views;
+        std::vector<VkDescriptorSet> sets;
+        std::vector<VkImage> images;
+
+        void clear() {
+            this->sets.clear();
+            this->pool.reset();
+            this->views.clear();
+            this->images.clear();
+        }
+        [[nodiscard]] std::optional<size_t> index(const VkImage image) const {
+            return directOutputIndex(this->images, image);
+        }
+        /// Replace the bindings only after every view and set exists.
+        void configure(const vk::Vulkan& vk, const std::span<const VkImage> targets,
+                const VkFormat format, const vk::Shader& shader,
+                const vk::Buffer* parameters, const vk::Sampler& sampler,
+                const std::span<const VkImageView> sampled) {
+            const auto count = static_cast<uint32_t>(targets.size());
+            std::optional<vk::DescriptorPool> replacementPool;
+            replacementPool.emplace(vk, vk::Limits{
+                .sets = count,
+                .uniform_buffers = parameters ? count : 0U,
+                .samplers = count,
+                .sampled_images = count * static_cast<uint32_t>(sampled.size()),
+                .storage_images = count,
+            });
+            std::vector<ls::owned_ptr<VkImageView>> replacementViews;
+            std::vector<VkDescriptorSet> replacementSets;
+            replacementViews.reserve(targets.size());
+            replacementSets.reserve(targets.size());
+            for (const auto image : targets) {
+                replacementViews.push_back(createStorageView(vk, image, format));
+                replacementSets.push_back(allocatePresentationSet(vk, *replacementPool,
+                    shader, parameters, sampler, sampled, *replacementViews.back()));
+            }
+            this->clear();
+            this->pool = std::move(replacementPool);
+            this->views = std::move(replacementViews);
+            this->sets = std::move(replacementSets);
+            this->images.assign(targets.begin(), targets.end());
+        }
+    };
+
     class NativeResolutionPipeline final : public Pipeline {
     public:
         NativeResolutionPipeline(const vk::Vulkan& vk,
@@ -172,6 +382,7 @@ namespace {
                 const VkFormat workingFormat, const VkFormat inputFormat) :
             sourceSize(sourceExtent),
             presentationSize(presentationExtent),
+            workingFormat(workingFormat),
             sourceImage(vk, sourceExtent, inputFormat,
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT |
                     VK_IMAGE_USAGE_TRANSFER_SRC_BIT),
@@ -253,12 +464,85 @@ namespace {
             );
         }
 
+        bool configureDirectPresentationOutputs(const vk::Vulkan&,
+                const std::span<const VkImage> images,
+                const VkFormat format) override {
+            if (!directNativePresentationFormatCompatible(
+                    this->workingFormat, format))
+                return false;
+            this->presentationTargets.assign(images.begin(), images.end());
+            return true;
+        }
+        void clearDirectPresentationOutputs() override {
+            this->presentationTargets.clear();
+        }
+        [[nodiscard]] size_t directPresentationOutputCount() const override {
+            return this->presentationTargets.size();
+        }
+        [[nodiscard]] bool hasDirectPresentationOutput(
+                const VkImage image) const override {
+            return directOutputIndex(this->presentationTargets, image).has_value();
+        }
+        /// One linear blit from the copied source replaces the presentation-
+        /// sized private output, its write and its copy-back. The target keeps
+        /// the transitions the copy-back used.
+        void recordDirectPresentation(const vk::Vulkan& vk,
+                const VkCommandBuffer commandBuffer,
+                const VkImage target, const VkImageLayout initialLayout,
+                const VkImageLayout finalLayout) const override {
+            if (!this->hasDirectPresentationOutput(target))
+                throw ls::vulkan_error("spatial presentation target is not bound");
+            const std::array barriers{
+                imageBarrier(
+                    this->sourceImage.handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_TRANSFER_READ_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+                ),
+                imageBarrier(
+                    target,
+                    initialLayout == VK_IMAGE_LAYOUT_UNDEFINED
+                        ? VK_ACCESS_NONE : VK_ACCESS_MEMORY_READ_BIT,
+                    VK_ACCESS_TRANSFER_WRITE_BIT, initialLayout,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+                ),
+            };
+            vk.df().CmdPipelineBarrier(
+                commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                0, nullptr, 0, nullptr,
+                static_cast<uint32_t>(barriers.size()), barriers.data()
+            );
+            const auto region = blitRegion(
+                this->sourceSize, this->presentationSize
+            );
+            vk.df().CmdBlitImage(
+                commandBuffer,
+                this->sourceImage.handle(),
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &region, VK_FILTER_LINEAR
+            );
+            const auto finalBarrier = imageBarrier(
+                target, VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_ACCESS_MEMORY_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                finalLayout
+            );
+            vk.df().CmdPipelineBarrier(
+                commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+                0, nullptr, 0, nullptr, 1, &finalBarrier
+            );
+        }
+
     private:
         VkExtent2D sourceSize{};
         VkExtent2D presentationSize{};
+        VkFormat workingFormat{};
         vk::Image sourceImage;
         vk::Image reconstructedImage;
         std::vector<VkImage> directOutputs;
+        std::vector<VkImage> presentationTargets;
     };
 
     class MakoPipeline final : public Pipeline {
@@ -316,7 +600,9 @@ namespace {
                 },
                 std::vector<ls::R<const vk::Buffer>>{
                     std::cref(this->parameterBuffer)
-                }) {}
+                }),
+            workingFormat(workingFormat),
+            fp16(fp16) {}
 
         [[nodiscard]] const vk::Image& input() const override {
             return this->sourceImage;
@@ -385,11 +671,66 @@ namespace {
             const auto directIndex = directOutput == VK_NULL_HANDLE
                 ? std::optional<size_t>{}
                 : directOutputIndex(this->directOutputs, directOutput);
-            const VkImage outputImage = directIndex
-                ? directOutput : this->reconstructedImage.handle();
-            const auto& outputDescriptors = directIndex
-                ? this->directDescriptorSets.at(*directIndex)
-                : this->descriptorSet;
+            this->recordReconstruction(vk, commandBuffer, this->shader,
+                directIndex ? this->directDescriptorSets.at(*directIndex).handle()
+                    : this->descriptorSet.handle(),
+                directIndex ? directOutput : this->reconstructedImage.handle(),
+                VK_IMAGE_LAYOUT_UNDEFINED, VK_ACCESS_TRANSFER_READ_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_PIPELINE_STAGE_TRANSFER_BIT);
+        }
+
+        bool configureDirectPresentationOutputs(const vk::Vulkan& vk,
+                const std::span<const VkImage> images,
+                const VkFormat format) override {
+            if (!directSpatialPresentationFormatCompatible(
+                    this->workingFormat, format, this->fp16))
+                return false;
+            if (images.empty()) {
+                this->presentation.clear();
+                return true;
+            }
+            if (!this->presentationShader)
+                this->presentationShader.emplace(
+                    vk, directScalingShader(this->fp16), 1, 1, 1, 1);
+            const std::array sampled{this->sourceImage.imageview()};
+            this->presentation.configure(vk, images, format,
+                *this->presentationShader, &this->parameterBuffer,
+                this->sampler, sampled);
+            return true;
+        }
+        void clearDirectPresentationOutputs() override {
+            this->presentation.clear();
+        }
+        [[nodiscard]] size_t directPresentationOutputCount() const override {
+            return this->presentation.images.size();
+        }
+        [[nodiscard]] bool hasDirectPresentationOutput(
+                const VkImage image) const override {
+            return this->presentation.index(image).has_value();
+        }
+        void recordDirectPresentation(const vk::Vulkan& vk,
+                const VkCommandBuffer commandBuffer,
+                const VkImage target, const VkImageLayout initialLayout,
+                const VkImageLayout finalLayout) const override {
+            const auto index = this->presentation.index(target);
+            if (!index)
+                throw ls::vulkan_error("spatial presentation target is not bound");
+            this->recordReconstruction(vk, commandBuffer,
+                *this->presentationShader, this->presentation.sets.at(*index),
+                target, initialLayout, VK_ACCESS_MEMORY_READ_BIT, finalLayout,
+                VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        }
+
+    private:
+        /// Reconstruct from the copied source into `output`, then hand it to
+        /// the next stage. The source copy's reads of `output` (an application
+        /// image) finish first; reconstruction replaces every pixel.
+        void recordReconstruction(const vk::Vulkan& vk,
+                const VkCommandBuffer commandBuffer, const vk::Shader& pass,
+                const VkDescriptorSet descriptor, const VkImage output,
+                const VkImageLayout initialLayout, const VkAccessFlags finalAccess,
+                const VkImageLayout finalLayout,
+                const VkPipelineStageFlags finalStage) const {
             const std::array barriers{
                 imageBarrier(
                     this->sourceImage.handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -398,8 +739,8 @@ namespace {
                     VK_IMAGE_LAYOUT_GENERAL
                 ),
                 imageBarrier(
-                    outputImage, VK_ACCESS_NONE,
-                    VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                    output, VK_ACCESS_NONE,
+                    VK_ACCESS_SHADER_WRITE_BIT, initialLayout,
                     VK_IMAGE_LAYOUT_GENERAL
                 ),
             };
@@ -410,13 +751,11 @@ namespace {
                 static_cast<uint32_t>(barriers.size()), barriers.data()
             );
             vk.df().CmdBindPipeline(
-                commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                this->shader.pipeline()
+                commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, pass.pipeline()
             );
-            const auto descriptor = outputDescriptors.handle();
             vk.df().CmdBindDescriptorSets(
                 commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
-                this->shader.pipelinelayout(), 0, 1, &descriptor, 0, nullptr
+                pass.pipelinelayout(), 0, 1, &descriptor, 0, nullptr
             );
             vk.df().CmdDispatch(
                 commandBuffer,
@@ -424,18 +763,15 @@ namespace {
                 (this->presentationSize.height + 7) / 8, 1
             );
             const auto outputBarrier = imageBarrier(
-                outputImage, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+                output, VK_ACCESS_SHADER_WRITE_BIT, finalAccess,
+                VK_IMAGE_LAYOUT_GENERAL, finalLayout
             );
             vk.df().CmdPipelineBarrier(
                 commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
-                1, &outputBarrier
+                finalStage, 0, 0, nullptr, 0, nullptr, 1, &outputBarrier
             );
         }
 
-    private:
         VkExtent2D sourceSize{};
         VkExtent2D presentationSize{};
         vk::Image sourceImage;
@@ -448,6 +784,10 @@ namespace {
         std::optional<vk::DescriptorPool> directDescriptorPool;
         std::vector<vk::DescriptorSet> directDescriptorSets;
         std::vector<VkImage> directOutputs;
+        VkFormat workingFormat;
+        bool fp16;
+        std::optional<vk::Shader> presentationShader;
+        PresentationTargets presentation;
     };
 
     class Ls1Pipeline final : public Pipeline {
@@ -505,7 +845,9 @@ namespace {
                 .capturedHeight = sourceExtent.height,
                 .outputWidth = presentationExtent.width,
                 .outputHeight = presentationExtent.height,
-            }) {
+            }),
+            workingFormat(workingFormat),
+            reconstructionDirectCode(payloads.reconstructionDirect) {
             if (!this->performance) {
                 this->intermediateA.emplace(
                     vk, sourceExtent, VK_FORMAT_R8G8B8A8_UNORM,
@@ -643,20 +985,74 @@ namespace {
             return directOutputIndex(this->directOutputs, image).has_value();
         }
 
+        bool configureDirectPresentationOutputs(const vk::Vulkan& vk,
+                const std::span<const VkImage> images,
+                const VkFormat format) override {
+            // LS1 always runs FP32 arithmetic.
+            if (this->reconstructionDirectCode.empty() ||
+                    !directSpatialPresentationFormatCompatible(
+                        this->workingFormat, format, false))
+                return false;
+            if (images.empty()) {
+                this->presentation.clear();
+                return true;
+            }
+            if (!this->presentationReconstruction)
+                this->presentationReconstruction.emplace(
+                    vk, this->reconstructionDirectCode, 2, 1, 1, 1);
+            const std::array sampled{
+                this->featureImage.imageview(), this->sourceImage.imageview(),
+            };
+            this->presentation.configure(vk, images, format,
+                *this->presentationReconstruction, &this->parameterBuffer,
+                this->sampler, sampled);
+            return true;
+        }
+        void clearDirectPresentationOutputs() override {
+            this->presentation.clear();
+        }
+        [[nodiscard]] size_t directPresentationOutputCount() const override {
+            return this->presentation.images.size();
+        }
+        [[nodiscard]] bool hasDirectPresentationOutput(
+                const VkImage image) const override {
+            return this->presentation.index(image).has_value();
+        }
+        void recordDirectPresentation(const vk::Vulkan& vk,
+                const VkCommandBuffer commandBuffer,
+                const VkImage target, const VkImageLayout initialLayout,
+                const VkImageLayout finalLayout) const override {
+            this->recordWithInput(vk, commandBuffer, VK_NULL_HANDLE, false,
+                false, target, initialLayout, finalLayout);
+        }
+
         void recordCompute(const vk::Vulkan& vk,
                 const VkCommandBuffer commandBuffer,
                 const VkImage directOutput) const override {
             recordWithInput(vk, commandBuffer, directOutput, false);
         }
+        /// A presentation target replaces the private output with a bound
+        /// swapchain image, moved from presentationInitialLayout to
+        /// presentationFinalLayout.
         void recordWithInput(const vk::Vulkan& vk,
                 const VkCommandBuffer commandBuffer,
                 const VkImage directOutput, const bool shaderInput,
-                const bool shaderOutput = false) const {
+                const bool shaderOutput = false,
+                const VkImage presentationTarget = VK_NULL_HANDLE,
+                const VkImageLayout presentationInitialLayout =
+                    VK_IMAGE_LAYOUT_UNDEFINED,
+                const VkImageLayout presentationFinalLayout =
+                    VK_IMAGE_LAYOUT_UNDEFINED) const {
+            const auto presentationIndex = presentationTarget == VK_NULL_HANDLE
+                ? std::optional<size_t>{}
+                : this->presentation.index(presentationTarget);
+            if (presentationTarget != VK_NULL_HANDLE && !presentationIndex)
+                throw ls::vulkan_error("spatial presentation target is not bound");
             const auto directIndex = directOutput == VK_NULL_HANDLE
                 ? std::optional<size_t>{}
                 : directOutputIndex(this->directOutputs, directOutput);
-            const VkImage outputImage = directIndex
-                ? directOutput : this->reconstructedImage.handle();
+            const VkImage outputImage = presentationIndex ? presentationTarget
+                : directIndex ? directOutput : this->reconstructedImage.handle();
             const auto& outputDescriptors = directIndex
                 ? this->directDescriptorSets.at(*directIndex)
                 : *this->reconstructionDescriptors;
@@ -676,7 +1072,9 @@ namespace {
             );
             initialBarriers.at(initialBarrierCount++) = imageBarrier(
                 outputImage, VK_ACCESS_NONE,
-                VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_ACCESS_SHADER_WRITE_BIT,
+                presentationIndex ? presentationInitialLayout
+                                  : VK_IMAGE_LAYOUT_UNDEFINED,
                 VK_IMAGE_LAYOUT_GENERAL
             );
             if (!this->performance) {
@@ -723,6 +1121,24 @@ namespace {
             this->shaderWriteToReadBarrier(
                 vk, commandBuffer, this->featureImage.handle()
             );
+            if (presentationIndex) {
+                bindAndDispatch(
+                    vk, commandBuffer, *this->presentationReconstruction,
+                    this->presentation.sets.at(*presentationIndex),
+                    this->presentationSize
+                );
+                const auto presentBarrier = imageBarrier(
+                    outputImage, VK_ACCESS_SHADER_WRITE_BIT,
+                    VK_ACCESS_MEMORY_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
+                    presentationFinalLayout
+                );
+                vk.df().CmdPipelineBarrier(
+                    commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                    VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0, 0, nullptr,
+                    0, nullptr, 1, &presentBarrier
+                );
+                return;
+            }
             bindAndDispatch(
                 vk, commandBuffer, this->reconstruction,
                 outputDescriptors, this->presentationSize
@@ -779,6 +1195,10 @@ namespace {
         std::optional<vk::DescriptorPool> directDescriptorPool;
         std::vector<vk::DescriptorSet> directDescriptorSets;
         std::vector<VkImage> directOutputs;
+        VkFormat workingFormat;
+        std::vector<uint8_t> reconstructionDirectCode;
+        std::optional<vk::Shader> presentationReconstruction;
+        PresentationTargets presentation;
     };
     // LS1's feature network operates on bounded display code values. Keep its
     // HDR input/output at RGBA16F precision and convert linear scRGB around the
@@ -842,11 +1262,48 @@ namespace {
             return directOutputIndex(directOutputs, image).has_value();
         }
 
+        bool configureDirectPresentationOutputs(const vk::Vulkan& vk,
+                std::span<const VkImage> images, VkFormat format) override {
+            // The decode pass writes rgba16f, the scRGB swapchain's format.
+            if (format != VK_FORMAT_R16G16B16A16_SFLOAT)
+                return false;
+            if (images.empty()) {
+                presentation.clear();
+                return true;
+            }
+            const std::array sampled{inner.output().imageview()};
+            presentation.configure(vk, images, format, decode, nullptr, sampler, sampled);
+            return true;
+        }
+        void clearDirectPresentationOutputs() override { presentation.clear(); }
+        size_t directPresentationOutputCount() const override { return presentation.images.size(); }
+        bool hasDirectPresentationOutput(VkImage image) const override {
+            return presentation.index(image).has_value();
+        }
+        void recordDirectPresentation(const vk::Vulkan& vk, VkCommandBuffer commandBuffer,
+                VkImage target, VkImageLayout initialLayout,
+                VkImageLayout finalLayout) const override {
+            const auto index = presentation.index(target);
+            if (!index)
+                throw ls::vulkan_error("spatial presentation target is not bound");
+            recordInto(vk, commandBuffer, target, presentation.sets.at(*index), initialLayout,
+                VK_ACCESS_MEMORY_READ_BIT, finalLayout, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT);
+        }
         void recordCompute(const vk::Vulkan& vk, VkCommandBuffer commandBuffer,
                 VkImage directOutput) const override {
             const auto directIndex = directOutputIndex(directOutputs, directOutput);
             const auto destination = directIndex ? directOutput : outputImage.handle();
-            const auto& descriptors = directIndex ? directDescriptorSets.at(*directIndex) : decodeSet;
+            const auto descriptors = directIndex
+                ? directDescriptorSets.at(*directIndex).handle() : decodeSet.handle();
+            recordInto(vk, commandBuffer, destination, descriptors, VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_PIPELINE_STAGE_TRANSFER_BIT);
+        }
+    private:
+        void recordInto(const vk::Vulkan& vk, VkCommandBuffer commandBuffer,
+                VkImage destination, VkDescriptorSet descriptors, VkImageLayout initialLayout,
+                VkAccessFlags finalAccess, VkImageLayout finalLayout,
+                VkPipelineStageFlags finalStage) const {
             const std::array inputBarriers{
                 imageBarrier(sourceImage.handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
                     VK_ACCESS_SHADER_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -858,11 +1315,10 @@ namespace {
             vk.df().CmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr,
                 inputBarriers.size(), inputBarriers.data());
-            dispatch(vk, commandBuffer, encode, encodeSet, sourceSize);
+            dispatch(vk, commandBuffer, encode, encodeSet.handle(), sourceSize);
             inner.recordWithInput(vk, commandBuffer, VK_NULL_HANDLE, true, true);
             const auto outputBarrier = imageBarrier(destination, VK_ACCESS_NONE,
-                VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_GENERAL);
+                VK_ACCESS_SHADER_WRITE_BIT, initialLayout, VK_IMAGE_LAYOUT_GENERAL);
             vk.df().CmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
                 VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 0, nullptr, 0, nullptr,
                 1, &outputBarrier);
@@ -871,15 +1327,13 @@ namespace {
             // for FG-off and resource-replacement transitions.
             dispatch(vk, commandBuffer, decode, descriptors, presentationSize);
             const auto finalBarrier = imageBarrier(destination, VK_ACCESS_SHADER_WRITE_BIT,
-                VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+                finalAccess, VK_IMAGE_LAYOUT_GENERAL, finalLayout);
             vk.df().CmdPipelineBarrier(commandBuffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr, 1, &finalBarrier);
+                finalStage, 0, 0, nullptr, 0, nullptr, 1, &finalBarrier);
         }
-    private:
         static void dispatch(const vk::Vulkan& vk, VkCommandBuffer commandBuffer,
-                const vk::Shader& shader, const vk::DescriptorSet& set, VkExtent2D extent) {
+                const vk::Shader& shader, VkDescriptorSet descriptor, VkExtent2D extent) {
             vk.df().CmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE, shader.pipeline());
-            const auto descriptor = set.handle();
             vk.df().CmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                 shader.pipelinelayout(), 0, 1, &descriptor, 0, nullptr);
             vk.df().CmdDispatch(commandBuffer, (extent.width + 7) / 8, (extent.height + 7) / 8, 1);
@@ -898,6 +1352,7 @@ namespace {
         std::optional<vk::DescriptorPool> directDescriptorPool;
         std::vector<vk::DescriptorSet> directDescriptorSets;
         std::vector<VkImage> directOutputs;
+        PresentationTargets presentation;
     };
 }
 
@@ -1055,6 +1510,78 @@ size_t SpatialScaler::directFrameGenerationOutputCount() const {
     return this->implementation->pipeline->directOutputCount();
 }
 
+bool SpatialScaler::directPresentationOutputSupported(const vk::Vulkan& vk,
+        const VkSwapchainCreateInfoKHR& createInfo,
+        const VkImageUsageFlags surfaceUsage, const bool fp16Arithmetic) {
+    // Other create flags, including deferred memory allocation, would let a
+    // view be created before the image is bound; keep those on the copy path.
+    if (!vk.supportsStorageImageWriteWithoutFormat(createInfo.imageFormat) ||
+            !directSpatialPresentationFormat(createInfo.imageFormat, fp16Arithmetic) ||
+            (surfaceUsage & VK_IMAGE_USAGE_STORAGE_BIT) == 0 ||
+            createInfo.imageArrayLayers != 1 ||
+            (createInfo.flags & ~VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0 ||
+            !vk.fi().GetPhysicalDeviceImageFormatProperties2)
+        return false;
+    const bool mutableFormat =
+        (createInfo.flags & VK_SWAPCHAIN_CREATE_MUTABLE_FORMAT_BIT_KHR) != 0;
+    VkImageFormatListCreateInfo formatList{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO,
+    };
+    bool hasFormatList = false;
+    for (auto* node = static_cast<const VkBaseInStructure*>(createInfo.pNext);
+            node; node = node->pNext) {
+        if (node->sType == VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO) {
+            const auto& list = *reinterpret_cast<const VkImageFormatListCreateInfo*>(node);
+            formatList.viewFormatCount = list.viewFormatCount;
+            formatList.pViewFormats = list.pViewFormats;
+            hasFormatList = true;
+            break;
+        }
+    }
+    const VkPhysicalDeviceImageFormatInfo2 imageInfo{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_FORMAT_INFO_2,
+        .pNext = hasFormatList ? &formatList : nullptr,
+        .format = createInfo.imageFormat,
+        .type = VK_IMAGE_TYPE_2D,
+        .tiling = VK_IMAGE_TILING_OPTIMAL,
+        .usage = createInfo.imageUsage | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+        .flags = mutableFormat
+            ? VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT | VK_IMAGE_CREATE_EXTENDED_USAGE_BIT
+            : 0U,
+    };
+    VkImageFormatProperties2 properties{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_FORMAT_PROPERTIES_2,
+    };
+    return vk.fi().GetPhysicalDeviceImageFormatProperties2(
+        vk.physdev(), &imageInfo, &properties) == VK_SUCCESS &&
+        directSpatialPresentationImageSupported(
+            createInfo.imageExtent, properties.imageFormatProperties);
+}
+
+size_t SpatialScaler::configureDirectPresentationOutputs(const vk::Vulkan& vk,
+        const std::span<const VkImage> images, const VkFormat format) {
+    auto& pipeline = *this->implementation->pipeline;
+    // Reconstruction passes write a format-less storage view; Native
+    // Resolution blits, which needs only transfer usage.
+    const bool blit =
+        this->implementation->active == ls::ScalingMethod::Native;
+    if ((!blit && !vk.supportsStorageImageWriteWithoutFormat(format)) ||
+            !pipeline.configureDirectPresentationOutputs(vk, images, format)) {
+        pipeline.clearDirectPresentationOutputs();
+        return 0;
+    }
+    return pipeline.directPresentationOutputCount();
+}
+
+void SpatialScaler::clearDirectPresentationOutputs() {
+    this->implementation->pipeline->clearDirectPresentationOutputs();
+}
+
+size_t SpatialScaler::directPresentationOutputCount() const {
+    return this->implementation->pipeline->directPresentationOutputCount();
+}
+
 VkExtent2D SpatialScaler::sourceExtent() const {
     return this->implementation->sourceSize;
 }
@@ -1103,33 +1630,19 @@ void SpatialScaler::record(const vk::Vulkan& vk,
         const VkImage frameGenerationSource,
         const VkImageLayout applicationLayout) const {
     const auto handle = commandBuffer.handle();
-    const std::array inputBarriers{
-        imageBarrier(
-            applicationImage, VK_ACCESS_MEMORY_WRITE_BIT,
-            VK_ACCESS_TRANSFER_READ_BIT, applicationLayout,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-        ),
-        imageBarrier(
-            this->implementation->pipeline->input().handle(), VK_ACCESS_NONE,
-            VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        ),
-    };
-    vk.df().CmdPipelineBarrier(
-        handle, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
-        static_cast<uint32_t>(inputBarriers.size()), inputBarriers.data()
-    );
-
-    const auto sourceCopy = blitRegion(
-        this->implementation->sourceSize, this->implementation->sourceSize
-    );
-    vk.df().CmdBlitImage(
-        handle, applicationImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        this->implementation->pipeline->input().handle(),
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1, &sourceCopy, VK_FILTER_NEAREST
-    );
+    const auto& pipeline = *this->implementation->pipeline;
+    recordSourceCopy(vk, handle, applicationImage, applicationLayout,
+        pipeline.input(), this->implementation->sourceSize);
+    if (frameGenerationSource == VK_NULL_HANDLE &&
+            pipeline.hasDirectPresentationOutput(applicationImage)) {
+        // The source copy has just read this image. Transition it from that
+        // layout: discarding it as UNDEFINED re-initialises its compression
+        // metadata, which on RADV left 8x8 blocks of LS1 output reading as
+        // cleared to zero.
+        pipeline.recordDirectPresentation(vk, handle, applicationImage,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, applicationLayout);
+        return;
+    }
 
     const bool directFrameGenerationOutput =
         frameGenerationSource != VK_NULL_HANDLE &&
@@ -1212,35 +1725,16 @@ void SpatialScaler::recordSourceToPresentation(const vk::Vulkan& vk,
         const VkImageLayout sourceLayout,
         const VkImageLayout presentationLayout) const {
     const auto handle = commandBuffer.handle();
-    const std::array inputBarriers{
-        imageBarrier(
-            sourceImage, VK_ACCESS_MEMORY_WRITE_BIT,
-            VK_ACCESS_TRANSFER_READ_BIT, sourceLayout,
-            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-        ),
-        imageBarrier(
-            this->implementation->pipeline->input().handle(), VK_ACCESS_NONE,
-            VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        ),
-    };
-    vk.df().CmdPipelineBarrier(
-        handle, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-        VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
-        static_cast<uint32_t>(inputBarriers.size()), inputBarriers.data()
-    );
+    const auto& pipeline = *this->implementation->pipeline;
+    recordSourceCopy(vk, handle, sourceImage, sourceLayout,
+        pipeline.input(), this->implementation->sourceSize);
+    if (pipeline.hasDirectPresentationOutput(presentationImage)) {
+        pipeline.recordDirectPresentation(vk, handle, presentationImage,
+            presentationLayout, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+        return;
+    }
 
-    const auto sourceCopy = blitRegion(
-        this->implementation->sourceSize, this->implementation->sourceSize
-    );
-    vk.df().CmdBlitImage(
-        handle, sourceImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        this->implementation->pipeline->input().handle(),
-        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        1, &sourceCopy, VK_FILTER_NEAREST
-    );
-
-    this->implementation->pipeline->recordCompute(vk, handle);
+    pipeline.recordCompute(vk, handle);
 
     const auto presentationBarrier = imageBarrier(
         presentationImage,

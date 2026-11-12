@@ -67,4 +67,10 @@ for invalid in ls1 no-fp16; do
     fi
 done
 
+pair_output=$("$cli" quality-regression --input-pair "saved frames" --interpolation 0.25 --no-fp16)
+if [[ "$pair_output" != $'input-pair=saved frames interpolation=0.25\nfp32' ]]; then
+    printf 'Saved image pair options did not reach the quality owner\n' >&2
+    exit 1
+fi
+
 printf 'CLI precision contract: PASS\n'

@@ -21,6 +21,7 @@ from py_modules.mako_plugin.flatpak_service import (  # noqa: E402
     FlatpakAppInfo,
     FlatpakOverrideResponse,
 )
+from py_modules.mako_plugin import frame_recording  # noqa: E402
 from py_modules.mako_plugin.shader_parameters import ShaderParameter, ShaderEffectParameters, ShaderParameterPresentation
 from py_modules.mako_plugin.types import (  # noqa: E402
     ShaderParametersResponse,
@@ -38,6 +39,7 @@ from py_modules.mako_plugin.types import (  # noqa: E402
     ProfileResponse,
     ProfilesResponse,
     RuntimeContextState,
+    RuntimeFrameGenerationUnavailable,
     RuntimePendingState,
     RuntimeProfileSnapshot,
     RuntimeSpatialScalingState,
@@ -111,6 +113,15 @@ class RpcContractTests(unittest.TestCase):
         self.assertEqual(len(frontend_bindings), len(set(frontend_bindings)))
         self.assertEqual(set(frontend_bindings), backend_methods)
 
+    def test_frame_recording_shortcut_event_matches_the_frontend(self):
+        frontend_source = (
+            PLUGIN_ROOT / "src/utils/frameRecording.ts"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            f'FRAME_RECORDING_SHORTCUT_EVENT = "{frame_recording.SHORTCUT_EVENT}"',
+            frontend_source,
+        )
+
     def test_dll_availability_accepts_an_optional_authoritative_path(self):
         from py_modules.mako_plugin.plugin import Plugin
         import inspect
@@ -164,6 +175,7 @@ class RpcContractTests(unittest.TestCase):
             RuntimePendingState: "RuntimePendingState",
             RuntimeSpatialScalingState: "RuntimeSpatialScalingState",
             RuntimeContextState: "RuntimeContextState",
+            RuntimeFrameGenerationUnavailable: "RuntimeFrameGenerationUnavailable",
             RuntimeStatusResponse: "RuntimeStatusResult",
             RemotePlayResponse: "RemotePlayResult",
             FlatpakApp: "FlatpakApp",
@@ -202,6 +214,9 @@ class RpcContractTests(unittest.TestCase):
                 for field_name, annotation in backend_hints.items():
                     if annotation is bool:
                         self.assertEqual(frontend_contract[field_name]["type"], "boolean")
+                    if field_name == "system_renderer_notice":
+                        self.assertEqual(frontend_contract[field_name]["type"], "Nullable<string>")
+                        self.assertTrue(self._annotation_is_nullable(annotation))
                     if field_name == "runtime_version":
                         self.assertEqual(
                             frontend_contract[field_name]["type"],

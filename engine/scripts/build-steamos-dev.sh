@@ -13,6 +13,7 @@ compiler="${CXX:-clang++}"
 jobs="${MAKO_BUILD_JOBS:-}"
 build_64_bit=true
 build_32_bit=false
+build_ui=OFF
 experimental_lsfg_fp16=OFF
 
 usage() {
@@ -21,13 +22,14 @@ Usage: scripts/build-steamos-dev.sh [options]
 
 Incrementally builds host Vulkan layers needed for native Steam-game testing.
 The default builds the 64-bit layer and CLI. The build directories are retained
-between runs; this does not build the Qt UI, Flatpak extensions, general test
-suite, archives, or a Decky ZIP. Real-hardware licensed-model validation is
+between runs; --with-ui adds the Qt UI. This does not build Flatpak extensions,
+the general test suite, archives, or a Decky ZIP. Real-hardware licensed-model validation is
 owned by the sibling MAKO Gym repository. Set CXX to choose a compiler. ccache
 is used automatically when present. The shared Vulkan-Headers revision is
 cached under build/cache and checked against the package presentation baseline.
 
 Options:
+  --with-ui              Also build the native 64-bit Qt configuration app.
   --with-32-bit          Build both the 64-bit and 32-bit host layers.
   --32-bit-only          Build only the 32-bit host layer.
   --build-dir PATH       64-bit persistent CMake build directory.
@@ -36,6 +38,7 @@ Options:
   --experimental-lsfg-fp16  Build the unqualified FP32-to-FP16 LSFG fallback.
                             Uses the existing FP16 setting; adds no user toggle.
 Environment:
+  MAKO_OPENGL_INCLUDE_DIR  Optional cached OpenGL headers for Qt
   MAKO_BUILD_DIR     Persistent CMake build directory (default: build/steamos-dev)
   MAKO_BUILD_32_DIR  Persistent 32-bit build directory (default: build/steamos-dev-32)
   MAKO_BUILD_JOBS    Parallel compile jobs (default: available CPUs)
@@ -72,6 +75,9 @@ while (($#)); do
             shift 2
             continue
             ;;
+        --with-ui)
+            build_ui=ON
+            ;;
         --with-32-bit)
             build_32_bit=true
             ;;
@@ -104,13 +110,16 @@ elif [[ "$build_32_dir" != /* ]]; then
     build_32_dir="$repo_root/$build_32_dir"
 fi
 
-for command in cmake ninja "$compiler"; do
+for command in cmake ninja python3 "$compiler"; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         echo "Run scripts/install-steamos-build-tools.sh --install on the SteamOS host." >&2
         exit 1
     fi
 done
+
+# MAKO FG is a separate program: no build links its code or embeds its model, and the built
+# layers are verified below to contain none of its weights.
 
 for header in \
     /usr/include/gnu/stubs-64.h \
@@ -203,13 +212,28 @@ build_layer() {
     local build_cli=OFF
     local install_libdir=lib
     local build_targets=(mako-render mako-render-scaling)
+    local ui=OFF
+    local optional_args=()
 
     if [[ "$architecture" == "64-bit" ]]; then
         build_cli=ON
         build_targets+=(mako-cli mako-remote-play-sdr)
+        ui="$build_ui"
+        if [[ "$ui" == ON ]]; then
+            build_targets+=(mako-ui)
+            if [[ -n "${MAKO_OPENGL_INCLUDE_DIR:-}" ]]; then
+                optional_args+=(-DOPENGL_INCLUDE_DIR="$MAKO_OPENGL_INCLUDE_DIR"
+                    -DOPENGL_GLX_INCLUDE_DIR="$MAKO_OPENGL_INCLUDE_DIR"
+                    -DOPENGL_gl_LIBRARY=/usr/lib/libGL.so)
+            fi
+        fi
     else
         install_libdir=lib32
     fi
+
+    # Source builds need nothing from MAKO FG; only installing it needs its local release.
+    local require_mako_fg=OFF
+    [[ -f "$repo_root/models/mako-fg/versions.json" ]] && require_mako_fg=ON
 
     # Reconfiguring a persistent Ninja tree is cheap and picks up CMake/source
     # changes without throwing away already compiled objects.
@@ -220,16 +244,17 @@ build_layer() {
         -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
         -DBUILD_TESTING=OFF \
         -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON \
+        -DMAKO_REQUIRE_FG="$require_mako_fg" \
         -DMAKO_VULKAN_HEADERS_INCLUDE_DIR="$vulkan_headers_include_dir" \
         -DMAKO_BUILD_VK_LAYER=ON \
-        -DMAKO_BUILD_UI=OFF \
+        -DMAKO_BUILD_UI="$ui" \
         -DMAKO_BUILD_CLI="$build_cli" \
         -DMAKO_EXPERIMENTAL_LSFG_FP16="$experimental_lsfg_fp16" \
         -DMAKO_LSFG_FP16_TOOLS_SOURCE="$lsfg_fp16_tools_source" \
         -DMAKO_INSTALL_XDG_FILES=OFF \
         -DMAKO_LAYER_LIBRARY_PATH="../$install_libdir/libmako-render.so" \
         -DMAKO_SCALING_LAYER_LIBRARY_PATH="../$install_libdir/libmako-render-scaling.so" \
-        "$@"
+        "${optional_args[@]}" "$@"
 
     if [[ "$experimental_lsfg_fp16" == ON ]]; then
         # Refresh with the canonical upstream generator even when an existing
@@ -251,6 +276,7 @@ build_layer() {
         echo "Expected $architecture spatial layer output is missing: $scaling_layer_path" >&2
         exit 1
     fi
+    python3 "$repo_root/scripts/mako-fg-package.py" verify --separate-only "$layer_path"
     echo "Incremental $architecture layer build ready: $layer_path"
 
 }

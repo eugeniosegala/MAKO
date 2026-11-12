@@ -1,24 +1,23 @@
 import { PanelSectionRow } from "@decky/ui";
-import { FiAlertCircle, FiCheckCircle } from "react-icons/fi";
+import { FiAlertCircle, FiCheckCircle, FiXCircle } from "react-icons/fi";
 import t from "../i18n/i18n";
 
 interface StatusDisplayProps {
   dllDetected: boolean;
-  dllDetectionStatus: string;
   isInstalled: boolean;
   installationStatus: string;
   topMargin?: string;
 }
 
 interface StatusRowProps {
-  ready: boolean;
+  state: "ready" | "checking" | "missing";
   text: string;
   separated?: boolean;
 }
 
-function StatusRow({ ready, text, separated = false }: StatusRowProps) {
-  const accent = ready ? "#65b9c9" : "#c89558";
-  const Icon = ready ? FiCheckCircle : FiAlertCircle;
+function StatusRow({ state, text, separated = false }: StatusRowProps) {
+  const accent = state === "ready" ? "#65b9c9" : "#c89558";
+  const Icon = state === "ready" ? FiCheckCircle : state === "missing" ? FiXCircle : FiAlertCircle;
 
   return (
     <div
@@ -52,18 +51,12 @@ function StatusRow({ ready, text, separated = false }: StatusRowProps) {
 
 export function StatusDisplay({
   dllDetected,
-  dllDetectionStatus,
   isInstalled,
   installationStatus,
   topMargin = "0"
 }: StatusDisplayProps) {
   // Keep essential labels visible even when status text is empty during refresh.
   // Preserve supplied progress and error messages.
-  const dllText = dllDetectionStatus?.trim()
-    ? dllDetectionStatus
-    : dllDetected
-      ? t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed")
-      : t("STATUS_LOSSLESS_CHECKING", "Checking Lossless Scaling…");
   const rendererText = installationStatus?.trim()
     ? installationStatus
     : isInstalled
@@ -85,8 +78,14 @@ export function StatusDisplay({
           boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 2px 5px rgba(0, 0, 0, 0.16)"
         }}
       >
-        <StatusRow ready={dllDetected} text={dllText} />
-        <StatusRow ready={isInstalled} text={rendererText} separated />
+        <StatusRow state={isInstalled ? "ready" : "checking"} text={rendererText} />
+        <StatusRow
+          state={dllDetected ? "ready" : "missing"}
+          text={dllDetected
+            ? t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed (optional)")
+            : t("STATUS_LOSSLESS_NOT_INSTALLED", "Lossless Scaling not installed (optional)")}
+          separated
+        />
       </div>
     </PanelSectionRow>
   );

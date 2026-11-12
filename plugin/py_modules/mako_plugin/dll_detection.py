@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from .base_service import BaseService
 from .constants import (
     ENV_MAKO_DLL_PATH, ENV_XDG_DATA_HOME,
-    STEAM_COMMON_PATH, LOSSLESS_DLL_NAME, CLI_DIR, CLI_FILENAME,
+    STEAM_COMMON_PATH, LOSSLESS_DLL_NAME, CLI_FILENAME,
 )
 from .types import DllDetectionResponse, ModelStatusResponse
 
@@ -90,7 +90,7 @@ class DllDetectionService(BaseService):
                 if not detected["path"]:
                     return {"compatible": False, "reason": "dll-unavailable"}
                 path = Path(detected["path"])
-            cli = self.user_home / CLI_DIR / CLI_FILENAME
+            cli = self._selected_renderer_bin_dir() / CLI_FILENAME
             try:
                 if not path.is_file():
                     return {"compatible": False, "reason": "dll-unavailable"}

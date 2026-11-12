@@ -132,6 +132,18 @@ verify_relay_contract() {
     fi
 }
 
+# The 64-bit and 32-bit frame generation layers sit beside only the active MAKO FG release.
+verify_mako_fg() {
+    local extension_dir="$1"
+    local runtime_version="$2"
+    if ! python3 "$repo_root/scripts/mako-fg-package.py" verify \
+            "$extension_dir/files/lib64/libmako-render.so" \
+            "$extension_dir/files/lib/i386-linux-gnu/libmako-render.so"; then
+        echo "Flatpak packaging failed: MAKO FG is not installed correctly for $runtime_version" >&2
+        exit 1
+    fi
+}
+
 # Docker Desktop's Linux VM may not expose CONFIG_SECCOMP_FILTER to nested
 # Bubblewrap instances. This is only set by the privileged local Docker build
 # above; normal Linux builds retain Flatpak's default sandboxing.
@@ -179,6 +191,7 @@ fi
 extension_id="org.freedesktop.Platform.VulkanLayer.makorender"
 runtime_versions_file="$repo_root/dist/flatpak/mako-render/runtime-versions.txt"
 runtime_count=0
+verified_fg_layers=()
 while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
     if [[ -z "$runtime_version" || "$runtime_version" == \#* ]]; then
         continue
@@ -215,6 +228,9 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
         "files/share/doc/mako-render/ASSET_PROVENANCE.md" \
         "files/share/doc/mako-render/LICENSE.md" \
         "files/share/doc/mako-render/THIRD_PARTY_NOTICES.md" \
+        "files/lib64/mako-fg/mako-fg-host" \
+        "files/share/doc/mako-render/mako-fg/LICENSE" \
+        "files/share/doc/mako-render/mako-fg/THIRD_PARTY_NOTICES" \
         "files/share/doc/mako-render/vkbasalt/LICENSE" \
         "files/share/doc/mako-render/vkbasalt/RESHade-LICENSE.md" \
         "files/share/doc/mako-render/vkbasalt/SOURCE" \
@@ -231,6 +247,7 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
         fi
     done
 
+    verify_mako_fg "$build_dir" "$runtime_version"
     verify_elf_class "$build_dir/files/lib64/libmako-render.so" 2
     verify_elf_class "$build_dir/files/lib64/libmako-render-scaling.so" 2
     verify_elf_class "$build_dir/files/lib64/vkbasalt/libvkbasalt.so" 2
@@ -394,13 +411,16 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
             exit 1
         fi
     done
-    for legal_file in ASSET_PROVENANCE.md LICENSE.md THIRD_PARTY_NOTICES.md; do
+    for legal_file in ASSET_PROVENANCE.md LICENSE.md THIRD_PARTY_NOTICES.md mako-fg/LICENSE mako-fg/THIRD_PARTY_NOTICES; do
         if [[ ! -f "$deployed_dir/files/share/doc/mako-render/$legal_file" ]]; then
             echo "Flatpak packaging failed: deployed legal file $legal_file is missing for $runtime_version" >&2
             exit 1
         fi
     done
 
+    verify_mako_fg "$deployed_dir" "$runtime_version"
+    verified_fg_layers+=("$deployed_dir/files/lib64/libmako-render.so"
+        "$deployed_dir/files/lib/i386-linux-gnu/libmako-render.so")
     verify_elf_class "$deployed_dir/files/lib64/libmako-render.so" 2
     verify_elf_class "$deployed_dir/files/lib64/libmako-render-scaling.so" 2
     verify_elf_class "$deployed_dir/files/lib64/vkbasalt/libvkbasalt.so" 2
@@ -495,5 +515,7 @@ fi
 # staging area, so recreate the destination immediately before writing it.
 mkdir -p "$(dirname "$output_path")"
 tar -C "$bundle_dir" -cJf "$output_path" .
+python3 "$repo_root/scripts/mako-fg-package.py" record-artifact \
+    "$output_path" "${verified_fg_layers[@]}"
 echo "Created and verified: $output_path"
 echo "Version: $version"

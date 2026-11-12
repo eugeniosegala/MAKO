@@ -4,6 +4,8 @@ Community creators and publications have helped Linux gamers discover and evalua
 
 Last researched: **10 October 2026**.
 
+Many videos and articles cover older releases; their installation steps and model names may differ from the current version. Use the [current setup guide](../../README.md#install-and-use) for installation and settings.
+
 ## Videos
 
 Browse [guides and settings](#guides-and-settings), [news and overviews](#news-and-overviews), [comparisons and benchmarks](#comparisons-and-benchmarks), or [game performance tests](#game-performance-tests).

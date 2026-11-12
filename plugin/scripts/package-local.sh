@@ -280,7 +280,7 @@ if [[ -n "$local_engine_repo" ]]; then
     exit 1
   fi
   local_engine_repo="$(cd "$local_engine_repo" && pwd)"
-  for required_path in VERSION scripts/package-local.sh scripts/package-flatpaks.sh; do
+  for required_path in VERSION scripts/package-local.sh scripts/package-flatpaks.sh scripts/mako-fg-package.py; do
     if [[ ! -f "$local_engine_repo/$required_path" ]]; then
       echo "Local engine repository is missing $required_path: $local_engine_repo" >&2
       exit 1
@@ -337,7 +337,8 @@ if [[ -n "$local_engine_repo" ]]; then
   engine_archive_path="$local_engine_repo/out/MAKO-Renderer-v$archive_version-local.$local_engine_label-$engine_archive_suffix.tar.xz"
   archive_name="$(basename "$engine_archive_path")"
 
-  if [[ -s "$engine_archive_path" ]]; then
+  if [[ -s "$engine_archive_path" ]] &&
+      python3 "$local_engine_repo/scripts/mako-fg-package.py" check-artifact "$engine_archive_path"; then
     echo "Reusing matching local engine archive $archive_name..."
   else
     echo "Building local engine checkout $local_engine_label..."
@@ -347,6 +348,7 @@ if [[ -n "$local_engine_repo" ]]; then
     fi
     "$local_engine_repo/scripts/package-local.sh" \
       "${engine_package_args[@]}" "$engine_archive_path"
+    python3 "$local_engine_repo/scripts/mako-fg-package.py" check-artifact "$engine_archive_path"
   fi
   if [[ "$native_only" == true ]]; then
     echo "Skipping Flatpak extension builds for this native-only test package."
@@ -356,10 +358,12 @@ if [[ -n "$local_engine_repo" ]]; then
   else
     flatpak_archive_path="$local_engine_repo/out/MAKO-Renderer-v$archive_version-local.$local_engine_label-flatpaks.tar.xz"
     flatpak_archive_name="$(basename "$flatpak_archive_path")"
-    if [[ -s "$flatpak_archive_path" ]]; then
+    if [[ -s "$flatpak_archive_path" ]] &&
+        python3 "$local_engine_repo/scripts/mako-fg-package.py" check-artifact "$flatpak_archive_path"; then
       echo "Reusing matching local Flatpak archive $flatpak_archive_name..."
     else
       "$local_engine_repo/scripts/package-flatpaks.sh" "$flatpak_archive_path"
+      python3 "$local_engine_repo/scripts/mako-fg-package.py" check-artifact "$flatpak_archive_path"
     fi
   fi
 fi
@@ -443,6 +447,20 @@ mkdir -p "$package_dir/bin" "$package_dir/dist" "$package_dir/py_modules"
 cp "$repository_root/scripts/mako-diagnostics" \
   "$package_dir/bin/mako-diagnostics"
 chmod 0755 "$package_dir/bin/mako-diagnostics"
+# Keep removal tools current even when a plugin-only build pins an older native
+# archive. Sources stay owned by Renderer; these are packaged copies only.
+management_dir="$package_dir/bin/renderer-management"
+mkdir -p "$management_dir/bin" "$management_dir/share/applications" \
+  "$management_dir/share/mako-render/mako_remote_play"
+cp "$repository_root/engine/scripts/mako-installer" \
+  "$repository_root/engine/scripts/mako-remote-play" "$management_dir/bin/"
+chmod 0755 "$management_dir/bin/"*
+cp "$repository_root/engine/mako-ui/rsc/io.github.eugeniosegala.mako.uninstaller.desktop" \
+  "$management_dir/share/applications/"
+for management_module in __init__.py remote_play_core.py remote_play_launch.py managed_files.py; do
+  cp "$repository_root/engine/scripts/mako_remote_play/$management_module" \
+    "$management_dir/share/mako-render/mako_remote_play/"
+done
 if [[ -n "$engine_archive_path" ]]; then
   echo "Using local MAKO Renderer $archive_version payload..."
   cp "$engine_archive_path" "$package_dir/bin/$archive_name"
@@ -542,6 +560,9 @@ for layer_binary_path in "${layer_binary_paths[@]}"; do
   if ! strings "$verification_binary" | grep -F "MAKO_PROFILE_FALLBACK" >/dev/null; then
     echo "Engine archive lacks the profile-fallback wrapper protocol in $layer_binary_path" >&2
     exit 1
+  fi
+  if [[ "$local_engine_mode" == true && "$expected_identity" == "VK_LAYER_MAKO_render" ]]; then
+    python3 "$local_engine_repo/scripts/mako-fg-package.py" verify --separate-only "$verification_binary"
   fi
 done
 
@@ -662,6 +683,19 @@ elif [[ "$local_plugin_mode" == true ]]; then
   ' "$package_dir/package.json" "$local_plugin_label" "$local_release_version" \
     "$local_package_source_commit" "$local_package_worktree_dirty"
 fi
+# Hash the native file inventory rather than the compressed archive, so an
+# independently installed copy can be compared without depending on its owner.
+native_payload_checksum="$(tar -xJOf "$package_dir/bin/$archive_name" \
+  ./MAKO-Renderer-install-manifest.txt | sha256sum | awk '{print $1}')"
+node -e '
+  const fs = require("node:fs");
+  const manifestPath = process.argv[1];
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  const binary = manifest.bundled_renderer ?? manifest.remote_binary?.[0];
+  if (!binary) throw new Error("Missing Renderer payload metadata");
+  binary.payload_sha256hash = process.argv[2];
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+' "$package_dir/package.json" "$native_payload_checksum"
 cp -R "$project_dir/dist/." "$package_dir/dist/"
 cp -R "$project_dir/py_modules/." "$package_dir/py_modules/"
 if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then

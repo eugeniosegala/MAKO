@@ -6,8 +6,9 @@ import {
   showModal,
   Navigation,
   QuickAccessTab,
+  Router,
 } from "@decky/ui";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   useInstallationStatus,
   useDllDetection,
@@ -18,12 +19,20 @@ import { useProfileManagement } from "../hooks/useProfileManagement";
 import { useInstallationActions } from "../hooks/useInstallationActions";
 import { useProfileSession } from "../hooks/useProfileSession";
 import { useProfileConfigWriter } from "../hooks/useProfileConfigWriter";
+import {
+  forgetPanel,
+  rememberPanel,
+  restorePanel,
+  type PanelView,
+  type ProfilesSnapshot,
+} from "../hooks/panelSnapshot";
 import { PowerProfileControls } from "./PowerProfileControls";
 import { StatusDisplay } from "./StatusDisplay";
 import { InstallationButton } from "./InstallationButton";
 import { RemotePlaySection } from "./RemotePlaySection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { useModelStatus } from "../hooks/useModelStatus";
+import { useModelFallback } from "../hooks/useModelFallback";
 import { effectiveScalingMethod } from "../config/ultraPerformancePreset";
 import { ProfileManagement } from "./ProfileManagement";
 import { UsageInstructions } from "./UsageInstructions";
@@ -42,10 +51,18 @@ import {
   addProfileShader,
   deleteProfileShaders,
   reloadProfileShaders,
+  type RemotePlayResult,
 } from "../api/makoApi";
+
+function currentAppId() {
+  const app = Router.MainRunningApp;
+  return app ? String(app.appid) : null;
+}
 
 export function Content() {
   const [profileRevision, setProfileRevision] = useState(0);
+  // Decky remounts the panel on every open; start from what it last showed.
+  const [restored] = useState(() => restorePanel(currentAppId()));
   const {
     isInstalled,
     installationStatus,
@@ -53,13 +70,16 @@ export function Content() {
     hostArchitectureSupported,
     installedEngineVersion,
     expectedEngineVersion,
+    installationVerified,
+    installationGeneration,
     setIsInstalled,
     setInstallationStatus,
     checkInstallation,
-  } = useInstallationStatus();
+  } = useInstallationStatus(restored?.installation);
 
   const {
     config,
+    configProfile,
     vkBasaltConfigPath,
     customShaderEffects,
     powerMode,
@@ -67,11 +87,12 @@ export function Content() {
     powerSource,
     getEditingPowerMode,
     isConfigLoading,
+    isConfigLoadingShown,
     canEditConfig,
     applyConfigPatch,
     replaceConfig,
     loadMakoConfig,
-  } = useMakoConfig();
+  } = useMakoConfig(restored?.config);
 
   // Session selection and the writer depend on each other. Keep only the
   // current queue drain here; useMakoConfig owns load locking and stale replies.
@@ -86,9 +107,7 @@ export function Content() {
     [loadMakoConfig],
   );
 
-  const { dllDetected, dllMissing, dllDetectionStatus } = useDllDetection(
-    config.dll,
-  );
+  const { dllDetected, dllMissing } = useDllDetection(config.dll);
 
   const { updateProfileConfigFields, syncCurrentProfile, setCurrentProfile } =
     useProfileManagement();
@@ -106,17 +125,35 @@ export function Content() {
     remotePlayRunning,
     powerSource: currentPowerSource,
     editingProfile,
+    profileSynced,
     selectEditingProfile,
     getEditingProfile,
   } = useProfileSession({
     isInstalled,
     loadProfileConfig: loadEditorConfig,
     syncCurrentProfile,
+    restored: restored?.session,
   });
   const scalingRuntimeState = useRuntimeScalingStatus(
     editingProfile,
     Boolean(isInstalled && (mainRunningApp || remotePlayRunning)),
   );
+  // Live status shows the remembered reading only until the first poll, and
+  // only for display: model fallbacks use live readings alone.
+  const initialRuntimeState = useRef(scalingRuntimeState);
+  const [runtimeLive, setRuntimeLive] = useState(false);
+  useEffect(() => {
+    if (scalingRuntimeState !== initialRuntimeState.current)
+      setRuntimeLive(true);
+  }, [scalingRuntimeState]);
+  const shownRuntimeState =
+    !runtimeLive && restored?.runtime?.profile === editingProfile
+      ? restored.runtime.state
+      : scalingRuntimeState;
+  const [loadedProfiles, setLoadedProfiles] =
+    useState<ProfilesSnapshot | null>();
+  const [remotePlayStatus, setRemotePlayStatus] =
+    useState<RemotePlayResult | null>();
   const modelStatus = useModelStatus(config, isInstalled);
   const {
     saveConfigChanges: handleConfigChanges,
@@ -134,6 +171,21 @@ export function Content() {
     replaceConfig,
   });
   flushConfigChangesRef.current = flushConfigChanges;
+  const availableModelStatus = useModelFallback({
+    config,
+    profileName: editingProfile,
+    powerMode,
+    enabled: isInstalled && installationVerified && !isConfigLoading,
+    dllMissing,
+    dllDetected,
+    ...modelStatus,
+    ls1RuntimeFallback:
+      scalingRuntimeState.requestedMethod === effectiveScalingMethod(config) &&
+      scalingRuntimeState.scalingActive &&
+      scalingRuntimeState.activeMethod === "mako" &&
+      Boolean(scalingRuntimeState.fallbackReason),
+    saveConfigChanges: handleConfigChanges,
+  });
 
   const customizeShaders = async () => {
     const profile = editingProfile;
@@ -182,19 +234,115 @@ export function Content() {
     }
   };
 
+  // Installation actions act on the real check, never on a restored snapshot,
+  // and the snapshot is dropped before and after every change they make.
   const onInstall = async () => {
+    if (!installationVerified) return;
+    forgetPanel();
     await handleInstall(
       setIsInstalled,
       setInstallationStatus,
       loadEditorConfig,
       engineUpdateRequired ? "update" : "install",
+      async () => {
+        forgetPanel();
+        await checkInstallation();
+      },
     );
-    await checkInstallation();
   };
 
-  const onUninstall = () => {
-    handleUninstall(setIsInstalled, setInstallationStatus);
+  const onUninstall = async () => {
+    if (!installationVerified) return;
+    forgetPanel();
+    try {
+      await handleUninstall(setIsInstalled, setInstallationStatus);
+    } finally {
+      forgetPanel();
+    }
   };
+
+  // A snapshot that outlived the Renderer loaded a profile; show the global
+  // settings view instead, as on a panel that never restored one.
+  const restoredConfigChecked = useRef(!restored?.config);
+  useEffect(() => {
+    if (!installationVerified || restoredConfigChecked.current) return;
+    restoredConfigChecked.current = true;
+    if (!isInstalled) void loadMakoConfig();
+  }, [installationVerified, isInstalled, loadMakoConfig]);
+
+  const panelView = useMemo((): PanelView | null => {
+    if (!isInstalled || !hostArchitectureSupported) return null;
+    const settled = profileSynced && !isConfigLoading;
+    return {
+      installation: {
+        engineUpdateRequired,
+        installedEngineVersion: installedEngineVersion ?? null,
+        expectedEngineVersion: expectedEngineVersion ?? null,
+      },
+      profiles: loadedProfiles,
+      remotePlay: remotePlayStatus,
+      session: profileSynced
+        ? {
+            profile: editingProfile,
+            appId: currentAppId(),
+            gameRunning: Boolean(mainRunningApp),
+            remotePlayRunning,
+          }
+        : undefined,
+      config: !settled
+        ? undefined
+        : configProfile === editingProfile
+          ? {
+              profile: editingProfile,
+              powerMode,
+              separatePowerModes,
+              powerSource,
+              config,
+              vkBasaltConfigPath,
+              customShaderEffects,
+            }
+          : null,
+      runtime:
+        !profileSynced || !runtimeLive
+          ? undefined
+          : mainRunningApp || remotePlayRunning
+            ? { profile: editingProfile, state: scalingRuntimeState }
+            : null,
+    };
+  }, [
+    isInstalled,
+    hostArchitectureSupported,
+    profileSynced,
+    isConfigLoading,
+    engineUpdateRequired,
+    installedEngineVersion,
+    expectedEngineVersion,
+    loadedProfiles,
+    remotePlayStatus,
+    editingProfile,
+    mainRunningApp,
+    remotePlayRunning,
+    configProfile,
+    powerMode,
+    separatePowerModes,
+    powerSource,
+    config,
+    vkBasaltConfigPath,
+    customShaderEffects,
+    runtimeLive,
+    scalingRuntimeState,
+  ]);
+  // Only a successful check, outside an installation change, describes what
+  // the next panel should show.
+  const canRemember =
+    installationGeneration !== null &&
+    !isInstalling &&
+    !isUninstalling &&
+    !isInstallCompletionVisible;
+  useEffect(() => {
+    if (canRemember && installationGeneration !== null)
+      rememberPanel(panelView, installationGeneration);
+  }, [canRemember, installationGeneration, panelView]);
 
   const handleShowAdvancedDetails = () => {
     showModal(<AdvancedDetailsModal />);
@@ -234,22 +382,10 @@ export function Content() {
           isInstalling={isInstalling}
           isInstallCompletionVisible={isInstallCompletionVisible}
           isUninstalling={isUninstalling}
+          installationVerified={installationVerified}
           onInstall={onInstall}
           modelStatus={{
-            ...modelStatus,
-            dllMissing: isInstalled && dllMissing,
-            ls1RuntimeFallback:
-              isInstalled &&
-              !config.disable_mako &&
-              config.scaling_enabled &&
-              ["ls1", "ls1-performance"].includes(
-                effectiveScalingMethod(config),
-              ) &&
-              scalingRuntimeState.requestedMethod ===
-                effectiveScalingMethod(config) &&
-              scalingRuntimeState.scalingActive &&
-              scalingRuntimeState.activeMethod === "mako" &&
-              Boolean(scalingRuntimeState.fallbackReason),
+            ...availableModelStatus,
           }}
         />
         {!isInstalled && (
@@ -260,13 +396,13 @@ export function Content() {
               isInstallCompletionVisible={isInstallCompletionVisible}
               isUninstalling={isUninstalling}
               hostArchitectureSupported={hostArchitectureSupported}
+              installationVerified={installationVerified}
               onInstall={onInstall}
               onUninstall={onUninstall}
             />
 
             <StatusDisplay
               dllDetected={dllDetected}
-              dllDetectionStatus={dllDetectionStatus}
               isInstalled={isInstalled}
               installationStatus={installationStatus}
               topMargin="16px"
@@ -282,6 +418,8 @@ export function Content() {
             profileRevision={profileRevision}
             mainRunningApp={mainRunningApp}
             topMargin="18px"
+            restoredProfiles={restored?.profiles}
+            onProfilesLoaded={setLoadedProfiles}
             onProfileChange={async (profileName) => {
               await flushConfigChanges();
               const result = await setCurrentProfile(profileName);
@@ -300,15 +438,15 @@ export function Content() {
               enabled={separatePowerModes}
               powerMode={powerMode}
               powerSource={currentPowerSource ?? powerSource}
-              disabled={isConfigLoading}
+              disabled={isConfigLoadingShown}
               flushConfigChanges={flushConfigChanges}
               loadProfileConfig={loadEditorConfig}
             />
             {(mainRunningApp || remotePlayRunning) && (
               <RuntimeStatusCard
-                runtimeState={scalingRuntimeState}
+                runtimeState={shownRuntimeState}
                 activeConfig={
-                  !isConfigLoading &&
+                  !isConfigLoadingShown &&
                   (!separatePowerModes ||
                     powerMode === (currentPowerSource ?? powerSource))
                     ? config
@@ -316,15 +454,21 @@ export function Content() {
                 }
               />
             )}
-            {isConfigLoading && (
+            {isConfigLoadingShown && (
               <PanelSectionRow>
                 {t("POWER_LOADING", "Loading profile settings...")}
               </PanelSectionRow>
             )}
-            <div hidden={isConfigLoading}>
+            <div hidden={isConfigLoadingShown}>
               <FeatureSettings
                 config={config}
-                runtimeState={scalingRuntimeState}
+                losslessFrameGenerationAvailable={
+                  dllDetected && availableModelStatus.lsfg?.compatible !== false
+                }
+                losslessScalingAvailable={
+                  dllDetected && availableModelStatus.ls1?.compatible !== false
+                }
+                runtimeState={shownRuntimeState}
                 profileName={editingProfile}
                 vkBasaltConfigPath={vkBasaltConfigPath}
                 customShaderEffects={customShaderEffects}
@@ -344,7 +488,7 @@ export function Content() {
         {isInstalled && <FgmodClipboardButton />}
 
         {isInstalled && (
-          <div hidden={isConfigLoading}>
+          <div hidden={isConfigLoadingShown}>
             <ConfigurationSection
               config={config}
               onConfigChange={handleConfigChange}
@@ -363,6 +507,8 @@ export function Content() {
                 throw new Error(result.error || "Could not select profile");
             }}
             onChanged={() => setProfileRevision((value) => value + 1)}
+            restoredStatus={restored?.remotePlay}
+            onStatus={setRemotePlayStatus}
           />
         )}
 
@@ -403,7 +549,6 @@ export function Content() {
           <>
             <StatusDisplay
               dllDetected={dllDetected}
-              dllDetectionStatus={dllDetectionStatus}
               isInstalled={isInstalled}
               installationStatus={installationStatus}
               topMargin="16px"
@@ -415,6 +560,7 @@ export function Content() {
               isInstallCompletionVisible={isInstallCompletionVisible}
               isUninstalling={isUninstalling}
               hostArchitectureSupported={hostArchitectureSupported}
+              installationVerified={installationVerified}
               onInstall={onInstall}
               onUninstall={onUninstall}
               topMargin="16px"

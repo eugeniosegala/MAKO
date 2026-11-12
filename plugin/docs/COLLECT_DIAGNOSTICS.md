@@ -51,9 +51,17 @@ With diagnostics enabled, `mako-run` retains ten launch sessions: the current `~
 
 Collect from the original session log, not an older filtered report, which may have omitted error details. The report does not include the separate Gamescope system journal; support may request it if the game log is insufficient.
 
+With `PROTON_LOG=1` in Launch Options, Proton writes the game's output, including MAKO Renderer records, to its own `steam-<game ID>.log` in your home directory or `PROTON_LOG_DIR` instead. The report then shows a `proton log:` line naming that file; send that file as well, or remove `PROTON_LOG` and collect again.
+
+If support asks for Vulkan loader details, also put `VK_LOADER_DEBUG=error,warn,layer` at the front of Launch Options. The report then includes the loader's layer search and load errors, including from loaders bundled in AppImages. Use `--lines 200000`, because the loader prints these lines at startup.
+
 For comparisons, collect a separate report after each run and note which settings changed. Use the same scene and game settings where possible. For HDR sharpening comparisons, also note the game resolution and display resolution. For VRR comparisons, record the VRR setting, display refresh rate, desktop or Gaming Mode session, and Gamescope version if used.
 
 For timing-field meanings and the limits of log-based comparisons, see [Interpreting presentation records](../../engine/docs/WSI-ISOLATION.md#interpreting-presentation-records).
+
+For Zink pacing comparisons, also note Fixed or Fractional Adaptive mode, Smooth Cadence, Real Frame Priority and any FPS caps. The report retains automatic-cap changes and FIFO handoff/drain records; see [Zink FIFO pacing](../../engine/docs/ADAPTIVE-VALIDATION.md#zink-fifo-pacing) for their meaning.
+
+If the optional Lossless Scaling model cannot initialize, MAKO tries MAKO FG. See [model selection and fallback](../../engine/docs/MAKO-FG.md) for details.
 
 ## 4. Restore your settings
 
@@ -63,8 +71,8 @@ Restore the saved Launch Options and any changed Target, or remove the two diagn
 
 Review `MAKO-diagnostics.txt` and remove personal information. Upload it through the [diagnostic form](https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform), choosing **MAKO Decky (Decky Loader plugin)**. Answer **Unknown** when unsure. Do not post the log publicly or attach `Lossless.dll`.
 
-## GPU Headroom evidence
+The report alone is enough for most problems. For a visual problem, a short video or photo of the screen can also help. Support can reproduce Frame Generation artifacts offline from [recorded test frames](../../engine/docs/MAKO-FG.md#record-test-frames), which hold the game's own frames before MAKO processes them; record them only if support asks.
 
-Reports retain Headroom cap changes and any Adaptive efficiency trial cancelled because the cap made its output target unreachable. A cancellation restores the proven workload and is not a presentation failure.
+## GPU Headroom evidence
 
 Compare the same scene with GPU Headroom Off and On. Collect a report after each run and note the reserve, Fixed/Adaptive mode, multiplier ceiling and any game FPS cap. Brief utilization spikes can still reach 100%; the readings cover the whole GPU and do not measure per-game GPU time or power. See [presentation records](../../engine/docs/WSI-ISOLATION.md#interpreting-presentation-records) for the retained fields and controller states.

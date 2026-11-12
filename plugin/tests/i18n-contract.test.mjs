@@ -206,7 +206,6 @@ test("uses localized restart markers only for process-start controls", async () 
     "CONFIG_FLOW_SCALE",
     "CONFIG_BASE_FPS_CAP",
     "CONFIG_FRAME_GENERATION_REFRESH_GUARD",
-    "CONFIG_PERFORMANCE_MODE",
     "CONFIG_DISABLE_MAKO_NEXT_LAUNCH",
     "FIXED_MULTIPLIER",
     "ADAPTIVE_TITLE",

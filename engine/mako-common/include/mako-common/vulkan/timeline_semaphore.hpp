@@ -5,6 +5,7 @@
 #include "../helpers/pointers.hpp"
 #include "vulkan.hpp"
 
+#include <functional>
 #include <cstdint>
 #include <optional>
 
@@ -30,6 +31,13 @@ namespace vk {
         /// @param value the value to signal to
         /// @throws ls::vulkan_error on failure
         void signal(const vk::Vulkan& vk, uint64_t value) const;
+
+        /// Build a callable that releases every wait on this semaphore, from
+        /// any thread, for work whose real signal will never arrive. The
+        /// semaphore must outlive the callable, and it must run at most once.
+        /// @param vk the vulkan instance
+        /// @returns the callable
+        [[nodiscard]] std::function<void()> releaser(const vk::Vulkan& vk) const;
 
         /// wait for the timeline semaphore
         /// @param vk the vulkan instance

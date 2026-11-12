@@ -24,6 +24,9 @@ namespace mako::backend {
         std::vector<uint8_t> stage2;
         std::vector<uint8_t> stage3;
         std::vector<uint8_t> reconstruction;
+        /// The same reconstruction with a format-less storage write, for a
+        /// presentation image whose view supplies the storage format.
+        std::vector<uint8_t> reconstructionDirect;
         std::string translator;
         std::string dllSha256;
         std::string resourceLayoutSha256;

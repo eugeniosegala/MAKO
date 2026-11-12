@@ -26,6 +26,7 @@ namespace mako::cli::benchmark {
         int duration{10};
 
         // Separate diagnostic recipe; never used by ordinary capacity runs.
+        std::string mako_fg_mode{"quality"};
         bool profile{false};
         int profile_samples{200};
         int profile_warmup{200};

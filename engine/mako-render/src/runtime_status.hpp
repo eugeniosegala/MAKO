@@ -52,6 +52,9 @@ namespace mako::layer {
         ls::GameConf appliedProfile;
         size_t appliedGeneratedCapacity{0};
         bool frameGenerationActive{false};
+        // Why Frame Generation cannot run for this swapchain at all, and the
+        // state of Wine's compatibility switch for that cause.
+        std::optional<std::string_view> frameGenerationUnavailableReason;
         std::string_view gpuHeadroomState{"off"};
         bool frameGenerationPrivatePending{false};
         bool spatialPrivatePending{false};

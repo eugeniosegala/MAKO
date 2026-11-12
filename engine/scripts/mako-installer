@@ -28,6 +28,13 @@ for candidate_icon in \
     fi
 done
 decky_renderer_relative_paths=(
+    ".local/bin/mako-installer"
+    ".local/bin/mako-remote-play"
+    ".local/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
+    ".local/share/mako-render/mako_remote_play/__init__.py"
+    ".local/share/mako-render/mako_remote_play/remote_play_core.py"
+    ".local/share/mako-render/mako_remote_play/remote_play_launch.py"
+    ".local/share/mako-render/mako_remote_play/managed_files.py"
     ".local/share/mako-render/mako_remote_play/libmako-remote-play-sdr.so"
     ".local/share/mako-render/lib/libmako-render.so"
     ".local/share/mako-render/lib32/libmako-render.so"
@@ -35,6 +42,12 @@ decky_renderer_relative_paths=(
     ".local/share/mako-render/lib32/libmako-render-scaling.so"
     ".local/share/mako-render/lib/vkbasalt/libvkbasalt.so"
     ".local/share/mako-render/lib32/vkbasalt/libvkbasalt.so"
+    ".local/share/mako-render/lib/mako-fg/mako-fg-host"
+    ".local/share/mako-render/lib/mako-fg/version.json"
+    ".local/share/mako-render/lib/mako-fg/model/weights.bin"
+    ".local/share/mako-render/lib/mako-fg/model/ops.spv"
+    ".local/share/mako-render/lib/mako-fg/model/transport.spv"
+    ".local/share/mako-render/lib/mako-fg/model/mixture.spv"
     ".local/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
     ".local/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
     ".local/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json"
@@ -77,6 +90,8 @@ decky_renderer_relative_paths=(
     ".local/bin/mako-diagnostics"
     ".local/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
     ".local/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+    ".local/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"
+    ".local/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
 )
 
 kdialog_mako() {
@@ -255,8 +270,8 @@ write_active_renderer_state() {
     local version="$1"
     local output_state="$2"
     local temporary_path="$output_state.mako-install.$$"
-    printf '{\n  "schema_version": 1,\n  "owner": "standalone",\n  "version": "%s"\n}\n' \
-        "$version" > "$temporary_path"
+    printf '{\n  "schema_version": 1,\n  "owner": "standalone",\n  "version": "%s",\n  "payload_sha256hash": "%s"\n}\n' \
+        "$version" "$(hash_file "$payload_manifest")" > "$temporary_path"
     chmod 0644 "$temporary_path"
     mv -fT -- "$temporary_path" "$output_state"
 }
@@ -350,6 +365,7 @@ prepare_install_destination() {
 }
 
 install_payload() {
+    acquire_install_lock
     [[ -f "$payload_manifest" && -f "$version_file" ]] ||
         fail "Open ‘Install MAKO Renderer’ from the extracted MAKO Renderer archive."
 
@@ -426,6 +442,8 @@ install_payload() {
     done
     install_committed=1
     finish_install
+    flock -u "$installer_lock_fd"
+    exec {installer_lock_fd}>&-
 
     notice "MAKO Renderer $version is installed. MAKO Renderer Configuration will open now.
 
@@ -443,12 +461,62 @@ For a native Steam or Proton game, use this Steam launch option:
     fi
 }
 
-uninstall_payload() {
-    local purge_configuration="${1:-0}"
-    [[ -f "$state_manifest" ]] ||
-        fail "No MAKO Renderer installation managed by this installer was found at $install_prefix."
+acquire_install_lock() {
+    local lock_path="$install_prefix/.mako-render-install.lock"
+    mkdir -p -- "$install_prefix"
+    [[ ! -L "$lock_path" && ( ! -e "$lock_path" || -f "$lock_path" ) ]] ||
+        fail "MAKO Renderer installation lock must be a private regular file."
+    # Retain this inode after removal so a new process cannot bypass a lease.
+    exec {installer_lock_fd}>>"$lock_path"
+    [[ "$(stat -c %h -- "$lock_path")" == 1 ]] ||
+        fail "MAKO Renderer installation lock must not have hard links."
+    chmod 0600 "$lock_path"
+    flock -n "$installer_lock_fd" ||
+        fail "Another MAKO Renderer installation or removal is in progress."
+}
 
-    validate_manifest "$state_manifest"
+private_manifest_selects_decky() {
+    # Match Decky's manifest resolver; active-renderer.json can be stale after
+    # a standalone install and cannot establish ownership for file removal.
+    python3 - "$install_prefix/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
+        "$install_prefix/share/mako-render/lib/libmako-render.so" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+try:
+    manifest_path, decky_library = map(Path, sys.argv[1:])
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    layer = manifest.get("layer") if isinstance(manifest, dict) else None
+    library = layer.get("library_path") if isinstance(layer, dict) else None
+    if not isinstance(library, str) or not library:
+        sys.exit(1)
+    selected = Path(library)
+    if not selected.is_absolute():
+        selected = manifest_path.parent / selected
+    sys.exit(0 if selected.resolve() == decky_library.resolve() else 1)
+except (OSError, ValueError, TypeError):
+    sys.exit(1)
+PY
+}
+
+uninstall_payload() {
+    acquire_install_lock
+    local purge_configuration="${1:-0}"
+    local active_decky=0
+    if [[ "$install_prefix" == "$decky_install_prefix" &&
+            -f "$install_prefix/share/mako-render/lib/libmako-render.so" ]]; then
+        command -v python3 >/dev/null || fail "Python 3 is required to identify the selected shared MAKO Renderer before removal."
+        if private_manifest_selects_decky; then
+            active_decky=1
+        fi
+    fi
+    if [[ -f "$state_manifest" ]]; then
+        validate_manifest "$state_manifest"
+    elif [[ "$install_prefix" != "$decky_install_prefix" ||
+            ! -f "$install_prefix/share/mako-render/lib/libmako-render.so" ]]; then
+        fail "No MAKO Renderer installation managed by this installer was found at $install_prefix."
+    fi
     local uninstall_message="Remove the managed native MAKO Renderer? Modified files and your profiles will be kept."
     if [[ "$install_prefix" == "$decky_install_prefix" && -f "$decky_plugin_manifest" ]]; then
         uninstall_message="Remove the managed native MAKO Renderer? MAKO Decky will remain installed, but its shared native Renderer will be removed. Open MAKO Decky and select Install Renderer before using MAKO again. Modified files and your profiles will be kept."
@@ -470,17 +538,41 @@ uninstall_payload() {
         fail "Remove the Remote Play override before uninstalling this older Renderer."
     fi
 
-    local line
-    while IFS= read -r line || [[ -n "$line" ]]; do
-        parse_manifest_line "$line"
-        remove_if_managed "$install_prefix/$manifest_path" "$manifest_hash"
-        remove_empty_parent_directories \
-            "$install_prefix/$manifest_path" "$install_prefix"
-    done < "$state_manifest"
+    local line relative_path decky_owned
+    local -a preserved_paths=()
+    if [[ -f "$state_manifest" ]]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            parse_manifest_line "$line"
+            decky_owned=0
+            if [[ "$active_decky" == 1 ]]; then
+                for relative_path in "${decky_renderer_relative_paths[@]}"; do
+                    if [[ "$install_prefix/$manifest_path" == "$HOME/$relative_path" ]]; then
+                        decky_owned=1
+                        break
+                    fi
+                done
+            fi
+            [[ "$decky_owned" == 0 ]] || continue
+            remove_if_managed "$install_prefix/$manifest_path" "$manifest_hash"
+            if [[ -e "$install_prefix/$manifest_path" || -L "$install_prefix/$manifest_path" ]]; then
+                preserved_paths+=("$install_prefix/$manifest_path")
+            fi
+            remove_empty_parent_directories \
+                "$install_prefix/$manifest_path" "$install_prefix"
+        done < "$state_manifest"
+    fi
 
     if [[ "$install_prefix" == "$decky_install_prefix" ]]; then
-        local relative_path
+        local preserved_path keep_file
         for relative_path in "${decky_renderer_relative_paths[@]}"; do
+            keep_file=0
+            for preserved_path in "${preserved_paths[@]}"; do
+                if [[ "$HOME/$relative_path" == "$preserved_path" ]]; then
+                    keep_file=1
+                    break
+                fi
+            done
+            [[ "$keep_file" == 0 ]] || continue
             rm -f -- "$HOME/$relative_path"
             remove_empty_parent_directories \
                 "$HOME/$relative_path" "$decky_install_prefix"
@@ -492,7 +584,15 @@ uninstall_payload() {
     fi
     rm -f -- "$state_manifest"
     remove_empty_parent_directories "$state_manifest" "$install_prefix"
-    rmdir -- "$install_prefix/bin" 2>/dev/null || true
+    # Keep the standard per-user bin, lib and share roots, which login PATH
+    # setup and other software rely on. Only the multilib root is MAKO's,
+    # while a custom prefix belongs entirely to this payload.
+    local top_level
+    for top_level in lib32 bin lib share; do
+        if [[ "$top_level" == lib32 || "$install_prefix" != "$decky_install_prefix" ]]; then
+            rmdir -- "$install_prefix/$top_level" 2>/dev/null || true
+        fi
+    done
 
     if [[ "$purge_configuration" == "1" ]] ||
             { [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" != "1" ]] &&

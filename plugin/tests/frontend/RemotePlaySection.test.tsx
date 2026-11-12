@@ -239,3 +239,58 @@ test("a conflicting runtime cannot show a healthy active status and keeps its re
   ).toBeNull();
   expect(screen.getByRole("alert").textContent).toContain("Edit it in Qt.");
 });
+
+test("shows the remembered status until the first poll and acts only on a live one", async () => {
+  let finishPoll!: (value: typeof idle) => void;
+  vi.mocked(getRemotePlayStatus).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finishPoll = resolve;
+    }),
+  );
+  const onStatus = vi.fn();
+  render(
+    <RemotePlaySection
+      restoredStatus={{ ...idle, installed: true, managed: true }}
+      onStatus={onStatus}
+    />,
+  );
+  const remove = screen.getByRole("button", {
+    name: "Remove Remote Play Override",
+  });
+  expect(remove.parentElement?.className).toContain("Mako_BrandButton--danger");
+  expect(
+    screen.getByText("Override installed — waiting for a stream"),
+  ).toBeTruthy();
+  expect(screen.queryByText("Checking Remote Play…")).toBeNull();
+  expect((remove as HTMLButtonElement).disabled).toBe(true);
+  fireEvent.click(remove);
+  expect(removeRemotePlayOverride).not.toHaveBeenCalled();
+
+  await act(async () => finishPoll({ ...idle }));
+  const install = screen.getByRole("button", { name: "Override Remote Play" });
+  expect((install as HTMLButtonElement).disabled).toBe(false);
+  expect(onStatus).toHaveBeenCalledWith({ ...idle });
+});
+test("a failed first poll drops the restored status and later failures keep live status", async () => {
+  vi.mocked(getRemotePlayStatus).mockRejectedValueOnce(new Error("offline"));
+  const onStatus = vi.fn();
+  const { unmount } = render(
+    <RemotePlaySection
+      restoredStatus={{ ...idle, installed: true, managed: true }}
+      onStatus={onStatus}
+    />,
+  );
+  expect(screen.getByRole("button", { name: "Remove Remote Play Override" })).toBeTruthy();
+  await waitFor(() => expect(onStatus).toHaveBeenCalledWith(null));
+  expect(screen.queryByRole("button", { name: "Remove Remote Play Override" })).toBeNull();
+  unmount();
+
+  onStatus.mockClear();
+  vi.useFakeTimers();
+  render(<RemotePlaySection onStatus={onStatus} />);
+  await act(async () => vi.advanceTimersByTimeAsync(0));
+  expect(onStatus).toHaveBeenCalledOnce();
+  vi.mocked(getRemotePlayStatus).mockRejectedValueOnce(new Error("offline"));
+  await act(async () => vi.advanceTimersByTimeAsync(2000));
+  expect(onStatus).not.toHaveBeenCalledWith(null);
+});

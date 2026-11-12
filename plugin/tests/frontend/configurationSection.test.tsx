@@ -285,8 +285,11 @@ import { ConfigurationSection } from "../../src/components/ConfigurationSection"
 import { showModal } from "@decky/ui";
 import { ShadersConfigurationGroup } from "../../src/components/settings/ShadersConfigurationGroup";
 import {
+  EXTERNAL_VULKAN_LAYER_MANGOHUD,
   EXTERNAL_VULKAN_LAYER_VKBASALT,
   GAMESCOPE_WSI_COMPATIBILITY,
+  MANGOHUD_COUNT_REAL_FRAMES,
+  MAILBOX_PRESENTATION_COMPATIBILITY,
   SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY,
   VKBASALT_SHARPENING_DLS,
   getDefaults,
@@ -1485,6 +1488,40 @@ describe("Configuration controls", () => {
     );
   });
 
+  test("exposes the explicit per-profile Mailbox presentation compatibility policy", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const { container } = render(
+      <ConfigurationSection
+        config={getDefaults()}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>(
+        ".MAKO_WorkaroundsCollapseButton_Container button",
+      )!,
+    );
+
+    const mailbox = screen.getByText(
+      "Mailbox Presentation (Restart)",
+    ) as HTMLButtonElement;
+    expect(mailbox.getAttribute("data-checked")).toBe("false");
+    expect(
+      screen
+        .getByText(
+          "A newer frame can replace a generated frame before it is shown, which can reduce smoothness or make pacing uneven.",
+        )
+        .getAttribute("data-tone"),
+    ).toBe("warning");
+    fireEvent.click(mailbox);
+    expect(onConfigChange).toHaveBeenCalledExactlyOnceWith(
+      MAILBOX_PRESENTATION_COMPATIBILITY,
+      true,
+    );
+  });
+
   test.each([false, true])(
     "Scaling keeps WSI independently editable when saved as %s",
     (wsiEnabled) => {
@@ -1567,6 +1604,36 @@ describe("Configuration controls", () => {
     expect(screen.queryByText("Enable shaders (Restart)")).toBeNull();
     expect(screen.queryByText("Experimental")).toBeNull();
     expect(localStorage.getItem("mako-external-tools-collapsed")).toBe("false");
+  });
+
+  test("offers the MangoHud frame count only while MangoHud is enabled", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const section = (externalLayer: string) => (
+      <ConfigurationSection
+        groups={["external-tools"]}
+        config={{ ...getDefaults(), external_vulkan_layer: externalLayer }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />
+    );
+    const { container, rerender } = render(section(""));
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>(
+        ".MAKO_ExternalToolsCollapseButton_Container button",
+      )!,
+    );
+    expect(screen.queryByText("Count Real Frames Only (Restart)")).toBeNull();
+
+    rerender(section(EXTERNAL_VULKAN_LAYER_MANGOHUD));
+    const toggle = screen
+      .getByText("Count Real Frames Only (Restart)")
+      .closest("button")!;
+    expect(toggle.dataset.checked).toBe("false");
+    fireEvent.click(toggle);
+    expect(onConfigChange).toHaveBeenCalledWith(
+      MANGOHUD_COUNT_REAL_FRAMES,
+      true,
+    );
   });
 
   test("enables global cadence recovery atomically from Compatibility", () => {

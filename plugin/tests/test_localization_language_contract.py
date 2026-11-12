@@ -97,10 +97,10 @@ class LocalizationLanguageContractTests(unittest.TestCase):
         }
         # These words have the same spelling in English and the target language.
         same_spelling = {
-            "pt-BR": {"Experimental", "Nostalgia"},
-            "pt-PT": {"Experimental", "Nostalgia"},
+            "pt-BR": {"Experimental", "Nostalgia", "LSFG Q"},
+            "pt-PT": {"Experimental", "Nostalgia", "LSFG Q"},
             "es": {"Error", "Error:", "Experimental", "Factor", "Nostalgia", "Sepia"},
-            "de": {"Details", "Installation", "Name", "Sepia", "Vignette", "Alpha"},
+            "de": {"Details", "Installation", "Name", "Sepia", "Vignette", "Alpha", "Lossless Scaling (optional)", "LSFG Q"},
         }
         for component, language, catalog, english in self.localized_catalogs():
             allowed = invariant_names | same_spelling.get(language, set())

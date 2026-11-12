@@ -72,6 +72,23 @@ if [[ "$default_output" != "$expected_default" ]]; then
     fail "default environment or argument forwarding changed:\n$default_output"
 fi
 
+# The switch is available on the first launch and preserves explicit overrides.
+for wine_value in unset 0 1 empty; do
+    wine_environment=(-u WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK)
+    wine_expected=1
+    if [[ "$wine_value" != unset ]]; then
+        wine_expected="$wine_value"
+        [[ "$wine_value" != empty ]] || wine_expected=""
+        wine_environment+=("WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=$wine_expected")
+    fi
+    wine_output="$(env -u DISABLE_MAKO "${wine_environment[@]}" \
+        "$launcher" bash -c 'printf "%s" "${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK-unset}"')"
+    [[ "$wine_output" == "$wine_expected" ]] || fail "Wine override was not preserved: $wine_value"
+done
+wine_disabled="$(env -u WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK DISABLE_MAKO=1 \
+    "$launcher" bash -c 'printf "%s" "${WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK-unset}"')"
+[[ "$wine_disabled" == unset ]] || fail "disabled Renderer changed Wine presentation"
+
 steam_overlay_dir="$test_data_home/vulkan/implicit_layer.d"
 mkdir -p "$steam_overlay_dir"
 touch "$steam_overlay_dir/steamoverlay_x86_64.json"
@@ -158,8 +175,17 @@ preload_output="$(
     "$launcher" "$test_root/preload/probe" 2> "$test_root/preload/stderr"
 )" || fail "overlay-only preload launch failed"
 [[ "$preload_output" == 'overlay=0 retained=0' ]] || fail "overlay-only hooks survived exec"
-[[ "$(cat "$test_root/preload/stderr")" == *'operation=launch-environment'*'steam_overlay_preload_removed=1'* ]] ||
+[[ "$(cat "$test_root/preload/stderr")" == *'operation=launch-environment'*'steam_overlay_preload_removed=1 proton_log=0'* ]] ||
     fail "launch diagnostics did not report removal"
+# Proton sends the game's output to its own log; the record names that file.
+PROTON_LOG=1 SteamGameId=42 PROTON_LOG_DIR="$test_root/proton logs" \
+    GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
+    XDG_DATA_HOME="$test_data_home" \
+    MAKO_PRESENT_DIAGNOSTICS=1 \
+    "$launcher" "$test_root/preload/probe" > /dev/null 2> "$test_root/preload/stderr" ||
+    fail "Proton log launch failed"
+[[ "$(cat "$test_root/preload/stderr")" == *"proton_log=1 proton_log_file=$test_root/proton logs/steam-42.log"* ]] ||
+    fail "launch diagnostics did not name the Proton log"
 preload_output="$(
     GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
     XDG_DATA_HOME="$test_data_home" \
@@ -318,22 +344,28 @@ printf '%s\n' \
     'enable_zink=1' \
     'force_alsa_audio=1' > "$launch_config"
 compatibility_output="$({
-    WINEDLLOVERRIDES='d3d11=n' \
+    WINEDLLOVERRIDES='d3d11=n' RADV_DEBUG='nohiz' \
         MAKO_LAUNCH_CONFIG="$launch_config" \
         "$launcher" bash -c '
             printf "%s\n" \
                 "${__GLX_VENDOR_LIBRARY_NAME:-unset}" \
                 "${MESA_LOADER_DRIVER_OVERRIDE:-unset}" \
                 "${GALLIUM_DRIVER:-unset}" \
+                "${RADV_DEBUG:-unset}" \
+                "${MAKO_GAMESCOPE_COMPOSITE_FORCE:-unset}" \
                 "${SDL_AUDIODRIVER:-unset}" \
                 "${WINEDLLOVERRIDES:-unset}" \
                 "${MAKO_LAUNCH_CONFIG:-unset}"
         '
 } 2>&1)" || fail "standalone compatibility launch failed: $compatibility_output"
-expected_compatibility=$'mesa\nzink\nzink\nalsa\nd3d11=n;winepulse.drv=d;winealsa.drv=b\nunset'
+expected_compatibility=$'mesa\nzink\nzink\nnohiz,nodisplaydcc\n1\nalsa\nd3d11=n;winepulse.drv=d;winealsa.drv=b\nunset'
 if [[ "$compatibility_output" != "$expected_compatibility" ]]; then
     fail "standalone compatibility settings were not applied safely:\n$compatibility_output"
 fi
+repeated_zink_output="$(RADV_DEBUG='nodisplaydcc' MAKO_LAUNCH_CONFIG="$launch_config" \
+    "$launcher" bash -c 'printf "%s" "${RADV_DEBUG:-unset}"')"
+[[ "$repeated_zink_output" == "nodisplaydcc" ]] ||
+    fail "Zink repeated the RADV display-compression switch: $repeated_zink_output"
 
 for disable_hdr in 0 1; do
     printf '%s\n' 'version=1' "disable_hdr_exposure=$disable_hdr" > "$launch_config"

@@ -71,4 +71,4 @@ if (( failure != 0 )); then
     exit 1
 fi
 
-printf '%s\n' 'Protected-input gate passed: the Git index contains no protected binary, model, shader, dump, or archive payloads.'
+printf '%s\n' 'Protected-input gate passed: the Git index contains no protected binary, model, shader or archive inputs.'

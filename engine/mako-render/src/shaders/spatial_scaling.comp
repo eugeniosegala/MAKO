@@ -28,7 +28,12 @@ layout(set = 0, binding = 0, std140) uniform SpatialScalingParameters {
 
 layout(set = 0, binding = 16) uniform sampler sourceSampler;
 layout(set = 0, binding = 32) uniform texture2D sourceTexture;
-#ifdef MAKO_SCALING_RGBA16F
+#if defined(MAKO_SCALING_DIRECT_OUTPUT)
+// Direct presentation output writes the application's swapchain image. Its
+// view supplies the storage format, so one variant serves BGRA, RGBA, packed
+// 10-bit and half-float images with the same arithmetic as the private path.
+layout(set = 0, binding = 48) uniform writeonly image2D outputImage;
+#elif defined(MAKO_SCALING_RGBA16F)
 layout(set = 0, binding = 48, rgba16f) uniform writeonly image2D outputImage;
 #else
 layout(set = 0, binding = 48, rgba8) uniform writeonly image2D outputImage;

@@ -13,7 +13,7 @@
 4. Check **Matched Processes** and the feature's **Restart** requirements. For Frame Generation, start with Fixed 2x.
 5. Try **Disable MAKO Renderer on Next Launch** and restart to compare. Turn it off after testing.
 
-Frame Generation and LS1 need Lossless Scaling's default Steam version and a valid DLL path. MAKO Scaler and Shaders work without it.
+MAKO FG, MAKO Scaler, and Shaders work without Lossless Scaling. Only the optional Lossless Scaling frame generation model and LS1 need its default Steam version and a valid DLL path; without it, switch to MAKO FG or MAKO Scaler.
 
 ## Stutter or visual problems
 
@@ -33,7 +33,7 @@ Use MAKO's displayed wrapper path. Clear an unnecessary **GPU** override; multi-
 
 ## Updates and Flatpak runtimes
 
-Follow the [update steps](../../README.md#updating-mako-decky), including **Flatpak Setup > Update** for prepared apps.
+Follow the [update steps](../../README.md#updating-mako-decky). Installing or updating MAKO Renderer also refreshes installed Flatpak extensions; retry a failed extension update through **Flatpak Setup > Update**.
 
 If profiles cannot load or save, close games and select **Install MAKO Renderer**. An invalid configuration is replaced with defaults, including its profiles. Read-only files need owner write permission first.
 

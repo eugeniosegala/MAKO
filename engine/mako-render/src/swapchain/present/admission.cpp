@@ -43,9 +43,55 @@ namespace {
     );
 }
 
+// Starts a replacement for a stopped frame generation program. This present waits
+// for the rebuild, a brief pause, and the frames before it stay real frames. It
+// always returns false, so generation resumes on a later frame.
+bool Swapchain::recoverLostBackend(const vk::Vulkan& vk) {
+    constexpr auto retryInterval = std::chrono::seconds(2);
+    constexpr uint32_t maximumFailures = 4;
+    if (this->recoveryState.lostBackendStopped)
+        return false;
+    const auto stop = [this] {
+        this->recoveryState.lostBackendStopped = true;
+        this->publishRuntimeStatus("frame-generation-stopped");
+    };
+    try {
+        const auto now = std::chrono::steady_clock::now();
+        if (this->recoveryState.lostBackendRetryAt &&
+                now < *this->recoveryState.lostBackendRetryAt)
+            return false;
+        if (this->frameState.renderFenceInFlight) {
+            if (!this->renderFence->wait(vk, 0))
+                return false;
+            this->frameState.renderFenceInFlight = false;
+        }
+        if (this->spatialScaler && !this->spatialScalingPassesReady(vk))
+            return false;
+        this->recoveryState.lostBackendRetryAt = now + retryInterval;
+        if (!this->instance->restartFrameGeneration(this->ctx.get())) {
+            stop();
+            return false;
+        }
+        this->rebuildPrivateResources(vk, this->colorPipeline, this->profile);
+    } catch (const std::exception& error) {
+        std::cerr << "MAKO Renderer: frame generation restart failed; native "
+                     "presentation retained: " << error.what() << '\n';
+        if (++this->recoveryState.lostBackendFailures == maximumFailures)
+            stop();
+        return false;
+    }
+    this->recoveryState.lostBackendRetryAt.reset();
+    this->recoveryState.lostBackendFailures = 0;
+    std::cerr << "MAKO Renderer: frame generation restarted; warming temporal "
+                 "history before resuming\n";
+    return false;
+}
+
 bool Swapchain::recoverBackendIfReady(const vk::Vulkan& vk) {
     if (!this->recoveryState.backendPending)
         return true;
+    if (this->instance && this->instance->contextLost(this->ctx.get()))
+        return this->recoverLostBackend(vk);
 
     bool backendReady = false;
     try {
@@ -103,7 +149,8 @@ void Swapchain::ensureHistoryWarmup(const bool restart) {
 
 Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         const DiagnosticsClock::time_point presentNow,
-        const bool orderedAcquireRecoveryProbe) {
+        const bool orderedAcquireRecoveryProbe,
+        const std::optional<size_t> integerBaseCapGenerationLimit) {
     PresentationFramePlan plan;
     plan.orderedAcquireRecoveryProbe = orderedAcquireRecoveryProbe;
     plan.historyWarmupActive =
@@ -118,11 +165,10 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             this->gamescopePresentationFeedback.variableRefreshRequested()
                 ? this->smoothCadencePacerHandoff.activeGenerationLimit()
                 : std::nullopt,
-            this->profile.adaptive && !this->smoothCadencePacerHandoff.active()
-                ? this->smoothCadenceBaseCap.activeGenerationLimit()
-                : std::nullopt,
+            integerBaseCapGenerationLimit,
             this->orderedPresentationDeadline,
-            this->gpuHeadroomResult.capFps
+            this->gpuHeadroomResult.capFps,
+            this->applicationLayerShare
         )
         : AdaptiveFramePlan{};
     const bool fixedSmoothCadenceFullMultiplier = !schedulerEnabled &&
@@ -192,12 +238,19 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
         const PresentationFramePlan& plan,
         const DiagnosticsClock::time_point presentNow) {
     bool pipelineReady = true;
+    bool renderFenceProvedBackend = false;
     if (gamescopeHdrTransport && this->frameState.renderFenceInFlight) {
         pipelineReady = this->renderFence->wait(vk, 0);
-        if (pipelineReady)
+        if (pipelineReady) {
             this->frameState.renderFenceInFlight = false;
+            renderFenceProvedBackend = true;
+        }
     }
-    if (gamescopeHdrTransport && pipelineReady) {
+    // The fence follows the last generated frame, which waited for the backend's
+    // final output, so a separate program needs no round trip to repeat that.
+    const bool readinessProved = renderFenceProvedBackend &&
+        this->instance && this->instance->usesSeparateProgram();
+    if (gamescopeHdrTransport && pipelineReady && !readinessProved) {
         try {
             pipelineReady = this->instance &&
                 this->instance->contextReady(this->ctx.get());

@@ -79,17 +79,41 @@ class MangoHudLauncherTests(unittest.TestCase):
                                     VK_INSTANCE_LAYERS="VK_LAYER_MANGOHUD_overlay_x86:VK_LAYER_TEST:VK_LAYER_MANGOHUD_overlay_x86_64:VK_LAYER_MAKO_render")
                     self.assertEqual(env["MANGOHUD_CONFIGFILE"], str(self.shared))
                     self.assertEqual(env["MANGOHUD_CONFIG"], "read_cfg,fps")
-                    self.assertEqual(env["MANGOHUD"], "1")
                     self.assertNotIn("DISABLE_MANGOHUD", env)
                     self.assertTrue(env["VK_IMPLICIT_LAYER_PATH"].endswith(":" + str(self.private)))
                     self.assertNotIn(str(self.manifests), env["VK_IMPLICIT_LAYER_PATH"])
                     if bits == "64":
+                        # Older loaders, such as 1.3.239, need the gates beside the list.
+                        self.assertEqual(env["MANGOHUD"], "1")
+                        self.assertEqual(env["ENABLE_MAKO"], "1")
                         self.assertEqual(env["VK_INSTANCE_LAYERS"], "VK_LAYER_MAKO_render:VK_LAYER_MANGOHUD_overlay_x86_64:VK_LAYER_TEST")
                     else:
+                        self.assertEqual(env["MANGOHUD"], "1")
                         self.assertNotIn("MANGOHUD", env["VK_INSTANCE_LAYERS"])
                 staged = list(self.private.glob("*.json"))
                 self.assertEqual(len(staged), 1)
                 self.assertEqual(json.loads(staged[0].read_text())["layer"]["library_arch"], bits)
+
+    def test_desktop_steam_overlay_stays_below_renderer_while_mangohud_counts_game_frames(self):
+        self.manifest()
+        config = self.root / "overlay-enabled.conf"
+        config.write_text("version=1\ndisable_steam_overlay=0\n")
+        overlay = self.root / "data/vulkan/implicit_layer.d"
+        overlay.mkdir(parents=True)
+        (overlay / "steamoverlay_x86_64.json").write_text("{}")
+        for real, expected in (
+                ("0", "VK_LAYER_MAKO_render:VK_LAYER_MANGOHUD_overlay_x86_64"),
+                ("1", "VK_LAYER_MANGOHUD_overlay_x86_64:VK_LAYER_MAKO_render")):
+            with self.subTest(real=real):
+                env = self.game(MANGOHUD="1", MAKO_LAUNCH_CONFIG=str(config),
+                                MAKO_MANGOHUD_REAL_FRAMES=real,
+                                ENABLE_VK_LAYER_VALVE_steam_overlay_1="1",
+                                VK_INSTANCE_LAYERS="VK_LAYER_TEST:VK_LAYER_VALVE_steam_overlay_64")
+                self.assertEqual(env["VK_INSTANCE_LAYERS"],
+                                 expected + ":VK_LAYER_VALVE_steam_overlay_64:VK_LAYER_TEST")
+                # The overlay's list predates MangoHud ordering and keeps both gates off.
+                self.assertNotIn("MANGOHUD", env)
+                self.assertNotIn("ENABLE_MAKO", env)
 
     def test_missing_or_invalid_shared_file_preserves_inheritance(self):
         self.manifest()
@@ -187,11 +211,34 @@ class MangoHudLauncherTests(unittest.TestCase):
         with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
             results = list(pool.map(lambda _: self.game(MANGOHUD="1"), range(12)))
         for result in results:
-            self.assertEqual(result.get("MANGOHUD"), "1")
+            self.assertTrue(result["VK_INSTANCE_LAYERS"].startswith(
+                "VK_LAYER_MAKO_render:VK_LAYER_MANGOHUD_overlay_x86_64:VK_LAYER_MANGOHUD_overlay_x86"))
         self.assertEqual(len(list(self.private.iterdir())), 2)
 
+    def test_real_frame_count_orders_both_identities_above_renderer(self):
+        self.manifest("64")
+        self.manifest("32")
+        both = "VK_LAYER_MANGOHUD_overlay_x86_64:VK_LAYER_MANGOHUD_overlay_x86"
+        for real, expected in (("0", "VK_LAYER_MAKO_render:" + both),
+                               ("1", both + ":VK_LAYER_MAKO_render")):
+            with self.subTest(real=real):
+                env = self.game(MANGOHUD="1", MAKO_MANGOHUD_REAL_FRAMES=real,
+                                VK_INSTANCE_LAYERS="VK_LAYER_TEST")
+                self.assertEqual(env["VK_INSTANCE_LAYERS"], expected + ":VK_LAYER_TEST")
+                # With both gates set, the Steam Linux Runtime's loader orders
+                # by discovery, so MangoHud's directory follows the list.
+                self.assertEqual(env["MANGOHUD"], "1")
+                self.assertEqual(env["ENABLE_MAKO"], "1")
+                implicit = env["VK_IMPLICIT_LAYER_PATH"]
+                if real == "1":
+                    self.assertTrue(implicit.startswith(str(self.private) + ":"), implicit)
+                else:
+                    self.assertTrue(implicit.endswith(":" + str(self.private)), implicit)
+                self.assertNotIn("MAKO_MANGOHUD_REAL_FRAMES", env)
+
     def test_invalid_requests_and_shader_conflict_fail_before_game_exec(self):
-        for options in ({"MANGOHUD": "yes"}, {"MANGOHUD": "1", "ENABLE_VKBASALT": "1"}):
+        for options in ({"MANGOHUD": "yes"}, {"MANGOHUD": "1", "ENABLE_VKBASALT": "1"},
+                        {"MANGOHUD": "1", "MAKO_MANGOHUD_REAL_FRAMES": "yes"}):
             result = self.run_launcher("/usr/bin/env", **options)
             self.assertEqual(result.returncode, 2)
             self.assertEqual(result.stdout, "")

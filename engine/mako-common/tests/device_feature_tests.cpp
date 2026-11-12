@@ -6,14 +6,90 @@
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <cstring>
 #include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 namespace {
+    struct FormatSupport {
+        uint32_t apiVersion{VK_API_VERSION_1_3};
+        bool formatFeatures2Extension{};
+        bool storage{true};
+        bool writeWithoutFormat{true};
+        VkResult extensionResult{VK_SUCCESS};
+        uint32_t formatQueries{};
+    } formatSupport;
+
+    template<typename T> T fakeHandle() {
+        if constexpr (std::is_pointer_v<T>)
+            return reinterpret_cast<T>(uintptr_t{1});
+        else
+            return static_cast<T>(1);
+    }
+
+    vk::Vulkan formatVulkan(const bool enabled = true, const bool queryAvailable = true) {
+        vk::VulkanInstanceFuncs fi{};
+        fi.GetPhysicalDeviceQueueFamilyProperties = [](VkPhysicalDevice,
+                uint32_t* count, VkQueueFamilyProperties* properties) {
+            *count = 1;
+            if (properties) properties[0].queueFlags = VK_QUEUE_COMPUTE_BIT;
+        };
+        fi.GetPhysicalDeviceProperties = [](VkPhysicalDevice, VkPhysicalDeviceProperties* properties) {
+            *properties = {};
+            properties->apiVersion = formatSupport.apiVersion;
+        };
+        fi.GetPhysicalDeviceFormatProperties = [](VkPhysicalDevice, VkFormat, VkFormatProperties* properties) {
+            *properties = {};
+            if (formatSupport.storage)
+                properties->optimalTilingFeatures = VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT;
+        };
+        fi.EnumerateDeviceExtensionProperties = [](VkPhysicalDevice, const char*,
+                uint32_t* count, VkExtensionProperties* properties) -> VkResult {
+            if (formatSupport.extensionResult != VK_SUCCESS)
+                return formatSupport.extensionResult;
+            *count = formatSupport.formatFeatures2Extension ? 1U : 0U;
+            if (properties && *count) {
+                properties[0] = {};
+                std::strcpy(properties[0].extensionName, VK_KHR_FORMAT_FEATURE_FLAGS_2_EXTENSION_NAME);
+            }
+            return VK_SUCCESS;
+        };
+        if (queryAvailable) {
+            fi.GetPhysicalDeviceFormatProperties2 = [](VkPhysicalDevice, VkFormat,
+                    VkFormatProperties2* properties) {
+                ++formatSupport.formatQueries;
+                auto* features = static_cast<VkFormatProperties3*>(properties->pNext);
+                features->optimalTilingFeatures = formatSupport.storage
+                    ? VK_FORMAT_FEATURE_2_STORAGE_IMAGE_BIT : 0;
+                if (formatSupport.writeWithoutFormat)
+                    features->optimalTilingFeatures |= VK_FORMAT_FEATURE_2_STORAGE_WRITE_WITHOUT_FORMAT_BIT;
+            };
+        }
+        vk::VulkanDeviceFuncs df{};
+        df.GetDeviceQueue = [](VkDevice, uint32_t, uint32_t, VkQueue* queue) {
+            *queue = fakeHandle<VkQueue>();
+        };
+        df.CreateCommandPool = [](VkDevice, const VkCommandPoolCreateInfo*,
+                const VkAllocationCallbacks*, VkCommandPool* pool) -> VkResult {
+            *pool = fakeHandle<VkCommandPool>();
+            return VK_SUCCESS;
+        };
+        df.DestroyCommandPool = [](VkDevice, VkCommandPool, const VkAllocationCallbacks*) {};
+        df.CreatePipelineCache = [](VkDevice, const VkPipelineCacheCreateInfo*,
+                const VkAllocationCallbacks*, VkPipelineCache* cache) -> VkResult {
+            *cache = fakeHandle<VkPipelineCache>();
+            return VK_SUCCESS;
+        };
+        df.DestroyPipelineCache = [](VkDevice, VkPipelineCache, const VkAllocationCallbacks*) {};
+        return {fakeHandle<VkInstance>(), fakeHandle<VkDevice>(), fakeHandle<VkPhysicalDevice>(),
+            fi, df, 0, false, false, std::nullopt, std::nullopt, false, enabled};
+    }
+
     std::vector<std::string>& unavailableDeviceFunctions() {
         static std::vector<std::string> functions;
         return functions;
@@ -53,6 +129,43 @@ namespace {
             failed = true;
         }
         expect(failed, message);
+    }
+
+    void testStorageWriteFormatSupport() {
+        for (const auto format : {VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_B8G8R8A8_UNORM,
+                VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+                VK_FORMAT_A2R10G10B10_UNORM_PACK32}) {
+            formatSupport = {};
+            const auto device = formatVulkan();
+            expect(device.supportsStorageImageWriteWithoutFormat(format) && formatSupport.formatQueries == 1,
+                "Modern format-specific storage writes must retain the fast path");
+            formatSupport.writeWithoutFormat = false;
+            expect(!device.supportsStorageImageWriteWithoutFormat(format),
+                "Storage support alone must not enable format-less writes");
+            formatSupport.writeWithoutFormat = true;
+            formatSupport.storage = false;
+            expect(!device.supportsStorageImageWriteWithoutFormat(format),
+                "A write-without-format bit must not replace storage-image support");
+
+            formatSupport = {};
+            expect(!formatVulkan(false).supportsStorageImageWriteWithoutFormat(format) &&
+                    formatSupport.formatQueries == 0,
+                "Physical support must not replace the logical device's enabled feature");
+            expect(!formatVulkan(true, false).supportsStorageImageWriteWithoutFormat(format),
+                "A missing format-query entrypoint must retain the copy path");
+            formatSupport.apiVersion = VK_API_VERSION_1_2;
+            expect(!device.supportsStorageImageWriteWithoutFormat(format),
+                "Legacy device-wide features must not stand in for format-specific proof");
+            formatSupport.formatFeatures2Extension = true;
+            expect(device.supportsStorageImageWriteWithoutFormat(format),
+                "Vulkan 1.2 with format-feature-flags2 must retain supported direct writes");
+            formatSupport.writeWithoutFormat = false;
+            expect(!device.supportsStorageImageWriteWithoutFormat(format),
+                "The extension path must also honor an unsupported format");
+            formatSupport.extensionResult = VK_ERROR_INITIALIZATION_FAILED;
+            expect(!device.supportsStorageImageWriteWithoutFormat(format),
+                "Failed optional capability discovery must retain the copy path");
+        }
     }
 
     void testDeviceFunctionLoading() {
@@ -230,7 +343,76 @@ int main() {
             "unknown feature prefixes must remain intact without substituting or duplicating FP16 structures");
     }
 
+    // The core write-without-format bit lives in pEnabledFeatures or in the
+    // one VkPhysicalDeviceFeatures2 that replaces it.
+    for (const bool enable : {false, true}) {
+        const VkPhysicalDeviceFeatures applicationFeatures{.samplerAnisotropy = VK_TRUE};
+        VkDeviceCreateInfo legacy{
+            .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            .pEnabledFeatures = &applicationFeatures,
+        };
+        {
+            const vk::StorageImageWriteWithoutFormatRequest request(legacy, enable);
+            expect(vk::storageImageWriteWithoutFormatEnabled(legacy) == enable &&
+                    legacy.pEnabledFeatures->samplerAnisotropy &&
+                    !applicationFeatures.shaderStorageImageWriteWithoutFormat,
+                "write-without-format must copy pEnabledFeatures and keep other bits");
+        }
+        expect(legacy.pEnabledFeatures == &applicationFeatures,
+            "write-without-format must restore the application's feature pointer");
+
+        VkDeviceCreateInfo bare{.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
+        {
+            const vk::StorageImageWriteWithoutFormatRequest request(bare, enable);
+            expect(vk::storageImageWriteWithoutFormatEnabled(bare) == enable &&
+                    !bare.pNext,
+                "write-without-format must add only core features to a bare request");
+        }
+        expect(!bare.pEnabledFeatures, "a bare request must be restored");
+
+        static const VkPhysicalDeviceFeatures2 immutableFeatures2{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .features = {.robustBufferAccess = VK_TRUE},
+        };
+        VkLayerDeviceCreateInfo loaderLink{
+            .sType = VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO,
+            .pNext = &immutableFeatures2,
+            .function = VK_LAYER_LINK_INFO,
+        };
+        VkDeviceCreateInfo chained{
+            .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            .pNext = &loaderLink,
+        };
+        {
+            const vk::StorageImageWriteWithoutFormatRequest request(chained, enable);
+            const auto* selectedLoader = static_cast<const VkLayerDeviceCreateInfo*>(chained.pNext);
+            const auto* selected = static_cast<const VkPhysicalDeviceFeatures2*>(selectedLoader->pNext);
+            expect(vk::storageImageWriteWithoutFormatEnabled(chained) == enable &&
+                    !chained.pEnabledFeatures && selected->features.robustBufferAccess &&
+                    selectedLoader->function == loaderLink.function &&
+                    !immutableFeatures2.features.shaderStorageImageWriteWithoutFormat &&
+                    loaderLink.pNext == &immutableFeatures2,
+                "write-without-format must patch a copied Features2 without pEnabledFeatures");
+        }
+        expect(chained.pNext == &loaderLink && !chained.pEnabledFeatures,
+            "a Features2 request must be restored");
+    }
+    {
+        const VkPhysicalDeviceFeatures alreadyEnabled{
+            .shaderStorageImageWriteWithoutFormat = VK_TRUE,
+        };
+        VkDeviceCreateInfo info{
+            .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            .pEnabledFeatures = &alreadyEnabled,
+        };
+        const vk::StorageImageWriteWithoutFormatRequest request(info, false);
+        expect(info.pEnabledFeatures == &alreadyEnabled &&
+                vk::storageImageWriteWithoutFormatEnabled(info),
+            "an application's own write-without-format request must be kept");
+    }
+
     testDeviceFunctionLoading();
+    testStorageWriteFormatSupport();
 
     std::cout << "device feature and function loading tests passed\n";
     return 0;

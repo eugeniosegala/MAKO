@@ -55,6 +55,10 @@ namespace mako::ui {
 
         Q_PROPERTY(QString dll READ getDll WRITE dllUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool lossless_scaling_missing READ isLosslessScalingMissing NOTIFY refreshUI)
+        Q_PROPERTY(bool lossless_scaling_fallback READ losslessScalingFallback NOTIFY refreshUI)
+        Q_PROPERTY(bool lsfg_unavailable READ isLsfgUnavailable NOTIFY refreshUI)
+        Q_PROPERTY(bool ls1_unavailable READ isLs1Unavailable NOTIFY refreshUI)
+        Q_PROPERTY(bool model_inspection_unavailable READ isModelInspectionUnavailable NOTIFY refreshUI)
         Q_PROPERTY(bool allow_fp16 READ getAllowFP16 WRITE allowFP16Updated NOTIFY refreshUI)
         Q_PROPERTY(bool enable_zink READ getEnableZink WRITE enableZinkUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool disable_steam_overlay READ getDisableSteamOverlay WRITE disableSteamOverlayUpdated NOTIFY refreshUI)
@@ -63,6 +67,7 @@ namespace mako::ui {
         Q_PROPERTY(bool enable_mangohud READ getEnableMangoHud WRITE enableMangoHudUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool mangohud_available READ mangoHudAvailable NOTIFY refreshUI)
         Q_PROPERTY(bool mangohud_checking READ mangoHudChecking NOTIFY refreshUI)
+        Q_PROPERTY(bool mangohud_count_real_frames READ getMangoHudCountRealFrames WRITE mangoHudCountRealFramesUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool enable_vkbasalt READ getEnableVkBasalt WRITE enableVkBasaltUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString vkbasalt_sharpening READ getVkBasaltSharpening WRITE vkBasaltSharpeningUpdated NOTIFY refreshUI)
         Q_PROPERTY(float vkbasalt_sharpness READ getVkBasaltSharpness WRITE vkBasaltSharpnessUpdated NOTIFY refreshUI)
@@ -84,10 +89,13 @@ namespace mako::ui {
         Q_PROPERTY(QString matched_processes READ getMatchedProcesses NOTIFY refreshUI)
         Q_PROPERTY(size_t multiplier READ getMultiplier WRITE multiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool frame_generation_provisioned READ getFrameGenerationProvisioned WRITE frameGenerationProvisionedUpdated NOTIFY refreshUI)
+        Q_PROPERTY(QString frame_generation_model READ getFrameGenerationModel WRITE frameGenerationModelUpdated NOTIFY refreshUI)
+        Q_PROPERTY(QString mako_fg_mode READ getMakoFgMode WRITE makoFgModeUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool frame_generation_enabled READ getFrameGenerationEnabled WRITE frameGenerationEnabledUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint frame_generation_factor_index READ getFrameGenerationFactorIndex WRITE frameGenerationFactorIndexUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool scaling_enabled READ getScalingEnabled WRITE scalingEnabledUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool swapchain_image_count_compatibility READ getSwapchainImageCountCompatibility WRITE swapchainImageCountCompatibilityUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool mailbox_presentation_compatibility READ getMailboxPresentationCompatibility WRITE mailboxPresentationCompatibilityUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString scaling_method READ getScalingMethod WRITE scalingMethodUpdated NOTIFY refreshUI)
         Q_PROPERTY(float scaling_factor READ getScalingFactor WRITE scalingFactorUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool scaling_supersampling READ getScalingSupersampling WRITE scalingSupersamplingUpdated NOTIFY refreshUI)
@@ -166,6 +174,10 @@ namespace mako::ui {
         Q_INVOKABLE bool deleteSelectedCustomShaders();
         Q_INVOKABLE void refreshLosslessScaling();
         [[nodiscard]] bool isLosslessScalingMissing() const { return m_lossless_scaling_missing; }
+        [[nodiscard]] bool losslessScalingFallback() const { return m_lossless_scaling_fallback; }
+        [[nodiscard]] bool isLsfgUnavailable() const;
+        [[nodiscard]] bool isLs1Unavailable() const;
+        [[nodiscard]] bool isModelInspectionUnavailable() const;
 
         [[nodiscard]] static bool isFractionalAdaptivePresetEnabled(
                 const ls::GameConf& conf) noexcept {
@@ -317,6 +329,8 @@ namespace mako::ui {
         [[nodiscard]] bool mangoHudChecking() const { return m_mangohud_process.state() != QProcess::NotRunning; }
         Q_INVOKABLE void refreshMangoHud();
         void enableMangoHudUpdated(bool enabled);
+        [[nodiscard]] bool getMangoHudCountRealFrames() const;
+        void mangoHudCountRealFramesUpdated(bool enabled);
 
 #define VALIDATE_AND_GET_PROFILE(default) \
     if (!isValidProfileIndex()) return default; \
@@ -374,6 +388,20 @@ namespace mako::ui {
                 ls::GameConfDefaults::swapchainImageCountCompatibility
             )
             return conf.swapchain_image_count_compatibility;
+        }
+        [[nodiscard]] bool getMailboxPresentationCompatibility() const {
+            VALIDATE_AND_GET_PROFILE(
+                ls::GameConfDefaults::mailboxPresentationCompatibility
+            )
+            return conf.mailbox_presentation_compatibility;
+        }
+        [[nodiscard]] QString getFrameGenerationModel() const {
+            VALIDATE_AND_GET_PROFILE(QString::fromUtf8(ls::frameGenerationModelName(ls::GameConfDefaults::frameGenerationModel)))
+            return QString::fromUtf8(ls::frameGenerationModelName(conf.frame_generation_model));
+        }
+        [[nodiscard]] QString getMakoFgMode() const {
+            VALIDATE_AND_GET_PROFILE(QString::fromUtf8(ls::makoFgModeName(ls::GameConfDefaults::makoFgMode)))
+            return QString::fromUtf8(ls::makoFgModeName(conf.mako_fg_mode));
         }
         [[nodiscard]] QString getScalingMethod() const {
             VALIDATE_AND_GET_PROFILE(
@@ -711,8 +739,10 @@ namespace mako::ui {
 
         void powerModeSelected(int mode) {
             if (mode < 0 || mode > 2 || (mode > 0 && !getSeparatePowerModes())) return;
+            if (m_power_mode != mode) m_lossless_scaling_fallback = false;
             m_power_mode = mode;
-            emit refreshUI();
+            if (selectAvailableModels()) { MARK_DIRTY() }
+            else emit refreshUI();
         }
         void separatePowerModesUpdated(bool enabled) {
             if (!isValidProfileIndex()) return;
@@ -725,6 +755,7 @@ namespace mako::ui {
                 base.power_profiles.clear();
                 m_power_mode = 0;
             }
+            selectAvailableModels();
             MARK_DIRTY()
         }
 
@@ -778,6 +809,27 @@ namespace mako::ui {
             conf.swapchain_image_count_compatibility = enabled;
             MARK_DIRTY()
         }
+        void mailboxPresentationCompatibilityUpdated(bool enabled) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.mailbox_presentation_compatibility = enabled;
+            MARK_DIRTY()
+        }
+        void makoFgModeUpdated(const QString& value) {
+            VALIDATE_AND_GET_PROFILE()
+            const auto mode = ls::makoFgModeFromName(value.toStdString());
+            if (!mode) return;
+            conf.mako_fg_mode = *mode;
+            MARK_DIRTY()
+        }
+        void frameGenerationModelUpdated(const QString& value) {
+            VALIDATE_AND_GET_PROFILE()
+            const auto model = ls::frameGenerationModelFromName(value.toStdString());
+            if (!model) return;
+            conf.frame_generation_model = *model;
+            selectAvailableModels();
+            if (conf.ultra_performance) conf.flow_scale = ls::effectiveFlowScale(conf);
+            MARK_DIRTY()
+        }
         void scalingMethodUpdated(const QString& scaling_method) {
             VALIDATE_AND_GET_PROFILE()
             if (conf.scaling_enabled && conf.ultra_performance) return;
@@ -786,6 +838,7 @@ namespace mako::ui {
             );
             if (!parsed) return;
             conf.scaling_method = *parsed;
+            selectAvailableModels();
             MARK_DIRTY()
         }
         void scalingFactorUpdated(float scaling_factor) {
@@ -928,7 +981,7 @@ namespace mako::ui {
             VALIDATE_AND_GET_PROFILE()
             conf.ultra_performance = ultra_performance;
             conf.flow_scale = ultra_performance
-                ? ls::GameConfDefaults::ultraPerformanceFlowScale
+                ? ls::effectiveFlowScale(conf)
                 : ls::GameConfDefaults::flowScale;
             conf.performance_mode = ultra_performance;
             MARK_DIRTY()
@@ -1034,6 +1087,26 @@ namespace mako::ui {
 
         QStringListModel* m_profile_list_model;
         bool m_lossless_scaling_missing{false};
+        bool m_lossless_scaling_fallback{false};
+        enum class ModelInspectionState { Unchecked, Checking, Available, Unavailable, Unknown };
+        struct ModelInspection {
+            QString key;
+            QStringList arguments;
+            ModelInspectionState state{ModelInspectionState::Unchecked};
+            qint64 checkedAt{0};
+        };
+        ModelInspection m_lsfg_inspection;
+        ModelInspection m_ls1_inspection;
+        QString m_model_dll_path;
+        QString m_model_cli;
+        QTimer m_model_inspection_timer{this};
+        QProcess* m_model_inspection_process{nullptr};
+        QString m_model_inspection_request_key;
+        bool m_model_inspecting_fg{false};
+        void initializeModelInspection();
+        void updateModelInspectionKeys();
+        void inspectSelectedModels();
+        bool selectAvailableModels();
         int m_profile_index{-1};
 
         std::vector<QStringListModel*> m_active_in_list_models;

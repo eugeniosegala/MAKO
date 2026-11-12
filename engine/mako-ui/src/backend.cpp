@@ -298,25 +298,62 @@ Backend::Backend(std::filesystem::path procRoot, QString remotePlayHelper, QStri
     connect(&this->m_save_timer, &QTimer::timeout, this, [this] { savePendingChanges(); });
     initializeRemotePlay();
     initializeMangoHud();
+    refreshLosslessScaling();
+    initializeModelInspection();
+}
+
+bool Backend::selectAvailableModels() {
+    if (!isValidProfileIndex()) return false;
+    updateModelInspectionKeys();
+    auto& profile = editingProfile();
+    const bool lsfgSelected = profile.frame_generation_model == ls::FrameGenerationModel::LosslessScaling;
+    const bool ls1Selected = ls::licensedScalingModelRequested(profile.scaling_method);
+    // A missing file can return, as an unmounted SD card does, so the saved choice stays and the Renderer uses MAKO until then.
+    if (m_lossless_scaling_missing) {
+        if (lsfgSelected || ls1Selected) m_lossless_scaling_fallback = true;
+        return false;
+    }
+    bool changed = false;
+    if (lsfgSelected && isLsfgUnavailable()) {
+        profile.frame_generation_model = ls::FrameGenerationModel::MakoFg;
+        changed = true;
+    }
+    if (ls1Selected && isLs1Unavailable()) {
+        profile.scaling_method = ls::ScalingMethod::Mako;
+        changed = true;
+    }
+    if (changed) m_lossless_scaling_fallback = true;
+    return changed;
 }
 
 void Backend::refreshLosslessScaling() {
     bool missing = false;
+    m_model_dll_path.clear();
     try {
         const auto path = m_global.dll.has_value()
             ? std::filesystem::path(*m_global.dll) : ls::findShaderDll();
+        m_model_dll_path = QString::fromStdString(path.string());
         std::error_code error;
         const bool found = std::filesystem::is_regular_file(path, error);
-        missing = !found && (!error || error == std::errc::no_such_file_or_directory);
+        missing = !found || bool(error);
     } catch (const ls::error&) {
         missing = true;
     } catch (const std::filesystem::filesystem_error&) {
-        // A filesystem failure is not proof that the installation is missing.
+        // Disable only the optional choices when their file cannot be checked.
+        missing = true;
     }
-    if (missing != m_lossless_scaling_missing) {
-        m_lossless_scaling_missing = missing;
+    const bool changed = missing != m_lossless_scaling_missing;
+    const bool previousFallback = m_lossless_scaling_fallback;
+    m_lossless_scaling_missing = missing;
+    if (changed) m_lossless_scaling_fallback = false;
+    const bool selected = selectAvailableModels();
+    if (selected) {
+        m_config_dirty = true;
+        m_save_timer.start();
+    }
+    if (changed || selected || previousFallback != m_lossless_scaling_fallback)
         emit refreshUI();
-    }
+    m_model_inspection_timer.start();
 }
 
 void Backend::loadVkBasaltProfiles() {
@@ -571,6 +608,26 @@ void Backend::enableMangoHudUpdated(bool enabled) {
         (getEnableVkBasalt() ? QStringLiteral("vkbasalt") : QString{}));
 }
 
+bool Backend::getMangoHudCountRealFrames() const {
+    if (!isValidProfileIndex()) return false;
+    const auto name = QString::fromStdString(m_profiles.at(static_cast<size_t>(m_profile_index)).name);
+    return m_wrapper_settings_root.value(QStringLiteral("profiles")).toObject()
+        .value(name).toObject().value(QStringLiteral("mangohud_count_real_frames")).toBool(false);
+}
+
+void Backend::mangoHudCountRealFramesUpdated(bool enabled) {
+    if (!isValidProfileIndex() || enabled == getMangoHudCountRealFrames()) return;
+    auto profiles = m_wrapper_settings_root.value(QStringLiteral("profiles")).toObject();
+    const auto name = QString::fromStdString(m_profiles.at(static_cast<size_t>(m_profile_index)).name);
+    auto profile = profiles.value(name).toObject();
+    profile.insert(QStringLiteral("mangohud_count_real_frames"), enabled);
+    profiles.insert(name, profile);
+    m_wrapper_settings_root.insert(QStringLiteral("profiles"), profiles);
+    m_vkbasalt_dirty = true;
+    m_save_timer.start();
+    emit refreshUI();
+}
+
 void Backend::initializeMangoHud() {
     if (m_launcher_helper.isEmpty()) {
         m_launcher_helper = launcherPathForUiDirectory(QCoreApplication::applicationDirPath());
@@ -621,8 +678,11 @@ QString Backend::getLaunchOption() const {
         environment.append(QStringLiteral("VKBASALT_CONFIG_FILE=") +
             shellQuote(QString::fromStdString(vkBasaltConfigPath(index).string())));
     }
-    if (getEnableMangoHud())
+    if (getEnableMangoHud()) {
         environment.append(QStringLiteral("MANGOHUD=1"));
+        if (getMangoHudCountRealFrames())
+            environment.append(QStringLiteral("MAKO_MANGOHUD_REAL_FRAMES=1"));
+    }
     environment.append(QStringLiteral("MAKO_PROFILE=") + shellQuote(
         QString::fromStdString(this->m_profiles.at(index).name)
     ));
@@ -1074,6 +1134,8 @@ bool Backend::applyProfileChange(const std::function<void()>& change,
     const auto selected = m_profile_index;
     const auto power = m_power_mode;
     const auto activeIn = m_active_in_index;
+    const auto selectedName = isValidProfileIndex() ? m_profiles.at(static_cast<size_t>(selected)).name : std::string{};
+    const bool fallback = m_lossless_scaling_fallback;
     std::vector<ProfileFileSnapshot> files;
     bool changed = false;
     try {
@@ -1091,6 +1153,9 @@ bool Backend::applyProfileChange(const std::function<void()>& change,
         for (const auto& path : paths) files.emplace_back(path);
         changed = true;
         change();
+        if (!isValidProfileIndex() || selectedName != m_profiles.at(static_cast<size_t>(m_profile_index)).name || power != m_power_mode)
+            m_lossless_scaling_fallback = false;
+        selectAvailableModels();
         m_config_dirty = true;
         if (!savePendingChanges(false))
             throw std::runtime_error("unable to persist profile operation");
@@ -1108,6 +1173,7 @@ bool Backend::applyProfileChange(const std::function<void()>& change,
         m_profile_index = selected;
         m_power_mode = power;
         m_active_in_index = activeIn;
+        m_lossless_scaling_fallback = fallback;
         m_config_dirty = m_vkbasalt_dirty = m_profile_metadata_dirty = false;
         std::cerr << "MAKO Renderer: profile operation failed: " << error.what() << '\n';
         for (auto iterator = files.rbegin(); changed && iterator != files.rend(); ++iterator) {
@@ -1209,6 +1275,12 @@ bool Backend::deleteProfile() {
 }
 
 Backend::~Backend() {
+    m_model_inspection_timer.stop();
+    if (m_model_inspection_process) {
+        m_model_inspection_process->disconnect(this);
+        m_model_inspection_process->kill();
+        m_model_inspection_process->waitForFinished(1000);
+    }
     m_mangohud_timeout.stop();
     if (m_mangohud_process.state() != QProcess::NotRunning) {
         m_mangohud_process.disconnect(this);

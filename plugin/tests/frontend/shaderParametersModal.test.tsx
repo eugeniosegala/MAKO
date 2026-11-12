@@ -232,6 +232,161 @@ async function open(closeModal = vi.fn(), onReturn = vi.fn()) {
   });
   return closeModal;
 }
+test("the header reports discovery before showing a saved state", async () => {
+  let complete!: (result: { success: boolean; effects: typeof effect[] }) => void;
+  api.get.mockImplementationOnce(
+    () => new Promise((resolve) => {
+      complete = resolve;
+    }),
+  );
+  await open();
+  const status = screen.getByRole("status");
+  expect(status.textContent).toBe("Reading shader options...");
+  expect(status.closest(".mako-shader-editor-header")).toBeTruthy();
+  await act(async () => {
+    complete({ success: true, effects: [effect] });
+  });
+  expect(screen.getByRole("status")).toBe(status);
+  expect(status.textContent).toBe("Saved to this profile and applied live.");
+});
+
+test("one stationary header status covers debounce, serialized saves and hidden controls", async () => {
+  const completions: ((result: { success: boolean }) => void)[] = [];
+  api.set.mockImplementation(
+    () => new Promise((resolve) => {
+      completions.push(resolve);
+    }),
+  );
+  await open();
+  const status = screen.getByRole("status");
+  const slider = screen.getByRole("slider");
+  fireEvent.change(slider, { target: { value: "0.6" } });
+  // Waiting for debounce is already unsaved, even before the RPC starts.
+  expect(status.textContent).toBe("Saving...");
+  expect(api.set).not.toHaveBeenCalled();
+  expect(screen.queryByText("Saved to this profile and applied live.")).toBeNull();
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(350);
+  });
+  fireEvent.change(slider, { target: { value: "0.9" } });
+  fireEvent.click(screen.getByText("Hide controls"));
+  expect(screen.getByRole("status")).toBe(status);
+  expect(status.textContent).toBe("Saving...");
+  await act(async () => {
+    completions[0]({ success: true });
+  });
+  expect(api.set).toHaveBeenCalledTimes(2);
+  expect(api.set).toHaveBeenLastCalledWith("Game A", { strength: 0.9 });
+  expect(status.textContent).toBe("Saving...");
+  await act(async () => {
+    completions[1]({ success: true });
+    await vi.advanceTimersByTimeAsync(150);
+  });
+  expect(screen.getByRole("status")).toBe(status);
+  expect(status.textContent).toBe("Saved to this profile and applied live.");
+  fireEvent.click(screen.getByText("Show controls"));
+  expect(status.closest(".mako-shader-editor-header")).toBeTruthy();
+  expect(
+    (screen.getByRole("textbox", { name: "Strength" }) as HTMLInputElement).value,
+  ).toBe("0.9");
+  // The queued edit's old debounce timer cannot produce another write or status.
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(350);
+  });
+  expect(api.set).toHaveBeenCalledTimes(2);
+  api.set.mockResolvedValue({ success: true });
+});
+
+test("fast saves keep Saving visible for 500 ms including the debounce interval", async () => {
+  await open();
+  fireEvent.change(screen.getByRole("slider"), { target: { value: "0.6" } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(350);
+  });
+  expect(api.set).toHaveBeenCalledExactlyOnceWith("Game A", { strength: 0.6 });
+  expect(screen.getByRole("status").textContent).toBe("Saving...");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(149);
+  });
+  expect(screen.getByRole("status").textContent).toBe("Saving...");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1);
+  });
+  expect(screen.getByRole("status").textContent).toBe(
+    "Saved to this profile and applied live.",
+  );
+});
+
+test("an edit during the minimum display interval cancels the old completion timer", async () => {
+  await open();
+  const slider = screen.getByRole("slider");
+  fireEvent.change(slider, { target: { value: "0.6" } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(400);
+  });
+  fireEvent.change(slider, { target: { value: "0.9" } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(100);
+  });
+  expect(screen.getByRole("status").textContent).toBe("Saving...");
+  expect(api.set).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(250);
+  });
+  expect(api.set).toHaveBeenLastCalledWith("Game A", { strength: 0.9 });
+  expect(api.set).toHaveBeenCalledTimes(2);
+  expect(screen.getByRole("status").textContent).toBe(
+    "Saved to this profile and applied live.",
+  );
+});
+
+test("slow saves finish their status immediately once the real write completes", async () => {
+  let complete!: (result: { success: boolean }) => void;
+  api.set.mockImplementationOnce(
+    () => new Promise((resolve) => {
+      complete = resolve;
+    }),
+  );
+  await open();
+  fireEvent.change(screen.getByRole("slider"), { target: { value: "0.6" } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000);
+  });
+  expect(screen.getByRole("status").textContent).toBe("Saving...");
+  await act(async () => {
+    complete({ success: true });
+  });
+  expect(screen.getByRole("status").textContent).toBe(
+    "Saved to this profile and applied live.",
+  );
+});
+
+test("the minimum status duration does not delay closing or repeat the saved edit", async () => {
+  const close = await open();
+  fireEvent.change(screen.getByRole("slider"), { target: { value: "0.6" } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(350);
+  });
+  expect(screen.getByRole("status").textContent).toBe("Saving...");
+  await act(async () => {
+    fireEvent.click(screen.getByText("Close"));
+  });
+  expect(close).toHaveBeenCalledTimes(1);
+  expect(api.set).toHaveBeenCalledTimes(1);
+});
+
+test("unmount cancels the pending status timer", async () => {
+  await open();
+  fireEvent.change(screen.getByRole("slider"), { target: { value: "0.6" } });
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(350);
+  });
+  expect(screen.getByRole("status").textContent).toBe("Saving...");
+  expect(vi.getTimerCount()).toBe(1);
+  cleanup();
+  expect(vi.getTimerCount()).toBe(0);
+});
+
 test("discovery errors never claim the selected shaders have no editable parameters", async () => {
   api.get.mockResolvedValue({
     success: false,
@@ -246,6 +401,8 @@ test("discovery errors never claim the selected shaders have no editable paramet
     screen.queryByText("No editable parameters in the selected shaders."),
   ).toBeNull();
   expect(screen.queryByRole("slider")).toBeNull();
+  expect(screen.queryByText("Saved to this profile and applied live.")).toBeNull();
+  expect(screen.queryByText("Saving...")).toBeNull();
 });
 test("successful discovery without parameters retains the empty message", async () => {
   api.get.mockResolvedValue({ success: true, effects: [] });
@@ -394,10 +551,21 @@ test("failed saves stay visible and retry without discarding the edit", async ()
   });
   expect(close).not.toHaveBeenCalled();
   expect(screen.getByRole("alert").textContent).toContain("disk full");
+  expect(screen.getByRole("status").textContent).toBe("Changes not saved.");
+  expect(screen.queryByText("Saved to this profile and applied live.")).toBeNull();
+  expect(screen.queryByText("Saving...")).toBeNull();
   await act(async () => {
     fireEvent.click(screen.getByText("Retry save"));
   });
   expect(api.set).toHaveBeenLastCalledWith("Game A", { strength: 0.8 });
+  expect(screen.getByRole("status").textContent).toBe("Saving...");
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(500);
+  });
+  expect(screen.getByRole("status").textContent).toBe(
+    "Saved to this profile and applied live.",
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
 });
 test("numeric input permits intermediate text and commits a valid value on blur", async () => {
   await open();

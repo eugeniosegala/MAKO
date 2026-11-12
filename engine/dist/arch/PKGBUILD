@@ -16,7 +16,7 @@ pkgrel=1
 pkgdesc="Frame generation and spatial scaling Vulkan layers for Linux games"
 arch=('x86_64')
 url="https://github.com/eugeniosegala/MAKO"
-license=('GPL-3.0-or-later')
+license=('GPL-3.0-or-later' 'LicenseRef-MAKO-FG')
 install="${pkgname}.install"
 
 # Runtime dependencies mapped to the DT_NEEDED entries of the shipped binaries.

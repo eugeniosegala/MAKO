@@ -2,6 +2,9 @@
 
 #pragma once
 
+#include "mako-backend/device_identity.hpp"
+
+#include <chrono>
 #include <cstdint>
 #include <exception>
 #include <filesystem>
@@ -33,6 +36,7 @@ namespace mako::backend {
     class [[gnu::visibility("default")]] ContextImpl;
     class [[gnu::visibility("default")]] InstanceImpl;
 
+    class MakoFG;
     using Context = ContextImpl;
 
     /// Diagnostic timings for the most recent completed generated-frame batch.
@@ -79,11 +83,12 @@ namespace mako::backend {
         ~error() override;
     };
 
-    /// Function type for picking a device based on its name and IDs
+    /// Function type for picking a device based on its name and IDs, formatted
+    /// by device_identity.hpp so they compare equal to the layer's own.
     using DevicePicker = std::function<bool(
         const std::string& deviceName,
-        std::pair<const std::string&, const std::string&> ids, // (vendor ID, device ID) 0xXXXX format
-        const std::optional<std::string>& pci // (bus:slot.func) if available, no padded zeros
+        std::pair<const std::string&, const std::string&> ids, // (vendor ID, device ID): deviceIdText()
+        const std::optional<std::string>& pci // pciAddressText(), if available
     )>;
 
     ///
@@ -97,13 +102,16 @@ namespace mako::backend {
         /// @param devicePicker Function that picks a physical device based on some identifiers.
         /// @param shaderDllPath Path to the Lossless.dll file to load shaders from.
         /// @param allowLowPrecision Request supported FP16 model shaders; false requires FP32.
+        /// @param gameDriver The game's driver, which a separate program must match to share its frames.
         ///
         /// @throws backend::error on failure
         ///
         Instance(
             const DevicePicker& devicePicker,
             const std::filesystem::path& shaderDllPath,
-            bool allowLowPrecision
+            bool allowLowPrecision,
+            std::optional<std::filesystem::path> modelPackage = std::nullopt,
+            const std::optional<DriverIdentity>& gameDriver = std::nullopt
         );
 
         ///
@@ -148,6 +156,7 @@ namespace mako::backend {
         ///        with half-size motion analysis, bounded at quarter Flow Scale.
         ///        Source/output extents and the selected model/arithmetic stay unchanged.
         ///        scRGB and SDR retain their existing model path.
+        /// @param motionPeriod MAKO FG solves motion on one pair in this many.
         ///
         /// @throws backend::error on failure
         ///
@@ -157,7 +166,8 @@ namespace mako::backend {
             int syncFd,
             uint32_t width, uint32_t height,
             FrameEncoding encoding, float flow, bool perf,
-            bool reducedHdrPrecision = false
+            bool reducedHdrPrecision,
+            int motionPeriod
         );
 
         /// Return whether the backend device can import and write the packed
@@ -195,9 +205,13 @@ namespace mako::backend {
         ///
         /// @param context Context to use.
         /// @param timestamps Normalized positions between the previous and current real frame.
+        /// @param realFrameInterval Time between those two real frames, zero when unknown.
+        ///        MAKO FG reuses motion (MAKO FG Mode) only while these intervals stay even;
+        ///        zero keeps reuse as though real frames were evenly spaced. LSFG ignores it.
         /// @throws backend::error on failure
         ///
-        void scheduleFrames(Context& context, std::span<const float> timestamps);
+        void scheduleFrames(Context& context, std::span<const float> timestamps,
+            std::chrono::nanoseconds realFrameInterval = {});
 
         ///
         /// Update temporal model history without generating output frames.
@@ -208,12 +222,32 @@ namespace mako::backend {
         /// expensive per-output generation passes are skipped.
         ///
         /// @param context Context to advance.
+        /// @param realFrameInterval Time since the previous real frame, as for scheduleFrames.
         ///
-        void scheduleFrameHistory(Context& context);
+        void scheduleFrameHistory(Context& context,
+            std::chrono::nanoseconds realFrameInterval = {});
 
         /// Check whether the context's previously submitted work has completed
         /// without blocking.
         [[nodiscard]] bool contextReady(const Context& context) const;
+
+        /// Set what releases application work waiting on the context's
+        /// timeline, should its separate frame generation program stop. It can
+        /// run on another thread. Closing the context withdraws it first.
+        void setContextLossHandler(Context& context, std::function<void()> handler);
+
+        /// Check whether the context's separate frame generation program
+        /// stopped, so its submitted work will never finish.
+        [[nodiscard]] bool contextLost(const Context& context) const;
+
+        /// Replace the separate program behind a lost context. The caller then
+        /// rebuilds its context. False once the restart limit is reached.
+        /// @throws backend::error when the program cannot start
+        [[nodiscard]] bool restartFrameGeneration(const Context& context);
+
+        /// Whether frame generation runs in a separate program, so that a
+        /// readiness poll costs a round trip.
+        [[nodiscard]] bool usesSeparateProgram() const;
 
         ///
         /// Close a frame generation context
@@ -232,6 +266,7 @@ namespace mako::backend {
         void collectRetiredContexts();
 
         std::unique_ptr<InstanceImpl> m_impl;
+        std::unique_ptr<MakoFG> m_fg;
 
         std::vector<std::unique_ptr<Context>> m_contexts;
         std::vector<std::unique_ptr<Context>> m_retiredContexts;

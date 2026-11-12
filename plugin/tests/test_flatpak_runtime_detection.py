@@ -57,6 +57,10 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
         # case explicitly overrides this boundary. Host detection itself has
         # dedicated coverage in test_dual_arch_installation.py.
         self.service._host_architecture_supported = lambda: True
+        # Runtime records must never reach the real home directory.
+        records = tempfile.TemporaryDirectory()
+        self.addCleanup(records.cleanup)
+        self.service.runtime_state_file = Path(records.name) / "flatpak-runtimes.json"
 
     def test_runtime_descriptor_owns_bundle_and_extension_identity(self):
         self.assertEqual(
@@ -177,6 +181,12 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
                     ),
                     2,
                 )
+                # CMake's files inside engine/ would mark the build
+                # fingerprint dirty, so both layers build in an ignored tree.
+                self.assertEqual(manifest.count("    builddir: true\n"), 2)
+                self.assertEqual(
+                    manifest.count("buildsystem: cmake-ninja\n"), 2
+                )
                 self.assertIn(
                     f"MAKO_LAYER_LIBRARY_PATH={FLATPAK_EXTENSION_PREFIX}"
                     f"/lib64/{LIB_FILENAME}",
@@ -198,6 +208,14 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
             manifest == normalized_manifests[0]
             for manifest in normalized_manifests[1:]
         ))
+        repository = Path(__file__).resolve().parents[2]
+        ignored = subprocess.run(
+            ["git", "check-ignore", "-q",
+             "engine/_flatpak_build/CMakeFiles/CMakeConfigureLog.yaml"],
+            cwd=repository,
+            check=False,
+        )
+        self.assertEqual(ignored.returncode, 0)
 
     def test_runtime_status_preserves_public_fields_and_order(self):
         self.service.check_flatpak_available = lambda: True
@@ -293,10 +311,62 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
                         expected = ["install", "--user", "--noninteractive"]
                         if installed:
                             expected.append("--reinstall")
-                        self.assertEqual(calls[-1], [*expected, str(bundle)])
+                        self.assertEqual(
+                            [call for call in calls if call[0] == "install"][-1],
+                            [*expected, str(bundle)],
+                        )
                 self.assertTrue(self.service.uninstall_extension("26.08")["success"])
                 self.assertEqual(calls[-1], ["uninstall", "--user", "--noninteractive",
                                            FLATPAK_RUNTIME_BUNDLES["26.08"].extension_id])
+
+    def test_installed_runtimes_are_recorded_and_checked_against_the_bundles(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            package = Path(temp_dir)
+            (package / "bin").mkdir()
+            for version in ("25.08", "26.08"):
+                (package / "bin" / FLATPAK_RUNTIME_BUNDLES[version].filename).write_bytes(
+                    f"bundle {version}".encode())
+            commits = {"25.08": "1" * 64, "26.08": "2" * 64}
+
+            def run(args, **_kwargs):
+                if args[:3] == ["info", "--user", "--show-commit"]:
+                    version = args[3].rsplit("/", 1)[1]
+                    return _result(commits[version] + "\n")
+                if args[:2] == ["list", "--user"]:
+                    return _result("".join(
+                        f"{FLATPAK_EXTENSION_NAME}\t{version}\t{commit[:12]}\n"
+                        for version, commit in commits.items()
+                    ) + "org.example.Unrelated\t26.08\tffffffffffff\n")
+                return _result()
+
+            self.service.check_flatpak_available = lambda: True
+            self.service._run_flatpak_command = run
+            self.service._is_extension_installed = lambda version: version in commits
+            with patch("py_modules.mako_plugin.flatpak_service.PLUGIN_ROOT", package):
+                # 25.08 predates the records, so only an update can vouch for it.
+                self.assertEqual(self.service.stale_runtime_versions(), ["25.08", "26.08"])
+                self.assertTrue(self.service.refresh_installed_extensions()["success"])
+                self.assertEqual(self.service.stale_runtime_versions(), [])
+                record = json.loads(self.service.runtime_state_file.read_text())
+                self.assertEqual(record["runtimes"]["26.08"]["commit"], commits["26.08"])
+
+                commits["26.08"] = "3" * 64  # replaced outside MAKO Decky
+                self.assertEqual(self.service.stale_runtime_versions(), ["26.08"])
+                self.assertTrue(self.service.install_extension("26.08")["success"])
+                self.assertEqual(self.service.stale_runtime_versions(), [])
+
+                bundle = package / "bin" / FLATPAK_RUNTIME_BUNDLES["25.08"].filename
+                bundle.write_bytes(b"a newer plugin's 25.08 bundle")
+                self.assertEqual(self.service.stale_runtime_versions(), ["25.08"])
+
+                self.assertTrue(self.service.uninstall_extension("26.08")["success"])
+                record = json.loads(self.service.runtime_state_file.read_text())
+                self.assertNotIn("26.08", record["runtimes"])
+
+                self.service.runtime_state_file.write_text("not json")
+                self.assertEqual(self.service.stale_runtime_versions(), ["25.08", "26.08"])
+                self.service._host_architecture_supported = lambda: False
+                self.assertEqual(self.service.stale_runtime_versions(), [])
 
     def test_direct_freedesktop_runtime_uses_its_branch(self):
         for version in SUPPORTED_FLATPAK_RUNTIME_VERSIONS:

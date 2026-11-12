@@ -13,7 +13,8 @@ This map identifies code owners and call boundaries. The behavior contracts rema
 | Fixed and Adaptive decisions | `mako-render/src/adaptive_scheduler.*`, `presentation_policy.hpp`, and `generated_frame_plan.hpp` | Chooses generated work, output timestamps, and pacing ownership before Vulkan submission. |
 | Swapchain state and transitions | `mako-render/src/swapchain/` | Owns the applied profile, private resources, recovery state, and game-owned swapchain boundary. |
 | Spatial reconstruction | `mako-render/src/spatial_scaler.*` and `spatial_scaling_policy.hpp` | Chooses geometry and records private scaling work without changing scheduler evidence. |
-| Model execution | `mako-backend/` | Owns LSFG and LS1 resources and compute work behind the Renderer context. |
+| Model execution | `mako-backend/` | Owns LSFG and LS1 resources and compute work behind the Renderer context; `context.hpp` defines the common context interface, and `mako_fg.cpp` is the client for the separate [MAKO FG](MAKO-FG.md) program. |
+| Qt model availability | `mako-ui/src/model_inspection.cpp` with `Backend` | Runs the canonical CLI inspector asynchronously; keeps per-family results separate, rejects stale responses, and uses the normal profile writer for confirmed unavailable choices. |
 | Shader effects | The optional vkBasalt layer selected by `mako-launch` and MAKO Decky wrappers | Runs as a separate Vulkan layer; Renderer scaling and Frame Generation do not own its effect chain. |
 | Native Steam Remote Play | `scripts/mako_remote_play/`, `scripts/mako-remote-play`, and `mako-ui/src/remote_play.cpp` | One Python owner handles Steam file safety. Qt invokes the packaged command asynchronously; Decky bundles byte-identical bindings. Existing launchers and Renderer configuration owners retain feature and live-update policy. |
 

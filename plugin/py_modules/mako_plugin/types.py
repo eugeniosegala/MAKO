@@ -2,7 +2,7 @@
 Type definitions for MAKO Decky responses.
 """
 
-from typing import Literal, TypedDict, Optional, List
+from typing import Literal, TypedDict, Optional, List, NotRequired
 from .config_schema import ConfigurationData
 from .shader_parameters import ShaderEffectParameters
 
@@ -62,6 +62,7 @@ class InstallationCheckResponse(TypedDict):
     engine_update_required: bool
     host_architecture: Optional[str]
     host_architecture_supported: bool
+    system_renderer_notice: Optional[str]
     error: Optional[str]
 
 
@@ -217,6 +218,7 @@ class RuntimeProfileSnapshot(TypedDict):
     gpu: Optional[str]
     multiplier: int
     frame_generation_provisioned: bool
+    frame_generation_model: NotRequired[str]
     frame_generation_enabled: bool
     scaling_enabled: bool
     scaling_method: str
@@ -282,6 +284,12 @@ class RuntimeSpatialScalingState(TypedDict):
     non_supersampling_factor_ceiling: Optional[float]
 
 
+class RuntimeFrameGenerationUnavailable(TypedDict):
+    """Why Frame Generation cannot run for a context."""
+
+    reason: str
+
+
 class RuntimeContextState(TypedDict):
     """One validated active Renderer context status record."""
 
@@ -296,6 +304,7 @@ class RuntimeContextState(TypedDict):
     pending: RuntimePendingState
     applied_generated_capacity: int
     frame_generation_active: bool
+    frame_generation_unavailable: Optional[RuntimeFrameGenerationUnavailable]
     gpu_headroom_state: str
     spatial_scaling: RuntimeSpatialScalingState
     requested: RuntimeProfileSnapshot

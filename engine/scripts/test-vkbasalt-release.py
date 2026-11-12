@@ -156,7 +156,7 @@ class VkBasaltReleaseTests(unittest.TestCase):
             manifests = list((root / "flatpak").glob("*.yml"))
             self.assertTrue(manifests)
             for manifest in manifests:
-                self.assertNotIn("path: ../../../..", manifest.read_text())
+                self.assertNotIn("path: ../../../", manifest.read_text())
                 self.assertIn(str(MODULE.ENGINE_ROOT.parent), manifest.read_text())
 
     def test_derives_pin_from_verified_archive(self) -> None:

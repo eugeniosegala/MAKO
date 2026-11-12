@@ -50,6 +50,14 @@ Use `--dll /path/to/Lossless.dll` when automatic discovery is unavailable and `-
 
 The spatial command runs the production scaler and fails if an LS1 request falls back to MAKO. The combined command reconstructs each endpoint directly into a presentation-sized LSFG source and scores the generated result against a presentation-resolution reference. It does not exercise the high-resolution post-Frame Generation placement or a WSI swapchain; those remain MAKO Gym boundaries.
 
+## Saved real-frame pairs
+
+Use `quality-regression --input-pair INPUT_DIRECTORY --output NEW_OUTPUT_DIRECTORY --interpolation 0.5` to run the same production backend on retained real frames. The input directory contains `previous.ppm`, `current.ppm` and `reference.ppm`, all with identical extents. Inputs use canonical binary RGB8 PPM: three header lines (`P6`, `WIDTH HEIGHT`, `255`), followed by exactly three bytes per pixel; comments, other depths, symlinks, trailing bytes, extents above 16384 per axis or 16 million pixels are rejected. No resizing or colour conversion is performed. The target reference is used only for scoring, never passed to inference.
+
+Select the licensed light model with `--performance-mode --dll /absolute/path/Lossless.dll`, or use the explicit development MAKO FG package override described in [MAKO FG](MAKO-FG.md). Preserve the actual backend/precision inspection log and executable, package, input, and DLL hashes; keep the licensed DLL in its installed location. Frame preparation, comparison orchestration, regional/temporal analysis and retained hardware evidence belong to MAKO Gym. Output contains the input/reference copies and generated PPM for exact offline comparison. The command reports `MAKO Renderer: image-pair result=OBSERVED`; procedural pass/fail thresholds are not applied to arbitrary gameplay. A fresh output directory is required and partial failures are retained.
+
+This SDR single-pair mode rejects procedural scenes, temporal sequence plans, HDR and explicit extent overrides. It primes history with the first endpoint, requests the selected intermediate time, and waits for readback; it does not measure GPU throughput, continuous temporal-state behavior or display cadence. Compare all three target times for 30→120 FPS; midpoint-only results do not qualify 4×. Use matched input bytes and generated-time selection across backends.
+
 ## Temporal frame-generation sequences
 
 `quality-regression --sequence-plan` keeps one backend context alive across 12–240 source steps. Separate source steps with semicolons. Each step is `history` or one to four strictly increasing interpolation positions between zero and one, separated by commas. The context allocates the maximum requested output count once; the sequence exercises changing output counts, timestamps, and history without replacing it. `--interpolation` belongs to the ordinary single-pair mode; the sequence plan supplies every temporal interpolation position.

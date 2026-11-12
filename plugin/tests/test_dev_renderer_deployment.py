@@ -1,6 +1,7 @@
 """Exercise direct deployment against competing native installation layouts."""
 
 import importlib.util
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ import unittest
 
 from py_modules.mako_plugin import constants as paths
 from py_modules.mako_plugin.layer_manifests import manifest_library
+from py_modules.mako_plugin.development_renderer import RECEIPT_PATH, read_development_receipt
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
@@ -37,6 +39,8 @@ class DevRendererDeploymentTests(unittest.TestCase):
             "py_modules/mako_plugin/package_paths.py",
             "py_modules/mako_plugin/constants.py",
             "py_modules/mako_plugin/layer_manifests.py",
+            "py_modules/mako_plugin/development_renderer.py",
+            "py_modules/mako_plugin/managed_files.py",
             "defaults/build_flavor.dev.py", "plugin.json",
         ):
             target = self.plugin / relative
@@ -46,11 +50,17 @@ class DevRendererDeploymentTests(unittest.TestCase):
         self.write(self.plugin / "scripts/generate_ts_schema.py", "")
         self.write(self.installed_plugin / "plugin.json", (PLUGIN_ROOT / "plugin.json").read_text())
         self.write(self.installed_plugin / "dist/index.js", "old frontend")
+        self.write(self.installed_plugin / "package.json", '{"version": "test"}')
+        (self.installed_plugin / "bin").mkdir()
         self.write(self.root / "bin/node", "#!/bin/sh\nexit 0\n", executable=True)
         self.write(self.engine / "scripts/build-steamos-dev.sh", """#!/bin/sh
 printf '%s\\n' "$@" > "$(dirname "$0")/build-args.txt"
 """, executable=True)
+        shutil.copy2(PLUGIN_ROOT.parent / 'engine/scripts/mako-fg-package.py',
+                     self.engine / 'scripts/mako-fg-package.py')
+        self.release('1.7', 'synthetic active MAKO FG weights')
         self.write(self.engine / "scripts/mako-vrr-lease", "#!/bin/sh\nexit 0\n", executable=True)
+        self.write(self.engine / "vkbasalt-fixture/bin/mako-shader-tool", "#!/bin/sh\n# new shader tool\nexit 0\n", executable=True)
         self.built_cli = self.engine / "build/steamos-dev/mako-cli" / paths.CLI_FILENAME
         self.installed_cli = self.home / paths.CLI_DIR / paths.CLI_FILENAME
         self.write(self.built_cli, "#!/bin/sh\n# new model inspector\nexit 0\n", executable=True)
@@ -71,7 +81,7 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
             self.env.pop(name, None)
         for bits in (64, 32):
             build = self.build_dir(bits)
-            self.write(build / paths.LIB_FILENAME, f"new FG {bits}")
+            self.write(build / paths.LIB_FILENAME, self.fg_layer(bits))
             self.write(build / paths.SPATIAL_SCALING_LIB_FILENAME, f"new spatial {bits}")
             renderer_name = paths.JSON_FILENAME if bits == 64 else paths.JSON32_FILENAME
             self.write(build / "private-manifest" / renderer_name, json.dumps({
@@ -99,6 +109,18 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
         if executable:
             path.chmod(0o755)
 
+    def release(self, version, weights):
+        """An open-weight MAKO FG release as MAKO FG's release command mirrors it."""
+        self.model_weights = weights
+        self.write(self.engine / f'models/mako-fg/V{version}/model/weights.bin', weights)
+        self.write(self.engine / f'models/mako-fg/V{version}/MANIFEST.json', json.dumps({'format': 2, 'files': [
+            {'name': 'model/weights.bin', 'sha256': hashlib.sha256(weights.encode()).hexdigest()}]}))
+        self.write(self.engine / 'models/mako-fg/versions.json', json.dumps({
+            'active': version, 'versions': [{'version': version, 'folder': f'V{version}'}]}))
+
+    def fg_layer(self, bits):
+        return f'new FG {bits}\n'
+
     def manifest(self, path, library, identity=paths.MAKO_LAYER_NAME):
         self.write(path, json.dumps({"layer": {"name": identity, "library_path": str(library)}}))
 
@@ -111,7 +133,12 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
         return self.home / ".local" / ("lib" if bits == 64 else "lib32")
 
     def prepare(self, owner):
-        self.write(self.installed_cli, "#!/bin/sh\n# old model inspector\nexit 1\n", executable=True)
+        self.selected_bin = self.home / (".local/bin" if owner == "standalone" else paths.CLI_DIR)
+        self.inactive_bin = self.home / (paths.CLI_DIR if owner == "standalone" else ".local/bin")
+        self.installed_cli = self.selected_bin / paths.CLI_FILENAME
+        for directory in (self.selected_bin, self.inactive_bin):
+            for filename in (paths.CLI_FILENAME, paths.SHADER_TOOL_FILENAME, paths.VRR_LEASE_FILENAME):
+                self.write(directory / filename, f"#!/bin/sh\n# old {directory} {filename}\nexit 1\n", executable=True)
         for bits in (64, 32):
             for installed_owner in ("decky", "standalone"):
                 libdir = self.library_dir(installed_owner, bits)
@@ -141,6 +168,8 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                     state = self.home / paths.MAKO_ROOT / paths.ACTIVE_RENDERER_STATE_FILENAME
                     original_state = state.read_bytes()
                     original_cli = self.installed_cli.read_bytes()
+                    inactive_tools = {path: path.read_bytes() for path in self.inactive_bin.iterdir()}
+                    original_shader = (self.selected_bin / paths.SHADER_TOOL_FILENAME).read_bytes()
                     original_manifest = (self.build_dir(bits) / "private-scaling-manifest" /
                         (paths.SPATIAL_SCALING_JSON_FILENAME if bits == 64 else paths.SPATIAL_SCALING_JSON32_FILENAME))
                     original_build_manifest = original_manifest.read_bytes()
@@ -157,16 +186,28 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                         self.assertEqual(self.installed_cli.read_bytes(), self.built_cli.read_bytes())
                         self.assertTrue(os.access(self.installed_cli, os.X_OK))
                         self.assertIn("verified installed 64-bit CLI", result.stdout)
+                        self.assertEqual((self.selected_bin / paths.SHADER_TOOL_FILENAME).read_bytes(),
+                                         (self.engine / "vkbasalt-fixture/bin/mako-shader-tool").read_bytes())
                     else:
                         self.assertEqual(self.installed_cli.read_bytes(), original_cli)
+                        self.assertEqual((self.selected_bin / paths.SHADER_TOOL_FILENAME).read_bytes(), original_shader)
+                    self.assertEqual((self.selected_bin / paths.VRR_LEASE_FILENAME).read_bytes(),
+                                     (self.engine / "scripts/mako-vrr-lease").read_bytes())
+                    for path, content in inactive_tools.items():
+                        self.assertEqual(path.read_bytes(), content)
                     _, libraries = selection.selected_libraries(self.home, bits)
-                    for library, content in zip(libraries, (f"new FG {bits}", f"new spatial {bits}", f"new vkBasalt {bits}")):
+                    for library, content in zip(libraries, (self.fg_layer(bits), f"new spatial {bits}", f"new vkBasalt {bits}")):
                         self.assertEqual(library.read_text(), content)
                     other_owner = "decky" if owner == "standalone" else "standalone"
                     self.assertEqual((self.library_dir(other_owner, bits) / paths.LIB_FILENAME).read_text(), f"old {other_owner} {bits}")
                     other_bits = 32 if bits == 64 else 64
                     self.assertEqual((self.library_dir(owner, other_bits) / paths.LIB_FILENAME).read_text(), f"old {owner} {other_bits}")
                     self.assertEqual(state.read_bytes(), original_state)
+                    receipt = read_development_receipt(self.installed_plugin, state)
+                    self.assertIsNotNone(receipt)
+                    for library in libraries:
+                        self.assertEqual(receipt["files"][str(library)],
+                                         hashlib.sha256(library.read_bytes()).hexdigest())
                     self.assertEqual(original_manifest.read_bytes(), original_build_manifest)
                     self.assertEqual(renderer_source.read_bytes(), original_renderer_manifest)
                     expected = json.loads(original_renderer_manifest)
@@ -174,6 +215,103 @@ shutil.copytree(source, sys.argv[sys.argv.index('--stage-native') + 1], dirs_exi
                     for directory in (paths.VULKAN_LAYER_DIR, paths.USER_VULKAN_LAYER_DIR):
                         self.assertEqual(json.loads((self.home / directory / renderer_name).read_text()), expected)
                     self.assertEqual((self.home / ".config/mako-render/conf.toml").read_text(), "keep profiles")
+
+    def test_sequential_architecture_deployments_retain_both_verified_overlays(self):
+        self.prepare("decky")
+        for bits in (64, 32):
+            result = self.deploy(bits)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        receipt = read_development_receipt(
+            self.installed_plugin, self.home / paths.MAKO_ROOT / paths.ACTIVE_RENDERER_STATE_FILENAME)
+        self.assertEqual(len(receipt["files"]), 6)
+        for bits in (64, 32):
+            for library in selection.selected_libraries(self.home, bits)[1]:
+                self.assertEqual(receipt["files"][str(library)], selection.sha256(library))
+
+    def test_failed_deployment_does_not_record_an_overlay(self):
+        self.prepare("decky")
+        self.built_cli.unlink()
+        self.assertNotEqual(self.deploy(64).returncode, 0)
+        self.assertFalse((self.installed_plugin / RECEIPT_PATH).exists())
+
+    def test_deployment_records_the_copied_mako_fg_program_and_model(self):
+        self.prepare("decky")
+        release = self.engine / "models/mako-fg/V1.7"
+        self.write(release / "runtime/x64/bin/mako-fg-host", "synthetic FG host")
+        self.write(release / "version.json", '{"version": "1.7"}')
+        result = self.deploy(64)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        receipt = read_development_receipt(
+            self.installed_plugin, self.home / paths.MAKO_ROOT / paths.ACTIVE_RENDERER_STATE_FILENAME)
+        for relative in ("mako-fg-host", "version.json", "model/weights.bin"):
+            installed = self.library_dir("decky", 64) / "mako-fg" / relative
+            self.assertEqual(receipt["files"][str(installed)], selection.sha256(installed))
+
+    def test_new_package_drops_receipts_for_previously_deployed_files(self):
+        self.prepare("decky")
+        self.assertEqual(self.deploy(64).returncode, 0)
+        self.write(self.installed_plugin / "package.json", '{"version": "next"}')
+        self.assertEqual(self.deploy(32).returncode, 0)
+        receipt = read_development_receipt(
+            self.installed_plugin, self.home / paths.MAKO_ROOT / paths.ACTIVE_RENDERER_STATE_FILENAME)
+        self.assertEqual(len(receipt["files"]), 3)
+        self.assertNotIn(str(self.library_dir("decky", 64) / paths.LIB_FILENAME), receipt["files"])
+
+    def test_qt_deploy_is_explicit_and_verified(self):
+        self.prepare("decky")
+        built_ui = self.engine / "build/steamos-dev/mako-ui/mako-ui"
+        self.write(built_ui, "#!/bin/sh\n# selected Qt build\nexit 0\n", executable=True)
+        result = self.deploy(64, "--ui")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual((self.home / ".local/bin/mako-ui").read_bytes(), built_ui.read_bytes())
+        self.assertIn("verified installed Qt app", result.stdout)
+        self.assertIn("--with-ui", (self.engine / "scripts/build-args.txt").read_text())
+
+    def test_tool_verification_ignores_a_matching_inactive_cli(self):
+        self.prepare("standalone")
+        shutil.copy2(self.built_cli, self.inactive_bin / paths.CLI_FILENAME)
+        with self.assertRaisesRegex(ValueError, "Selected native tool differs"):
+            selection.verify_tools(self.home, [
+                self.built_cli, self.engine / "vkbasalt-fixture/bin/mako-shader-tool",
+                self.engine / "scripts/mako-vrr-lease",
+            ])
+
+    def test_missing_shader_tool_retires_only_the_selected_owners_copy(self):
+        self.prepare("standalone")
+        (self.engine / "vkbasalt-fixture/bin/mako-shader-tool").unlink()
+        inactive = self.inactive_bin / paths.SHADER_TOOL_FILENAME
+        original = inactive.read_bytes()
+        result = self.deploy(64)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse((self.selected_bin / paths.SHADER_TOOL_FILENAME).exists())
+        self.assertEqual(inactive.read_bytes(), original)
+
+    def test_a_layer_containing_mako_fg_in_either_architecture_stops_before_installation(self):
+        for bits in (64, 32):
+            with self.subTest(bits=bits):
+                self.prepare('standalone')
+                self.write(self.build_dir(bits) / paths.LIB_FILENAME, f'renderer with {self.model_weights}')
+                result = self.deploy(bits)
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn('must stay a separate program', result.stderr)
+                self.assertEqual((self.library_dir('standalone', bits) / paths.LIB_FILENAME).read_text(),
+                                 f'old standalone {bits}')
+                self.assertEqual((self.installed_plugin / 'dist/index.js').read_text(), 'old frontend')
+                self.write(self.build_dir(bits) / paths.LIB_FILENAME, self.fg_layer(bits))
+
+    def test_deploy_follows_a_future_active_release_without_script_changes(self):
+        self.prepare('standalone')
+        self.release('2.0', 'synthetic future MAKO FG weights')
+        result = self.deploy(64)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('MAKO FG: release 2.0 verified for', result.stdout)
+
+    def test_missing_qt_app_fails_before_replacing_renderer(self):
+        self.prepare("decky")
+        before = (self.library_dir("decky", 64) / paths.LIB_FILENAME).read_bytes()
+        result = self.deploy(64, "--ui")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual((self.library_dir("decky", 64) / paths.LIB_FILENAME).read_bytes(), before)
 
     def test_experimental_precision_is_forwarded_only_when_requested(self):
         for bits in (64, 32):

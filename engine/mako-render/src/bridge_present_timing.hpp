@@ -55,6 +55,19 @@ namespace mako::layer::present_diagnostics {
             Samples lateness;
             Samples submitLateness;
         };
+        /// One matched or dropped output for opt-in per-frame diagnostics.
+        /// Timestamps are CLOCK_MONOTONIC nanoseconds; zero means unavailable.
+        struct Frame {
+            uint64_t id{};
+            uint64_t desired{};
+            uint64_t plannedSubmit{};
+            uint64_t submitted{};
+            uint64_t shown{};
+            uint64_t latch{};
+            uint64_t queueEnd{};
+            bool lateLatch{};
+            bool dropped{};
+        };
 
         explicit BridgePresentTiming(bool staged = false) : staged(staged) {}
 
@@ -64,7 +77,7 @@ namespace mako::layer::present_diagnostics {
             auto& entry = pending[id % pending.size()];
             if (entry.valid)
                 ++window.overwritten;
-            entry = {id, desired, wake, true};
+            entry = {id, desired, wake, submit, true};
             ++window.requests;
             if (previousDesired && desired > previousDesired)
                 window.requestedInterval.add(milliseconds(desired - previousDesired));
@@ -72,14 +85,16 @@ namespace mako::layer::present_diagnostics {
             window.submitLateness.add(wake > submit ? milliseconds(wake - submit) : 0);
         }
 
-        void feedback(uint64_t id, uint64_t desired, uint64_t actual,
-                bool lateLatch = false) {
+        std::optional<Frame> feedback(uint64_t id, uint64_t desired, uint64_t actual,
+                bool lateLatch = false, uint64_t latch = 0, uint64_t queueEnd = 0) {
             auto& entry = pending[id % pending.size()];
             if (!entry.valid || entry.id != id || entry.desired != desired || !actual) {
                 ++window.unmatched;
-                return;
+                return std::nullopt;
             }
             entry.valid = false;
+            const Frame frame{id, desired, entry.plannedSubmit, entry.submittedAt,
+                actual, latch, queueEnd, lateLatch, false};
             ++window.feedbacks;
             window.lateLatchFeedbacks += lateLatch;
             // Gamescope may report a target vblank slightly before the request.
@@ -98,19 +113,21 @@ namespace mako::layer::present_diagnostics {
             }
             previousActual = actual;
             previousId = id;
+            return frame;
         }
 
-        void feedbackTiming(uint64_t id, uint64_t queueEnd, uint64_t latch,
+        std::optional<Frame> feedbackTiming(uint64_t id, uint64_t queueEnd, uint64_t latch,
                 uint64_t predicted, uint64_t receivedAt) {
             auto& entry = pending[id % pending.size()];
             if (!entry.valid || entry.id != id) {
                 ++window.unmatched;
-                return;
+                return std::nullopt;
             }
             if (!queueEnd && !latch && !predicted) {
                 entry.valid = false;
                 ++window.dropped;
-                return;
+                return Frame{id, entry.desired, entry.plannedSubmit, entry.submittedAt,
+                    0, 0, 0, false, true};
             }
             const bool invalid =
                 (queueEnd && (queueEnd < entry.submittedAt || queueEnd > receivedAt)) ||
@@ -127,11 +144,12 @@ namespace mako::layer::present_diagnostics {
             if (!queueEnd || !latch || !predicted)
                 ++window.unavailableStages;
             if (predicted && predicted <= static_cast<uint64_t>(INT64_MAX))
-                feedback(id, entry.desired, predicted, !invalid && latch > predicted);
-            else {
-                entry.valid = false;
-                ++window.feedbacks;
-            }
+                return feedback(id, entry.desired, predicted, !invalid && latch > predicted,
+                    latch, queueEnd);
+            entry.valid = false;
+            ++window.feedbacks;
+            return Frame{id, entry.desired, entry.plannedSubmit, entry.submittedAt,
+                0, latch, queueEnd, false, false};
         }
 
         [[nodiscard]] std::optional<Window> take(uint64_t now) {
@@ -151,6 +169,7 @@ namespace mako::layer::present_diagnostics {
             uint64_t id{};
             uint64_t desired{};
             uint64_t submittedAt{};
+            uint64_t plannedSubmit{};
             bool valid{};
         };
         std::array<Pending, 128> pending{};

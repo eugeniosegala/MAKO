@@ -2,6 +2,7 @@ find_package(Qt6 6.2 REQUIRED COMPONENTS Quick)
 
 set(UI_SOURCES
     "src/backend.cpp"
+    "src/model_inspection.cpp"
     "src/main.cpp"
     "src/process_detection.cpp"
     "src/remote_play.cpp"
@@ -20,6 +21,7 @@ set(UI_RESOURCES
     "rsc/widgets/FileEdit.qml"
     "rsc/widgets/FlowSlider.qml"
     "rsc/widgets/List.qml"
+    "rsc/widgets/ModelComboBox.qml"
     "rsc/i18n/translations.json"
     "rsc/io.github.eugeniosegala.mako.png"
     "rsc/UI.qml")
@@ -62,6 +64,7 @@ if(BUILD_TESTING)
     add_executable(mako-ui-process-detection-tests
         "tests/process_detection_tests.cpp"
         "src/backend.cpp"
+        "src/model_inspection.cpp"
         "src/backend.hpp"
         "src/process_detection.cpp"
         "src/remote_play.cpp")
@@ -73,6 +76,7 @@ if(BUILD_TESTING)
     add_executable(mako-ui-backend-contract-tests
         "tests/backend_contract_tests.cpp"
         "src/backend.cpp"
+        "src/model_inspection.cpp"
         "src/process_detection.cpp"
         "src/remote_play.cpp"
         "src/backend.hpp")
@@ -85,6 +89,7 @@ if(BUILD_TESTING)
         PRIVATE Qt6::Gui)
     target_compile_definitions(mako-ui-backend-contract-tests PRIVATE
         MAKO_UI_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/UI.qml"
+        MAKO_UI_LAUNCHER="${CMAKE_CURRENT_SOURCE_DIR}/../scripts/mako-launch"
         MAKO_UI_REMOTE_PLAY_HELPER="${CMAKE_CURRENT_SOURCE_DIR}/../scripts/mako-remote-play"
         MAKO_UI_GROUP_ENTRY_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/panes/GroupEntry.qml"
         MAKO_UI_VKBASALT_SHADER_SOURCE_DIR="${MAKO_VKBASALT_SHADER_SOURCE_DIR}")
@@ -110,7 +115,8 @@ if(BUILD_TESTING)
     add_executable(mako-ui-profile-dialog-tests "tests/profile_dialog_tests.cpp")
     target_link_libraries(mako-ui-profile-dialog-tests PRIVATE Qt6::Quick)
     target_compile_definitions(mako-ui-profile-dialog-tests PRIVATE
-        MAKO_UI_DIALOGS_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/rsc/dialogs")
+        MAKO_UI_DIALOGS_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/rsc/dialogs"
+        MAKO_UI_WIDGETS_DIRECTORY="${CMAKE_CURRENT_SOURCE_DIR}/rsc/widgets")
     add_test(NAME ui-profile-dialog COMMAND mako-ui-profile-dialog-tests)
     set_tests_properties(ui-profile-dialog PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_BACKEND=software")

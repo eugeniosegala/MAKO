@@ -72,6 +72,12 @@ namespace mako::layer::present_diagnostics {
         size_t outstanding, uint64_t refreshCycleNs,
         uint32_t timingVersion = 1, uint64_t refreshIntervalNs = 0);
 
+    /// Opt-in per-output bridge records for pacing investigations. Requires
+    /// present diagnostics plus MAKO_PRESENT_DIAGNOSTICS_BRIDGE_FRAMES=1.
+    [[nodiscard]] bool bridgeFramesEnabled();
+    void logBridgeFrame(uint64_t bridgeId, uint32_t timingVersion,
+        const BridgePresentTiming::Frame& frame);
+
     enum class PresentWaitApi { Khr, Khr2 };
 
     enum class ApplicationFrameApi { AcquireKhr, AcquireKhr2, Present };

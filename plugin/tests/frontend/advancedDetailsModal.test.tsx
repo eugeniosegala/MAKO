@@ -83,6 +83,7 @@ const installation: InstallationStatus = {
   engine_update_required: true,
   host_architecture: "x86_64",
   host_architecture_supported: true,
+  system_renderer_notice: null,
   error: null,
 };
 
@@ -123,7 +124,7 @@ describe("Advanced Details", () => {
       installation.lib_path,
       installation.json_path,
       installation.script_path,
-      "Lossless Scaling installed",
+      "Lossless Scaling installed (optional)",
       "/games/Lossless.dll",
       "Steam",
     ]) {

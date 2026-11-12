@@ -13,7 +13,9 @@ Detection finds the executable; MAKO activates on the next launch. The configura
 
 ## Lossless Scaling availability
 
-**MAKO Scaler and Shaders work without Lossless Scaling.** Frame Generation and LS1 require it. If MAKO reports it missing, install Lossless Scaling or correct its DLL path, then restart the game.
+**MAKO FG, MAKO Scaler and Shaders work without Lossless Scaling.** Only the Lossless Scaling frame generation model and LS1 require it. The editor stays available without it; unavailable LSFG and LS1 choices are grayed out.
+
+If `Lossless.dll` is missing or compatibility cannot be verified, the editor warns and keeps your saved selection. The Renderer falls back to MAKO FG or MAKO Scaler if the selected model cannot initialize. If the DLL is present but fails its check, the editor saves the MAKO alternative only for the affected model family, profile, and power mode. Restart a running game to apply an FG model change.
 
 ## Profiles
 
@@ -49,13 +51,29 @@ Turn on **Enable Frame-gen (Restart)** before launching. **Real FPS** counts gam
 | **Steady Base Cap** | Initially caps real FPS at half the target for even cadence; may reduce responsiveness. |
 | **Fractional Adaptive** | Keeps more real frames, but delivery may feel less even. |
 | **Real Frame Priority** | Low–Very High select a Fractional real-FPS cap; higher priority allows more real FPS. **Automatic** adds no priority cap. |
-| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. |
+| **Base FPS Cap** | Limits real FPS. **Off** adds no manual cap; Steady or explicit Fractional caps take precedence. Eligible Zink games have the refresh-based pacing described below. |
 | **Smooth Cadence** | Favours consistent delivery; compare on/off for responsiveness. |
 | **Gamescope VRR** | Follows Steam, or temporarily requests VRR on/off on a supported display during play. |
+
+With Fixed Frame Generation through Zink and **Base FPS Cap** off, MAKO automatically paces real frames at Gamescope's reported refresh divided by the multiplier: for example, 60 real FPS at 2x on a 120 Hz display. **Dynamic Cadence Recovery** disables this cap so it can measure the game's native rate. Without refresh feedback, ordinary Fixed pacing applies.
+
+Eligible Zink games use the same pacing with **Fractional Adaptive**, **Automatic** Real Frame Priority and **Smooth Cadence** once MAKO accepts a constant multiplier. The target must match display refresh, with **Base FPS Cap** and **Dynamic Cadence Recovery** off. VRR may be on or off. See [Zink FIFO pacing](ADAPTIVE-VALIDATION.md#zink-fifo-pacing) for supported presentation paths, probes and recovery.
 
 With **Fractional Adaptive** and **Automatic** Real Frame Priority, sustained native FPS can exceed **Target FPS** without generation when **Base FPS Cap** is off or at least the target. For example, a 60 FPS target on a 90 Hz display allows native 75 FPS gameplay with the cap off or set to 90; the manual cap still limits faster sources. Smooth Cadence can be on or off; below-target caps, explicit priorities and Steady keep their selected pacing.
 
 For games switching between 30 FPS cutscenes and 60 FPS gameplay on a 60 Hz display, try Fractional Adaptive with a 2x ceiling, a 60 FPS target, and **Dynamic Cadence Recovery** enabled. Recovery clears base caps and selects **Automatic** Real Frame Priority; keep those settings to let gameplay reach its native rate. Its checks can briefly lower output FPS or hitch. **Match Display Refresh Rate** can supply the target. **Auto-disable Frame Generation by Refresh Rate** instead checks display Hz, not the game's real FPS.
+
+#### Proton offscreen windows
+
+`mako-launch` automatically applies a Wine workaround that allows generated frames to reach the screen in affected Proton 8 and 9 games. It takes effect on the first launch with the updated launcher; restart an already running game to receive it.
+
+If this causes display problems, preserve the rest of your launch command and opt out with:
+
+```text
+WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK=0 ~/.local/bin/mako-launch %command%
+```
+
+If Frame Generation remains unavailable or output looks unchanged despite a higher FPS counter, try another Proton version or window mode. Proton 7 lacks this switch, other versions can use different offscreen paths, and MAKO cannot detect every case. Direct Flatpak users must apply the [app environment setup](FLATPAK-GUIDE.md). See [Wine offscreen windows](WSI-ISOLATION.md#wine-offscreen-windows) for version and detection limits.
 
 ### Scaling
 
@@ -74,12 +92,11 @@ Enable Scaling before launching. Set Steam's **Game Resolution** to the display 
 
 | Control | What it does |
 | --- | --- |
-| **Ultra Performance (Restart)** | Uses 70% Flow Scale, the lighter FG model, and LS1 Performance when scaling is enabled. |
-| **Flow Scale** | 25–100% motion-estimation resolution; lower saves GPU work at a quality cost. Ultra Performance fixes it at 70%. |
+| **Ultra Performance (Restart)** | Uses 60% Flow Scale and at least the Performance mode with MAKO FG, 70% Flow Scale and LSFG Performance with LSFG, and MAKO Scaler when scaling is enabled. |
+| **Flow Scale** | 25–100% motion-estimation resolution; lower saves GPU work at a quality cost. Ultra Performance fixes it at 60% with MAKO FG and 70% with LSFG. |
 | **GPU Headroom** | Live, Frame Generation-only control that reduces real FPS to target spare GPU capacity; see below. Off by default. |
-| **Lighter FG Model** | Reduces GPU work, with potentially more artifacts; forced on by Ultra Performance. |
 | **Allow FP16 (Restart)** | Global precision: FP16 for supported Frame Generation models and MAKO Scaler; off uses FP32. LS1 always uses FP32. |
-| **Lossless.dll Path (Restart)** | Global override; leave empty for automatic detection. |
+| **Lossless.dll Path (Restart)** | Optional global override for LSFG and LS1; leave empty for automatic detection. |
 | **GPU (Restart)** | Selects a GPU; multi-GPU Frame Generation is unsupported. |
 
 ### GPU Headroom
@@ -100,7 +117,7 @@ Enable **Shaders** before launching to use bundled vkBasalt; more effects cost m
 
 Select **Customize shaders** to adjust selected bundled and compatible custom effects with sliders, exact-value fields, toggles, choices, and colour controls. **Reset shader to defaults** resets only the selected effect, preserving values its author marked as non-resettable. The popup edits parameters; choose enabled effects in **Effects**.
 
-Sliders follow the shader author's step, or use a decimal step such as 0.01 when none is specified. Type a value beneath the slider for finer adjustments. Fields hide floating-point readback noise without changing the shader's value; simply opening or leaving a field does not rewrite it.
+Type a value beneath a slider for finer adjustments.
 
 Palettes such as Nostalgia's **Custom palette** appear as colour swatches. Select a swatch to edit its RGB channels with sliders or exact values. Only the selected colour's controls are expanded; reset still applies to the whole effect. Colour controls require metadata from the matching Renderer helper; older helpers show numeric fields instead.
 
@@ -118,6 +135,7 @@ Under **Compatibility**, keep defaults unless a game needs a change:
 - **Dynamic Cadence Recovery:** off by default. Rechecks games that change native FPS by briefly reducing generated work; these checks can lower output FPS or cause hitches under sustained GPU load. Clears base caps and GPU Headroom, and resets Real Frame Priority. Enabling a cap or GPU Headroom, or changing priority, turns Recovery off.
 - **Cadence Probe Interval:** 0.1–3 seconds between recovery checks; default 2 seconds. Shorter intervals react sooner but can hitch more often.
 - **Game Swapchain Images (Restart):** may help games that fail to start, with less generated-frame headroom.
+- **Mailbox Presentation (Restart):** may help games that hang or fail with Frame Generation; a newer frame can replace a generated frame, so smoothness and pacing may suffer.
 
 ### Crop & Stretch
 
@@ -133,13 +151,13 @@ For 1920×1080 output at 1.5x, aim for a 1280×720 input. Raising the factor wit
 
 | Timing | Common settings |
 | --- | --- |
-| **Restart** | Enabling Frame Generation, Scaling, or Shaders; DLL; FP16; GPU; Ultra Performance; launcher compatibility controls |
-| **Live** | Most Frame Generation controls; scaling method and sharpness; Flow Scale; Lighter FG Model; shader adjustments |
+| **Restart** | Enabling Frame Generation, Scaling, or Shaders; switching between MAKO FG and LSFG; DLL; FP16; GPU; Ultra Performance; launcher compatibility controls |
+| **Live** | Most Frame Generation controls; switching between LSFG Quality and LSFG Performance; scaling method and sharpness; Flow Scale; shader adjustments |
 | **May wait for resolution change or restart** | Scale Factor, Quality Supersampling, and changes needing more Frame Generation capacity |
 
 Some live changes rebuild resources and may briefly hitch. See [Runtime transitions](RUNTIME-TRANSITIONS.md) for details.
 
-**Interface Settings > Language** changes and saves the Qt interface language, including German and Russian. The first launch follows your system language, with English as the fallback.
+**Interface Settings > Language** changes and saves the Qt interface language. The first launch follows your system language, with English as the fallback.
 
 ## Launch Settings
 
@@ -153,9 +171,13 @@ The Arch package uses `/usr/bin/mako-launch`. For a terminal launch, replace `%c
 
 The controls under **Launch Settings** apply globally to `mako-launch` games. **Disable Steam Overlay (Restart)** is on by default; it may reduce stutter but disables Steam's in-game overlay and FPS counter and may affect Steam Input. Gaming Mode menus and performance overlay remain available.
 
-**Zink** runs OpenGL through Vulkan. **Force ALSA** changes the audio path for compatibility problems. Steam Deck mode and Gamescope WSI controls are available in MAKO Decky.
+**Zink** runs OpenGL through Vulkan. It also disables RADV display compression and requests Gamescope composition during supported Game Mode launches to address colour speckles and tearing. The helper restores its change after the game exits when ownership can still be verified. See [Zink launch compatibility](WSI-ISOLATION.md#zink-launch-compatibility) for requirements and limits.
+
+**Force ALSA** changes the audio path for compatibility problems. Steam Deck mode and Gamescope WSI controls are available in MAKO Decky.
 
 **External Tools → Enable MangoHud (Restart)** applies to the selected profile and shares its saved selection with MAKO Decky. Install host MangoHud and Python 3, then use **Refresh MangoHud** if needed. Enabling MangoHud turns off Shaders; enabling Shaders turns off MangoHud. Copy the updated launch option to Steam after either change and restart the game. Flatpak games are unsupported. Both UIs use the optional [shared MangoHud layout](LAYER-CHAINING.md#shared-mangohud-layout).
+
+**Count Real Frames Only (Restart)** appears below MangoHud and is shared with MAKO Decky. Leave it off to count every output frame, including generated ones, or turn it on to show the game's real FPS. Copy the updated launch option after changing it. See [MangoHud frame counting](LAYER-CHAINING.md#mangohud-frame-counting).
 
 ## Advanced configuration
 
@@ -167,4 +189,12 @@ For manual TOML fields, defaults, and environment variables, see the [advanced r
 
 In **Launch Settings**, turn on **Enable HDR (Restart)**, restart the game, then enable HDR in its settings. Restart after changing MAKO’s HDR toggle or switching between HDR and SDR displays.
 
-**HDR Quality** defaults to **Performance**. **Quality** retains full precision and full motion analysis; **Balanced** uses compact shader/scaling buffers while retaining linear-light Frame Generation and full motion analysis; **Performance** also uses approximate HDR10 generation and coarser motion analysis. Output resolution stays unchanged. Changes apply live with a brief hitch; lower precision may add banding or motion artifacts. See the [HDR pipeline](HDR-PIPELINE.md) for details.
+**HDR Quality** defaults to **Performance**. **Quality** retains full-precision shader/scaling buffers; **Balanced** uses compact buffers. With LSFG, both retain linear-light generation and full motion analysis; **Performance** also uses approximate HDR10 generation and coarser motion analysis. MAKO FG uses its own HDR processing and selected Flow Scale. Output resolution stays unchanged. Changes apply live with a brief hitch; lower precision may add banding or motion artifacts. See the [HDR pipeline](HDR-PIPELINE.md) for details.
+
+## Frame Generation Model
+
+Select **MAKO FG**, **LSFG Quality**, or **LSFG Performance** in the Frame Generation group. MAKO FG is the default unless the profile saves an LSFG model. The choice is saved per game and per power mode. Switching between MAKO FG and LSFG requires a game restart; switching between LSFG Quality and LSFG Performance applies live.
+
+With MAKO FG selected, **MAKO FG Mode** applies live. At 2× and 3×, **Quality** normally solves motion for every real-frame pair, **Balanced** (default) one in two, **Performance** one in three, and **Extra Performance** one in four. Balanced and Performance correct motion between full solves; Extra Performance corrects it when frame delivery is uneven and uses cheaper reuse otherwise. Try Quality if fast motion still shows artifacts. Large cadence changes and scene cuts temporarily force full solves; at 4× and above, every pair solves. Ultra Performance offers only Performance and Extra Performance. See [MAKO FG Mode](MAKO-FG.md#mako-fg-mode) for the tradeoffs and [MAKO FG setup](MAKO-FG.md) for SDR, HDR, Flow Scale, and package requirements.
+
+LSFG Performance lowers GPU cost but can increase ghosting. Ultra Performance forces it and hides LSFG Quality. LSFG Quality with FP16 has an extra speed optimization on AMD GPUs using Mesa's RADV driver; other GPUs and settings use the standard path.

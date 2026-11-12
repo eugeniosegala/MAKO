@@ -633,6 +633,9 @@ struct GamescopeScalingSurface::Impl {
         const uint64_t ready = earliest - margin;
         const bool validReadiness = earliest > 0 && earliest <= static_cast<uint64_t>(INT64_MAX) &&
             ready > 0 && ready <= static_cast<uint64_t>(INT64_MAX);
+        // The reported present time lets the owner detect outputs that queued a
+        // whole refresh behind its deadlines.
+        const auto displayed = time(actualHi, actualLo);
         if (validReadiness) {
             // Preserve only positive latch-to-refresh room. Stale predictions
             // have no allowance and must not move the recovered latch earlier.
@@ -641,13 +644,17 @@ struct GamescopeScalingSurface::Impl {
                 time(static_cast<uint32_t>(prediction >> 32),
                     static_cast<uint32_t>(prediction)),
                 std::chrono::duration_cast<OrderedPresentTimeline::Clock::duration>(
-                    std::chrono::nanoseconds(prediction - ready)));
+                    std::chrono::nanoseconds(prediction - ready)), displayed);
         } else
-            content.presentTimeline.feedback(id, time(desiredHi, desiredLo), {});
-        if (content.timing)
-            content.timing->feedback(id, (uint64_t{desiredHi} << 32) | desiredLo,
+            content.presentTimeline.feedback(id, time(desiredHi, desiredLo), {}, {}, displayed);
+        if (content.timing) {
+            const auto frame = content.timing->feedback(id,
+                (uint64_t{desiredHi} << 32) | desiredLo,
                 (uint64_t{actualHi} << 32) | actualLo,
-                validReadiness && ready > earliest);
+                validReadiness && ready > earliest, validReadiness ? ready : 0);
+            if (frame && present_diagnostics::bridgeFramesEnabled())
+                present_diagnostics::logBridgeFrame(content.diagnosticId, 1, *frame);
+        }
     }
     static void refreshCycle(void* data, wl_proxy*, uint32_t hi, uint32_t lo) {
         auto& content = *static_cast<Content*>(data);
@@ -672,9 +679,17 @@ struct GamescopeScalingSurface::Impl {
         content.presentTimeline.feedbackTiming(serial, valid
             ? OrderedPresentTimeline::TimePoint{std::chrono::duration_cast<
                 OrderedPresentTimeline::Clock::duration>(std::chrono::nanoseconds(queueEnd))}
-            : OrderedPresentTimeline::TimePoint{}, now);
-        if (content.timing)
-            content.timing->feedbackTiming(serial, queueEnd, latch, pixel, nowNs);
+            : OrderedPresentTimeline::TimePoint{}, now,
+            pixel && pixel <= static_cast<uint64_t>(INT64_MAX)
+                ? OrderedPresentTimeline::TimePoint{std::chrono::duration_cast<
+                    OrderedPresentTimeline::Clock::duration>(std::chrono::nanoseconds(pixel))}
+                : OrderedPresentTimeline::TimePoint{});
+        if (content.timing) {
+            const auto frame = content.timing->feedbackTiming(
+                serial, queueEnd, latch, pixel, nowNs);
+            if (frame && present_diagnostics::bridgeFramesEnabled())
+                present_diagnostics::logBridgeFrame(content.diagnosticId, 2, *frame);
+        }
     }
     static void timingProperties(void* data, wl_proxy*, uint32_t durationHi,
             uint32_t durationLo, uint32_t intervalHi, uint32_t intervalLo) {
@@ -1399,6 +1414,15 @@ VkResult GamescopeScalingSurface::preparePresent(
         if (!slot)
             return impl->failure(*found->second, content->second.get(), surface, swapchain,
                 VK_ERROR_SURFACE_LOST_KHR, "invalid-timeline", "present");
+        if (slot->realignment > OrderedPresentTimeline::Clock::duration::zero() &&
+                present_diagnostics::enabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: operation=gamescope-bridge-realign"
+                      << " bridge=" << content->second->diagnosticId
+                      << " removed_ms=" << std::chrono::duration<double, std::milli>(
+                            slot->realignment).count()
+                      << " refresh_hz=" << refreshRate
+                      << " timing_protocol=" << content->second->timingVersion << '\n';
+        }
         // No GPU-idle wait and no adapter lock held during backpressure.
         lock.unlock();
         std::this_thread::sleep_until(slot->submitAt);

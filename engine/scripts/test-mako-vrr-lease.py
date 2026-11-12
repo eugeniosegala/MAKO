@@ -8,8 +8,11 @@ import io
 import fcntl
 import json
 import os
+import signal
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -99,6 +102,7 @@ class VrrLeaseTests(unittest.TestCase):
     def test_host_monitor_reuses_lease_and_retries_failed_service(self):
         with patch.object(module, "STOP", False), \
              patch.object(module.signal, "signal"), \
+             patch.object(module, "runtime_lock", return_value=None), \
              patch.object(module, "publishers", return_value=[module.Publisher(20, 42, "off")]), \
              patch.object(module, "flatpak_environment", return_value={"PATH": "/usr/bin:/bin"}), \
              patch.object(module.time, "monotonic", side_effect=[0, 0, 1, 30, 30]), \
@@ -117,6 +121,7 @@ class VrrLeaseTests(unittest.TestCase):
     def test_follow_steam_does_not_start_a_flatpak_lease(self):
         with patch.object(module, "STOP", False), \
              patch.object(module.signal, "signal"), \
+             patch.object(module, "runtime_lock", return_value=None), \
              patch.object(module, "publishers", return_value=[module.Publisher(20, 42, "follow-steam")]), \
              patch.object(module, "flatpak_environment") as session, \
              patch.object(module.time, "sleep", side_effect=lambda _: setattr(module, "STOP", True)), \
@@ -124,6 +129,116 @@ class VrrLeaseTests(unittest.TestCase):
             self.assertEqual(module.watch_flatpak(), 0)
             session.assert_not_called()
             run.assert_not_called()
+
+    def test_standalone_watcher_is_not_bound_to_its_shell(self):
+        environment = {key: value for key, value in os.environ.items()
+                       if key != module.WATCH_OWNER_ENV}
+        with patch.dict(os.environ, environment, clear=True), patch("ctypes.CDLL") as libc:
+            self.assertIsNone(module.watch_owner())
+            libc.assert_not_called()
+
+    def test_owned_watcher_arms_parent_death_signal(self):
+        with patch.dict(os.environ, {module.WATCH_OWNER_ENV: "1234"}), \
+             patch("ctypes.CDLL") as libc:
+            self.assertEqual(module.watch_owner(), 1234)
+            libc.return_value.prctl.assert_called_once_with(
+                module.PR_SET_PDEATHSIG, int(signal.SIGTERM), 0, 0, 0)
+
+    def test_watcher_whose_owner_already_died_never_discovers(self):
+        # Our own PID is never our parent, as after an owner dies before arming.
+        with patch.dict(os.environ, {module.WATCH_OWNER_ENV: str(os.getpid())}), \
+             patch("ctypes.CDLL"), \
+             patch.object(module, "STOP", False), \
+             patch.object(module.signal, "signal"), \
+             patch.object(module, "runtime_lock", return_value=None), \
+             patch.object(module, "publishers") as discovered, \
+             patch.object(module.time, "sleep") as sleep:
+            self.assertEqual(module.watch_flatpak(), 0)
+            discovered.assert_not_called()
+            sleep.assert_not_called()
+
+    def test_second_watcher_waits_for_the_discovery_lock(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            holder = os.open(Path(temporary) / "mako-vrr-flatpak-watch.lock",
+                             os.O_CREAT | os.O_RDWR, 0o600)
+            fcntl.flock(holder, fcntl.LOCK_EX)
+
+            def release_then_stop(_seconds):
+                if sleep.call_count == 1:
+                    os.close(holder)
+                else:
+                    module.STOP = True
+
+            with patch.dict(os.environ, {"XDG_RUNTIME_DIR": temporary}), \
+                 patch.object(module, "STOP", False), \
+                 patch.object(module.signal, "signal"), \
+                 patch.object(module, "watch_owner", return_value=None), \
+                 patch.object(module, "publishers", return_value=[]) as discovered, \
+                 patch.object(module.time, "sleep", side_effect=release_then_stop) as sleep:
+                self.assertEqual(module.watch_flatpak(), 0)
+            self.assertEqual(sleep.call_count, 2)
+            discovered.assert_called_once()
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "parent-death signals are Linux-only")
+    def test_owned_watcher_exits_after_its_backend_is_killed(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            (Path(temporary) / "runtime-state").mkdir()
+            lock = Path(temporary) / "mako-vrr-flatpak-watch.lock"
+            # Stand in for a Decky backend that SIGKILL ends before _unload completes.
+            backend = subprocess.Popen((
+                sys.executable, "-c",
+                "import os, subprocess, sys, time\n"
+                f"env = dict(os.environ, {module.WATCH_OWNER_ENV}=str(os.getpid()))\n"
+                "watcher = subprocess.Popen((sys.executable, sys.argv[1], '--watch-flatpak'), env=env,\n"
+                "                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)\n"
+                "print(watcher.pid, flush=True)\n"
+                "time.sleep(60)\n",
+                str(source),
+            ), stdout=subprocess.PIPE, text=True, env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"), "HOME": temporary,
+                "XDG_RUNTIME_DIR": temporary, "MAKO_CONFIG": str(Path(temporary) / "conf.toml"),
+            })
+            watcher = None
+            try:
+                watcher = int(backend.stdout.readline())
+                deadline = time.monotonic() + 10
+                while not lock.exists() or self._lock_is_free(lock):
+                    self.assertLess(time.monotonic(), deadline, "watcher never started discovery")
+                    time.sleep(0.05)
+                backend.kill()
+                backend.wait()
+                deadline = time.monotonic() + 5
+                while self._running(watcher):
+                    self.assertLess(time.monotonic(), deadline, "orphaned watcher kept running")
+                    time.sleep(0.05)
+                self.assertTrue(self._lock_is_free(lock))
+            finally:
+                if backend.poll() is None:
+                    backend.kill()
+                    backend.wait()
+                backend.stdout.close()
+                if watcher is not None and self._running(watcher) and str(source).encode() in \
+                        Path(f"/proc/{watcher}/cmdline").read_bytes():
+                    os.kill(watcher, signal.SIGKILL)  # Never leave a failed run's orphan behind.
+
+    @staticmethod
+    def _lock_is_free(path: Path) -> bool:
+        descriptor = os.open(path, os.O_RDWR)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return True
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(descriptor)
+
+    @staticmethod
+    def _running(pid: int) -> bool:
+        try:
+            state = Path(f"/proc/{pid}/stat").read_text().rsplit(") ", 1)[1].split()[0]
+        except (OSError, IndexError):
+            return False
+        return state != "Z"  # An unreaped orphan has still exited.
 
     def test_decision_log_emits_only_on_state_changes(self):
         output = io.StringIO()
@@ -227,6 +342,7 @@ class VrrLeaseTests(unittest.TestCase):
             "XAUTHORITY": "/tmp/gamescope-test-xauthority",
             "XDG_RUNTIME_DIR": "/run/user/1000",
             "MAKO_CONFIG": "/tmp/mako-game.toml",
+            "MAKO_GAMESCOPE_COMPOSITE_FORCE": "1",
         }), patch.object(module.shutil, "which", return_value="/usr/bin/systemd-run"), \
              patch.object(Path, "stat", return_value=SimpleNamespace(
                  st_mode=0o140777, st_dev=12, st_ino=34)), \
@@ -241,7 +357,140 @@ class VrrLeaseTests(unittest.TestCase):
             self.assertIn("--setenv=DISPLAY=:1", command)
             self.assertIn("--setenv=XAUTHORITY=/tmp/gamescope-test-xauthority", command)
             self.assertIn("--setenv=MAKO_CONFIG=/tmp/mako-game.toml", command)
+            self.assertIn("--setenv=MAKO_GAMESCOPE_COMPOSITE_FORCE=1", command)
             self.assertEqual(command[-5:], ["123", "123-4-5", "9876", "12", "34"])
+
+    def test_composite_force_reads_a_missing_property_as_scanout(self):
+        with patch.object(module, "verified_root_properties", return_value=(
+                {"GAMESCOPE_PID": 1, "GAMESCOPE_XWAYLAND_SERVER_ID": 0}, "ok")):
+            self.assertEqual(module.read_composite_force(), (False, "ok"))
+        with patch.object(module, "verified_root_properties", return_value=(
+                {"GAMESCOPE_COMPOSITE_FORCE": 1}, "ok")):
+            self.assertEqual(module.read_composite_force(), (True, "ok"))
+        with patch.object(module, "verified_root_properties",
+                          return_value=(None, "x-root-unverified")):
+            self.assertEqual(module.read_composite_force(), (None, "x-root-unverified"))
+
+    def test_composite_force_write_uses_the_verified_root_property(self):
+        with patch.object(module, "XROOT_CACHE", (":2", 123, ":0")), \
+             patch.object(module, "read_composite_force",
+                          side_effect=[(False, "ok"), (True, "ok")]), \
+             patch.object(module.subprocess, "run", return_value=
+                          subprocess.CompletedProcess([], 0, "", "")) as run:
+            self.assertTrue(module.write_composite_force(True, False))
+            self.assertEqual(run.call_args.args[0], (
+                "xprop", "-display", ":0", "-root", "-f", "GAMESCOPE_COMPOSITE_FORCE",
+                "32c", "-set", "GAMESCOPE_COMPOSITE_FORCE", "1",
+            ))
+        with patch.object(module, "XROOT_CACHE", (":2", 123, ":0")), \
+             patch.object(module, "read_composite_force", return_value=(True, "ok")), \
+             patch.object(module.subprocess, "run") as run:
+            self.assertFalse(module.write_composite_force(True, False))
+            run.assert_not_called()
+
+    def test_composite_lease_holds_for_the_game_and_restores_scanout(self):
+        state = {"value": False}
+        clock = {"now": 0.0}
+
+        def write(value, expected):
+            self.assertEqual(state["value"], expected)
+            state["value"] = value
+            return True
+
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")) as read, \
+             patch.object(module, "write_composite_force", side_effect=write), \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "write-confirmed")
+            self.assertTrue(state["value"])
+            reads = read.call_count
+            self.assertEqual(lease.update(), "holding")
+            self.assertEqual(read.call_count, reads)
+            clock["now"] += module.HOLD_CHECK_SECONDS
+            self.assertEqual(lease.update(), "holding")
+            self.assertTrue(lease.restore())
+            self.assertFalse(state["value"])
+            self.assertFalse(lease.applied)
+
+    def test_composite_lease_never_takes_over_or_restores_an_external_value(self):
+        state = {"value": True}
+        clock = {"now": 0.0}
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")), \
+             patch.object(module, "write_composite_force") as write, \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "already-composited")
+            self.assertEqual(lease.update(), "yielded")
+            self.assertTrue(lease.restore())
+            write.assert_not_called()
+            self.assertTrue(state["value"])
+
+        state["value"] = False
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")), \
+             patch.object(module, "write_composite_force",
+                          side_effect=lambda value, expected: state.update(value=value) or True) as write, \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "write-confirmed")
+            state["value"] = False  # The user or Steam turned composition off.
+            clock["now"] += module.HOLD_CHECK_SECONDS
+            self.assertEqual(lease.update(), "yielded-to-external-change")
+            self.assertTrue(lease.restore())
+            self.assertEqual(write.call_count, 1)
+            self.assertFalse(state["value"])
+
+    def test_composite_lease_restores_its_own_late_confirmed_write(self):
+        state = {"value": False}
+        clock = {"now": 0.0}
+
+        def late_write(value, expected):
+            self.assertEqual(state["value"], expected)
+            state["value"] = value  # Gamescope applies it after the readback window.
+            return False
+
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")), \
+             patch.object(module, "write_composite_force", side_effect=late_write), \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "write-not-verified")
+            clock["now"] += module.POLL_SECONDS
+            self.assertEqual(lease.update(), "write-confirmed")
+            self.assertTrue(lease.applied)
+            self.assertFalse(lease.yielded)
+        with patch.object(module, "read_composite_force",
+                          side_effect=lambda: (state["value"], "ok")), \
+             patch.object(module, "write_composite_force",
+                          side_effect=lambda value, expected: state.update(value=value) or True):
+            self.assertTrue(lease.restore())
+            self.assertFalse(state["value"])
+
+    def test_composite_lease_gives_up_a_write_that_never_lands(self):
+        clock = {"now": 0.0}
+        with patch.object(module, "read_composite_force", return_value=(False, "ok")), \
+             patch.object(module, "write_composite_force", return_value=False) as write, \
+             patch.object(module.time, "monotonic", side_effect=lambda: clock["now"]):
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "write-not-verified")
+            clock["now"] += module.POLL_SECONDS
+            self.assertEqual(lease.update(), "awaiting-write-readback")
+            clock["now"] += 2.0
+            self.assertEqual(lease.update(), "write-not-applied")
+            self.assertTrue(lease.yielded)
+            self.assertTrue(lease.restore())
+            self.assertEqual(write.call_count, 1)
+
+    def test_composite_lease_keeps_trying_until_gamescope_is_readable(self):
+        with patch.object(module, "read_composite_force",
+                          return_value=(None, "x-root-unverified")), \
+             patch.object(module, "write_composite_force") as write:
+            lease = module.CompositeLease()
+            self.assertEqual(lease.update(), "query-x-root-unverified")
+            self.assertFalse(lease.yielded)
+            write.assert_not_called()
 
     def test_restore_only_while_value_is_still_ours(self):
         state = {"value": True}

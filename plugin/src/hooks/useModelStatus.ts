@@ -31,7 +31,7 @@ async function inspect(action: () => Promise<ModelStatusResult>) {
     };
   } catch {
     // An older/missing backend is not proof that the model has failed.
-    return null;
+    return { compatible: null, reason: "inspection-unavailable" };
   }
 }
 
@@ -47,6 +47,7 @@ export function useModelStatus(
     (method === SCALING_METHOD_LS1 ||
       method === SCALING_METHOD_LS1_PERFORMANCE);
   const lsfg =
+    config.frame_generation_model !== "mako-fg" &&
     enabled &&
     !config.disable_mako &&
     config.frame_generation_provisioned &&

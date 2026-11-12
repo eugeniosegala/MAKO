@@ -1,4 +1,4 @@
 interface:
   display_name: "MAKO cleanup"
-  short_description: "Review MAKO disk use and clean after confirmation"
-  default_prompt: "Use $mako-cleanup to report reclaimable MAKO storage, preserve build caches and tooling, and ask me before deleting anything."
+  short_description: "Reclaim MAKO experiments and desktop/system storage"
+  default_prompt: "Use $mako-cleanup to maximize disk-space reclamation across ~/mako, especially MAKO-FG and Gym experiments, plus system logs, desktop caches, and Codex/Claude/Kimi leftovers; rank measured cleanup and historical-retirement options, keep a minimal working setup and protected inputs, and get approval for the exact deletion plan."

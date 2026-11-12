@@ -58,7 +58,7 @@ Known launchers and helpers stay inactive while their child games can match. The
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `dll` | Automatic | Optional absolute path to `Lossless.dll`. LSFG and LS1 require it; MAKO Scaler and Native Resolution do not. |
+| `dll` | Automatic | Optional absolute path to `Lossless.dll`. Only the optional Lossless Scaling frame generation model and LS1 require it; MAKO FG, MAKO Scaler, Native Resolution, and Shaders do not. |
 | `allow_fp16` | `true` | Selects FP16 for supported LSFG models and MAKO Scaler; `false` selects FP32. If a model lacks native FP16, select FP32. LS1 always uses FP32. Requires restart; Ultra Performance respects this choice. [Experimental source builds](BUILDING-FROM-SOURCE.md#experimental-forced-lsfg-fp16) have separate limits. |
 
 ## Profile settings
@@ -78,7 +78,7 @@ Known launchers and helpers stay inactive while their child games can match. The
 | `adaptive_fractional_real_frame_priority` | `auto` | Fractional real-frame preference: `auto`, `low`, `medium`, `high`, or `very-high`. |
 | `adaptive_stable_cadence` | `true` | Favours a stable validated cadence when available. |
 | `gamescope_vrr_mode` | `follow-steam` | Per-profile live Gamescope VRR choice: `follow-steam`, `on`, or `off`. On and Off take effect only when Gamescope reports that the active display supports VRR; otherwise they are saved but leave the live setting untouched. |
-| `base_fps_cap` | `0` | Real-frame cap; `0` disables it. |
+| `base_fps_cap` | `0` | Manual real-frame cap; `0` disables only this cap. Eligible Fixed and Fractional Adaptive Zink games still use [automatic refresh-based pacing](ADAPTIVE-VALIDATION.md#zink-fifo-pacing) unless `dynamic_cadence_recovery` is on. |
 | `frame_generation_refresh_threshold` | `0` | Pauses generation at or below a confirmed Gamescope refresh; `0` disables it. |
 | `dynamic_cadence_recovery` | `false` | Rechecks native cadence for games that switch rates between gameplay and menus. Temporarily reduces generated work while sampling; checks can lower output FPS or cause hitches under sustained GPU load. |
 | `dynamic_cadence_probe_interval_seconds` | `2.0` | Recovery interval from 0.1–3 seconds. |
@@ -90,21 +90,22 @@ See [Adaptive validation](ADAPTIVE-VALIDATION.md) for scheduling details.
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `scaling_enabled` | `false` | Enables scaling at process start. Requires restart. |
-| `scaling_method` | `ls1` | `native`, `mako`, `ls1`, or `ls1-performance`. LS1 failures fall back to MAKO Scaler. |
+| `scaling_method` | `mako` | `native`, `mako`, `ls1`, or `ls1-performance`. LS1 failures fall back to MAKO Scaler. |
 | `scaling_factor` | `1.5` | Target output-to-source ratio per dimension from 1.0–2.0; the surface, display target, and resource limits may reduce the effective ratio. |
 | `scaling_supersampling` | `false` | Allows supported variable Gamescope surfaces to render beyond the display target before downsampling. |
 | `scaling_sharpness` | `0.8` | Sharpening strength from 0.0–1.0. |
-| `hdr_quality` | `'performance'` | Live HDR quality: `'quality'` retains full precision; `'balanced'` uses compact shader/scaling buffers with full motion analysis and linear-light generation; `'performance'` also uses approximate HDR10 interpolation and halves motion Flow Scale, bounded at 0.25. Output resolution and saved Flow Scale are preserved. SDR ignores it. See [HDR quality](HDR-PIPELINE.md#hdr-quality). |
+| `hdr_quality` | `'performance'` | Live HDR quality: `'quality'` retains full-precision shader/scaling buffers; `'balanced'` uses compact shader/scaling buffers; with LSFG it retains full motion analysis and linear-light generation. `'performance'` also uses approximate HDR10 interpolation and halves motion Flow Scale for LSFG, bounded at 0.25. MAKO FG uses its own HDR processing and selected Flow Scale. Output resolution and saved Flow Scale are preserved. SDR ignores it. See [HDR quality](HDR-PIPELINE.md#hdr-quality). |
 | `swapchain_image_count_compatibility` | `false` | Preserves the game's requested swapchain image minimum. Use only for games that otherwise fail to start. Requires restart. |
+| `mailbox_presentation_compatibility` | `false` | Presents ordered Frame Generation through MAILBOX instead of FIFO when the driver advertises it. Use only for games that hang or fail with FIFO presentation; a newer frame can replace a generated frame before it is shown. Requires restart. |
 
 ### Performance and device selection
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `gpu_headroom_percent` | `0` | GPU Headroom reserve: `0` (Off), `5`, `10`, `15`, or `20` percent. Live, Frame Generation only; see below. |
-| `flow_scale` | `0.8` | LSFG motion-estimation resolution from 0.25–1.0. Lower values reduce GPU cost and may reduce quality. |
-| `performance_mode` | `false` | Uses the lighter LSFG model. |
-| `ultra_performance` | `false` | Restart-bound lighter preset using 70% Flow Scale, the lighter model and LS1 Performance when scaling is enabled. Respects the global precision choice. |
+| `flow_scale` | `0.8` | Motion-estimation resolution from 0.25–1.0. MAKO FG applies it relative to the packaged analysis grid and requires a compatible operator shader. Lower values reduce GPU cost and may reduce quality; RGB output resolution stays unchanged. |
+| `performance_mode` | `false` | Uses the lighter LSFG model, shown as **LSFG Performance** in the model picker. |
+| `ultra_performance` | `false` | Restart-bound lighter preset for either FG model: 60% Flow Scale for MAKO FG and 70% for Lossless Scaling, active-policy-sized capacity, at least the Performance `mako_fg_mode`, the lighter LSFG model for Lossless Scaling, and MAKO Scaler when scaling is enabled. Respects the global precision choice. |
 | `gpu` | Automatic | Optional GPU name, vendor/device ID, or PCI bus ID. Cross-GPU Frame Generation is unsupported. |
 | `pacing` | `none` | Compatibility field; `none` is the only supported value. |
 
@@ -139,11 +140,19 @@ Set `MAKO_ENV=1` to build one profile from environment variables instead of TOML
 - Adaptive: `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_TARGET_REFRESH_RATE`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`, `MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS`;
 - Gamescope VRR: `MAKO_GAMESCOPE_VRR_MODE` (`follow-steam`, `on`, or `off`);
 - HDR quality: `MAKO_HDR_QUALITY` (`quality`, `balanced`, or `performance`; defaults to `performance`);
-- Scaling: `MAKO_SCALING_ENABLED`, `MAKO_SCALING_METHOD`, `MAKO_SCALING_FACTOR`, `MAKO_SCALING_SUPERSAMPLING`, `MAKO_SCALING_SHARPNESS`, `MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY`; and
-- resources: `MAKO_ULTRA_PERFORMANCE`, `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`.
+- Scaling: `MAKO_SCALING_ENABLED`, `MAKO_SCALING_METHOD`, `MAKO_SCALING_FACTOR`, `MAKO_SCALING_SUPERSAMPLING`, `MAKO_SCALING_SHARPNESS`, `MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY`, `MAKO_MAILBOX_PRESENTATION_COMPATIBILITY`; and
+- resources: `MAKO_ULTRA_PERFORMANCE`, `MAKO_FG_MODE`, `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`.
+
+`WINE_DISABLE_VK_CHILD_WINDOW_RENDERING_HACK` defaults to `1` in MAKO Decky's game wrapper and standalone `mako-launch` when the Renderer is enabled. They set it before Wine starts and preserve explicit caller values, including `0` to opt out. This launch default bypasses the affected offscreen path on Proton 8 and 9; it is not a live Renderer setting or a guarantee of direct presentation on other versions. See [standalone setup](CONFIGURATION.md#proton-offscreen-windows) and the [Wine presentation contract](WSI-ISOLATION.md#wine-offscreen-windows).
 
 `MAKO_DISABLE_HDR_EXPOSURE=1` disables HDR exposure by default. The restart-only HDR control exports `MAKO_DISABLE_HDR_EXPOSURE=0` and `DXVK_HDR=1` while retaining `DISABLE_GAMESCOPE_WSI=1`; see the [HDR launch contract](HDR-PIPELINE.md#toggle-and-launch-contract). Environment-only settings are process-start settings, not live profile controls.
 
 ## Presentation acquisition timeout
 
 `MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` limits how long MAKO waits for generated-image availability before native recovery. MAKO Decky uses 50 ms; standalone launches have no explicit default, although Adaptive VRR delivery and constrained Fixed image pools enforce a 50 ms limit. For a focused stall reproduction, try `25` and include the log. See [presentation recovery](LIFECYCLE.md) for deadline and fallback rules.
+
+## Frame generation model
+
+`mako_fg_mode` sets the normal full-solve frequency at 2× and 3×: `"quality"` every real-frame pair, `"balanced"` (default) one in two, `"performance"` one in three, or `"extra-performance"` one in four. With V1.24, Balanced and Performance correct carried motion against the new real frame; Extra Performance reuses it at even cadence and corrects it at uneven cadence. Carried pairs retain the last static-overlay map. Broken cadence and scene cuts force full solves; at 4× and above, every pair solves. Fast reversals can still produce artifacts outside Quality. Ultra Performance raises Quality and Balanced to Performance and locks Flow Scale at 60%. The setting applies live through a private frame-generation rebuild, and Lossless Scaling ignores it. `MAKO_FG_MODE` sets it in environment-only mode. See [MAKO FG Mode](MAKO-FG.md#mako-fg-mode) for selection and [source timing](MAKO-FG.md#motion-reuse-and-source-timing) for the runtime contract.
+
+`frame_generation_model` selects `"mako-fg"` (default) or `"lossless-scaling"` per profile, including AC/battery overrides. Missing fields use the current default; an explicitly saved value remains a choice, including values written by an earlier editor with a different default. The Decky and Qt model pickers present Lossless Scaling as **LSFG Quality** and **LSFG Performance**, which also write `performance_mode`; that lighter-model switch stays live. An unavailable LSFG backend falls back to bundled MAKO FG at startup without rewriting this field. The model actually initialized is fixed at process startup and remains pending across swapchain recreation until restart. `MAKO_FRAME_GENERATION_MODEL` sets it in environment-only mode. `MAKO_FG_PACKAGE` overrides the installed MAKO FG release with an absolute package directory for a test process. Without it, MAKO FG uses the release installed beside the Renderer; the override does not affect LS1 or Lossless Scaling. See [model setup](MAKO-FG.md).

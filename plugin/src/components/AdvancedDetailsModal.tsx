@@ -200,12 +200,12 @@ export function AdvancedDetailsModal({
                   borderTop: makoPanelDivider,
                 }}
               >
-                {t("ADVANCED_DETAILS_LIBRARY", "Lossless Scaling Library")}
+                {t("ADVANCED_DETAILS_LIBRARY", "Lossless Scaling Library (optional)")}
               </div>
               {detail(
                 t("ADVANCED_DETAILS_DETECTION", "Detection"),
                 dll.detected
-                  ? t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed")
+                  ? t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed (optional)")
                   : dll.error ||
                       t(
                         "ADVANCED_DETAILS_DLL_NOT_DETECTED",

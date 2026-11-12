@@ -3,6 +3,7 @@ import {
   EXTERNAL_VULKAN_LAYER_MANGOHUD,
   EXTERNAL_VULKAN_LAYER_NONE,
   EXTERNAL_VULKAN_LAYER,
+  MANGOHUD_COUNT_REAL_FRAMES,
 } from "../../config/configSchema";
 import t from "../../i18n/i18n";
 import { MakoRestartLabel, MakoSectionHeader } from "../MakoUi";
@@ -59,6 +60,30 @@ export function ExternalToolsConfigurationGroup({
               bottomSeparator="none"
             />
           </PanelSectionRow>
+
+          {config.external_vulkan_layer === EXTERNAL_VULKAN_LAYER_MANGOHUD && (
+            <PanelSectionRow>
+              <ToggleField
+                label={
+                  <MakoRestartLabel
+                    label={t(
+                      "CONFIG_MANGOHUD_COUNT_REAL_FRAMES",
+                      "Count Real Frames Only (Restart)",
+                    )}
+                  />
+                }
+                description={t(
+                  "CONFIG_MANGOHUD_COUNT_REAL_FRAMES_DESC",
+                  "Off counts every output frame, including generated ones. On shows the game's real FPS instead, but the HUD then passes through Frame Generation and Scaling.",
+                )}
+                checked={config.mangohud_count_real_frames}
+                onChange={(value) =>
+                  onConfigChange(MANGOHUD_COUNT_REAL_FRAMES, value)
+                }
+                bottomSeparator="none"
+              />
+            </PanelSectionRow>
+          )}
         </>
       )}
     </>

@@ -20,6 +20,7 @@ namespace {
     ls::GameConf exercisedProfile() {
         ls::GameConf profile{};
         profile.frame_generation_enabled = true;
+        profile.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
         profile.adaptive = true;
         profile.multiplier = 4;
         profile.target_fps = 120;
@@ -40,7 +41,7 @@ int main() {
     expect(spatialScalingLayer && !frameGenerationLayer,
         "the lower build must identify only the spatial-scaling role");
     expect(lower.scaling_enabled &&
-            lower.scaling_method == ls::ScalingMethod::Ls1Performance,
+            lower.scaling_method == ls::ScalingMethod::Mako,
         "the lower layer must retain Ultra Performance's effective scaler");
     expect(!lower.frame_generation_provisioned &&
             !lower.frame_generation_enabled && !lower.adaptive &&
@@ -93,7 +94,7 @@ int main() {
     expect(direct.frame_generation_enabled && direct.scaling_enabled,
         "direct Renderer launches must retain the established combined library");
     expect(ls::effectiveScalingMethod(direct) ==
-            ls::ScalingMethod::Ls1Performance,
+            ls::ScalingMethod::Mako,
         "direct Renderer launches must apply Ultra Performance to scaling");
     expect(spatialScalingOwnedByLayer(),
         "the direct combined layer must enforce spatial capability contracts");

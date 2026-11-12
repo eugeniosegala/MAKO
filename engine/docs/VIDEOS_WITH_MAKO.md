@@ -13,7 +13,7 @@ Use mpv's Vulkan renderer for video Frame Generation. MAKO changes displayed fra
 2. For Flatpak, follow [Flatpak preparation](FLATPAK-GUIDE.md) with `appid=io.mpv.Mpv` and its matching runtime extension. Native mpv skips this step.
 3. In **MAKO Renderer Configuration**, create a `Video` profile, enable Frame Generation, and start with Fixed 2x. Leave scaling off initially.
 
-Frame Generation and LS1 need Lossless Scaling's default Steam version and a valid DLL path. MAKO Scaler works without it.
+MAKO FG and MAKO Scaler work without Lossless Scaling; the matching Flatpak extension includes MAKO FG (see [MAKO FG](MAKO-FG.md)). Only the optional Lossless Scaling frame generation model and LS1 need Lossless Scaling's default Steam version and a valid DLL path.
 
 The Flatpak examples below select mpv’s `waylandvk` context and require a Wayland session, including Gamescope. On X11, omit `gpu-context=waylandvk` or `--gpu-context=waylandvk` and let mpv select its Vulkan context automatically. See [mpv’s context options](https://mpv.io/manual/stable/#options-gpu-context).
 
@@ -77,4 +77,4 @@ For native mpv in a Wayland session, add `--gpu-context=waylandvk` only if `mpv 
 - Higher output FPS depends on the video cadence, display refresh, and GPU capacity. Interpolation can make grain, compression artifacts, cuts, and subtitles more noticeable.
 - FFplay may use an unsupported colour format; use mpv with the SDR settings above.
 
-If MAKO does not activate, check the profile, Flatpak runtime branch, and DLL access, then [collect diagnostics](COLLECT_DIAGNOSTICS.md).
+If MAKO does not activate, check the profile and Flatpak runtime branch, plus DLL access if using Lossless Scaling, then [collect diagnostics](COLLECT_DIAGNOSTICS.md).

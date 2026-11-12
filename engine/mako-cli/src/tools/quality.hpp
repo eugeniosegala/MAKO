@@ -14,10 +14,13 @@ namespace mako::cli::quality {
         bool hdr10{false};
         bool hdr_reduced_precision{false};
         float hdr_white_nits{203.0F};
+        /// HDR exchange encoding: packed PQ (A2B10G10R10), half-float PQ or linear scRGB.
+        std::string hdr_encoding{"packed"};
         std::optional<std::string> dll;
         bool allow_fp16{true};
         std::optional<std::string> gpu;
         std::optional<std::filesystem::path> output;
+        std::optional<std::filesystem::path> input_pair;
         std::string scene{"motion-boundary"};
         float interpolation{0.5F};
         std::optional<std::string> sequence_plan;
@@ -59,8 +62,17 @@ namespace mako::cli::quality {
         float scaling_factor{1.5F};
         float sharpness{0.5F};
         uint32_t warmup_iterations{12};
+        /// Repeat warm-up batches until this much time has passed, so
+        /// automatic GPU clocks settle however cheap one graph is.
+        uint32_t warmup_milliseconds{0};
         uint32_t samples{50};
         bool frame_generation_handoff{false};
+        /// rgba8, bgra8, a2b10g10r10, a2r10g10b10, rgba16f or scrgb
+        std::string presentation_format{"rgba8"};
+        /// Reconstruct straight into the application image (not Native).
+        bool direct_output{false};
+        /// Require byte-identical direct and copy-back output (not Native).
+        bool compare_direct_output{false};
     };
 
     /// Measure the complete production spatial command graph with Vulkan GPU

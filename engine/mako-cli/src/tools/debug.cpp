@@ -158,7 +158,7 @@ int debug::run(const Options& opts, const i18n::Language language) {
         std::string dll{};
         if (opts.dll.has_value())
             dll = *opts.dll;
-        else
+        else if (!ls::makoFgPackageOverride())
             dll = ls::findShaderDll();
         mako::backend::Instance mako{
             [opts](
@@ -168,14 +168,14 @@ int debug::run(const Options& opts, const i18n::Language language) {
             ) {
                 return opts.gpu.value_or(gpu_name) == gpu_name;
             },
-            dll, opts.allow_fp16
+            dll, opts.allow_fp16, ls::makoFgPackageOverride()
         };
         mako::backend::Context& mako_ctx = mako.openContext(
             (sourceScope.release(), std::pair{srcfds[0], srcfds[1]}),
             (destinationScope.release(), destfds),
             (syncScope.release(), syncfd), extent.width, extent.height,
             mako::backend::FrameEncoding::Sdr8,
-            1.0F / opts.flow, opts.performance_mode
+            1.0F / opts.flow, opts.performance_mode, false, 1
         );
 
         // render destination images

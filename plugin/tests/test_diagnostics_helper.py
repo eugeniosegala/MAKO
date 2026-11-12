@@ -36,6 +36,7 @@ MAKO Decky: Gamescope WSI skipped: no active Gamescope session; continuing with 
 MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0; fingerprint=abc123.dirty.12345678
 MAKO Renderer: present diagnostics: operation=launch-environment pid=4242 steam_overlay_preload_filter_requested=1 steam_overlay_preload_removed=2
 MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executable=game.exe wine_executable=game.exe process_name=GameThread profile=mako identification=fallback build=1.0.0 fingerprint=abc123.dirty.12345678 steam_overlay_hook_loaded=0 steam_overlay_vulkan_loaded=0
+MAKO Renderer: present diagnostics: operation=instance-engine engine=mesa zink instances=2
 MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
 MAKO Renderer: HDR generation precision: reduced_requested=1; model_space=pq-code-values; pq_conversion=0; requested_flow_scale=0.8; motion_flow_scale=0.4; motion_width=1024; motion_height=576
 MAKO Renderer: HDR scaling precision: input_format=64; output_format=97; compact_input=1
@@ -44,7 +45,15 @@ MAKO Renderer: HDR shader source footprint: source=2560x1440; output=3840x2160; 
 MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
 MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
 MAKO Renderer: Gamescope presentation feedback initialized: vrr_enabled=1; vrr_capable=1; vrr_active=1; allow_tearing=0
+MAKO Renderer: offscreen X11 presentation window: window=2560x1440; top_level=1x1
 MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 application_width=854 application_height=532 frame_generation_width=1280 frame_generation_height=800 spatial_pipeline=pre-frame-generation images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 live_profile_recreation=guarded-maintenance1-one-shot
+MAKO Renderer: present diagnostics: operation=application-acquire-budget swapchain=1234 engine=zink requested_images=3 provisioned_images=6 surface_min_images=3 window=1
+MAKO Renderer: application acquire budget wait expired; acquiring without it swapchain=1234 window=1
+MAKO Renderer: present diagnostics: operation=fifo-backlog-drain context=1 action=hold hold_ms=8.33333 holds=1 waited_frames=28 frames=31 source_cap_fps=60 refresh_hz=120
+MAKO Renderer: present diagnostics: operation=zink-refresh-limited-cap context=1 cap_fps=60 refresh_hz=120 multiplier=2
+MAKO Renderer: present diagnostics: operation=zink-refresh-limited-cap context=2 cap_fps=40 refresh_hz=120 multiplier=3
+MAKO Renderer: present diagnostics: operation=zink-refresh-limited-cap context=2 cap_fps=0 refresh_hz=120 multiplier=1
+MAKO Renderer: present diagnostics: operation=adaptive-smooth-cadence-pacer-restored generated_limit=1 baseline_base_fps=62.5 current_base_fps=60 reason=zink-refresh-limited-cap
 MAKO Renderer: present diagnostics: operation=gamescope-presentation-feedback context=1 vrr_enabled=1 vrr_capable=1 vrr_active=1 allow_tearing=0 pacing_owner=mako-target-clock action=reset-pacer-only scheduler_reset=0 recreation=0
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources spatial_scaling_pending=1 frame_generation_backend_pending=1 flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 available_generated_capacity=1 requested_generated_capacity=3 process_restart_required=0 action=signal-out-of-date-after-successful-present
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=2 state_revision=4 reason=frame-generation-resources flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 active_generated_capacity=1 requested_generated_capacity=4 action=prepare-private-context
@@ -73,6 +82,7 @@ MAKO Renderer: present diagnostics: operation=application-queue-present stream=2
 MAKO Renderer: present diagnostics: operation=runtime-health monitor=21 pid=4242 role=frame-generation session_ms=3600000 gpu_render_node=226:128 process_rss_bytes=123456 gpu_busy_percent=95 gpu_temperature_mc=65000 mako_backend_internal_bytes=987654
 MAKO Renderer: present diagnostics: operation=gpu-headroom context=1 state=limiting reserve_percent=10 target_utilization_percent=90 measured_utilization_percent=94 source_cap_fps=38 source_floor_fps=30
 MAKO Renderer: present diagnostics: operation=adaptive-efficiency-probe-cancelled context=1 generated_limit=1 baseline_base_fps=40 current_base_fps=40 projected_output_fps=80 reason=gpu-headroom-source-cap
+MAKO Renderer: present diagnostics: operation=source-interval-spacing context=1 state=released reason=source-slowed source_interval_ms=25 retry_ms=5000 frame=120
 MAKO Renderer: present diagnostics: operation=runtime-health-unavailable reason=device-monitor-limit
 MAKO Renderer: present diagnostics: operation=present-phase-summary context=1 pid=4242 tid=4243 sample_end_monotonic_ms=3600000 calls=45 total_mean_ms=2 total_max_ms=4 render_fence_mean_ms=0.2 render_fence_max_ms=1
 MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
@@ -86,11 +96,19 @@ MAKO Renderer: spatial scaling swapchain policy: requested=854x532; surface_curr
 MAKO Renderer: spatial scaling swapchain policy: requested=1280x800; surface_current=1280x800; surface_extent_mode=fixed; advertised_source=854x532; advertised_presentation=1280x800; actual_source=1280x800; actual_presentation=1280x800; policy_revision=4; contract_policy_revision=4; query_generation=9; selected_source=0x0; selected_presentation=0x0; format=44; format_supported=1; shape_supported=1; queue_presentation_support=not-checked; queue_commands_supported=1; variable_feedback_suppressed=0; inactive_reason=application-extent-override-no-source-presentation-split; source_presentation_split=0; active=0
 MAKO Renderer: spatial scaling active: source=854x532; presentation=1280x800; factor=1.5; requested_method=ls1; active_method=ls1; sharpness=0.5; ls1_model_variant=2; ls1_translator=/runtime/libvkd3d-shader.so.1; working_format=37; pipeline=pre-frame-generation; placement_reason=presentation-within-low-resolution-budget
 MAKO Renderer: LS1 scaling unavailable; using MAKO fallback: test translator unavailable
+MAKO Renderer: fg-model operation=fallback requested=lossless-scaling next=mako-fg reason=backend-initialization-failed
+- test DLL unavailable
+MAKO Renderer: temporarily bypassing frame generation after backend scheduling failure; native presentation retained: Unable to schedule frames
+- MAKO FG host stopped responding
+MAKO Renderer: frame-generation context initialization failed; native presentation retained:
+- MAKO FG is not installed: mako-fg-host is missing
 MAKO Renderer: spatial scaling variable-surface feedback guard: surface=5678; previous_source=500x500; previous_presentation=750x750; requested=750x750; action=native-feedback-guard
 MAKO Renderer: standalone spatial scaling: frame-generation backend and interop resources were not created
 MAKO Renderer: multi-swapchain spatial-scaling present rejected before semaphore consumption; batch scaling is not supported
 MAKO Renderer: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
 MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=60 target_fps=90 generated=1 max_generated=1 stable_cadence=0 target_clock=1 target_budget_credit_outputs=0.25 target_deferred_budget_output=1 target_phase_error_ms=-2.1 source_interval_samples=60 source_interval_mean_ms=16.6 source_interval_stddev_ms=1.2 source_interval_p95_ms=18.5 source_interval_p99_ms=20.5 generated_count_changes=29 requested_interval_samples=90 requested_interval_mean_ms=11.1 requested_interval_stddev_ms=1.3 requested_interval_p95_ms=13.5 requested_interval_p99_ms=13.5 target_phase_error_samples=60 target_phase_error_rms_ms=2.2 target_phase_error_max_ms=5.5
+MAKO Renderer: present diagnostics: operation=dynamic-cadence-probe-rejected context=1 generated_limit=1 baseline_base_fps=30 measured_base_fps=30 confirmed_samples=0 native_frames=3 native_ms=100 reason=interval layer_share_max=0.95
+MAKO Renderer: present diagnostics: operation=dynamic-cadence-probe-skipped context=1 generated_limit=1 baseline_base_fps=0 measured_base_fps=0 confirmed_samples=0 native_frames=0 native_ms=0 reason=capped layer_share_max=0.02
 MAKO Renderer: present diagnostics: operation=adaptive-wsi-headroom-limit context=1 requested_min_images=3 images=5 requested_generated=2 admitted_generated=1 previous_generated_capacity=2 effective_generated_capacity=1 evidence=higher-multiplier-partial-admission action=retain-proven-generated-capacity
 MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
 MAKO Renderer: present diagnostics: operation=fixed-cadence-collapse-probe-start context=2 baseline_base_fps=30.1 observed_base_fps=30.1 confirmed_samples=0 consecutive_failures=0 retry_ms=0 action=history-only-probe
@@ -268,6 +286,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("operation=gpu-headroom", result.stdout)
                     self.assertIn("operation=adaptive-efficiency-probe-cancelled", result.stdout)
                     self.assertIn("reason=gpu-headroom-source-cap", result.stdout)
+                    self.assertIn("operation=source-interval-spacing context=1 state=released", result.stdout)
 
     def test_recent_trace_preserves_initial_and_latest_context(self):
         records = [
@@ -416,6 +435,38 @@ class DiagnosticsHelperTests(unittest.TestCase):
             helper_source,
         )
 
+    def test_proton_log_redirect_names_the_file_that_holds_the_trace(self):
+        launch = (
+            "MAKO Renderer: present diagnostics: operation=launch-environment pid=10439 "
+            "steam_overlay_preload_filter_requested=1 steam_overlay_preload_removed=2 "
+        )
+        layer = "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=5.0.0; fingerprint=abc; role=frame-generation"
+        cases = (
+            # Proton took the game's output: name its file.
+            ([launch + "proton_log=1 proton_log_file=/home/deck/my logs/steam-4206942.log"],
+             "/home/deck/my logs/steam-4206942.log"),
+            # The Renderer still reached this file, so its trace is here.
+            ([launch + "proton_log=1 proton_log_file=/home/deck/steam-7.log", layer], None),
+            ([launch + "proton_log=0"], None),
+            # Wrappers before the field existed.
+            ([launch.rstrip()], None),
+        )
+        for lines, expected in cases:
+            with self.subTest(lines=lines), tempfile.TemporaryDirectory() as directory:
+                path = Path(directory) / "diagnostics.log"
+                path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+                for preset in ("all", "hdr"):
+                    result = self._run("--log", str(path), preset)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("operation=launch-environment", result.stdout)
+                    if expected is None:
+                        self.assertNotIn("proton log:", result.stderr)
+                    else:
+                        self.assertIn(
+                            f"proton log: PROTON_LOG sent this game's output, including MAKO Renderer records, to {expected}; ",
+                            result.stderr,
+                        )
+
     def _run(self, *arguments, environment=None):
         return subprocess.run(
             ["bash", str(HELPER), *arguments],
@@ -524,6 +575,10 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("ls1_model_variant=2", result.stdout)
         self.assertIn("pipeline=pre-frame-generation", result.stdout)
         self.assertIn("LS1 scaling unavailable; using MAKO fallback", result.stdout)
+        self.assertIn("fg-model operation=fallback requested=lossless-scaling next=mako-fg", result.stdout)
+        self.assertIn("test DLL unavailable", result.stdout)
+        self.assertIn("MAKO FG host stopped responding", result.stdout)
+        self.assertIn("mako-fg-host is missing", result.stdout)
         self.assertIn("action=native-feedback-guard", result.stdout)
         self.assertIn("standalone spatial scaling", result.stdout)
         self.assertIn("multi-swapchain spatial-scaling present rejected", result.stdout)
@@ -565,6 +620,21 @@ class DiagnosticsHelperTests(unittest.TestCase):
             with self.subTest(field=field):
                 self.assertIn(field, result.stdout)
                 self.assertIn(field, producer)
+
+    def test_adaptive_and_performance_presets_keep_native_probe_cost(self):
+        producer = (
+            REPOSITORY_ROOT / "engine/mako-render/src/present_diagnostics.cpp"
+        ).read_text(encoding="utf-8")
+        for preset in ("adaptive", "performance"):
+            with self.subTest(preset=preset), tempfile.TemporaryDirectory() as temporary_directory:
+                path = self._fixture_path(Path(temporary_directory))
+                result = self._run("--log", str(path), preset)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("operation=dynamic-cadence-probe-rejected", result.stdout)
+                self.assertIn("operation=dynamic-cadence-probe-skipped", result.stdout)
+                for field in ("native_frames=", "native_ms=", "reason=", "layer_share_max="):
+                    self.assertIn(field, result.stdout)
+                    self.assertIn(field, producer)
 
     def test_current_recovery_operations_have_renderer_producers(self):
         renderer_source = "\n".join(
@@ -652,7 +722,16 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("steam_overlay_hook_loaded=0", result.stdout)
                     self.assertIn("steam_overlay_vulkan_loaded=0", result.stdout)
                     self.assertIn("operation=swapchain-context-create", result.stdout)
+                    self.assertIn("operation=instance-engine engine=mesa zink", result.stdout)
+                    self.assertIn("operation=application-acquire-budget", result.stdout)
+                    self.assertIn("application acquire budget wait expired", result.stdout)
+                    self.assertIn("operation=fifo-backlog-drain", result.stdout)
+                    self.assertIn("operation=zink-refresh-limited-cap context=1 cap_fps=60", result.stdout)
+                    self.assertIn("operation=zink-refresh-limited-cap context=2 cap_fps=40", result.stdout)
+                    self.assertIn("operation=zink-refresh-limited-cap context=2 cap_fps=0", result.stdout)
+                    self.assertIn("reason=zink-refresh-limited-cap", result.stdout)
                     self.assertIn("Gamescope presentation feedback initialized", result.stdout)
+                    self.assertIn("offscreen X11 presentation window: window=2560x1440; top_level=1x1", result.stdout)
                     self.assertIn("operation=gamescope-presentation-feedback", result.stdout)
                     self.assertIn("pacing_owner=mako-target-clock", result.stdout)
                     self.assertIn("scheduler_reset=0", result.stdout)
@@ -744,6 +823,39 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("renderer-memory operation=private-context-prepared", result.stdout)
         self.assertIn("renderer-memory operation=private-context-applied", result.stdout)
         self.assertNotIn("adaptive-ramp", result.stdout)
+
+    def test_bare_loader_lines_from_older_and_bundled_loaders_are_kept(self):
+        # Loaders without the [Vulkan Loader] prefix, such as AppImage copies,
+        # print VK_LOADER_DEBUG lines with their message types and padding.
+        loader = [
+            "LAYER:            Searching for implicit layer manifest files",
+            "LAYER:               In following locations:",
+            "LAYER:                  /tmp/.mount_game/usr/share/vulkan/implicit_layer.d",
+            'INFO | LAYER:      Insert instance layer "VK_LAYER_MESA_device_select" (libVkLayer_MESA_device_select.so)',
+            "INFO | DRIVER:     Searching for driver manifest files",
+            "[2026-11-02 18:00:00] LAYER:            Found the following files:",
+        ]
+        problems = [
+            'WARNING:          vkEnumerateInstanceLayerProperties: Unable to load implicit layer library "/home/deck/.local/share/mako-render/lib/libmako-render.so"',
+            "ERROR:            /home/deck/.local/share/mako-render/lib/libmako-render.so: cannot open shared object file",
+            "ERROR | LAYER:    loader_create_instance_chain: Failed to find 'vkGetInstanceProcAddr'",
+        ]
+        # A game's own messages carry no type list or alignment padding.
+        game = ["ERROR: failed to load texture", "INFO: emulator started", "WARNING: low disk space"]
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "diagnostics.log"
+            path.write_text("\n".join(loader + problems + game) + "\n", encoding="utf-8")
+            for preset, expected in (
+                ("all", loader + problems),
+                ("startup", loader + problems),
+                ("layers", loader + problems),
+                ("errors", problems),
+                ("hdr", []),
+            ):
+                with self.subTest(preset=preset):
+                    result = self._run("--log", str(path), "--lines", "100", preset)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout.splitlines(), expected)
 
     def test_startup_includes_loader_gamescope_context_and_hdr(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

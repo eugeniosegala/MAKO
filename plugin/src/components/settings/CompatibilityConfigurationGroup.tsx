@@ -8,6 +8,7 @@ import {
   ENABLE_ZINK,
   FORCE_ALSA_AUDIO,
   GAMESCOPE_WSI_COMPATIBILITY,
+  MAILBOX_PRESENTATION_COMPATIBILITY,
   SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY,
 } from "../../config/configSchema";
 import { dynamicCadenceRecoveryChanges } from "../../config/fractionalAdaptivePreset";
@@ -217,6 +218,39 @@ export function CompatibilityConfigurationGroup({
               checked={config.swapchain_image_count_compatibility}
               onChange={(value) =>
                 onConfigChange(SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY, value)
+              }
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_MAILBOX_PRESENTATION_COMPATIBILITY",
+                    "Mailbox Presentation (Restart)",
+                  )}
+                />
+              }
+              description={
+                <>
+                  <div>
+                    {t(
+                      "CONFIG_MAILBOX_PRESENTATION_COMPATIBILITY_DESC",
+                      "May fix games that hang or fail with Frame Generation by presenting through Mailbox instead of the FIFO queue. Use only for affected games.",
+                    )}
+                  </div>
+                  <MakoInlineTip tone="warning">
+                    {t(
+                      "CONFIG_MAILBOX_PRESENTATION_COMPATIBILITY_WARNING",
+                      "A newer frame can replace a generated frame before it is shown, which can reduce smoothness or make pacing uneven.",
+                    )}
+                  </MakoInlineTip>
+                </>
+              }
+              checked={config.mailbox_presentation_compatibility}
+              onChange={(value) =>
+                onConfigChange(MAILBOX_PRESENTATION_COMPATIBILITY, value)
               }
             />
           </PanelSectionRow>

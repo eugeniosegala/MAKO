@@ -29,6 +29,9 @@ Usage: scripts/package-local.sh [--64-bit-only] [output-path]
 
 Build and verify a local Linux engine archive. --64-bit-only omits the 32-bit
 layer and manifest for faster native 64-bit Deck/Steam Machine test builds.
+
+Every package carries MAKO FG beside the Renderer: the mako-fg-host program
+and model of the active open-weight release in engine/models/mako-fg.
 EOF
 }
 
@@ -124,7 +127,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
             apt-get update -qq
             apt-get install -y -qq \
                 git curl nodejs python3 llvm clang cmake ninja-build pkg-config g++-multilib \
-                libvulkan-dev mesa-common-dev \
+                libvulkan-dev mesa-common-dev glslang-tools \
                 qt6-base-dev qt6-base-dev-tools \
                 qt6-tools-dev qt6-tools-dev-tools \
                 qt6-declarative-dev qt6-declarative-dev-tools \
@@ -283,6 +286,7 @@ cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
     -DCMAKE_INSTALL_LIBDIR=lib \
     -DBUILD_TESTING="$build_testing" \
     -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON \
+    -DMAKO_REQUIRE_FG=ON \
     -DMAKO_BUILD_VK_LAYER=ON \
     -DMAKO_BUILD_UI=ON \
     -DMAKO_BUILD_CLI=ON \
@@ -314,6 +318,7 @@ if [[ "$build_32_bit" == true ]]; then
         -DCMAKE_INSTALL_LIBDIR=lib32 \
         -DBUILD_TESTING=OFF \
         -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON \
+        -DMAKO_REQUIRE_FG=ON \
         -DMAKO_BUILD_VK_LAYER=ON \
         -DMAKO_BUILD_UI=OFF \
         -DMAKO_BUILD_CLI=OFF \
@@ -355,9 +360,14 @@ required_paths=(
     "lib/libmako-render.so" \
     "lib/libmako-render-scaling.so" \
     "lib/vkbasalt/libvkbasalt.so" \
+    "lib/mako-fg/mako-fg-host" \
+    "lib/mako-fg/version.json" \
+    "lib/mako-fg/model/weights.bin" \
     "share/doc/mako-render/ASSET_PROVENANCE.md" \
     "share/doc/mako-render/LICENSE.md" \
     "share/doc/mako-render/THIRD_PARTY_NOTICES.md" \
+    "share/doc/mako-render/mako-fg/LICENSE" \
+    "share/doc/mako-render/mako-fg/THIRD_PARTY_NOTICES" \
     "share/applications/io.github.eugeniosegala.mako.desktop" \
     "share/applications/io.github.eugeniosegala.mako.uninstaller.desktop" \
     "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
@@ -461,6 +471,13 @@ verify_elf_class() {
 verify_elf_class "$install_dir/lib/libmako-render.so" 2
 verify_elf_class "$install_dir/lib/libmako-render-scaling.so" 2
 verify_elf_class "$install_dir/lib/vkbasalt/libvkbasalt.so" 2
+verify_elf_class "$install_dir/lib/mako-fg/mako-fg-host" 2
+mako_fg_protocol="$(sed -n 's/^constexpr uint32_t hostProtocol=\([0-9]*\);$/\1/p' \
+    "$repo_root/mako-backend/src/mako_fg_protocol.hpp")"
+if [[ "$("$install_dir/lib/mako-fg/mako-fg-host" --protocol)" != "$mako_fg_protocol" ]]; then
+    echo "Packaging failed: mako-fg-host does not match this Renderer's protocol" >&2
+    exit 1
+fi
 if [[ "$build_32_bit" == true ]]; then
     verify_elf_class "$install_dir/lib32/libmako-render.so" 1
     verify_elf_class "$install_dir/lib32/libmako-render-scaling.so" 1
@@ -635,7 +652,20 @@ for layer_binary in "${layer_binaries[@]}"; do
     fi
 done
 
+# MAKO FG is a separate program: no layer may contain it, and each must sit beside
+# the active release.
+fg_layer_binaries=("$install_dir/lib/libmako-render.so")
+if [[ "$build_32_bit" == true ]]; then
+    fg_layer_binaries+=("$install_dir/lib32/libmako-render.so")
+fi
+if ! python3 "$repo_root/scripts/mako-fg-package.py" verify "${fg_layer_binaries[@]}"; then
+    echo "Packaging failed: MAKO FG is not installed correctly" >&2
+    exit 1
+fi
+
 tar -C "$install_dir" -cJf "$output_path" .
+python3 "$repo_root/scripts/mako-fg-package.py" record-artifact \
+    "$output_path" "${fg_layer_binaries[@]}"
 
 echo "Created and verified: $output_path"
 echo "Version: $version"

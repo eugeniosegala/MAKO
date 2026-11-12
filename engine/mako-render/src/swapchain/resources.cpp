@@ -66,14 +66,29 @@ bool Swapchain::directSpatialFrameGenerationOutputSupported(
     );
 }
 
+SwapchainColorPipeline Swapchain::surfaceColorPipeline(
+        SwapchainColorPipeline pipeline,
+        const bool frameGenerationSurfaceUnavailable) {
+    if (frameGenerationSurfaceUnavailable) {
+        pipeline.generationSupported = false;
+        pipeline.reason = "the game window is rendered offscreen and copied "
+            "to the screen once per game frame, so generated frames cannot be "
+            "shown";
+    }
+    return pipeline;
+}
+
 SwapchainColorPipeline Swapchain::initialColorPipeline(
         const VkFormat format, const VkColorSpaceKHR colorSpace,
         const std::optional<bool> gamescopeHdrActive,
         const bool gamescopeDetected,
-        const bool hdrExposureDisabled) {
+        const bool hdrExposureDisabled,
+        const bool frameGenerationSurfaceUnavailable) {
     auto pipeline = classifySwapchainColor(
         format, colorSpace, gamescopeHdrActive.value_or(false)
     );
+    if (frameGenerationSurfaceUnavailable)
+        return surfaceColorPipeline(std::move(pipeline), true);
     if (hdrExposureDisabled && pipeline.hdr) {
         pipeline.generationSupported = false;
         pipeline.name = "hdr-exposure-disabled";
@@ -195,19 +210,22 @@ Swapchain::buildFrameGenerationResources(const vk::Vulkan& vk,
     int syncFd{-1};
     ls::FileDescriptorScope syncScope{{&syncFd, 1}};
     resources.syncSemaphore.emplace(vk, 0, std::nullopt, &syncFd);
+    const auto contextSettings = frameGenerationContextSettings(resourceProfile);
     resources.context = ls::owned_ptr<ls::R<backend::Context>>(
         new ls::R<backend::Context>(backendInstance.openContext(
             (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
             (destinationScope.release(), destinationFds),
             (syncScope.release(), syncFd),
             extent.width, extent.height, pipeline.encoding,
-            1.0F / ls::effectiveFlowScale(resourceProfile),
-            ls::effectivePerformanceMode(resourceProfile),
-            ls::hdrApproximateGeneration(resourceProfile.hdr_quality)
+            contextSettings.flow, contextSettings.performanceMode,
+            contextSettings.reducedHdrPrecision, contextSettings.motionPeriod
         )),
         [backend = &backendInstance](ls::R<backend::Context>& context) {
             backend->closeContext(context);
         }
+    );
+    backendInstance.setContextLossHandler(
+        resources.context.get(), resources.syncSemaphore->releaser(vk)
     );
     backend::makeLeaking();
     return resources;
@@ -243,6 +261,7 @@ void Swapchain::commitFrameGenerationResources(
 
     this->frameState.backendTimelineIndex = 1;
     this->frameState.backendFrameIndex = 0;
+    this->frameState.backendSourceCadence.reset();
     this->frameState.renderFenceInFlight = false;
     this->recoveryState.backendPending = false;
     this->recoveryState.generatedImageAdmission.reset();
@@ -250,8 +269,11 @@ void Swapchain::commitFrameGenerationResources(
     this->recoveryState.pipelineBusyRecovery.reset();
     this->fixedRefreshBudget.reset();
     this->realFramePacer.reset();
+    this->sourceIntervalSpacing.reset();
     this->smoothCadenceBaseCap.reset();
     this->smoothCadencePacerHandoff.reset();
+    this->cappedFifoBacklogDrain.reset();
+    this->lastGeneratedAcquireWait.reset();
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
     );
@@ -376,10 +398,10 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
         }
     }
 
-    auto desiredPipeline = classifySwapchainColor(
+    auto desiredPipeline = surfaceColorPipeline(classifySwapchainColor(
         this->info.format, this->info.colorSpace,
         *this->colorTransitionState.pendingGamescopeHdrActive
-    );
+    ), this->info.frameGenerationSurfaceUnavailable);
     try {
         this->rebuildPrivateResources(
             vk, std::move(desiredPipeline), this->profile
@@ -454,6 +476,8 @@ bool Swapchain::applyPendingFrameGenerationResources(
                           << generatedFrameCapacityForProfile(requested)
                           << " requested_flow_scale="
                           << ls::effectiveFlowScale(requested)
+                          << " requested_mako_fg_mode="
+                          << ls::makoFgModeName(ls::effectiveMakoFgMode(requested))
                           << " requested_lighter_model="
                           << ls::effectivePerformanceMode(requested)
                           << " action=drain-private-work\n";
@@ -540,6 +564,8 @@ bool Swapchain::applyPendingFrameGenerationResources(
     std::cerr << "MAKO Renderer: frame-generation resources changed live: "
               << "generated_capacity=" << this->destinationImages.size()
               << "; flow_scale=" << ls::effectiveFlowScale(this->profile)
+              << "; mako_fg_mode="
+              << ls::makoFgModeName(ls::effectiveMakoFgMode(this->profile))
               << "; lighter_model="
               << ls::effectivePerformanceMode(this->profile)
               << "; transition=private-context\n";
@@ -552,6 +578,8 @@ bool Swapchain::applyPendingFrameGenerationResources(
                   << " transition=private-context"
                   << " effective_flow_scale="
                   << ls::effectiveFlowScale(this->profile)
+                  << " effective_mako_fg_mode="
+                  << ls::makoFgModeName(ls::effectiveMakoFgMode(this->profile))
                   << " lighter_model="
                   << ls::effectivePerformanceMode(this->profile)
                   << " generated_frame_capacity="
@@ -577,6 +605,8 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
                 requested.sharpness, this->scalingShaderDll, this->fp16Requested,
                 this->colorPipeline.encoding, ls::hdrCompactBuffers(requested.hdrQuality)
             );
+            this->configureDirectSpatialPresentationOutputs(
+                vk, *this->preparedSpatialScaler, "spatial-scaler-prepared");
             this->configureDirectSpatialFrameGenerationOutputs(
                 vk, *this->preparedSpatialScaler, this->sourceImages,
                 "spatial-scaler-prepared"
@@ -652,7 +682,7 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
     this->invalidateSpatialScalingRecordings();
     *this->spatialScaler = std::move(*this->preparedSpatialScaler);
     this->preparedSpatialScaler.reset();
-    if (!this->info.hdrDisplayResize) {
+    if (!this->info.bridgeDisplayResize) {
         this->profile.scaling_method = requested.method;
         this->profile.scaling_sharpness = requested.sharpness;
     }
@@ -793,6 +823,36 @@ void Swapchain::configureDirectSpatialFrameGenerationOutputs(
     }
 }
 
+void Swapchain::configureDirectSpatialPresentationOutputs(
+        const vk::Vulkan& vk, SpatialScaler& scaler,
+        const std::string_view reason) noexcept {
+    this->invalidateSpatialScalingRecordings();
+    // Native Resolution, including the bridge display resize, blits into the
+    // swapchain image; reconstruction methods need storage usage on it.
+    const bool blit = scaler.activeMethod() == ls::ScalingMethod::Native;
+    if (!blit && (this->info.imageUsage & VK_IMAGE_USAGE_STORAGE_BIT) == 0) {
+        scaler.clearDirectPresentationOutputs();
+        return;
+    }
+    try {
+        const size_t bound = scaler.configureDirectPresentationOutputs(
+            vk, this->info.images, this->info.format);
+        std::cerr << "MAKO Renderer: spatial scaling presentation transport: "
+                     "mode="
+                  << (!bound ? "copy-private-output"
+                      : blit ? "direct-blit" : "direct-reconstruction")
+                  << "; outputs=" << bound
+                  << "; format=" << this->info.format
+                  << "; method=" << ls::scalingMethodName(scaler.activeMethod())
+                  << "; reason=" << reason << '\n';
+    } catch (const std::exception& error) {
+        scaler.clearDirectPresentationOutputs();
+        std::cerr << "MAKO Renderer: spatial scaling presentation transport: "
+                     "mode=copy-private-output; direct-output-unavailable="
+                  << error.what() << "; reason=" << reason << '\n';
+    }
+}
+
 void Swapchain::clearDirectSpatialFrameGenerationOutputs() noexcept {
     this->invalidateSpatialScalingRecordings();
     if (this->spatialScaler)
@@ -807,9 +867,9 @@ bool Swapchain::updateGamescopeHdrState(
             this->spatialScaler.has_value())) {
         return false;
     }
-    const auto desiredPipeline = classifySwapchainColor(
+    const auto desiredPipeline = surfaceColorPipeline(classifySwapchainColor(
         this->info.format, this->info.colorSpace, active
-    );
+    ), this->info.frameGenerationSurfaceUnavailable);
     if (!this->colorTransitionState.pendingGamescopeHdrActive &&
             desiredPipeline.name == this->colorPipeline.name &&
             desiredPipeline.generationSupported ==

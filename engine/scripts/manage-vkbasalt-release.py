@@ -410,10 +410,10 @@ def _prepare_local_flatpak(archive: Path, target: Path) -> None:
         _write(target / name, _flatpak_manifest(pin, architecture).encode(), 0o644)
     shutil.copyfile(source / "vulkan-headers.json", target / "vulkan-headers.json")
     # Keep the generated runtime manifests authoritative. Relocate only their
-    # checkout source path in this ignored build directory, never tracked files.
+    # checkout paths in this ignored build directory, never tracked files.
     for manifest in source.glob("org.freedesktop.Platform.VulkanLayer.makorender_*.yml"):
         text = manifest.read_text()
-        if text.count("path: ../../../..") != 2:
+        if text.count("path: ../../../..") != 2 or "path: ../../../" in text.replace("path: ../../../..", ""):
             raise ValueError("unexpected Flatpak source layout: " + str(manifest))
         text = text.replace("path: ../../../..", "path: " + json.dumps(str(ENGINE_ROOT.parent)))
         _write(target / manifest.name, text.encode(), 0o644)

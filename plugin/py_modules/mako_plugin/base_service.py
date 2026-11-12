@@ -31,7 +31,10 @@ from .constants import (
     VKBASALT_PROFILE_CONFIG_DIRNAME,
     WRAPPER_PROFILE_SETTINGS_FILENAME,
     PROFILE_METADATA_FILENAME,
+    STANDALONE_INSTALL_PREFIX,
+    CLI_DIR, LIB_FILENAME, ACTIVE_RENDERER_OWNER_STANDALONE,
 )
+from .layer_manifests import manifest_owner
 
 ResponseType = TypeVar('ResponseType', bound=Dict[str, Any])
 
@@ -55,6 +58,16 @@ def resolve_user_home() -> Path:
 
 class BaseService:
     """Base service class with common functionality"""
+
+    def _selected_renderer_bin_dir(self) -> Path:
+        """Use tools from the same payload as the selected native layer."""
+        if manifest_owner(
+            self.local_share_dir / JSON_FILENAME,
+            self.local_lib_dir / LIB_FILENAME,
+            self.standalone_install_prefix / "lib" / LIB_FILENAME,
+        ) == ACTIVE_RENDERER_OWNER_STANDALONE:
+            return self.standalone_install_prefix / "bin"
+        return self.user_home / CLI_DIR
 
     def __init__(self, logger: Optional[Any] = None):
         """Initialize base service
@@ -92,6 +105,7 @@ class BaseService:
             self.spatial_scaling_layer_dir /
             SPATIAL_SCALING_JSON32_FILENAME
         )
+        self.standalone_install_prefix = self.user_home / STANDALONE_INSTALL_PREFIX
         self.mako_script_path = self.user_home / SCRIPT_NAME
         self.diagnostics_script_path = self.user_home / DIAGNOSTICS_SCRIPT_NAME
         self.config_dir = self.user_home / CONFIG_DIR

@@ -90,6 +90,7 @@ if(BUILD_TESTING)
         PRIVATE mako-common)
     add_test(NAME optional-device-features
         COMMAND mako-device-feature-tests)
+    set_tests_properties(optional-device-features PROPERTIES LABELS "portable-policy")
 
     add_executable(mako-device-memory-accounting-tests
         "tests/device_memory_accounting_tests.cpp")

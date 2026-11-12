@@ -59,6 +59,7 @@ int main() {
     base.active_in = {"Game.exe"};
     base.frame_generation_provisioned = true;
     base.frame_generation_enabled = true;
+    base.frame_generation_model = ls::FrameGenerationModel::LosslessScaling;
     base.adaptive = true;
     base.adaptive_max_multiplier = 3;
     base.adaptive_auto_base_fps_cap = false;
@@ -145,6 +146,7 @@ int main() {
     ac.frame_generation_provisioned = false;
     ac.scaling_enabled = false;
     ac.swapchain_image_count_compatibility = true;
+    ac.mailbox_presentation_compatibility = true;
     ac.flow_scale = 0.8F;
     ac.performance_mode = true;
     ac.scaling_method = ls::ScalingMethod::Ls1;
@@ -152,7 +154,7 @@ int main() {
     config.power_source = ls::PowerSource::Docked;
     requested = selected(config);
     const auto projection = projectProcessStaticProfileForLiveUpdate(
-        applied, requested, true, true, false);
+        applied, requested, true, true, false, false);
     plan = planProfileUpdate(applied, projection.runtimeProfile, 3, true, true, true);
     expect(projection.restartRequired() && plan.decision.frameGenerationPrivateRebuild &&
             plan.decision.spatialScalingLiveRebuild &&
@@ -167,7 +169,7 @@ int main() {
 
     ac.scaling_factor = 1.75F;
     const auto extentProjection = projectProcessStaticProfileForLiveUpdate(
-        applied, selected(config), true, true, false);
+        applied, selected(config), true, true, false, false);
     plan = planProfileUpdate(applied, extentProjection.runtimeProfile, 3, true, true, true);
     expect(plan.decision.swapchainRecreationDeferred &&
             plan.appliedProfile.scaling_factor == applied.scaling_factor &&
@@ -185,7 +187,7 @@ int main() {
     requested = handheld;
     requested.target_fps = 100;
     const auto unprovisioned = projectProcessStaticProfileForLiveUpdate(
-        applied, requested, false, true, false);
+        applied, requested, false, true, false, false);
     plan = planProfileUpdate(applied, unprovisioned.runtimeProfile, 0, false);
     expect(unprovisioned.restartRequired() && plan.decision.processRestartDeferred &&
             !plan.appliedProfile.frame_generation_enabled &&
@@ -222,7 +224,7 @@ int main() {
     config.power_source = ls::PowerSource::Docked;
     streamProfile = ls::findProfile(config, streamIdentity, false)->second;
     const auto streamProjection = projectProcessStaticProfileForLiveUpdate(
-        applied, streamProfile, true, true, false);
+        applied, streamProfile, true, true, false, false);
     plan = planProfileUpdate(applied, streamProjection.runtimeProfile, 3, true, true, true);
     expect(streamProjection.restartRequired() &&
             plan.appliedProfile.target_fps == 120 && plan.appliedProfile.gpu == applied.gpu &&

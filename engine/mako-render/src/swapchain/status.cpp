@@ -19,8 +19,9 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
         return frameGenerationPhase == phase || spatialPhase == phase;
     };
 
+    const bool generationStopped = this->recoveryState.lostBackendStopped;
     RuntimeApplicationPhase phase = RuntimeApplicationPhase::Active;
-    if (this->runtimeStatusState.error ||
+    if (this->runtimeStatusState.error || generationStopped ||
             eitherPhase(PrivateResourceTransitionPhase::Failed)) {
         phase = RuntimeApplicationPhase::Failed;
     } else if (this->runtimeStatusState.processRestartPending) {
@@ -101,7 +102,13 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
         .appliedGeneratedCapacity = this->destinationImages.size(),
         .frameGenerationActive = effectiveFrameGenerationEnabled(
             this->profile, this->gamescopeRefreshHz
-        ) && !this->destinationImages.empty(),
+        ) && !this->destinationImages.empty() && !generationStopped,
+        // Only a profile that asked for Frame Generation needs the reason.
+        .frameGenerationUnavailableReason =
+            this->info.frameGenerationSurfaceUnavailable &&
+                this->runtimeStatusState.requestedProfile.frame_generation_provisioned
+                ? std::optional<std::string_view>{"offscreen-x11-window"}
+                : std::nullopt,
         .gpuHeadroomState = this->gpuHeadroomResult.state,
         .frameGenerationPrivatePending =
             this->frameGenerationTransition.pendingRequest(),
@@ -155,6 +162,11 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
             : std::nullopt,
         .nonSupersamplingFactorCeiling =
             nonSupersamplingFactorCeiling,
-        .error = this->runtimeStatusState.error,
+        .error = generationStopped && !this->runtimeStatusState.error
+            ? std::optional<std::string>{
+                "Frame generation stopped after repeated failures; "
+                "restart the game"
+            }
+            : this->runtimeStatusState.error,
     });
 }

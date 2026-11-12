@@ -1,0 +1,17 @@
+MAKO FG V1.24
+
+Copyright 2026 Eugenio Segala
+
+Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0)
+
+Licence text: https://creativecommons.org/licenses/by-nc/4.0/
+
+The model in `model/` (its weights and GPU shaders) is licensed under CC BY-NC 4.0. You may use, copy and share it and adapt it, including running it in your own software or porting it to another runtime, for non-commercial purposes only, provided you credit "MAKO FG by Eugenio Segala", link to the licence and say whether you made changes. Part of the training data, X4K1000FPS, is provided by its authors for non-commercial research and educational use only. They permitted this open release provided that their condition passes on to every user, so it applies to every use of this model. Commercial use is not permitted. MAKO FG is a non-commercial research project: the model is not sold and the project does not make money from it. The source code of the model, the runtime and the training is not published and is not covered by this licence.
+
+MAKO FG runtime library (runtime/)
+
+The prebuilt MAKO FG runtime in `runtime/` (the `mako-fg-host` program, `libmako-fg-runtime.a` and its headers) may be used, run or linked from your own software and redistributed unmodified, free of charge and for non-commercial purposes only, to run MAKO FG models. It is published in binary form; its source code is not published. It contains ncnn and glslang under the licences reproduced in `runtime/THIRD_PARTY_NOTICES`; keep that file with every copy of the runtime and of software built with it.
+
+Part of the training data is licensed for non-commercial use only: X4K1000FPS (X-TRAIN, reviewed subset). Commercial use of these weights is not permitted.
+
+The model and the runtime library are provided "as is", without warranty of any kind, express or implied, including fitness for a particular purpose. Generated frames are synthetic approximations of the real frames between two inputs. In no event are the authors liable for any claim, damages or other liability arising from their use.

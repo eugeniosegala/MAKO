@@ -140,6 +140,23 @@ namespace mako::layer {
         double targetPhaseErrorMaximumMilliseconds{0.0};
     };
 
+    struct AdaptiveNativeCadenceProbeDiagnostic {
+        std::string_view operation;
+        size_t generationLimit{0};
+        double baselineBaseFps{0.0};
+        double measuredBaseFps{0.0};
+        size_t confirmedSamples{0};
+        // Plans this probe emitted without generated frames, and the source
+        // time from its start to the decision. A rejecting frame already
+        // resumes generation and is not counted.
+        size_t nativeFrames{0};
+        std::chrono::steady_clock::duration nativeDuration{};
+        // Why the probe started or was skipped, and the largest share of a
+        // source interval the application spent inside MAKO beforehand.
+        std::string_view reason;
+        std::optional<double> maximumLayerShare;
+    };
+
     class AdaptiveSchedulerDiagnostics {
     public:
         virtual ~AdaptiveSchedulerDiagnostics() = default;
@@ -179,8 +196,8 @@ namespace mako::layer {
             std::string_view) {}
         virtual void automaticBaseCapRestored(size_t, double, double,
             std::string_view) {}
-        virtual void nativeCadenceProbe(std::string_view, size_t, double,
-            double, size_t) {}
+        virtual void nativeCadenceProbe(
+            const AdaptiveNativeCadenceProbeDiagnostic&) {}
         virtual void nearTargetNativePreference(std::string_view, uint32_t,
             double, double, double, std::chrono::steady_clock::duration,
             std::string_view) {}
@@ -202,13 +219,17 @@ namespace mako::layer {
         // The presentation owner supplies its existing queue horizon. Native
         // probes capture it once; the scheduler never queries the transport.
         // An active Headroom source cap bounds reachable lower-load output;
-        // zero leaves ordinary workload qualification unchanged.
+        // zero leaves ordinary workload qualification unchanged. The layer
+        // share is the previous source interval's fraction spent inside
+        // MAKO's application acquire and present calls; unknown retains the
+        // configured native-probe timer.
         [[nodiscard]] AdaptiveFramePlan planFrame(TimePoint now,
             bool generatedImageAcquireBackoff,
             std::optional<size_t> orderedFifoGenerationLimit = std::nullopt,
             std::optional<size_t> integerBaseCapGenerationLimit = std::nullopt,
             std::optional<TimePoint> queuedPresentationDeadline = std::nullopt,
-            double headroomSourceCapFps = 0.0);
+            double headroomSourceCapFps = 0.0,
+            std::optional<double> applicationLayerShare = std::nullopt);
 
         void resetTiming(TimePoint now);
         // A released Headroom cap is fresh evidence that the old paced source
@@ -340,7 +361,10 @@ namespace mako::layer {
             double desiredOutputsPerRealFrame,
             size_t maximumGeneratedFrameCount,
             size_t& generatedFrameCount,
-            std::optional<TimePoint> queuedPresentationDeadline);
+            std::optional<TimePoint> queuedPresentationDeadline,
+            std::optional<double> applicationLayerShare);
+        void reportNativeCadenceProbe(TimePoint now,
+            std::string_view operation, double measuredBaseFps);
         [[nodiscard]] inline bool advanceNearTargetNativePreference(
             TimePoint now, double baseFps, size_t configuredGenerationLimit);
         void suppressAutomaticBaseCap(size_t generationLimit,
@@ -596,20 +620,52 @@ namespace mako::layer {
             struct NativeCadenceProbe {
                 std::optional<TimePoint> nextAt;
                 std::optional<TimePoint> drainUntil;
+                std::optional<TimePoint> startedAt;
                 bool active{false};
                 bool qualifyingNearTarget{false};
                 double baselineBaseFps{0.0};
                 double minimumMeasuredBaseFps{0.0};
                 size_t confirmedSamples{0};
+                size_t nativeFrames{0};
+                std::string_view reason;
+                std::optional<double> reasonLayerShare;
+                // Application time inside MAKO since the probe was scheduled.
+                double maximumLayerShare{0.0};
+                size_t layerShareSamples{0};
+                bool layerShareUnknown{false};
+                size_t cappedFrames{0};
+                size_t heldFrames{0};
+                bool heldTriggerArmed{false};
+                // Disarmed by a rise during the current capped period.
+                bool heldTriggerSpent{false};
+                double heldTriggerBaseFps{0.0};
+                size_t skippedProbes{0};
+
+                void resetLayerShareWindow() {
+                    this->maximumLayerShare = 0.0;
+                    this->layerShareSamples = 0;
+                    this->layerShareUnknown = false;
+                }
 
                 void reset() {
                     this->nextAt.reset();
                     this->drainUntil.reset();
+                    this->startedAt.reset();
                     this->active = false;
                     this->qualifyingNearTarget = false;
                     this->baselineBaseFps = 0.0;
                     this->minimumMeasuredBaseFps = 0.0;
                     this->confirmedSamples = 0;
+                    this->nativeFrames = 0;
+                    this->reason = {};
+                    this->reasonLayerShare.reset();
+                    this->resetLayerShareWindow();
+                    this->cappedFrames = 0;
+                    this->heldFrames = 0;
+                    this->heldTriggerArmed = false;
+                    this->heldTriggerSpent = false;
+                    this->heldTriggerBaseFps = 0.0;
+                    this->skippedProbes = 0;
                 }
             } nativeCadenceProbe;
 

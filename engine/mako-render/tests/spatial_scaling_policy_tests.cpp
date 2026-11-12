@@ -234,46 +234,49 @@ int main() {
         const VkExtent2D display{3840, 2160};
         for (bool internalResize : {false, true}) {
             for (bool admitted : {false, true}) {
-                expect(hdrBridgeSharpenSourceRequired(internalResize, admitted,
+                expect(bridgeDisplayResizeSharpenSourceRequired(internalResize, admitted,
                         source, display) == (internalResize && admitted),
-                    "Shader source footprint requires an admitted internal HDR resize");
+                    "Shader source footprint requires an admitted internal display resize");
             }
         }
         for (const auto target : {source, VkExtent2D{1920,1080},
                 VkExtent2D{3840,2400}, VkExtent2D{7680,4320}}) {
-            expect(!hdrBridgeSharpenSourceRequired(true, true, source, target),
+            expect(!bridgeDisplayResizeSharpenSourceRequired(true, true, source, target),
                 "Native replacement and incompatible geometry must retain original shader sampling");
         }
-        expect(!hdrBridgeSharpenSourceRequired(true, true, {0,0}, display),
+        expect(!bridgeDisplayResizeSharpenSourceRequired(true, true, {0,0}, display),
             "Unknown source geometry must not reach the shader handoff");
-        expect(hdrBridgeSharpenSourceRequired(true, true, {1920,1080}, display),
+        expect(bridgeDisplayResizeSharpenSourceRequired(true, true, {1920,1080}, display),
             "The maximum admitted 2x internal resize must retain source-pixel sharpening");
-        for (unsigned gates = 0; gates < 16; ++gates) {
-            const auto resize = hdrBridgeDisplayResizePolicy(profile,
-                (gates & 1) != 0, (gates & 2) != 0,
-                (gates & 4) != 0, (gates & 8) != 0, source, display);
-            expect(resize.has_value() == (gates == 15),
-                "Display resize requires the private bridge, actual HDR, HDR opt-in and FG provisioning");
+        for (unsigned gates = 0; gates < 8; ++gates) {
+            const auto resize = bridgeDisplayResizePolicy(profile,
+                (gates & 1) != 0, (gates & 2) != 0, (gates & 4) != 0,
+                source, display);
+            expect(resize.has_value() == (gates == 7),
+                "Display resize requires the private bridge, HDR opt-in and FG provisioning");
         }
-        const auto resize = hdrBridgeDisplayResizePolicy(
-            profile, true, true, true, true, source, display);
+        // The game's current colour mode is not an input: SDR content on the
+        // HDR-capable bridge must reach Gamescope at the display size too, or
+        // Gamescope rescales every refresh and bridge frames miss refreshes.
+        const auto resize = bridgeDisplayResizePolicy(
+            profile, true, true, true, source, display);
         expect(resize && resize->enabled && !resize->supersampling &&
-                !profile.scaling_enabled,
-            "HDR display resize must preserve the saved Scaling choice and cap output at the display");
+                resize->preserveFrameGenerationSource && !profile.scaling_enabled,
+            "Bridge display resize must preserve the saved Scaling choice and cap output at the display");
         profile.scaling_enabled = true;
-        expect(!hdrBridgeDisplayResizePolicy(
-                profile, true, true, true, true, source, display),
+        expect(!bridgeDisplayResizePolicy(
+                profile, true, true, true, source, display),
             "Explicit user scaling must retain its own geometry and method");
         profile.scaling_enabled = false;
         for (const VkExtent2D target : {source, VkExtent2D{1920, 1080},
                 VkExtent2D{3840, 2400}, VkExtent2D{7680, 4320}, VkExtent2D{0, 0}}) {
-            expect(!hdrBridgeDisplayResizePolicy(
-                    profile, true, true, true, true, source, target),
-                "HDR display resize must reject no-op, downscale, aspect mismatch and oversized targets");
+            expect(!bridgeDisplayResizePolicy(
+                    profile, true, true, true, source, target),
+                "Bridge display resize must reject no-op, downscale, aspect mismatch and oversized targets");
         }
-        expect(!hdrBridgeDisplayResizePolicy(profile, true, true, true, true,
+        expect(!bridgeDisplayResizePolicy(profile, true, true, true,
                 source, std::nullopt) &&
-            !hdrBridgeDisplayResizePolicy(profile, true, true, true, true,
+            !bridgeDisplayResizePolicy(profile, true, true, true,
                 {0, 0}, display),
             "Unknown geometry must keep ordinary presentation");
         auto caps = fixedCapabilities(8192, 8192);
@@ -283,12 +286,12 @@ int main() {
             uniformPresentationBudgets(10'000'000), display, true);
         expect(accepted.extents && sameExtent(accepted.extents->source, source) &&
                 sameExtent(accepted.extents->presentation, display),
-            "HDR display resize must preserve the 1440p game source and select exact 4K output");
+            "Bridge display resize must preserve the 1440p game source and select exact 4K output");
         const auto denied = scalingDecisionForCreate(*resize, true, 1,
             caps, source, std::nullopt, std::nullopt,
             uniformPresentationBudgets(0), display, true);
         expect(!denied.extents,
-            "HDR display resize must obey the existing memory-admission guard");
+            "Bridge display resize must obey the existing memory-admission guard");
 
         const auto proven = committedVariableSurfaceScalingExtents(
             std::nullopt, true, true, true, false, false, source, display);
@@ -313,7 +316,7 @@ int main() {
             "Other presentation paths must keep clearing proof on native source changes");
         expect(!committedVariableSurfaceScalingExtents(
                 std::nullopt, true, true, false, false, false, display, display, true),
-            "A native-only launch cannot invent a previous HDR resize allocation");
+            "A native-only launch cannot invent a previous display resize allocation");
         expect(!committedVariableSurfaceScalingExtents(
                 SpatialScalingExtents{display, display}, true, true, false,
                 false, false, display, display, true),
@@ -344,19 +347,19 @@ int main() {
                 proven, largerSource, 2.0F, VkExtent2D{7680, 4320}, true),
             "An admission retry cannot expand beyond the proven output envelope");
 
-        // Small HDR display targets also interpolate at source resolution.
+        // Small display targets also interpolate at source resolution.
         // Their admission must price the same graph that construction uses.
         const VkExtent2D smallSource{640, 360};
         const VkExtent2D smallDisplay{1280, 720};
-        const auto smallPolicy = hdrBridgeDisplayResizePolicy(
-            profile, true, true, true, true, smallSource, smallDisplay);
+        const auto smallPolicy = bridgeDisplayResizePolicy(
+            profile, true, true, true, smallSource, smallDisplay);
         const VariablePresentationPixelBudgets postOnlyBudget{0, 1'000'000, 0};
         const auto small = scalingDecisionForCreate(*smallPolicy, true, 1,
             caps, smallSource, std::nullopt, std::nullopt,
             postOnlyBudget, smallDisplay, true);
         expect(small.extents && sameExtent(small.extents->presentation, smallDisplay) &&
                 small.memoryAdmissionPlacement == SpatialFramePipelinePlacement::PostFrameGeneration,
-            "Small HDR display resize must use the source-resolution FG memory estimate");
+            "Small display resize must use the source-resolution FG memory estimate");
         auto ordinary = *smallPolicy;
         ordinary.preserveFrameGenerationSource = false;
         const auto ordinaryDenied = scalingDecisionForCreate(ordinary, true, 1,
@@ -366,8 +369,8 @@ int main() {
             "Ordinary low-resolution scaling must not borrow the cheaper post-FG budget");
 
         // The extent lifecycle is shared by explicit SDR/HDR scaling and
-        // automatic HDR display resizing, independently of FG execution.
-        for (const bool hdr : {false, true}) {
+        // automatic bridge display resizing, independently of FG execution.
+        for (const bool hdrAllowed : {false, true}) {
             for (const bool fg : {false, true}) {
                 profile.scaling_enabled = true;
                 profile.frame_generation_enabled = fg;
@@ -384,8 +387,8 @@ int main() {
                     uniformPresentationBudgets(0), display, true, 10'000'000);
                 expect(returned.extents && sameExtent(returned.extents->presentation, display),
                     "Explicit scaling must reuse its output after a native window-mode hop");
-                expect(!hdrBridgeDisplayResizePolicy(profile, true, hdr, true, fg, source, display),
-                    "Automatic HDR geometry cannot replace explicit user scaling");
+                expect(!bridgeDisplayResizePolicy(profile, true, hdrAllowed, fg, source, display),
+                    "Automatic display geometry cannot replace explicit user scaling");
             }
         }
     }
@@ -1919,6 +1922,49 @@ int main() {
             VK_PRESENT_MODE_MAILBOX_KHR &&
             !scalingOnlyPresent.compositorPresentMode,
         "Scaling-only presentation must retain its existing lower present-mode owner");
+    const auto mailboxOrderedPresent = gamescopeScalingPresentContract(
+        combinedCreate.presentMode, false, combinedPrivateTransport, true, false, true
+    );
+    expect(mailboxOrderedPresent.lowerPresentMode ==
+            VK_PRESENT_MODE_MAILBOX_KHR &&
+            !mailboxOrderedPresent.compositorPresentMode,
+        "Mailbox Presentation must replace ordered FIFO on an ordinary surface without a refresh clock");
+    const auto mailboxBridgePresent = gamescopeScalingPresentContract(
+        combinedCreate.presentMode, true, combinedPrivateTransport, true, true, true
+    );
+    expect(mailboxBridgePresent.lowerPresentMode ==
+            VK_PRESENT_MODE_MAILBOX_KHR &&
+            mailboxBridgePresent.compositorPresentMode ==
+                VK_PRESENT_MODE_MAILBOX_KHR,
+        "Mailbox Presentation must also release the bridge's per-output FIFO ordering");
+    const auto unavailableMailboxPresentation = gamescopeScalingPresentContract(
+        combinedCreate.presentMode, false, combinedPrivateTransport, false, true, true
+    );
+    expect(unavailableMailboxPresentation.lowerPresentMode ==
+            VK_PRESENT_MODE_FIFO_KHR &&
+            !unavailableMailboxPresentation.compositorPresentMode,
+        "Mailbox Presentation must retain ordered FIFO when the driver does not advertise MAILBOX");
+    const auto scalingOnlyMailboxPresentation = gamescopeScalingPresentContract(
+        scalingOnlyCreate.presentMode, true, scalingOnlyPrivateTransport, true, true, true
+    );
+    expect(scalingOnlyMailboxPresentation.lowerPresentMode ==
+            scalingOnlyCreate.presentMode &&
+            !scalingOnlyMailboxPresentation.compositorPresentMode,
+        "Mailbox Presentation must not change scaling-only presentation");
+    expect(x11WindowPresentsOffscreen(2560, 1440, 1, 1),
+        "A Wine client window inside a 1x1 top-level must be recognized as offscreen");
+    expect(!x11WindowPresentsOffscreen(3840, 2160, 1920, 1080) &&
+            !x11WindowPresentsOffscreen(2560, 1440, 1280, 720) &&
+            !x11WindowPresentsOffscreen(2560, 1440, 2560, 2),
+        "A window switching to fullscreen before its top-level is resized must keep frame generation");
+    expect(!x11WindowPresentsOffscreen(3840, 2160, 3840, 2060),
+        "A fullscreen window briefly clipped by a desktop panel must keep frame generation");
+    expect(!x11WindowPresentsOffscreen(1, 1, 1, 1),
+        "A 1x1 top-level window presenting to itself is not drawn offscreen");
+    expect(!x11WindowPresentsOffscreen(2560, 1440, 2560, 1440),
+        "A top-level window presenting to itself must keep frame generation");
+    expect(!x11WindowPresentsOffscreen(2560, 1440, 2580, 1480),
+        "A child window inside a larger top-level must keep frame generation");
 
     auto inactiveCombinedProfile = combinedProfile;
     inactiveCombinedProfile.scaling_method = ls::ScalingMethod::Native;
@@ -2006,6 +2052,110 @@ int main() {
             compatibleNonOrderedCreate.presentMode ==
                 VK_PRESENT_MODE_MAILBOX_KHR,
         "Explicit startup compatibility must not invent ordered transport on a non-ordered path");
+
+    VkSwapchainCreateInfoKHR directScalingCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 3,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    };
+    static_cast<void>(applySwapchainCreateProvisioning(
+        frameGenerationOnlyProfile, 0, directScalingCreate,
+        false, true, false, false, true));
+    expect((directScalingCreate.imageUsage & VK_IMAGE_USAGE_STORAGE_BIT) != 0,
+        "A directly written scaled swapchain must request storage usage");
+    VkSwapchainCreateInfoKHR directWithoutScalingCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 3,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+    };
+    static_cast<void>(applySwapchainCreateProvisioning(
+        frameGenerationOnlyProfile, 0, directWithoutScalingCreate,
+        true, false, false, false, true));
+    expect((directWithoutScalingCreate.imageUsage & VK_IMAGE_USAGE_STORAGE_BIT) == 0,
+        "Storage usage must never be added without active scaling");
+    for (const auto method : {ls::ScalingMethod::Mako, ls::ScalingMethod::Ls1,
+            ls::ScalingMethod::Ls1Performance}) {
+        expect(directSpatialPresentationRequested(true, true, method, true, false),
+            "Every reconstruction method must request direct presentation");
+        expect(!directSpatialPresentationRequested(true, true, method, true, true),
+            "A shader layer without storage-safe views must keep the copy path");
+        expect(!directSpatialPresentationRequested(false, true, method, true, false) &&
+                !directSpatialPresentationRequested(true, false, method, true, false),
+            "Inactive scaling and MAKO's display resize must keep the copy path");
+    }
+    expect(!directSpatialPresentationRequested(true, true, ls::ScalingMethod::Native, true, false),
+        "Native Resolution must keep transfer-only swapchain usage");
+    const VkImageFormatProperties storageImageLimits{
+        .maxExtent = {2560, 1600, 1},
+        .maxMipLevels = 1,
+        .maxArrayLayers = 1,
+        .sampleCounts = VK_SAMPLE_COUNT_1_BIT,
+    };
+    expect(directSpatialPresentationImageSupported({2560, 1600}, storageImageLimits),
+        "A presentation extent at the storage-image limit must retain direct output");
+    for (const VkExtent2D extent : {VkExtent2D{2561, 1600}, {2560, 1601}, {0, 1600}, {2560, 0}})
+        expect(!directSpatialPresentationImageSupported(extent, storageImageLimits),
+            "Unsupported storage extents must keep transfer-only swapchain creation");
+    for (const auto limit : {&VkImageFormatProperties::maxMipLevels,
+            &VkImageFormatProperties::maxArrayLayers}) {
+        auto unsupported = storageImageLimits;
+        unsupported.*limit = 0;
+        expect(!directSpatialPresentationImageSupported({2560, 1600}, unsupported),
+            "Missing mip or layer support must keep the copy path");
+    }
+    auto unsupportedStorage = storageImageLimits;
+    unsupportedStorage.maxExtent.depth = 0;
+    expect(!directSpatialPresentationImageSupported({2560, 1600}, unsupportedStorage),
+        "A 2D storage image still requires a supported depth of one");
+    unsupportedStorage = storageImageLimits;
+    unsupportedStorage.sampleCounts = VK_SAMPLE_COUNT_4_BIT;
+    expect(!directSpatialPresentationImageSupported({2560, 1600}, unsupportedStorage),
+        "Multisample-only storage support must not enable swapchain storage usage");
+    // Native Resolution, including the bridge display resize, blits straight
+    // into the swapchain only where the copy-back it replaces is lossless.
+    for (const auto format : {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM})
+        expect(directNativePresentationFormatCompatible(VK_FORMAT_R8G8B8A8_UNORM, format) &&
+                !directNativePresentationFormatCompatible(VK_FORMAT_R16G16B16A16_SFLOAT, format),
+            "8-bit UNORM swapchains must take the Native blit only from 8-bit working images");
+    expect(directNativePresentationFormatCompatible(
+                VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R16G16B16A16_SFLOAT) &&
+            !directNativePresentationFormatCompatible(
+                VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT),
+        "Half-float swapchains must take the Native blit only from half-float working images");
+    for (const auto format : {VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+            VK_FORMAT_A2R10G10B10_UNORM_PACK32, VK_FORMAT_B8G8R8A8_SRGB,
+            VK_FORMAT_R8G8B8A8_SRGB, VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_FORMAT_UNDEFINED})
+        for (const auto working : {VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT})
+            expect(!directNativePresentationFormatCompatible(working, format),
+                "Packed 10-bit, sRGB and unlisted swapchains must keep the Native copy-back, "
+                "whose intermediate rounding a single blit would skip");
+    expect(!directSpatialPresentationRequested(true, true, ls::ScalingMethod::Mako, false, false) &&
+            directSpatialPresentationRequested(true, true, ls::ScalingMethod::Ls1, false, false),
+        "An unusable FP16 request affects only MAKO Scaler, which then uses Native Resolution");
+    for (const bool fp16 : {false, true}) {
+        for (const auto format : {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R8G8B8A8_UNORM})
+            expect(directSpatialPresentationFormat(format, fp16) &&
+                    directSpatialPresentationFormatCompatible(VK_FORMAT_R8G8B8A8_UNORM, format, fp16) &&
+                    !directSpatialPresentationFormatCompatible(VK_FORMAT_R16G16B16A16_SFLOAT, format, fp16),
+                "8-bit UNORM swapchains must take the direct path only from 8-bit working images");
+        expect(directSpatialPresentationFormatCompatible(
+                    VK_FORMAT_R16G16B16A16_SFLOAT, VK_FORMAT_R16G16B16A16_SFLOAT, fp16) &&
+                !directSpatialPresentationFormatCompatible(
+                    VK_FORMAT_R8G8B8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT, fp16),
+            "Half-float swapchains must take the direct path only from half-float working images");
+        for (const auto format : {VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+                VK_FORMAT_A2R10G10B10_UNORM_PACK32})
+            expect(directSpatialPresentationFormatCompatible(
+                        VK_FORMAT_R16G16B16A16_SFLOAT, format, fp16) == fp16 &&
+                    !directSpatialPresentationFormatCompatible(
+                        VK_FORMAT_R8G8B8A8_UNORM, format, fp16),
+                "Packed 10-bit swapchains must take the direct path only with FP16 arithmetic, "
+                "which already matches the half-float private output");
+        for (const auto format : {VK_FORMAT_B8G8R8A8_SRGB, VK_FORMAT_R8G8B8A8_SRGB,
+                VK_FORMAT_A8B8G8R8_UNORM_PACK32, VK_FORMAT_UNDEFINED})
+            expect(!directSpatialPresentationFormat(format, fp16),
+                "sRGB and unlisted swapchain formats must keep the copy-based path");
+    }
 
     VkPhysicalDeviceMemoryBudgetPropertiesEXT imageCountPricingBudget{
         .sType =

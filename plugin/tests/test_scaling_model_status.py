@@ -14,6 +14,8 @@ sys.modules.setdefault("decky", SimpleNamespace(logger=Mock()))
 
 from py_modules.mako_plugin.constants import CLI_DIR, CLI_FILENAME
 from py_modules.mako_plugin.dll_detection import DllDetectionService
+from py_modules.mako_plugin import base_service
+from py_modules.mako_plugin.constants import JSON_FILENAME, LIB_FILENAME
 
 
 class ScalingModelStatusTests(unittest.TestCase):
@@ -21,8 +23,8 @@ class ScalingModelStatusTests(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.home = Path(self.temporary.name)
-        self.service = DllDetectionService(Mock())
-        self.service.user_home = self.home
+        with patch.object(base_service, "resolve_user_home", return_value=self.home):
+            self.service = DllDetectionService(Mock())
         self.dll = self.home / "library with spaces" / "Lossless.dll"
         self.dll.parent.mkdir()
         self.dll.write_text("synthetic input")
@@ -76,6 +78,27 @@ class ScalingModelStatusTests(unittest.TestCase):
                 self.assertEqual(kwargs["timeout"], 15)
         self.assertEqual(self.dll.read_bytes(), original)
         self.assertFalse((self.home / ".config").exists())
+
+    def test_selected_owner_switches_inspector_and_invalidates_cached_result(self):
+        standalone = self.home / ".local/bin/mako-cli"
+        standalone.parent.mkdir(parents=True)
+        standalone.write_text("standalone inspector")
+        manifest = self.service.local_share_dir / JSON_FILENAME
+        manifest.parent.mkdir(parents=True)
+        for library, selected in (
+            (self.service.local_lib_dir / LIB_FILENAME, self.cli),
+            (self.home / ".local/lib" / LIB_FILENAME, standalone),
+            (self.service.local_lib_dir / LIB_FILENAME, self.cli),
+        ):
+            manifest.write_text(json.dumps({"layer": {"library_path": str(library)}}))
+            self.assertTrue(self.check()["compatible"])
+            self.assertEqual(self.runner.call_args.args[0][0], str(selected))
+        self.assertEqual(self.runner.call_count, 3)
+        # Do not fall back to the retained other-owner inspector.
+        standalone.unlink()
+        manifest.write_text(json.dumps({"layer": {"library_path": str(self.home / ".local/lib" / LIB_FILENAME)}}))
+        self.assertIsNone(self.check()["compatible"])
+        self.assertEqual(self.runner.call_count, 3)
 
     def test_ls1_always_inspects_fp32_and_ignores_global_precision_changes(self):
         for precision in (False, True, False):

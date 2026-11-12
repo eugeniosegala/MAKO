@@ -29,6 +29,7 @@ namespace vk {
         PFN_vkGetPhysicalDeviceQueueFamilyProperties GetPhysicalDeviceQueueFamilyProperties;
         PFN_vkGetPhysicalDeviceFeatures2 GetPhysicalDeviceFeatures2;
         PFN_vkGetPhysicalDeviceFormatProperties GetPhysicalDeviceFormatProperties;
+        PFN_vkGetPhysicalDeviceFormatProperties2 GetPhysicalDeviceFormatProperties2;
         PFN_vkGetPhysicalDeviceImageFormatProperties2 GetPhysicalDeviceImageFormatProperties2;
         PFN_vkGetPhysicalDeviceMemoryProperties GetPhysicalDeviceMemoryProperties;
         PFN_vkGetPhysicalDeviceMemoryProperties2 GetPhysicalDeviceMemoryProperties2;
@@ -198,7 +199,8 @@ namespace vk {
             bool isGraphical = true,
             std::optional<PFN_vkSetDeviceLoaderData> setLoaderData = std::nullopt,
             const std::optional<std::filesystem::path>& cachefile = std::nullopt,
-            bool shaderFloat16Enabled = false);
+            bool shaderFloat16Enabled = false,
+            bool storageImageWriteWithoutFormatEnabled = false);
 
         /// find a memory type index
         /// @param validTypes bitset of valid memory types
@@ -225,6 +227,13 @@ namespace vk {
         /// Check whether this physical device exposes the extended storage
         /// image formats required by packed RGB10A2 compute output.
         [[nodiscard]] bool supportsStorageImageExtendedFormats() const;
+
+        /// Whether a shader may write this format through a storage image
+        /// declared without a format: the device feature is enabled, the
+        /// format supports optimal-tiled storage and format features 2
+        /// explicitly advertise format-less writes. Missing proof is false.
+        [[nodiscard]] bool supportsStorageImageWriteWithoutFormat(
+            VkFormat format) const;
 
         /// persist the pipeline cache to file, silently failing on error
         void persistPipelineCache() const noexcept;
@@ -300,6 +309,7 @@ namespace vk {
         VkQueueFlags queueFamilyFlags{0};
         bool frameGenerationInterop{true};
         bool fp16;
+        bool storageWriteWithoutFormat{false};
         bool robustImageAccess2;
 
         ls::owned_ptr<VkDevice> device;

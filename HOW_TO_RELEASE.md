@@ -17,6 +17,7 @@ Fast native-only packages and direct deployments are intentionally incomplete an
 ## One-time setup
 
 - Install the [Renderer build prerequisites](engine/docs/BUILDING-FROM-SOURCE.md).
+- Every Renderer package carries the active MAKO FG release as a separate program from the ignored `engine/models/mako-fg`. Run `mako-fg release sync` in the private MAKO FG checkout first; publication fails if the release is missing or not cleared for public distribution. See [MAKO FG packaging](engine/docs/BUILDING-FROM-SOURCE.md#mako-fg).
 - Authenticate GitHub CLI with `gh auth login -h github.com`.
 - Confirm `origin` targets this repository and the worktree is clean.
 - Prepare the SteamOS test machine and complete any affected manual game checks described in [Testing](TESTING.md). A compatible MAKO Gym checkout is needed only for hardware suites you choose to run.
@@ -29,7 +30,7 @@ Source identity alone is insufficient: Vulkan extension macros can change compil
 
 - Build complete tester ZIPs with `MAKO_PORTABLE_PACKAGE=1`. Local Decky archive names separate portable and default builder modes, so a portable candidate cannot reuse a default host build. A changed container image, external SDK, or compiler package can still alter output without changing MAKO source; remove the matching cached archives before rebuilding after such a change. Publication rebuilds native archives independently.
 - Keep the shared package header check enabled for both 64-bit and 32-bit native and Flatpak builds. `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON` requires headers at least as new as [`engine/vulkan-headers-revision.txt`](engine/vulkan-headers-revision.txt), with `VK_KHR_present_id2` and `VK_EXT_present_timing`, even when tests are skipped. It checks build-time declarations and does not raise the game's Vulkan runtime requirement. Do not turn required compatibility support into an optional compile-time path without an equivalent fallback or a package failure.
-- Retain the exact tester ZIP, its SHA-256, embedded Renderer hashes and binary fingerprint, source commit and dirty state, build log, compiler/Qt/Vulkan header versions, pinned vkBasalt asset identity, and Flatpak SDK/runtime identities. Record the devices, driver, Proton version, games, and results against that artifact. After changing the header pin, regenerate the shared Flatpak module with `just generate-flatpak-headers`. After changing the vkBasalt pin, regenerate its module with `just generate-vkbasalt-release`. Package and portable gates reject stale generated modules. Do not identify tested content by filename or source commit alone.
+- Retain the exact tester ZIP, its SHA-256, embedded Renderer hashes and binary fingerprint, source commit and dirty state, build log, compiler/Qt/Vulkan header versions, MAKO FG source commit and bundled release, pinned vkBasalt asset identity, and Flatpak SDK/runtime identities. Record the devices, driver, Proton version, games, and results against that artifact. After changing the header pin, regenerate the shared Flatpak module with `just generate-flatpak-headers`. After changing the vkBasalt pin, regenerate its module with `just generate-vkbasalt-release`. Package and portable gates reject stale generated modules. Do not identify tested content by filename or source commit alone.
 - Treat any builder, header, compiler, build-option, or runtime SDK change as a new candidate requiring affected compatibility coverage. The container recipe fixes the baseline but still receives distribution package updates; it does not guarantee reproducible bytes. Record the resolved versions from each build.
 - After publication, download and verify the actual public assets, check that Decky's embedded Renderer matches the standalone archive, and complete the public installation and affected-game checks below. A successful build or checksum check does not establish game compatibility.
 
@@ -75,7 +76,15 @@ The local candidate ZIP is not promoted byte-for-byte: publication makes its own
 
 ## Publish
 
-From the repository root, replace `1.2.0` with the release version:
+The bundled model card links MAKO FG's Hugging Face repository, so publish the bundled MAKO FG version there first. From the private MAKO FG checkout, replace `V1.22` with the bundled version folder in `engine/models/mako-fg/`:
+
+```bash
+.venv/bin/mako-fg release hf --version V1.22 --hub-repo eugeniosegala/MAKO-FG
+```
+
+It uploads only the release's public files and verifies a fresh download. It never changes the repository's visibility, which is set in its Hugging Face settings.
+
+Then, from this repository's root, replace `1.2.0` with the release version:
 
 ```bash
 ./scripts/publish-release.sh 1.2.0

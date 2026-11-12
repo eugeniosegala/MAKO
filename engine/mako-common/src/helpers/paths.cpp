@@ -7,6 +7,19 @@
 #include <filesystem>
 #include <vector>
 
+std::filesystem::path ls::makoFgPackagePath() {
+    std::filesystem::path path;
+    if (const char* value = std::getenv("MAKO_FG_PACKAGE"); value && *value)
+        path = value;
+    else if (const char* data = std::getenv("XDG_DATA_HOME"); data && *data)
+        path = std::filesystem::path(data) / "mako-render/models/mako-fg";
+    else if (const char* home = std::getenv("HOME"); home && *home)
+        path = std::filesystem::path(home) / ".local/share/mako-render/models/mako-fg";
+    if (!path.is_absolute())
+        throw ls::error("MAKO FG requires an absolute model package path");
+    return path;
+}
+
 std::filesystem::path ls::findShaderDll() {
     const std::vector<std::filesystem::path> FRAGMENTS{{
         ".local/share/Steam/steamapps/common",
@@ -47,4 +60,10 @@ std::filesystem::path ls::findShaderDll() {
         return local;
 
     throw ls::error("unable to locate Lossless.dll, please set the path in the configuration");
+}
+
+std::optional<std::filesystem::path> ls::makoFgPackageOverride() {
+    if (const char* value = std::getenv("MAKO_FG_PACKAGE"); value && *value)
+        return makoFgPackagePath();
+    return std::nullopt;
 }

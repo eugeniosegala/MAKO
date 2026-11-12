@@ -66,7 +66,7 @@ COMMANDS:
     debug       Run mako on a set of images
     inspect-dll Inspect and fingerprint licensed model-resource compatibility
     quality-regression
-                Run a procedural LSFG image-quality regression
+                Run a procedural LSFG image-quality regression or a saved image pair
     spatial-quality-regression
                 Run a procedural MAKO/LS1 spatial-quality regression
     spatial-profile
@@ -101,6 +101,7 @@ SUBCOMMAND OPTIONS:
 
     benchmark
         -t, --duration <SECONDS>        Benchmark duration in seconds
+            --mako-fg-mode <MODE>      MAKO FG mode: quality (default), balanced, performance, extra-performance
             --profile                  Separate CPU/GPU diagnostic mode; ignores duration
             --profile-samples <INT>     Measured iterations, 1-10000 (default 200)
             --profile-warmup <INT>      Warm-up iterations, 6-10000 (default 200)
@@ -112,6 +113,7 @@ SUBCOMMAND OPTIONS:
 
     quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
+            --input-pair <DIR>          Read previous/current/reference RGB8 PPMs; reports OBSERVED
         -a, --allow-fp16                Request FP16 arithmetic (default)
             --no-fp16                  Use FP32 arithmetic
         -g, --gpu <STRING>              GPU to use
@@ -122,6 +124,7 @@ SUBCOMMAND OPTIONS:
             --hdr10                    Single-pair packed HDR10 quality probe
             --hdr-reduced-precision    Approximate PQ generation; requires --hdr10
             --hdr-white-nits <NITS>    HDR fixture white (default 203, max 10000)
+            --hdr-encoding <NAME>      HDR exchange: packed (default), pq16 or scrgb; requires --hdr10
         -t, --interpolation <FLOAT>     Generated timestamp between 0 and 1
         -f, --flow <FLOAT>              Flow scale from 0.25 to 1.0
         -p, --performance-mode          Use the lighter LSFG model
@@ -150,9 +153,13 @@ SUBCOMMAND OPTIONS:
         -h, --height <INT>              Presentation height
         -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
         -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
-        -u, --warmup <INT>              Untimed warm-up graph iterations
+        -u, --warmup <INT>              Untimed warm-up graph iterations per batch
+        -W, --warmup-ms <INT>           Repeat warm-up batches for at least this long, 0-60000
         -n, --samples <INT>             Timestamped graph iterations
         -x, --frame-generation-handoff Include the full-resolution FG source handoff
+        -p, --presentation-format <NAME> rgba8 (default), bgra8, a2b10g10r10, a2r10g10b10, rgba16f, or scrgb
+        -D, --direct-output             Write directly into the application image
+        -C, --compare-direct-output     Require identical direct and copy-back pixels
 
     synchronization-validation-canary
         -g, --gpu <STRING>              GPU to use
@@ -264,7 +271,8 @@ SUBCOMMAND OPTIONS:
         benchmark::Options opts{};
         bool profileControlsExplicit{false};
 
-        const std::array<option, 16> GETOPT {{
+        const std::array<option, 17> GETOPT {{
+            { "mako-fg-mode",     required_argument, nullptr, 1005 },
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
             { "no-fp16",          no_argument,       nullptr, 'A' },
@@ -336,6 +344,9 @@ SUBCOMMAND OPTIONS:
                 case 1004:
                     opts.profile_hdr_reduced_precision = true;
                     profileControlsExplicit = true;
+                    break;
+                case 1005:
+                    opts.mako_fg_mode = optarg;
                     break;
                 case '?':
                 default:
@@ -429,7 +440,9 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::Options opts{};
-        const std::array<option, 16> GETOPT {{
+        const std::array<option, 18> GETOPT {{
+            { "input-pair", required_argument, nullptr, 1006 },
+            { "hdr-encoding", required_argument, nullptr, 1007 },
             { "hdr10", no_argument, nullptr, 1003 },
             { "hdr-reduced-precision", no_argument, nullptr, 1004 },
             { "hdr-white-nits", required_argument, nullptr, 1005 },
@@ -452,9 +465,11 @@ SUBCOMMAND OPTIONS:
         while ((c = getopt_long(
                 argc, argv, "d:ag:o:s:t:f:p", GETOPT.data(), nullptr)) != -1) {
             switch (c) {
+                case 1006: opts.input_pair = optarg; break;
                 case 1003: opts.hdr10 = true; break;
                 case 1004: opts.hdr_reduced_precision = true; break;
                 case 1005: opts.hdr_white_nits = numericArgument<float>(optarg, "--hdr-white-nits"); break;
+                case 1007: opts.hdr_encoding = optarg; break;
                 case 1001:
                     opts.width = numericArgument<uint32_t>(optarg, "--width");
                     break;
@@ -585,7 +600,7 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_spatial_profile(int argc, char** argv,
             const std::string& program) {
         quality::SpatialProfileOptions opts{};
-        const std::array<option, 13> GETOPT {{
+        const std::array<option, 17> GETOPT {{
             { "allow-fp16", no_argument, nullptr, 'a' },
             { "no-fp16", no_argument, nullptr, 'A' },
             { "dll",                      required_argument, nullptr, 'd' },
@@ -596,14 +611,18 @@ SUBCOMMAND OPTIONS:
             { "factor",                   required_argument, nullptr, 'f' },
             { "sharpness",                required_argument, nullptr, 's' },
             { "warmup",                   required_argument, nullptr, 'u' },
+            { "warmup-ms",                required_argument, nullptr, 'W' },
             { "samples",                  required_argument, nullptr, 'n' },
             { "frame-generation-handoff", no_argument,       nullptr, 'x' },
+            { "presentation-format",      required_argument, nullptr, 'p' },
+            { "direct-output",            no_argument,       nullptr, 'D' },
+            { "compare-direct-output",    no_argument,       nullptr, 'C' },
             { nullptr,                       no_argument,       nullptr,  0  }
         }};
 
         int c{0};
         while ((c = getopt_long(
-                argc, argv, "ad:g:m:w:h:f:s:u:n:x", GETOPT.data(), nullptr)) != -1) {
+                argc, argv, "ad:g:m:w:h:f:s:u:W:n:xp:DC", GETOPT.data(), nullptr)) != -1) {
             switch (c) {
                 case 'a': opts.allow_fp16 = true; break;
                 case 'A': opts.allow_fp16 = false; break;
@@ -637,6 +656,11 @@ SUBCOMMAND OPTIONS:
                         optarg, "--warmup"
                     );
                     break;
+                case 'W':
+                    opts.warmup_milliseconds = numericArgument<uint32_t>(
+                        optarg, "--warmup-ms"
+                    );
+                    break;
                 case 'n':
                     opts.samples = numericArgument<uint32_t>(
                         optarg, "--samples"
@@ -644,6 +668,15 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'x':
                     opts.frame_generation_handoff = true;
+                    break;
+                case 'p':
+                    opts.presentation_format = optarg;
+                    break;
+                case 'D':
+                    opts.direct_output = true;
+                    break;
+                case 'C':
+                    opts.compare_direct_output = true;
                     break;
                 case '?':
                 default:

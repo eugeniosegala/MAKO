@@ -31,6 +31,10 @@ namespace mako::cli {
         return reportPrecision(opts.allow_fp16);
     }
     int quality::run(const Options& opts) {
+        if (opts.input_pair) {
+            std::cout << "input-pair=" << opts.input_pair->string()
+                      << " interpolation=" << opts.interpolation << '\n';
+        }
         return reportPrecision(opts.allow_fp16);
     }
     int quality::runCombined(const CombinedOptions& opts) {

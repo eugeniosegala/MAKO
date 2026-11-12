@@ -26,6 +26,9 @@ target_compile_options(mako-cli PRIVATE
     -Wno-unsafe-buffer-usage) # CLI parsing
 
 if(BUILD_TESTING)
+    add_executable(mako-quality-inputs-tests "tests/quality_inputs_tests.cpp")
+    target_include_directories(mako-quality-inputs-tests PRIVATE src "../mako-common/include")
+    add_test(NAME cli-quality-inputs-contract COMMAND mako-quality-inputs-tests)
     add_executable(mako-profile-statistics-tests "tests/profile_statistics_tests.cpp")
     target_include_directories(mako-profile-statistics-tests PRIVATE src)
     target_link_libraries(mako-profile-statistics-tests PRIVATE mako-common)

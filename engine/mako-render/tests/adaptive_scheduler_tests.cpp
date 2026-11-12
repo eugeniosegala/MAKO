@@ -4,6 +4,7 @@
 #include "generated_frame_delivery.hpp"
 #include "presentation_policy.hpp"
 #include "profile_update.hpp"
+#include "swapchain/application_acquire_budget.hpp"
 
 #include <algorithm>
 #include <array>
@@ -12,6 +13,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdlib>
+#include <deque>
 #include <exception>
 #include <iostream>
 #include <limits>
@@ -57,7 +59,16 @@ namespace {
             std::chrono::milliseconds duration{0};
         };
 
+        struct NativeProbe {
+            std::string operation;
+            size_t nativeFrames{0};
+            std::chrono::steady_clock::duration nativeDuration{};
+            std::string reason;
+            std::optional<double> maximumLayerShare;
+        };
+
         std::vector<Event> events;
+        std::vector<NativeProbe> nativeProbes;
         std::vector<AdaptivePlanDiagnostic> plans;
         std::optional<AdaptivePlanDiagnostic> latestPlan;
 
@@ -188,10 +199,17 @@ namespace {
             });
         }
 
-        void nativeCadenceProbe(std::string_view operation, size_t,
-                double, double, size_t) override {
+        void nativeCadenceProbe(
+                const AdaptiveNativeCadenceProbeDiagnostic& probe) override {
             this->events.push_back({
-                .operation = std::string(operation),
+                .operation = std::string(probe.operation),
+            });
+            this->nativeProbes.push_back({
+                .operation = std::string(probe.operation),
+                .nativeFrames = probe.nativeFrames,
+                .nativeDuration = probe.nativeDuration,
+                .reason = std::string(probe.reason),
+                .maximumLayerShare = probe.maximumLayerShare,
             });
         }
 
@@ -294,6 +312,7 @@ namespace {
         TimePoint now{};
         std::optional<TimePoint> queuedPresentationDeadline;
         double headroomSourceCapFps{};
+        std::optional<double> applicationLayerShare;
 
         Harness(const uint32_t targetFps, const size_t maximumMultiplier,
                 const bool stableCadence = false,
@@ -346,7 +365,7 @@ namespace {
             this->now += interval;
             const auto plan = this->scheduler.planFrame(this->now, acquireBackoff,
                 std::nullopt, std::nullopt, this->queuedPresentationDeadline,
-                this->headroomSourceCapFps);
+                this->headroomSourceCapFps, this->applicationLayerShare);
             // Ordinary workload simulations deliver their plan. Fault tests
             // opt out before supplying their own missing/partial observation.
             if (reportDelivery)
@@ -375,7 +394,7 @@ namespace {
             }
             auto plan = this->scheduler.planFrame(this->now, false,
                 std::nullopt, std::nullopt, this->queuedPresentationDeadline,
-                this->headroomSourceCapFps);
+                this->headroomSourceCapFps, this->applicationLayerShare);
             if (delivered)
                 this->scheduler.reportGeneratedFrameDelivery({
                     plan.size(), *delivered ? plan.size() : 0,
@@ -3673,6 +3692,174 @@ namespace {
             "nonblocking HDR transport allowed a 2x convergence probe");
     }
 
+    void testZinkFractionalCadencePacesWithoutFifoHandoff() {
+        using Clock = AdaptiveScheduler::Clock;
+        const auto at = [](const double seconds) {
+            return TimePoint{} + std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(seconds));
+        };
+        const auto seconds = [](const TimePoint time) {
+            return std::chrono::duration<double>(time.time_since_epoch()).count();
+        };
+        constexpr double refresh = 1.0 / 120.0;
+        for (const bool zink : {false, true}) {
+            for (const bool vrr : {false, true}) {
+                ls::GameConf profile;
+                profile.frame_generation_provisioned = true;
+                profile.frame_generation_enabled = true;
+                profile.adaptive = true;
+                profile.adaptive_auto_base_fps_cap = false;
+                profile.target_fps = 120;
+                profile.adaptive_max_multiplier = 3;
+                profile.adaptive_stable_cadence = true;
+                const bool applicationWindow = applicationAcquireBudgetApplies(
+                    zink ? "mesa zink" : "DXVK", 3, 6, 3);
+                Harness harness(120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+                    false, 2s, 120, true, false, true, true);
+                harness.start();
+                GamescopePresentationFeedback feedback{
+                    .vrrEnabled = vrr, .vrrCapable = true,
+                    .vrrActive = vrr, .allowTearing = false,
+                };
+                SmoothCadencePacerHandoff handoff;
+                CappedFifoBacklogDrain drain;
+                RealFramePacer pacer;
+                std::deque<double> fifo;
+                const auto retire = [&](const double now) {
+                    while (!fifo.empty() && fifo.front() <= now + 1e-9)
+                        fifo.pop_front();
+                };
+                const auto enqueue = [&](const double now) {
+                    retire(now);
+                    const double nextRefresh =
+                        (std::floor(now / refresh + 1e-8) + 1) * refresh;
+                    fifo.push_back(fifo.empty() ? nextRefresh
+                        : std::max(nextRefresh, fifo.back() + refresh));
+                };
+                double now = seconds(harness.now);
+                double nativeTick = now;
+                double workerDone = now;
+                double previousCadence = now;
+                Clock::duration lastWait{};
+                double lateWait = 0.0;
+                double maximumLateCadence = 0.0;
+                size_t lateFrames = 0;
+                size_t holds = 0;
+                size_t frame = 0;
+                while (now < 60.0) {
+                    nativeTick += 1.0 / 62.5;
+                    now = std::max(nativeTick, workerDone);
+                    retire(now);
+                    while (fifo.size() >= 6) {
+                        now = std::max(now, fifo.front());
+                        retire(now);
+                    }
+                    now += 0.00005;
+                    // Inject the same occasional worker/producer delay in
+                    // both controls, after the integer cadence qualifies.
+                    // This models source timing, not Vulkan or visible pixels.
+                    if (now > 12.0 && ++frame % 64 == 0)
+                        now += refresh;
+                    const double arrival = now;
+                    const auto snapshot = harness.scheduler.snapshot();
+                    const double zinkCap = applicationWindow
+                        ? zinkRefreshLimitedBaseFpsCap(
+                            profile, 120, snapshot, true, false) : 0.0;
+                    auto eligible = smoothCadencePacerHandoffGenerationLimit(
+                        profile, true, false, 120, snapshot, feedback,
+                        handoff.activeGenerationLimit());
+                    if (zinkCap > 0.0)
+                        eligible.reset();
+                    const auto decision = handoff.update(at(now), eligible,
+                        zinkCap > 0.0, 120,
+                        applicationWindow ? std::optional{lastWait} : std::nullopt);
+                    const double cap = zinkCap > 0.0 ? zinkCap :
+                        effectiveBaseFpsCap(profile, snapshot, feedback, 120);
+                    auto deadline = pacer.schedule(at(now), cap);
+                    if (applicationWindow) {
+                        const auto drainDecision = drain.observe(
+                            at(now), cap, 120, lastWait);
+                        if (drainDecision.hold > Clock::duration::zero()) {
+                            ++holds;
+                            deadline = pacer.hold(deadline, drainDecision.hold);
+                        }
+                    }
+                    const bool prepare = deadline > at(now) &&
+                        baseCapPacesOutputs(profile, cap, true, 120) &&
+                        orderedGeneratedBatchCanPrepareBeforeCap(3, 6, 2, false);
+                    if (!prepare)
+                        now = std::max(now, seconds(deadline));
+                    const double cadence = prepare
+                        ? std::max(now, seconds(deadline)) : now;
+                    const bool warmup = harness.scheduler.historyWarmupActive();
+                    AdaptiveFramePlan plan;
+                    if (warmup)
+                        harness.scheduler.consumeHistoryWarmupFrame(at(cadence));
+                    else
+                        plan = harness.scheduler.planFrame(at(cadence), false,
+                            vrr ? decision.generationLimit : std::nullopt,
+                            zinkCap > 0.0 ? snapshot.stableCadenceLimit : std::nullopt);
+                    const auto outputs = prepare && !warmup
+                        ? pacer.scheduleOutputs(at(now), deadline, 120,
+                            plan.size() + 1,
+                            harness.scheduler.snapshot().targetOutputClockActive)
+                        : std::nullopt;
+                    double privateWait = 0.0;
+                    for (size_t i = 0; i < plan.size(); ++i) {
+                        retire(now);
+                        // The application holds the original image while
+                        // MAKO acquires each generated output from the pool.
+                        if (fifo.size() + 1 >= 6) {
+                            const double begin = now;
+                            now = std::max(now, fifo.front());
+                            retire(now);
+                            privateWait += now - begin;
+                        }
+                        if (outputs)
+                            now = std::max(now, seconds(outputs->at(i)));
+                        enqueue(now);
+                        now += 0.0001;
+                    }
+                    if (outputs)
+                        now = std::max(now, seconds(outputs->at(outputs->count - 1)));
+                    else if (prepare)
+                        now = std::max(now, seconds(deadline));
+                    enqueue(now);
+                    now += 0.0001;
+                    if (prepare)
+                        now = std::max(now, seconds(deadline));
+                    workerDone = now + 0.0002;
+                    if (!warmup)
+                        harness.scheduler.reportGeneratedFrameDelivery({plan.size(), plan.size()});
+                    if (arrival > 40.0) {
+                        lateWait += privateWait;
+                        maximumLateCadence = std::max(
+                            maximumLateCadence, cadence - previousCadence);
+                        ++lateFrames;
+                    }
+                    previousCadence = cadence;
+                    lastWait = std::chrono::duration_cast<Clock::duration>(
+                        std::chrono::duration<double>(privateWait));
+                }
+                require(harness.scheduler.snapshot().stableCadenceLimit == 1 &&
+                        harness.scheduler.snapshot().validatedGenerationLimit == 1,
+                    "source pacing discarded the accepted 2x workload");
+                require(lateFrames > 1000,
+                    "the FIFO regression did not reach sustained gameplay");
+                if (zink) {
+                    require(lateWait / lateFrames < 0.0001 &&
+                            maximumLateCadence < 0.017 && holds > 0 && holds <= 4 &&
+                            !handoff.active(),
+                        "accepted Zink cadence retained FIFO pressure or competed with a handoff");
+                } else {
+                    require(lateWait / lateFrames > refresh / 2 &&
+                            maximumLateCadence > 0.024 && holds == 0,
+                        "the non-Zink control was changed or failed to reproduce the uncapped queue");
+                }
+            }
+        }
+    }
+
     void testVrrFullFifoUsesOnlyValidatedHigherRung() {
         Harness harness(
             120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
@@ -4495,6 +4682,77 @@ namespace {
             }
             require(harness.diagnostics.contains("adaptive-paced-load-accepted"),
                 "accepted uncapped Fractional cadence did not validate its FIFO pacing cost");
+        }
+    }
+
+    void testZinkCadencePreservesIntegerPacingCostValidation() {
+        for (const size_t multiplier : {3U, 4U, 5U}) {
+            for (const bool delayed : {false, true}) {
+                for (const bool paid : {false, true}) {
+                    if (!delayed && !paid)
+                        continue;
+                    Harness harness(120, multiplier, true,
+                        AdaptiveRecoveryPolicy::OrderedSdr, false, 2s,
+                        120, false, false, true);
+                    promoteForPacedLoadTest(harness, multiplier, 100.0);
+                    const double settledFps = 120.0 / multiplier;
+                    for (size_t frame = 0; frame < 500; ++frame) {
+                        harness.frameAtFps(settledFps);
+                        const auto snapshot = harness.scheduler.snapshot();
+                        if (snapshot.stableCadenceLimit == multiplier - 1 &&
+                                !snapshot.stableCadenceEvaluationActive)
+                            break;
+                    }
+                    require(harness.scheduler.snapshot().stableCadenceLimit == multiplier - 1 &&
+                            !harness.scheduler.snapshot().stableCadenceEvaluationActive,
+                        "Zink pacing fixture did not qualify its constant cadence");
+                    if (delayed)
+                        harness.runAtFps(settledFps, 12s);
+                    ls::GameConf profile;
+                    profile.frame_generation_provisioned = true;
+                    profile.frame_generation_enabled = true;
+                    profile.adaptive = true;
+                    profile.adaptive_auto_base_fps_cap = false;
+                    profile.target_fps = 120;
+                    profile.adaptive_max_multiplier = multiplier;
+                    profile.adaptive_stable_cadence = true;
+                    const auto rejected = [&] {
+                        const auto* result = harness.diagnostics.last("ramp-result");
+                        return result && !result->accepted &&
+                            result->reason == "paced-unpaid-real-frame-cost";
+                    };
+                    bool lowerProbeObserved = false;
+                    for (size_t frame = 0; frame < 300; ++frame) {
+                        const auto snapshot = harness.scheduler.snapshot();
+                        const double cap = zinkRefreshLimitedBaseFpsCap(
+                            profile, 120, snapshot, true, false);
+                        require(cap > 0.0,
+                            "Zink pacing lost its source cap during applied workload comparison");
+                        const auto pacedLimit = snapshot.efficiencyProbeGenerationLimit
+                            ? snapshot.efficiencyProbeGenerationLimit : snapshot.stableCadenceLimit;
+                        const bool lower = snapshot.efficiencyProbeGenerationLimit.has_value();
+                        lowerProbeObserved |= lower;
+                        const double sourceFps = lower
+                            ? std::min(cap, (paid ? 108.0 : 120.0) / (multiplier - 1))
+                            : cap;
+                        harness.now += std::chrono::duration_cast<TimePoint::duration>(
+                            std::chrono::duration<double>(1.0 / sourceFps));
+                        const auto plan = harness.scheduler.planFrame(
+                            harness.now, false, std::nullopt, pacedLimit);
+                        harness.scheduler.reportGeneratedFrameDelivery({plan.size(), plan.size()});
+                        if (harness.diagnostics.contains("adaptive-paced-load-accepted") ||
+                                rejected())
+                            break;
+                    }
+                    require((paid ? harness.diagnostics.contains("adaptive-paced-load-accepted")
+                            : rejected()) &&
+                            harness.scheduler.snapshot().validatedGenerationLimit ==
+                                (paid ? multiplier - 1 : multiplier - 2),
+                        "Zink source pacing bypassed the existing accepted/rejected workload-cost decision");
+                    require(!delayed || lowerProbeObserved,
+                        "Delayed Zink pacing skipped its fresh adjacent-load comparison");
+                }
+            }
         }
     }
 
@@ -5762,6 +6020,313 @@ namespace {
             require(harness.now - transitionAt <= 200ms,
                 "live probe interval update did not reschedule the next probe");
         }
+    }
+
+    void testDynamicCadenceRepeatedRejectionsKeepConfiguredInterval() {
+        // Emulators and games that switch native rates rely on the configured
+        // interval to bound how long a hidden rise stays behind FIFO work.
+        // Without layer-share evidence that interval must never stretch.
+        for (const auto interval : {100ms, 500ms, 2000ms, 3000ms}) {
+            Harness harness(
+                60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, interval
+            );
+            harness.start();
+            std::optional<TimePoint> rejectedAt;
+            size_t rejections = 0;
+            const auto until = harness.now + 25s;
+            while (harness.now < until) {
+                const size_t recorded = harness.diagnostics.nativeProbes.size();
+                harness.deliveredFrameAtFps(30.0);
+                for (size_t index = recorded;
+                        index < harness.diagnostics.nativeProbes.size(); ++index) {
+                    const auto& probe = harness.diagnostics.nativeProbes[index];
+                    if (probe.operation == "dynamic-cadence-probe-start" && rejectedAt) {
+                        const auto waited = harness.now - *rejectedAt;
+                        require(waited >= interval && waited < interval + 34ms,
+                            "a rejected native probe did not retry at its configured interval");
+                    } else if (probe.operation == "dynamic-cadence-probe-rejected") {
+                        rejections++;
+                        rejectedAt = harness.now;
+                    }
+                }
+            }
+            require(rejections >= 5,
+                "precondition failed: true 30 FPS cadence produced too few rejected probes");
+            require(!harness.diagnostics.contains("dynamic-cadence-recovered"),
+                "repeated probes mistook a true 30 FPS source for recovery");
+        }
+    }
+
+    void testDynamicCadenceProbeReportsNativeOnlyCost() {
+        for (const bool bridged : {false, true}) {
+            // Unbridged probes cost one native frame. A captured bridge
+            // horizon also keeps its drain frames native.
+            Harness harness(bridged ? 120 : 60, 2, false,
+                AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms);
+            const double fps = bridged ? 60.0 : 30.0;
+            harness.start();
+            harness.runAtFps(fps, 8s);
+            size_t nativeRun = 0;
+            std::optional<TimePoint> nativeRunStartedAt;
+            // A probe that began before this loop has an unobserved prefix.
+            bool startObserved = false;
+            size_t rejections = 0;
+            for (size_t frame = 0; frame < 1200; ++frame) {
+                if (bridged)
+                    harness.queuedPresentationDeadline = harness.now + 34ms;
+                const size_t recorded = harness.diagnostics.nativeProbes.size();
+                const auto plan = harness.deliveredFrameAtFps(fps);
+                for (size_t index = recorded;
+                        index < harness.diagnostics.nativeProbes.size(); ++index) {
+                    const auto& probe = harness.diagnostics.nativeProbes[index];
+                    if (probe.operation == "dynamic-cadence-probe-start")
+                        startObserved = true;
+                    if (probe.operation != "dynamic-cadence-probe-rejected" ||
+                            !std::exchange(startObserved, false))
+                        continue;
+                    rejections++;
+                    require(!plan.empty() && nativeRunStartedAt &&
+                            probe.nativeFrames == nativeRun &&
+                            probe.nativeDuration == harness.now - *nativeRunStartedAt,
+                        "rejected native probe misreported its native-only frames");
+                    require(bridged ? nativeRun >= 2 && nativeRun <= 4 : nativeRun == 1,
+                        "rejected native probe cost differed from its transport drain");
+                }
+                if (plan.empty()) {
+                    if (nativeRun++ == 0)
+                        nativeRunStartedAt = harness.now;
+                } else {
+                    nativeRun = 0;
+                    nativeRunStartedAt.reset();
+                }
+            }
+            require(rejections >= 3, "precondition failed: too few rejected native probes");
+        }
+    }
+
+    // Probe operations after the first, as "operation/reason".
+    std::vector<std::string> nativeProbeSequence(const Harness& harness, size_t from) {
+        std::vector<std::string> sequence;
+        for (size_t index = from; index < harness.diagnostics.nativeProbes.size(); ++index) {
+            const auto& probe = harness.diagnostics.nativeProbes[index];
+            if (probe.operation == "dynamic-cadence-probe-start" ||
+                    probe.operation == "dynamic-cadence-probe-skipped")
+                sequence.push_back(probe.operation + "/" + probe.reason);
+        }
+        return sequence;
+    }
+
+    // Runs a capped source until the timer has just skipped a probe, so the
+    // next timer decision is a whole interval away.
+    AdaptiveFramePlan runCappedUntilProbeSkipped(Harness& harness) {
+        harness.applicationLayerShare = 0.02;
+        const size_t skipped = harness.diagnostics.count("dynamic-cadence-probe-skipped");
+        const auto deadline = harness.now + 20s;
+        AdaptiveFramePlan plan;
+        while (harness.diagnostics.count("dynamic-cadence-probe-skipped") == skipped) {
+            plan = harness.deliveredFrameAtFps(30.0);
+            require(harness.now < deadline,
+                "precondition failed: a capped source never skipped a probe");
+        }
+        return plan;
+    }
+
+    void testDynamicCadenceSkipsProbesForSelfCappedSource() {
+        for (const auto interval : {100ms, 500ms, 2000ms}) {
+            Harness harness(
+                60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, interval
+            );
+            harness.start();
+            harness.applicationLayerShare = 0.02;
+            while (!harness.diagnostics.contains("dynamic-cadence-probe-rejected"))
+                harness.deliveredFrameAtFps(30.0);
+            const size_t recorded = harness.diagnostics.nativeProbes.size();
+            const auto until = harness.now + 12 * interval;
+            while (harness.now < until)
+                harness.deliveredFrameAtFps(30.0);
+
+            const auto sequence = nativeProbeSequence(harness, recorded);
+            require(sequence.size() >= 8,
+                "precondition failed: too few native-probe decisions");
+            for (size_t index = 0; index < sequence.size(); ++index) {
+                const bool safetyProbe = index % 4 == 3;
+                require(sequence[index] == (safetyProbe
+                        ? "dynamic-cadence-probe-start/skip-limit"
+                        : "dynamic-cadence-probe-skipped/capped"),
+                    "a self-capped source did not skip three probes before each safety probe");
+            }
+            for (size_t index = recorded; index < harness.diagnostics.nativeProbes.size(); ++index) {
+                const auto& probe = harness.diagnostics.nativeProbes[index];
+                if (probe.operation == "dynamic-cadence-probe-skipped")
+                    require(probe.maximumLayerShare && *probe.maximumLayerShare < 0.03,
+                        "a skipped probe did not report the capped layer share");
+            }
+            require(!harness.diagnostics.contains("dynamic-cadence-recovered"),
+                "skipping probes mistook a true 30 FPS source for recovery");
+        }
+    }
+
+    void testDynamicCadenceProbesHeldSourceImmediately() {
+        Harness harness(60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true);
+        harness.start();
+        auto previous = runCappedUntilProbeSkipped(harness);
+        require(previous.size() == 1,
+            "precondition failed: capped 30 FPS cadence did not settle at 2x");
+
+        // The source can now run at 60 FPS. Generated FIFO work holds it at
+        // 30 while it waits inside MAKO; a native frame releases it.
+        const auto transitionAt = harness.now;
+        while (!harness.diagnostics.contains("dynamic-cadence-recovered")) {
+            harness.applicationLayerShare = previous.empty() ? 0.02 : 0.95;
+            previous = harness.deliveredFrameAtFps(previous.empty() ? 60.0 : 30.0);
+            require(harness.now - transitionAt <= 300ms,
+                "a held source waited for the probe interval instead of probing at once");
+        }
+        const auto& probes = harness.diagnostics.nativeProbes;
+        const auto started = std::find_if(probes.rbegin(), probes.rend(),
+            [](const auto& probe) { return probe.operation == "dynamic-cadence-probe-start"; });
+        require(started != probes.rend() && started->reason == "held",
+            "the immediate native probe did not report its held trigger");
+    }
+
+    void testDynamicCadenceHeldTriggerYieldsToVisibleRise() {
+        // A 60 to 119 FPS rise that ordinary Fractional planning can already
+        // observe must not be interrupted by a probe measured against the
+        // risen baseline; its rejection would restore the FIFO hold.
+        Harness harness(120, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, 3000ms);
+        harness.start();
+        harness.applicationLayerShare = 0.02;
+        const size_t skipped = harness.diagnostics.count("dynamic-cadence-probe-skipped");
+        while (harness.diagnostics.count("dynamic-cadence-probe-skipped") == skipped)
+            harness.deliveredFrameAtFps(60.0);
+        const size_t recorded = harness.diagnostics.nativeProbes.size();
+        harness.applicationLayerShare = 0.6;
+        double fps = 60.0;
+        const auto until = harness.now + 1500ms;
+        while (harness.now < until) {
+            fps = std::min(119.0, fps + 6.0);
+            harness.deliveredFrameAtFps(fps);
+        }
+        require(nativeProbeSequence(harness, recorded).empty() &&
+                !harness.diagnostics.contains("dynamic-cadence-probe-rejected"),
+            "the held trigger probed a source whose rise was already visible");
+        require(harness.deliveredFrameAtFps(119.0).empty(),
+            "a visible native rise did not reach native output without a probe");
+    }
+
+    void testDynamicCadenceHeldTriggerYieldsToRiseBeginningWhileCapped() {
+        // Gym's 60 to 119 FPS step first renders a few frames faster before
+        // FIFO work makes the source wait inside MAKO. Those capped frames
+        // must not carry the trigger's reference up with the rise.
+        Harness harness(120, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, 3000ms);
+        harness.start();
+        harness.applicationLayerShare = 0.02;
+        const size_t skipped = harness.diagnostics.count("dynamic-cadence-probe-skipped");
+        while (harness.diagnostics.count("dynamic-cadence-probe-skipped") == skipped)
+            harness.deliveredFrameAtFps(60.0);
+        const size_t recorded = harness.diagnostics.nativeProbes.size();
+        double fps = 60.0;
+        const auto risen = harness.now + 250ms;
+        while (harness.now < risen) {
+            fps = std::min(119.0, fps + 8.0);
+            harness.deliveredFrameAtFps(fps);
+        }
+        harness.applicationLayerShare = 0.6;
+        harness.runAtFps(119.0, 1500ms);
+        require(nativeProbeSequence(harness, recorded).empty() &&
+                !harness.diagnostics.contains("dynamic-cadence-probe-rejected"),
+            "capped frames at the start of a rise moved the held trigger's reference");
+        require(harness.deliveredFrameAtFps(119.0).empty(),
+            "a rise that began while capped did not reach native output without a probe");
+    }
+
+    void testDynamicCadenceRejectionResumesOrdinaryPlan() {
+        // Ordinary planning runs a 119 FPS source at a 120 FPS target almost
+        // natively. A rejected probe there must resume that plan unchanged:
+        // an added generated frame fills the FIFO slot that holds the source,
+        // as Gym's 60 to 119 FPS step showed.
+        Harness harness(120, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, 100ms,
+            std::nullopt, false);
+        harness.start();
+        harness.runAtFps(60.0, 8s);
+        harness.runAtFps(119.0, 2s);
+        const size_t rejected = harness.diagnostics.count("dynamic-cadence-probe-rejected");
+        size_t generated = 0;
+        const auto until = harness.now + 2s;
+        while (harness.now < until)
+            generated += harness.deliveredFrameAtFps(119.0).size();
+        require(harness.diagnostics.count("dynamic-cadence-probe-rejected") >= rejected + 10,
+            "precondition failed: the near-native source was not probed");
+        require(generated <= 4,
+            "rejected native-cadence probes added generated frames to a near-native plan");
+    }
+
+    void testDynamicCadenceKeepsIntervalWithoutCappedEvidence() {
+        constexpr auto interval = 500ms;
+        // Mid-band, held from the start, or partially unknown evidence must
+        // not skip a probe or retrigger one before the configured interval.
+        const std::vector<std::vector<std::optional<double>>> patterns{
+            {0.15},
+            {0.6},
+            {0.02, 0.02, std::nullopt},
+        };
+        for (const auto& pattern : patterns) {
+            Harness harness(
+                60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, interval
+            );
+            harness.start();
+            size_t frame = 0;
+            std::optional<TimePoint> rejectedAt;
+            size_t starts = 0;
+            const auto until = harness.now + 20s;
+            while (harness.now < until) {
+                harness.applicationLayerShare = pattern[frame++ % pattern.size()];
+                const size_t recorded = harness.diagnostics.nativeProbes.size();
+                harness.deliveredFrameAtFps(30.0);
+                for (size_t index = recorded;
+                        index < harness.diagnostics.nativeProbes.size(); ++index) {
+                    const auto& probe = harness.diagnostics.nativeProbes[index];
+                    require(probe.operation != "dynamic-cadence-probe-skipped",
+                        "a probe was skipped without capped evidence");
+                    if (probe.operation == "dynamic-cadence-probe-start") {
+                        starts++;
+                        require(probe.reason == "interval",
+                            "a probe without a capped-to-held transition did not use the interval");
+                        if (rejectedAt) {
+                            const auto waited = harness.now - *rejectedAt;
+                            require(waited >= interval && waited < interval + 34ms,
+                                "a probe without capped evidence left its configured interval");
+                        }
+                    } else if (probe.operation == "dynamic-cadence-probe-rejected") {
+                        rejectedAt = harness.now;
+                    }
+                }
+            }
+            require(starts >= 10, "precondition failed: too few native probes");
+        }
+    }
+
+    void testDynamicCadenceHeldTriggerRearmsOnlyAfterCappedFrames() {
+        // A held source that cannot rise, such as one limited by its own
+        // GPU load, must not convert the trigger into repeated probing.
+        Harness harness(60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true);
+        harness.start();
+        runCappedUntilProbeSkipped(harness);
+        const size_t recorded = harness.diagnostics.nativeProbes.size();
+        harness.applicationLayerShare = 0.9;
+        harness.runAtFps(30.0, 1500ms);
+        auto sequence = nativeProbeSequence(harness, recorded);
+        require(sequence == std::vector<std::string>{"dynamic-cadence-probe-start/held"},
+            "a held source that cannot rise probed more than once before its interval");
+
+        const size_t rearmed = harness.diagnostics.nativeProbes.size();
+        harness.applicationLayerShare = 0.02;
+        harness.runAtFps(30.0, 150ms);
+        harness.applicationLayerShare = 0.9;
+        harness.runAtFps(30.0, 150ms);
+        sequence = nativeProbeSequence(harness, rearmed);
+        require(sequence == std::vector<std::string>{"dynamic-cadence-probe-start/held"},
+            "a fresh capped period did not re-arm the held trigger");
     }
 
     void testDynamicCadenceProbeRejectsTrueThirtyFpsCadence() {
@@ -7049,6 +7614,7 @@ int main() {
         {"Smooth Cadence converges Fractional 2x on matching refresh", testSmoothCadenceConvergesFractionalTwoXOnMatchingRefresh},
         {"Smooth Cadence rejects unproven 2x convergence", testSmoothCadenceRejectsTwoXThatDoesNotConverge},
         {"Smooth Cadence convergence requires matching ordered FIFO", testSmoothCadenceConvergenceRequiresTargetMatchedOrderedFifo},
+        {"Zink Fractional cadence paces without a FIFO handoff", testZinkFractionalCadencePacesWithoutFifoHandoff},
         {"VRR FIFO uses only a validated higher rung", testVrrFullFifoUsesOnlyValidatedHigherRung},
         {"integer pacing prefers delivered target at 3x through 5x", testIntegerPacingPrefersDeliveredTargetAcrossMultipliers},
         {"paced load needs fresh continuous evidence", testPacedLoadRequiresFreshContinuousEvidence},
@@ -7065,6 +7631,7 @@ int main() {
         {"fresh pacing probe keeps cadence qualification separate", testFreshPacingProbeKeepsCadenceQualificationSeparate},
         {"delayed Fractional handoff uses fresh probe", testDelayedFractionalHandoffUsesFreshProbe},
         {"accepted Fractional cadence checks VRR pacing cost", testAcceptedFractionalCadenceChecksVrrPacingCost},
+        {"Zink cadence preserves integer pacing cost validation", testZinkCadencePreservesIntegerPacingCostValidation},
         {"unreachable integer pacing does not delay higher loads", testUnreachableIntegerPacingDoesNotDelayHigherWorkloads},
         {"Headroom release rechecks Fractional generated load", testHeadroomReleaseRechecksFractionalGeneratedLoad},
         {"Headroom release handles low and invalid source evidence", testHeadroomReleaseHandlesLowAndInvalidSourceEvidence},
@@ -7103,6 +7670,15 @@ int main() {
         {"dynamic cadence bounds self-hidden recovery latency", testDynamicCadenceBoundsSelfHiddenRecoveryLatency},
         {"dynamic cadence probe interval updates live", testDynamicCadenceProbeIntervalUpdatesLive},
         {"dynamic cadence rejects true 30 FPS", testDynamicCadenceProbeRejectsTrueThirtyFpsCadence},
+        {"dynamic cadence repeated rejections keep the configured interval", testDynamicCadenceRepeatedRejectionsKeepConfiguredInterval},
+        {"dynamic cadence reports native-only probe cost", testDynamicCadenceProbeReportsNativeOnlyCost},
+        {"dynamic cadence skips probes for a self-capped source", testDynamicCadenceSkipsProbesForSelfCappedSource},
+        {"dynamic cadence probes a held source immediately", testDynamicCadenceProbesHeldSourceImmediately},
+        {"dynamic cadence held trigger yields to a visible rise", testDynamicCadenceHeldTriggerYieldsToVisibleRise},
+        {"dynamic cadence held trigger yields to a rise that begins while capped", testDynamicCadenceHeldTriggerYieldsToRiseBeginningWhileCapped},
+        {"dynamic cadence rejection resumes the ordinary plan", testDynamicCadenceRejectionResumesOrdinaryPlan},
+        {"dynamic cadence keeps its interval without capped evidence", testDynamicCadenceKeepsIntervalWithoutCappedEvidence},
+        {"dynamic cadence held trigger re-arms only after capped frames", testDynamicCadenceHeldTriggerRearmsOnlyAfterCappedFrames},
         {"dynamic cadence remains opt-in and SDR-only", testDynamicCadenceRecoveryIsOptInAndSdrOnly},
         {"Smooth Cadence resists oscillating-load chatter", testSmoothCadenceDoesNotChatterOnOscillatingLoad},
         {"validated workloads ignore ordinary gameplay slowdown", testValidatedWorkloadIgnoresOrdinaryGameplaySlowdown},

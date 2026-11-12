@@ -36,6 +36,7 @@ export interface InstallationStatus {
   engine_update_required: boolean;
   host_architecture: Nullable<string>;
   host_architecture_supported: boolean;
+  system_renderer_notice: Nullable<string>;
   error: Nullable<string>;
 }
 
@@ -248,6 +249,7 @@ export interface RuntimeProfileSnapshot {
   gpu: Nullable<string>;
   multiplier: number;
   frame_generation_provisioned: boolean;
+  frame_generation_model?: string;
   frame_generation_enabled: boolean;
   scaling_enabled: boolean;
   scaling_method: string;
@@ -289,6 +291,10 @@ export type RuntimeScalingMethod =
 export type RuntimeScalingPipeline =
   "inactive" | "pre-frame-generation" | "post-frame-generation";
 
+export interface RuntimeFrameGenerationUnavailable {
+  reason: string;
+}
+
 export interface RuntimeSpatialScalingState {
   active: boolean;
   activation_supported: boolean;
@@ -321,6 +327,7 @@ export interface RuntimeContextState {
   pending: RuntimePendingState;
   applied_generated_capacity: number;
   frame_generation_active: boolean;
+  frame_generation_unavailable: Nullable<RuntimeFrameGenerationUnavailable>;
   gpu_headroom_state: string;
   spatial_scaling: RuntimeSpatialScalingState;
   requested: RuntimeProfileSnapshot;
@@ -376,6 +383,44 @@ export const checkFrameGenerationModel = callable<
   ModelStatusResult
 >("check_frame_generation_model");
 export const getDllStats = callable<[], DllStatsResult>("get_dll_stats");
+
+export interface FrameRecordingSummary {
+  name: string;
+  complete: boolean;
+  frames?: number;
+  dropped?: number;
+  width?: number;
+  height?: number;
+  end_reason?: string;
+}
+export interface FrameRecordingArmedGame {
+  process: string;
+  mode: "burst" | "ring";
+  seconds: number;
+  delay: number;
+}
+export interface FrameRecordingRequestResult {
+  success: boolean;
+  directory?: string;
+  error?: string;
+}
+export interface FrameRecordingStatusResult {
+  success: boolean;
+  pending?: boolean;
+  status?: string;
+  armed?: FrameRecordingArmedGame[];
+  launch_option?: string;
+  recordings?: FrameRecordingSummary[];
+  directory?: string;
+  error?: string;
+}
+export const requestFrameRecording = callable<[], FrameRecordingRequestResult>(
+  "request_frame_recording",
+);
+export const getFrameRecordingStatus = callable<
+  [],
+  FrameRecordingStatusResult
+>("get_frame_recording_status");
 export const getMakoConfig = callable<[], ConfigResult>("get_mako_config");
 export const getProfileConfig = callable<[string, string?], ConfigResult>(
   "get_profile_config",

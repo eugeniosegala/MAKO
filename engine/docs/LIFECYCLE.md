@@ -16,9 +16,9 @@ MAKO separates proof from policy:
 
 | Lifetime | Created by | What becomes fixed | What can still change |
 | --- | --- | --- | --- |
-| Process | Vulkan layer activation and profile match | Scaling enablement, layer-chain role, Gamescope isolation, HDR exposure, Game Swapchain Images compatibility, and launcher-owned compatibility behavior | The configuration can be re-read, but changes to process-static choices remain pending until restart |
+| Process | Vulkan layer activation and profile match | Scaling enablement, layer-chain role, Gamescope isolation, HDR exposure, Game Swapchain Images and Mailbox Presentation compatibility, and launcher-owned compatibility behavior | The configuration can be re-read, but changes to process-static choices remain pending until restart |
 | Vulkan device | The application's device creation | Available queues, device extensions, synchronization features, and optional swapchain-maintenance support | Per-swapchain policy can change within those capabilities |
-| Private Frame Generation backend | The first active swapchain that needs Frame Generation | Selected GPU, DLL-derived model family, startup FP16 precision choice, and Ultra Performance topology | Per-swapchain Frame Generation contexts may be replaced; the process backend is shared |
+| Private Frame Generation backend | The first active swapchain that needs Frame Generation | Selected GPU, Frame Generation model, startup FP16 precision choice, and Ultra Performance topology | Per-swapchain Frame Generation contexts may be replaced; the process backend is shared |
 | Surface | Application surface creation | Native window-system provenance and cached scaling eligibility | Current capabilities and output feedback are rechecked at swapchain creation |
 | Application swapchain | Application creation or recreation | Source and presentation extents, scaling placement, transport, image pool, and generated-output headroom | Live policy and compatible private resources may change |
 | Private scaling or Frame Generation context | Initial swapchain setup or a live private transition | Images, pipelines, model topology, and synchronization objects for that context | A complete replacement can be built beside the old context and switched atomically |
@@ -73,7 +73,7 @@ Diagnostic health sampling is opt-in and observational; it cannot change schedul
 | Memory admission | Every scaling-capable swapchain creation and relevant private-resource admission | Heap properties and memory budget/usage when available, followed by conservative allocation estimates, **moderate** | MAKO may reduce the effective scale or disable the feature. The estimate can reject a viable configuration, but it must not overrule an explicit Vulkan limit |
 | Direct generated output | Frame Generation context construction | External-image format and usage capability queries, **moderate** | Supported devices can write directly to the presentation-compatible output; otherwise MAKO uses a private image and copy path |
 | Private resource construction | Initial context creation or an accepted live transition | Image allocation, exported/imported synchronization, pipelines, model translation, and backend context creation, **high** | The old context stays active until a complete candidate is ready. Failure retains the old context and schedules a bounded retry |
-| Frame Generation backend creation | Once, lazily, on the first swapchain that actually needs Frame Generation | DLL discovery and validation, GPU matching, a private Vulkan instance/device, resource extraction/translation, and pipelines, **high one-time cost** | Failure disables Frame Generation without changing the user-owned input. Licensed scaling resources are owned by the private scaling context instead; neither path performs periodic backend work |
+| Frame Generation backend creation | Once, lazily, on the first swapchain that actually needs Frame Generation | GPU matching, then either a private Vulkan instance/device and model setup for LSFG, which also discovers and validates the DLL and may translate its resources, or starting the separate `mako-fg-host` program, which does its own device and model setup, **high one-time cost** | If LSFG initialization fails, the Renderer tries bundled MAKO FG once; if generation cannot initialize, it retains the real-frame path. Licensed scaling resources are owned by the private scaling context instead; neither path performs periodic backend work |
 
 ### Per-present observations and probes
 
@@ -143,13 +143,24 @@ For every application swapchain creation, MAKO:
 4. Requests the application minimum image count plus generated capacity when allowed. Ordered Frame-Generation-only paths may reserve one relief image; combined scaling that is active or configured above 1.0 omits that relief reservation for compatibility. An enabled 1.0 scaler remains inactive and retains the FG-only relief topology. The surface maximum remains authoritative, and Game Swapchain Images compatibility preserves the application's original minimum from process start.
 5. Creates the lower swapchain. If only an expanded minimum fails with initialization or host/device memory exhaustion, it retries exactly once with the application's original minimum.
 6. Reads the images actually returned. Fewer images than the application minimum removes generated capacity rather than assuming headroom.
-7. Builds the required scaling and Frame Generation resources. Scaling-context failure rolls back creation because presenting the smaller source rectangle directly would be visibly incorrect. Frame-Generation-only failure retains a valid native swapchain.
+7. When MAKO expands a Zink swapchain's requested image minimum, records an [application acquire window](#zink-application-acquire-window) so the game cannot consume the reservation for generated frames.
+8. Builds the required scaling and Frame Generation resources. Scaling-context failure rolls back creation because presenting the smaller source rectangle directly would be visibly incorrect. Frame-Generation-only failure retains a valid native swapchain.
 
 Scaling factor is clamped to 1–2, dimensions greater than one are rounded down to even values, and aspect ratio is preserved. Managed variable-size Gamescope surfaces require a confirmed output target. Non-opaque, protected, layered, or shared-present swapchains, unsupported formats or queues, and managed multi-swapchain batches fail closed.
 
 For presentation extents up to 2,304,000 pixels, scaling normally reconstructs the real frame before Frame Generation so reconstruction runs once. Above that threshold, Frame Generation runs at source resolution and each delivered image is reconstructed afterward. The threshold is a performance-placement heuristic; both orders use capability and synchronization proofs, and the selected order stays fixed for that swapchain.
 
 LS1 creation failure falls back to the open MAKO Scaler for the affected context. Direct generated output is used only when external-image capabilities prove it safe; otherwise a private output plus copy is used.
+
+### Zink application acquire window
+
+`ApplicationAcquireBudget` applies only when the swapchain device's own Vulkan instance reports the exact engine name `mesa zink`, the surface minimum is known and nonzero, and MAKO expands the application's requested image minimum. Its window is `max(1, requested minimum - surface minimum + 1)`. The engine identity belongs to that instance because Wine can keep another instance alive in the same process; present diagnostics record each instance's engine as `instance-engine`.
+
+Zink presents from a worker thread and sizes its acquire window from the images exposed to it. Without MAKO's window, it can hold images reserved for generated frames. Combined with MAKO's generated-image acquires, this can exceed the lower swapchain's acquire limit; a failed application acquire then makes Zink destroy its swapchain and end the game.
+
+While the application window is full, an infinite-timeout acquire waits until MAKO finishes processing an application present and releases a slot. This carries MAKO's pacing back to the game thread. If no slot arrives within 250 ms, MAKO clears the held-image count and forwards the acquire normally, avoiding a permanent wait when an image was released without presentation. Finite-timeout calls retain the driver's result because Zink treats repeated short timeouts as fatal. Other engines receive no acquire window.
+
+The same window identifies swapchains eligible for [Zink FIFO pacing](ADAPTIVE-VALIDATION.md#zink-fifo-pacing), which handles uneven worker-thread delivery when the presentation queue stays full.
 
 ### Warm-up and steady presentation
 

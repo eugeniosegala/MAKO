@@ -61,6 +61,62 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.service.vkbasalt_layer_dir = Path(
             "/home/deck/.local/share/mako/vkbasalt.d"
         )
+        # Characterized bytes must not depend on a Renderer installed on the
+        # test host; these fixed paths can name a real SteamOS home.
+        owner_patch = patch(
+            "py_modules.mako_plugin.base_service.manifest_owner",
+            return_value=None,
+        )
+        owner_patch.start()
+        self.addCleanup(owner_patch.stop)
+
+    def test_frame_generation_model_selection(self):
+        self.assertEqual(ConfigurationManager.validate_config({})["frame_generation_model"], "mako-fg")
+        for model in ("lossless-scaling", "mako-fg"):
+            value = ConfigurationManager.validate_config({"frame_generation_model": model, "flow_scale": .6})
+            self.assertEqual(value["frame_generation_model"], model)
+            self.assertEqual(value["flow_scale"], .6)
+        for invalid in ("", "unknown", 7, True):
+            with self.subTest(invalid=invalid), self.assertRaises((ValueError, TypeError)):
+                ConfigurationManager.validate_config({"frame_generation_model": invalid})
+
+    def test_mako_fg_mode_selection(self):
+        self.assertEqual(ConfigurationManager.validate_config({})["mako_fg_mode"], "balanced")
+        for mode in ("quality", "balanced", "performance", "extra-performance"):
+            self.assertEqual(ConfigurationManager.validate_config({"mako_fg_mode": mode})["mako_fg_mode"], mode)
+        for invalid in ("", "fast", 7, True):
+            with self.subTest(invalid=invalid), self.assertRaises((ValueError, TypeError)):
+                ConfigurationManager.validate_config({"mako_fg_mode": invalid})
+
+    def test_profiles_before_the_model_selector_use_current_default_without_migration(self):
+        for content in (
+            'version = 1\n[global]\n[[game]]\nexe = "older"\nperformance_mode = true\n',
+            'version = 2\n[[profile]]\nname = "older"\nultra_performance = true\n'
+            '[profile.handheld]\nperformance_mode = true\n[profile.docked]\nflow_scale = 0.5\n',
+        ):
+            with self.subTest(content=content):
+                data = ConfigurationManager.parse_toml_content_multi_profile(content)
+                self.assertEqual(data["profiles"]["older"]["frame_generation_model"], "mako-fg")
+                for variant in data.get("power_profiles", {}).get("older", {}).values():
+                    self.assertEqual(variant["frame_generation_model"], "mako-fg")
+                saved = ConfigurationManager.generate_toml_content_multi_profile(data)
+                self.assertEqual(ConfigurationManager.parse_toml_content_multi_profile(saved), data)
+
+    def test_saved_model_choices_are_not_confused_with_missing_defaults(self):
+        data = ConfigurationManager.parse_toml_content_multi_profile('''version = 2
+[[profile]]
+name = "saved"
+frame_generation_model = "lossless-scaling"
+[profile.handheld]
+frame_generation_model = "mako-fg"
+[profile.docked]
+performance_mode = true
+''')
+        self.assertEqual(data["profiles"]["saved"]["frame_generation_model"], "lossless-scaling")
+        self.assertEqual(data["power_profiles"]["saved"]["handheld"]["frame_generation_model"], "mako-fg")
+        self.assertEqual(data["power_profiles"]["saved"]["docked"]["frame_generation_model"], "lossless-scaling")
+        saved = ConfigurationManager.generate_toml_content_multi_profile(data)
+        self.assertEqual(ConfigurationManager.parse_toml_content_multi_profile(saved), data)
 
     def test_gpu_headroom_presets_and_recovery_exclusion(self):
         for reserve in (0, 5, 10, 15, 20):
@@ -166,10 +222,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         defaults = ConfigurationManager.get_defaults()
         content = self.service._generate_script_content(defaults)
 
-        self.assertEqual(len(content.encode("utf-8")), 20594)
+        self.assertEqual(len(content.encode("utf-8")), 22419)
         self.assertEqual(
             _sha256(content),
-            "5839462a865591875484733fa9ac08393240491b47de01a3406188d97468d251",
+            "667a4a97e9b7f714d971337919fde6692cd4b77780478c7f202255d87be79c56",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -236,10 +292,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
                 profile_data
             )
 
-        self.assertEqual(len(content.encode("utf-8")), 23553)
+        self.assertEqual(len(content.encode("utf-8")), 25458)
         self.assertEqual(
             _sha256(content),
-            "62561faa53c738b43c8ccc8500fe64fcc8b79e7b7f0ab6db2453c200efc9dab7",
+            "5710b00d1df54a465e96f36fb37bc975968b7f1f4e077e3f244901e675d58e88",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -290,6 +346,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             "scaling_supersampling": True,
             "scaling_sharpness": 0.7,
             "swapchain_image_count_compatibility": True,
+            "mailbox_presentation_compatibility": True,
         }
 
         toml_content = ConfigurationManager.generate_toml_content(scaling)
@@ -304,6 +361,9 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertIn(
             "swapchain_image_count_compatibility = true", toml_content
         )
+        self.assertIn(
+            "mailbox_presentation_compatibility = true", toml_content
+        )
         for field in (
             "frame_generation_provisioned",
             "scaling_enabled",
@@ -311,6 +371,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             "scaling_supersampling",
             "scaling_sharpness",
             "swapchain_image_count_compatibility",
+            "mailbox_presentation_compatibility",
         ):
             with self.subTest(field=field):
                 self.assertNotIn(field, wrapper_settings)
@@ -330,7 +391,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "a938c81d4d0dbd6a549f1b771429c64fed8f7742f9ad5d3972b32d8e08a7f8ca",
+            "a71c9f4bb9ea10d3c94b1e4cc6a98d66c398a9dd8152efe4227ae3dfd86cbca6",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):
@@ -369,9 +430,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         ]
         self.assertNotIn("retired_option", stored_wrapper_settings)
         self.assertFalse(stored_wrapper_settings["vkbasalt_manage_custom_shaders"])
+        self.assertFalse(stored_wrapper_settings["mangohud_count_real_frames"])
         self.assertEqual(
             _sha256(wrapper_content),
-            "e49bd2eda5fa55a72c27e48dcb58422ea9adbc6057d1d0529bcf2eb988e51f71",
+            "e21d2a6b5feb674ab6b891edcd4e9d53a86de9b781a07dd9e055bbdd1462bf2b",
         )
         self.assertEqual(
             _sha256(metadata_content),

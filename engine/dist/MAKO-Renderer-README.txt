@@ -1,9 +1,9 @@
 MAKO Renderer standalone archive
 ================================
 
-MAKO Renderer provides Frame Generation and spatial scaling for Vulkan games on SteamOS and Linux. The archive includes matching 64-bit and 32-bit Vulkan layers, the configuration UI, the command-line tools, and the managed installer.
+MAKO Renderer provides Frame Generation, spatial scaling, and shaders for Vulkan games on SteamOS and Linux. The archive includes matching 64-bit and 32-bit Vulkan layers, the MAKO FG program and model, bundled vkBasalt and shader effects, the Gamescope VRR/composition helper, native Steam Remote Play tools, the configuration UI, diagnostics, and the managed installer. These files are installed together; MAKO FG needs no separate download.
 
-Frame Generation and LS1 scaling require a user-owned installation of the default public version of Lossless Scaling from Steam. MAKO can use beta branches, but they are not validated; the default public branch is recommended. The open MAKO Scaler does not require Lossless.dll.
+MAKO FG and MAKO Scaler are the default models and, with Shaders, work without Lossless Scaling. Only the optional Lossless Scaling frame generation models and LS1 scaling require a user-owned installation of Lossless Scaling from Steam. Its default public branch is recommended; beta branches are not validated. The archive never includes Lossless.dll.
 
 Install or update
 -----------------
@@ -21,7 +21,7 @@ Installing MAKO Renderer or opening its configuration window does not activate i
 
 1. In MAKO Renderer Configuration, choose "Create New Profile" and name it.
 2. Under Profile Matching > Matched Processes > Edit..., enter the game's executable or process name (for example Game.exe), then press +. Use the game's process, not its launcher or Steam display title.
-3. Select Frame Generation and/or scaling. Set Lossless.dll Path if automatic discovery fails. To use the open MAKO Scaler without the DLL, turn Frame Generation off and select MAKO Scaler. Scaling enablement and other restart-labelled settings must be selected before launch.
+3. Select Frame Generation, scaling, and/or shaders. MAKO FG and MAKO Scaler work without the DLL. Set Lossless.dll Path only when using a Lossless Scaling model and automatic discovery fails. Scaling enablement, frame generation model changes, and other restart-labelled settings must be selected before launch.
 4. Changes save automatically. You can close the configuration window; it does not need to stay open during play.
 
 For a native Steam or Proton game, add this under Steam Properties > General > Launch Options:
@@ -29,6 +29,8 @@ For a native Steam or Proton game, add this under Steam Properties > General > L
     ~/.local/bin/mako-launch %command%
 
 Keep %command% exactly as written. Set this once per game, then use Steam's Play button normally. If you selected a custom installation prefix, use the mako-launch path shown by the installer's completion message instead.
+
+When shaders are enabled, copy the complete launch option shown by MAKO Renderer Configuration; it includes the selected profile's shader configuration.
 
 For a direct desktop command, replace %command% with the actual game executable and arguments:
 
@@ -48,6 +50,8 @@ For the full vkBasalt option suite, create a standard config file and select it 
 The config path is optional. Renderer process matching does not select a vkBasalt file; assign a distinct VKBASALT_CONFIG_FILE in each game's launch option for per-game settings. Only MAKO's private bundled vkBasalt is used; a system installation is ignored. If the complete 64-bit/32-bit bundle or selected config is unavailable, the launcher reports it and safely continues with MAKO alone. Restart the game after changing activation or configuration. Flatpak applications require the separate setup guide below.
 
 Flatpak games, launchers, and emulators require the matching MAKO runtime extension and preparation for each application. The standalone configuration window edits profiles; it does not prepare Flatpaks. "Install MAKO Flatpak Extensions" installs extensions only. Follow the Flatpak setup link below for runtime selection, configuration/DLL access, and sandbox environment, then restart and launch the app normally. The host mako-launch command does not replace that preparation. MAKO Decky's Flatpak Setup provides managed preparation when using Decky.
+
+Native Steam Remote Play is opt-in. On the receiving device, close streams and select "Override Remote Play" in MAKO Renderer Configuration to activate the installed tools. Use "Restore Steam Client" to remove the override. This requires system Python 3.11 or newer.
 
 Update
 ------

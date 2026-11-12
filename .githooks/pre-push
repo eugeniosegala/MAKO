@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Private-playground guard. A checkout with a remote named mako-private keeps its working branches there:
+# every other remote, such as the public origin, accepts only main (and tags on main), and only commits that
+# are already on the local main branch. Checkouts without that remote are unaffected.
+set -euo pipefail
+
+private_remote=mako-private
+remote="$1"
+url="$2"
+
+if ! private_url="$(git remote get-url "$private_remote" 2>/dev/null)"; then
+    exit 0
+fi
+if [[ "$remote" == "$private_remote" || "$url" == "$private_url" ]]; then
+    exit 0
+fi
+
+zero="$(git hash-object --stdin </dev/null | tr '0-9a-f' '0')"
+blocked=0
+while read -r local_ref local_sha remote_ref _; do
+    # Deleting a remote ref publishes nothing.
+    [[ "$local_sha" == "$zero" ]] && continue
+    case "$remote_ref" in
+        refs/heads/main | refs/tags/*) ;;
+        *)
+            printf 'MAKO pre-push: %s is not main. This checkout pushes branches to %s, not %s.\n' \
+                "$remote_ref" "$private_remote" "$remote" >&2
+            blocked=1
+            continue
+            ;;
+    esac
+    commit="$(git rev-parse --verify --quiet "$local_sha^{commit}" || true)"
+    if [[ -z "$commit" ]] || ! git rev-parse --verify --quiet refs/heads/main >/dev/null ||
+            ! git merge-base --is-ancestor "$commit" refs/heads/main; then
+        printf 'MAKO pre-push: %s would publish commits that are not on the local main branch.\n' \
+            "${local_ref:-$local_sha}" >&2
+        blocked=1
+    fi
+done
+
+if (( blocked )); then
+    printf 'MAKO pre-push: push working branches with `git push %s HEAD:main`; only main goes to %s.\n' \
+        "$private_remote" "$remote" >&2
+    exit 1
+fi

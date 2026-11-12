@@ -6,11 +6,17 @@ This document supplements [LICENSE.md](LICENSE.md). It identifies third-party ma
 
 MAKO is an independent open-source project. MAKO source archives, MAKO Renderer packages, MAKO Decky packages, Flatpak extensions, and the MAKO website do not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted LS1 or LSFG model and shader payloads.
 
-The open MAKO Scaler works without Lossless Scaling. A user who chooses LSFG frame generation or LS1 scaling must independently obtain a lawful copy of Lossless Scaling and select or permit discovery of its locally installed `Lossless.dll`. The user is responsible for complying with the terms and law applicable to that copy. MAKO grants no license or other rights in Lossless Scaling or its proprietary resources.
+MAKO FG, the default frame generation model, and the open MAKO Scaler, the default scaling method, work without Lossless Scaling. A user who opts into the Lossless Scaling frame generation model (LSFG) or LS1 scaling must independently obtain a lawful copy of Lossless Scaling and select or permit discovery of its locally installed `Lossless.dll`. The user is responsible for complying with the terms and law applicable to that copy. MAKO grants no license or other rights in Lossless Scaling or its proprietary resources.
 
-MAKO Renderer reads the user-supplied local DLL at runtime for LSFG or LS1. It may translate shaders for Vulkan or, in experimental builds, convert eligible LSFG shader arithmetic from FP32 to FP16. Extracted and transformed resources stay in process memory. MAKO does not install, upload, package, or alter the DLL, or save those resources as standalone files.
+MAKO Renderer reads the user-supplied local DLL at runtime for LSFG or LS1. It may translate shaders for Vulkan or, in experimental builds, convert eligible LSFG shader arithmetic from FP32 to FP16. Extracted and transformed shaders stay in process memory. To speed up later launches, MAKO and the GPU driver may cache compiled pipelines on the user's machine. That data is specific to the user's GPU and driver, and MAKO does not upload or package it. MAKO does not install, upload, package, or alter the DLL, or save extracted shaders as standalone files.
 
 Lossless Scaling, LS1, and LSFG are used descriptively and remain the property of their respective owner. MAKO is not affiliated with or endorsed by Lossless Scaling.
+
+## MAKO FG program and model
+
+MAKO FG, the default frame generation model, runs in a separate program. Packages carry its `mako-fg-host` program and model files in `mako-fg/` beside the 64-bit Renderer library. The Renderer starts the program and exchanges frames and socket messages with it; it links no MAKO FG code. MAKO Renderer remains GPL-3.0-or-later. Distribution of MAKO FG under separate terms relies on the programs being independent works; process separation alone does not settle that question, as the [GNU licensing FAQ](https://www.gnu.org/licenses/gpl-faq.en.html#MereAggregation) explains.
+
+The release identifies the model files as Creative Commons Attribution-NonCommercial 4.0 International (CC BY-NC 4.0). Its `LICENSE` also passes on X4K1000FPS's "non-commercial research and educational use only" condition. That additional condition is narrower than ordinary non-commercial use; the complete release terms, rather than the CC identifier alone, describe the stated permission. The program is published in binary form under its own non-commercial terms and contains ncnn and glslang. The release's `LICENSE` and `THIRD_PARTY_NOTICES`, with the full ncnn and glslang licences, are installed with every Renderer package under `share/doc/mako-render/mako-fg/`. The [model card](engine/docs/mako-fg/MODEL_CARD.md) describes the model, its training data and its terms.
 
 ## Incorporated Renderer and Decky source
 

@@ -57,6 +57,38 @@ describe("profile editor model", () => {
 
   afterEach(cleanup);
 
+  test("a failed first read drops restored profiles and later failures keep live ones", async () => {
+    mocks.getProfiles.mockRejectedValueOnce(new Error("offline"));
+    const onProfilesLoaded = vi.fn();
+    const restoredProfiles = {
+      profiles: ["mako", "deleted"],
+      details: [{ ...defaultProfile, steam_app_id: null }],
+    };
+    const { result, unmount } = renderHook(() =>
+      useProfileEditorModel({ restoredProfiles, onProfilesLoaded }),
+    );
+    await waitFor(() => expect(onProfilesLoaded).toHaveBeenCalledWith(null));
+    expect(result.current.profileOptions).toHaveLength(0);
+    unmount();
+
+    onProfilesLoaded.mockClear();
+    const live = renderHook(
+      ({ revision }) =>
+        useProfileEditorModel({
+          restoredProfiles,
+          onProfilesLoaded,
+          profileRevision: revision,
+        }),
+      { initialProps: { revision: 0 } },
+    );
+    await waitFor(() => expect(live.result.current.profileOptions).toHaveLength(2));
+    mocks.getProfiles.mockRejectedValueOnce(new Error("offline"));
+    live.rerender({ revision: 1 });
+    await waitFor(() => expect(mocks.showErrorToast).toHaveBeenCalledTimes(2));
+    expect(live.result.current.profileOptions).toHaveLength(2);
+    expect(onProfilesLoaded).not.toHaveBeenCalledWith(null);
+  });
+
   test("switches only the offline editor and never overrides the runtime profile", async () => {
     const onProfileChange = vi.fn(async () => undefined);
     const { result } = renderHook(() =>
@@ -372,5 +404,44 @@ describe("profile editor model", () => {
     expect(onProfileChange.mock.invocationCallOrder[1]).toBeLessThan(
       mocks.showSuccessToast.mock.invocationCallOrder[1],
     );
+  });
+
+  test("shows the remembered list until the first load and reports each load", async () => {
+    let finishLoad!: (value: unknown) => void;
+    mocks.getProfiles.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishLoad = resolve;
+      }),
+    );
+    const onProfilesLoaded = vi.fn();
+    const { result } = renderHook(() =>
+      useProfileEditorModel({
+        editingProfile: "game-123",
+        mainRunningApp: { appid: 123, display_name: "Test Game" } as never,
+        restoredProfiles: {
+          profiles: ["mako", "game-123"],
+          details: [defaultProfile as never, gameProfile],
+        },
+        onProfilesLoaded,
+      }),
+    );
+    // A running game with a saved profile never offers to save it again.
+    expect(result.current.runningProfile?.profile_name).toBe("game-123");
+    expect(result.current.selectedDetails?.display_name).toBe("Test Game");
+    expect(result.current.profileOptions).toHaveLength(2);
+
+    await act(async () =>
+      finishLoad({
+        success: true,
+        profiles: ["mako"],
+        current_profile: "mako",
+        profile_details: [defaultProfile],
+      }),
+    );
+    expect(result.current.runningProfile).toBeUndefined();
+    expect(onProfilesLoaded).toHaveBeenCalledWith({
+      profiles: ["mako"],
+      details: [defaultProfile],
+    });
   });
 });

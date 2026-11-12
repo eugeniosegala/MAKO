@@ -701,6 +701,32 @@ int main() {
                 staged.outstanding() == 0,
             "V2 diagnostics mixed stage times, serial namespaces or explicit drops");
     }
+    {
+        // Opt-in per-frame records carry each matched output's request and feedback stages.
+        BridgePresentTiming frames;
+        constexpr uint64_t at = 20000000000;
+        frames.request(7, at + 16000000, at + 1000000, at + 900000);
+        const auto shown = frames.feedback(7, at + 16000000, at + 24333333, true,
+            at + 24500000);
+        expect(shown && shown->id == 7 && shown->desired == at + 16000000 &&
+                shown->plannedSubmit == at + 900000 && shown->submitted == at + 1000000 &&
+                shown->shown == at + 24333333 && shown->latch == at + 24500000 &&
+                shown->lateLatch && !shown->dropped,
+            "per-frame bridge record lost its request or feedback stages");
+        expect(!frames.feedback(7, at + 16000000, at + 24333333),
+            "per-frame bridge record reported a duplicate feedback");
+        BridgePresentTiming staged(true);
+        staged.request(8, at + 32000000, at + 2000000, at + 2000000);
+        const auto dropped = staged.feedbackTiming(8, 0, 0, 0, at + 40000000);
+        expect(dropped && dropped->dropped && dropped->desired == at + 32000000,
+            "per-frame bridge record hid an explicit V2 drop");
+        staged.request(9, at + 48000000, at + 3000000, at + 3000000);
+        const auto timed = staged.feedbackTiming(9, at + 5000000, at + 47000000,
+            at + 48300000, at + 49000000);
+        expect(timed && timed->queueEnd == at + 5000000 && timed->latch == at + 47000000 &&
+                timed->shown == at + 48300000 && !timed->lateLatch,
+            "per-frame bridge record lost V2 queue and latch stages");
+    }
     BridgePresentTiming timing;
     constexpr uint64_t origin = 10000000000;
     timing.request(UINT32_MAX, origin, origin, origin - 100000);

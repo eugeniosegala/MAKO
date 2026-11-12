@@ -48,4 +48,9 @@ expect_rejection disguised-zip fixture.dat '\x50\x4b\x03\x04payload'
 expect_rejection lfs-pointer fixture.dat 'version https://git-lfs.github.com/spec/v1\noid sha256:0000000000000000000000000000000000000000000000000000000000000000\nsize 1\n'
 expect_rejection model-extension model.onnx 'documentation only\n'
 
+# MAKO FG is a separate program: none of its files may be tracked here, under any name.
+expect_rejection mako-fg-weights weights.bin 'MFGTV9\x00\x00weights'
+expect_rejection mako-fg-shader ops.spv '\x03\x02\x23\x07shader'
+expect_rejection mako-fg-program mako-fg-host '\x7fELFprogram'
+
 printf '%s\n' 'Protected-input scanner tests passed.'
