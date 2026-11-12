@@ -1,6 +1,6 @@
 {
   "name": "mako-plugin",
-  "version": "4.6.0",
+  "version": "5.0.0",
   "description": "MAKO Decky controls for frame generation, spatial scaling, and shaders on Steam Deck and compatible Linux systems",
   "type": "module",
   "packageManager": "pnpm@11.17.0",
