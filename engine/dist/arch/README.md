@@ -101,7 +101,7 @@ The release workflow publishes packages on GitHub, not the AUR. AUR publication 
 
 ## Verification
 
-The package is checked against the host archive's checksums, required files, architectures, dependencies and Vulkan manifests. The native Remote Play SDR helper is the only reviewed ELF under `/usr/share`; it retains the same 64-bit and dependency checks as the host tools. The installed checksum manifest is `/usr/share/doc/mako-renderer-bin/MAKO-Renderer-install-manifest.txt`. See [maintainer verification](../../docs/BUILDING-FROM-SOURCE.md#verification) for the complete contract.
+The package is checked against the host archive's checksums, required files, architectures, dependencies and Vulkan manifests. MAKO FG's separate 64-bit host uses the `libmvec.so.1` library from the required `glibc` package. The native Remote Play SDR helper is the only reviewed ELF under `/usr/share`; it retains the same 64-bit and dependency checks as the host tools. The installed checksum manifest is `/usr/share/doc/mako-renderer-bin/MAKO-Renderer-install-manifest.txt`. See [maintainer verification](../../docs/BUILDING-FROM-SOURCE.md#verification) for the complete contract.
 
 ## Links
 

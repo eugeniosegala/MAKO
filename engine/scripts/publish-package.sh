@@ -213,7 +213,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed Frame
 - **Quality and latency tuning:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness, so compare the available choices per game.
 
 > [!IMPORTANT]
-> MAKO does not contain or distribute Lossless Scaling, \`Lossless.dll\`, or extracted proprietary model payloads. Fixed or Adaptive Frame Generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. The open MAKO Scaler does not use it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.
+> MAKO does not contain or distribute Lossless Scaling, \`Lossless.dll\`, or extracted proprietary model payloads. Only the optional Lossless Scaling frame generation model and LS1 scaling read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. MAKO FG, the open MAKO Scaler, and bundled shaders do not require it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.
 
 ## Installation
 
@@ -244,7 +244,7 @@ Reopen the configuration UI after installation:
 - **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode, open the bottom-left Application Launcher, search for **MAKO Renderer Configuration**, and click the MAKO-logo app icon.
 - **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
 
-Configure the profile in the UI or \`~/.config/mako-render/conf.toml\`. Select the licensed DLL path when using Frame Generation or LS1 scaling, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch.
+Configure the profile in the UI or \`~/.config/mako-render/conf.toml\`. Select the licensed DLL path when using the optional Lossless Scaling frame generation model or LS1 scaling, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch.
 
 ### Arch Linux package
 
@@ -280,7 +280,7 @@ Keep the previous archives until the new version has been tested with your games
 ## Before you play
 
 - Test MAKO per game. Start with Frame Generation and Scaling disabled, then enable one path at a time before combining them.
-- If you use Frame Generation or LS1 scaling, confirm the detected \`Lossless.dll\` path before launching. Leaving it blank permits normal discovery. MAKO Scaler does not need it.
+- If you use a Lossless Scaling frame generation model or LS1 scaling, confirm the detected \`Lossless.dll\` path before launching. Leaving it blank permits normal discovery. MAKO Scaler does not need it.
 - Do not combine MAKO with another frame-generation or scaling Vulkan wrapper for the same game.
 
 EOF

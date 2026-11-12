@@ -237,6 +237,8 @@ while IFS= read -r -d '' audited_binary; do
         case "$soname" in
             libc.so.6 | libm.so.6 | ld-linux.so.2 | ld-linux-x86-64.so.2)
                 dependency="${architecture_prefix}glibc" ;;
+            libmvec.so.1)
+                dependency=glibc ;;
             libgcc_s.so.1 | libstdc++.so.6)
                 dependency="${architecture_prefix}gcc-libs" ;;
             libX11.so.6)
@@ -253,7 +255,7 @@ while IFS= read -r -d '' audited_binary; do
         esac
         if [[ -n "$architecture_prefix" ]]; then
             case "$dependency" in
-                qt6-* | libglvnd)
+                qt6-* | libglvnd | glibc)
                     echo "Built Arch package has an unreviewed 32-bit dependency: $binary_path needs $soname." >&2
                     exit 1 ;;
             esac

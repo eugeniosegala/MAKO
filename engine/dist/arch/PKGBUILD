@@ -24,7 +24,7 @@ install="${pkgname}.install"
 # bash is intentionally not listed even though /usr/bin/mako-launch and
 # /usr/bin/mako-diagnostics are bash scripts: bash is guaranteed by base.
 depends=(
-    # libc.so.6, libm.so.6, ld-linux-x86-64.so.2
+    # libc.so.6, libm.so.6, libmvec.so.1 (64-bit MAKO FG host), ld-linux-x86-64.so.2
     'glibc'
     # libstdc++.so.6, libgcc_s.so.1
     'gcc-libs'

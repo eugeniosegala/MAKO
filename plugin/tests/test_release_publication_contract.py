@@ -235,6 +235,22 @@ class ReleasePublisherSourceContractTests(unittest.TestCase):
         self.assertEqual(source.count("read-release-info.mjs"), 2)
         self.assertIn("Paired release notes must use the same codename", source)
 
+    def test_release_instructions_distinguish_optional_lossless_scaling_models(self):
+        for component in ("engine", "plugin"):
+            source = (
+                REPOSITORY_ROOT / component / "scripts/publish-package.sh"
+            ).read_text(encoding="utf-8")
+            self.assertIn(
+                "Only the optional Lossless Scaling frame generation model and LS1 scaling",
+                source,
+            )
+            self.assertIn(
+                "MAKO FG, the open MAKO Scaler, and bundled shaders do not require it.",
+                source,
+            )
+            self.assertNotIn("when using Frame Generation or LS1 scaling", source)
+            self.assertNotIn("If you use Frame Generation or LS1 scaling", source)
+
 
 if __name__ == "__main__":
     unittest.main()

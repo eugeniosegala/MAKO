@@ -52,6 +52,7 @@ trap 'rm -rf -- "$package_root"' EXIT
 mkdir -p \
     "$package_root/usr/bin" \
     "$package_root/usr/lib" \
+    "$package_root/usr/lib/mako-fg" \
     "$package_root/usr/lib/vkbasalt" \
     "$package_root/usr/lib32" \
     "$package_root/usr/lib32/vkbasalt" \
@@ -74,6 +75,7 @@ for binary_path in \
     usr/bin/mako-cli \
     usr/bin/mako-ui \
     usr/lib/libmako-render.so \
+    usr/lib/mako-fg/mako-fg-host \
     usr/lib/libmako-render-scaling.so \
     usr/lib/vkbasalt/libvkbasalt.so \
     usr/lib32/libmako-render.so \
@@ -132,6 +134,9 @@ case "$1" in
         if [ -n "${MAKO_TEST_EXTRA_NEEDED:-}" ]; then
             printf ' 0x00000001 (NEEDED)             Shared library: [%s]\n' "$MAKO_TEST_EXTRA_NEEDED"
         fi
+        if [ "${MAKO_TEST_MAKO_FG_MVEC:-0}" = 1 ] && [ "${2##*/}" = mako-fg-host ]; then
+            printf ' 0x00000001 (NEEDED)             Shared library: [libmvec.so.1]\n'
+        fi
         case "$2" in
             */libfuture.so) printf ' 0x00000001 (NEEDED)             Shared library: [libunexpected.so.1]\n' ;;
         esac ;;
@@ -155,6 +160,20 @@ MAKO_TEST_PKGVER="$current_pkgver" \
         "$fake_archive" "$retained_package" >/dev/null
 [[ -f "$retained_package" ]]
 tar -tf "$retained_package" | grep -Fqx usr/bin/mako-launch
+MAKO_TEST_PKGVER="$current_pkgver" \
+    MAKO_TEST_PKGREL="$current_pkgrel" \
+    MAKO_TEST_MAKO_FG_MVEC=1 \
+    PATH="$fake_tools:/usr/bin:/bin" \
+    "$script_dir/verify-release-package.sh" "$fake_archive" >/dev/null
+if MAKO_TEST_PKGVER="$current_pkgver" \
+        MAKO_TEST_PKGREL="$current_pkgrel" \
+        MAKO_TEST_EXTRA_NEEDED=libmvec.so.1 \
+        PATH="$fake_tools:/usr/bin:/bin" \
+        "$script_dir/verify-release-package.sh" "$fake_archive" \
+        >/dev/null 2>&1; then
+    echo "Arch release package accepted an unreviewed 32-bit libmvec dependency" >&2
+    exit 1
+fi
 if MAKO_TEST_PKGVER="$current_pkgver" \
         MAKO_TEST_PKGREL="$current_pkgrel" \
         MAKO_TEST_EXTRA_NEEDED=libunexpected.so.1 \

@@ -290,7 +290,7 @@ printf '%s\n' \
   'See the [Configuration guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/CONFIGURATION.md) and [Troubleshooting guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/TROUBLESHOOTING.md) for complete behaviour and per-game controls.' \
   '' \
   '> [!IMPORTANT]' \
-  '> MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. Frame Generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. The open MAKO Scaler does not use it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.' \
+  '> MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. Only the optional Lossless Scaling frame generation model and LS1 scaling read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. MAKO FG, the open MAKO Scaler, and bundled shaders do not require it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.' \
   '' \
   '> ⚠️ **Required MAKO Renderer update:** Installing the ZIP updates MAKO Decky, but does **not** replace the shared native Renderer. Open the plugin and select **Install MAKO Renderer** afterwards.' \
   '' \
@@ -330,7 +330,7 @@ printf '%s\n' \
   '## Before you play' \
   '' \
   '- Test MAKO per game. Start with Frame Generation and Scaling disabled, then enable one path at a time before combining them.' \
-  '- If you use Frame Generation or LS1 scaling, confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery. The open MAKO Scaler does not need it.' \
+  '- If you use a Lossless Scaling frame generation model or LS1 scaling, confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery. The open MAKO Scaler does not need it.' \
   '- Do not combine `mako-run` with another frame-generation or scaling Vulkan wrapper for the same game.' \
   '' \
   "## Bundled MAKO Renderer \`$engine_version\`" \
