@@ -28,30 +28,18 @@ Compatible direct-image packages pool motion input and reconstruct the generated
 
 ## MAKO FG Mode
 
-**MAKO FG Mode** sits under the model picker in MAKO Decky and the Qt app and sets how often MAKO FG solves motion for the selected profile. It applies live.
+**MAKO FG Mode** sits under the model picker in MAKO Decky and the Qt app and applies live. At 2× and 3×, it controls the normal frequency of full motion solves:
 
-| Mode | Motion solved | Between solved pairs | Use |
-| --- | --- | --- | --- |
-| **Quality** | Every real-frame pair | — | A game that shows artifacts in the other modes |
-| **Balanced** (default) | One pair in two | Corrected | Most games |
-| **Performance** | One pair in three | Corrected | A game short of GPU time, or a low-power device |
-| **Extra Performance** | One pair in four | Moved forward while frames arrive evenly, corrected otherwise | The most GPU time, with the most risk of artifacts |
+| Mode | Full motion solve | Between solves |
+| --- | --- | --- |
+| **Quality** | Every real-frame pair | — |
+| **Balanced** (default) | One pair in two | Corrects carried motion against the new real frame |
+| **Performance** | One pair in three | Corrects carried motion against the new real frame |
+| **Extra Performance** | One pair in four | Reuses carried motion while frames arrive evenly; corrects it otherwise |
 
-Between solved pairs, MAKO FG moves the last motion field forward along its own motion and keeps the last static-overlay map. A corrected pair then analyses its new real frame and refines that motion with the finest level of MAKO FG's motion search; a moved pair uses it as it is and skips that analysis. Each generated frame is still reconstructed from the two real frames. A sparse frame comparison on every pair makes the next pair solve after a scene cut. From 4x, where the thin-structure layer runs, every pair solves.
+Correction handles uneven frame delivery and gradual changes in motion better than uncorrected reuse, at a higher GPU cost. Fast reversals can still exceed its search range; try Quality if the other modes show artifacts. Every generated frame uses the current two real frames. Scene cuts and large cadence changes temporarily force full solves; at 4× and above, every pair solves regardless of the mode.
 
-Moved motion is right only while real frames arrive evenly and the camera keeps its speed and direction, because a game moves its content by its velocity times the time between frames. An uneven rate makes it fall short or overshoot, which fast camera motion shows as judder, uneven speed and doubled edges. Correction reads the frames, so it follows an uneven rate and gradual changes of speed or direction as closely as a solved pair, but it costs about 60% of one where moving costs about a quarter. A camera that reverses at full speed within one frame moves further than the correction reaches; in every mode but Quality that frame is wrong unless it falls on a solved pair.
-
-To choose, the Renderer passes each real frame's interval since the previous one it gave MAKO FG, measured on the same cadence clock Adaptive uses (`mako_fg_protocol.hpp`, host protocol 3). MAKO FG treats the last four intervals as even when the longest is at most 1.1 times the shortest and uneven up to 1.5 times; an even cadence corrects in one search pass and an uneven one in two. Beyond 1.5 times, as after a hitch, the next four pairs solve. This needs a `mako-fg-host` that speaks protocol 3; packaging rejects an older one.
-
-On MAKO FG's 1280×720 camera-pan sequences on a Navi 33 GPU at 2×, these modes save this much GPU time per real-frame pair against Quality (MAKO FG `docs/NATIVE.md` records the measurements):
-
-| Mode                  | Even frame rate | Uneven frame rate |
-| --------------------- | --------------- | ----------------- |
-| **Balanced**          | about 15–20%    | about 15%         |
-| **Performance**       | about 25%       | about 15–20%      |
-| **Extra Performance** | about 50%       | about 20–25%      |
-
-A game capped at its frame rate gains spare GPU time from a higher mode, not more frames, so start at Balanced and move up only if the game cannot hold its rate. Ultra Performance uses at least Performance and a 60% Flow Scale.
+Start with Balanced and move up only if the game cannot hold its frame rate. A game already at its cap gains spare GPU time, not more frames. Ultra Performance uses at least Performance and a 60% Flow Scale. See [motion reuse and source timing](#motion-reuse-and-source-timing) for the interval contract and measured GPU costs.
 
 ## Record test frames
 
@@ -114,5 +102,17 @@ A 32-bit layer uses the same 64-bit program, which keeps the model and its drive
 A failed request reaches the Renderer's existing recovery as an error. A thread that sleeps on the host's socket notices a lost host at once, even when the game's threads are stuck, and signals the shared timeline so application work cannot wait on it forever. Later requests fail at once and the game continues with its real frames. The next present, or the next request a new swapchain makes, starts a replacement, up to three times per process, and rebuilds its context, which pauses that present briefly. Past that limit **Live Status** reports frame generation as stopped until the game restarts. On the Gamescope path a signalled render fence proves the program finished, so ordinary frames need no readiness round trip.
 
 The host ends when the Renderer's process ends, however it ends, and the Renderer keeps no child process. Its environment has `LD_PRELOAD` removed and the layer-disabling variables of the backend instance set. Live frames remain on the GPU. All outputs in a generated batch currently complete together, and backend memory accounting is unavailable. The process-level backend stays fixed across profile changes and swapchain recreation until restart.
+
+### Motion reuse and source timing
+
+The Renderer measures the interval since the previous real frame accepted by the backend on the same cadence clock Adaptive uses. Generated and history-only batches both carry it; a new context resets the previous-frame timestamp. A first or non-increasing timestamp produces an unknown interval. LSFG ignores this input.
+
+Host protocol 3 carries the interval as seconds in `Request::interval`; zero means unknown, and the request remains 176 bytes. Both native and Flatpak packaging require a matching `mako-fg-host`. The Renderer's declaration is [`mako_fg_protocol.hpp`](../mako-backend/src/mako_fg_protocol.hpp); MAKO FG owns the runtime policy.
+
+The host classifies the last four known intervals as even when the longest is at most 1.1 times the shortest, uneven up to 1.5 times, and broken beyond that. A known current interval also needs a complete window without unknown entries; otherwise the pair solves fully. A current interval of zero retains the compatibility behavior of treating cadence as even. A hitch therefore forces full solves while it disrupts that window, rather than a fixed number of future pairs.
+
+Between full solves, the host moves the previous motion field forward and retains its static-overlay map. With V1.24, Balanced and Performance correct that motion against the new frame; Extra Performance reuses it at even cadence and corrects it at uneven cadence. Correction analyses the new endpoint and refines the motion at the finest coarse-search level, using one search pass at even cadence and two at uneven cadence. A scene cut makes the next pair solve, and batches with three or more generated frames always solve for the thin-object stage. Older packages without correction support reuse at even cadence and solve at uneven cadence.
+
+MAKO FG's `docs/NATIVE.md` records a 1280×720, 2×, Flow Scale 100% camera-pan comparison on one Navi 33 GPU with the unchanged V1.23 model files. At even cadence, reported GPU time per real-frame pair was about 0.83 ms with every pair solved, 0.71 ms in Balanced and 0.63 ms in Performance. Individual corrected batches cost about 0.50 ms with one search pass or 0.55 ms with two, against 0.85 ms for a solved batch and 0.22 ms for uncorrected reuse. These sequence measurements do not establish savings or quality in other games, resolutions or devices.
 
 MAKO FG owns training and independent native/PyTorch comparisons. MAKO Gym owns real-game trials, licensed controls, synchronization validation and full GPU-cost profiling. Follow their `docs/NATIVE.md`, `docs/MAKO-FG.md` and `docs/RENDER-PERFORMANCE.md`. Preserve the exact model, source, binary hashes, dependencies and raw evidence for each comparison. A one-game trial does not qualify all games, devices, resolutions, display paths or recovery behavior.
