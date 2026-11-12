@@ -1,8 +1,8 @@
 <p align="center"><img src="mako-fg-banner.webp" width="100%" alt="MAKO FG: video frame interpolation model" /></p>
 
-# MAKO FG V1.22
+# MAKO FG V1.23
 
-**Model card · Version V1.22 (1.22) · Released 2026-11-03**
+**Model card · Version V1.23 (1.23) · Released 2026-11-12**
 
 **Free, non-commercial research release.** Part of the training data is licensed for research and education or non-commercial use only: X4K1000FPS (X-TRAIN, reviewed subset). This model is released free of charge by a non-commercial research project and may not be used commercially.
 
@@ -63,7 +63,7 @@ MAKO FG also runs standalone. Download the model and the prebuilt runtime from [
 2. Load the model with `mfg::readPackageDirectory("model")`, or with `mfg::packageFromFiles(weights, ops, transport, mixture)` when its files are already in memory.
 3. Choose a GPU from `mfg::devices()`. On that GPU, in your own Vulkan code, create two source images and one output image per generated frame, at the frame size, with optimal tiling, storage and sampled usage and dedicated memory, in `VK_FORMAT_R8G8B8A8_UNORM` for 8-bit SDR (`mfg::supportsEncoding` and `external.hpp` list the HDR formats), and a timeline semaphore. Export each as an opaque file descriptor.
 4. Create `mfg::ExternalContext context(model, device_index, half_storage, width, height, source_a, source_b, outputs, timeline, flow_scale, mfg::Encoding::Sdr8)`. It takes ownership of the file descriptors. `half_storage = true` selects half-precision storage, `flow_scale` (0.25 to 1) the motion-analysis resolution.
-5. Keep a timeline value `v`, starting at 1. For each real frame: once the previous frame's generated frames are finished (`context.ready()`), write the frame into source A on even frames and source B on odd frames, signal the timeline to `v` after the write, and call `context.schedule(times)` with the generated times in increasing order between 0 and 1, for example `{0.5f}` for 2x or `{0.25f, 0.5f, 0.75f}` for 4x. Generated frame `i` (counting from 1) is in its output image when the timeline reaches `v + i`; then add `times.size() + 1` to `v`. The first frame only primes the model.
+5. Keep a timeline value `v`, starting at 1. For each real frame: once the previous frame's generated frames are finished (`context.ready()`), write the frame into source A on even frames and source B on odd frames, signal the timeline to `v` after the write, and call `context.schedule(times, interval)` with the generated times in increasing order between 0 and 1, for example `{0.5f}` for 2x or `{0.25f, 0.5f, 0.75f}` for 4x, and the seconds since the previous real frame (0 when unknown). Frames that generate nothing call `context.schedule({}, interval)`. Generated frame `i` (counting from 1) is in its output image when the timeline reaches `v + i`; then add `times.size() + 1` to `v`. The first frame only primes the model.
 
 **Motion-estimation frequency**
 
@@ -80,7 +80,7 @@ context.setMotionPeriod(2);
 | Performance | `context.setMotionPeriod(3)` | One pair in three |
 | Extra Performance | `context.setMotionPeriod(4)` | One pair in four |
 
-The standalone runtime defaults to `1` (Quality) when this method is not called. You can change the period between completed batches without recreating the context. Between solves, the runtime moves the previous motion field forward along itself and keeps the last HUD map; each output is still reconstructed from the current two real frames. Longer periods save GPU time and can add artifacts when motion changes quickly. A scene cut forces the next pair to solve, and batches with three or more generated frames (4x and above) always solve for the thin-object stage. The constructor's `flow_scale` independently controls motion-analysis resolution.
+The standalone runtime defaults to `1` (Quality) when this method is not called. You can change the period between completed batches without recreating the context. Between solves, the runtime moves the previous motion field forward along itself and keeps the last HUD map; each output is still reconstructed from the current two real frames. Longer periods save GPU time and can add artifacts when motion changes quickly. Moved motion is right only while real frames arrive evenly, so with intervals a pair reuses it only when its interval and the three before it are within 1.1 times of each other; an interval of 0 keeps reuse as if frames were evenly spaced, which judders in fast motion at an uneven frame rate. A scene cut forces the next pair to solve, and batches with three or more generated frames (4x and above) always solve for the thin-object stage. The constructor's `flow_scale` independently controls motion-analysis resolution.
 
 `external.hpp` documents the full contract. Use outside MAKO must follow the licence below, including its non-commercial condition and attribution.
 
@@ -181,7 +181,7 @@ MAKO FG learned from X4K1000FPS, the 4K, 1000 FPS video dataset created by Hyeon
 
 ## Release notes
 
-MAKO FG needs far less GPU memory: mako-fg-host frees a context's memory when MAKO replaces it, frees frame buffers it outgrows and no longer allocates buffers it never uses. The model and every generated frame are unchanged from V1.21.
+Balanced, Performance and Extra Performance no longer judder, change speed or double edges in fast camera motion when a game's frame rate is uneven: MAKO FG reuses motion only while real frames arrive evenly, and solves every pair otherwise. The model is unchanged from V1.22.
 
 ## Files and integrity
 
