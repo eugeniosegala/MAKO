@@ -156,7 +156,7 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow"><span /> Frame generation + spatial scaling + shaders / Linux</p>
             <h1>Frames. Scaling.<br /><em>Shaders.</em></h1>
-            <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. MAKO FG and the open MAKO Scaler are the defaults and, with bundled shaders, work without Lossless Scaling. Only the optional Lossless Scaling frame generation model (LSFG) and LS1 scaling need a separate Lossless Scaling purchase.</p>
+            <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. MAKO FG, MAKO Scaler and bundled shaders work without it. Only optional LSFG and LS1 require a separate purchase.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
               <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Contribute. Fork it. Change it. Make it yours.</span></span>

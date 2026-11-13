@@ -141,21 +141,21 @@ Image-quality scores use full motion estimation (Quality mode); separate scores 
 | Camera orbits around a character in rendered 3D scenes (3 scenes, 75 cases) | 2x, Flow Scale 0.8 | PSNR | 30.19 dB | A staircase with railings, a grass hillside and a furnished room, turning 2 to 14 degrees per real frame; 24.95 dB at the fastest turn and 30.70 dB at 4x |
 | Third-person camera turns (procedural suite, 5 scenes) | 2x | PSNR | 31.74 dB | A character at the screen centre while the world pans 16 to 80 pixels per real frame; 32.45 dB at 4x |
 | Thin moving objects (procedural suite, 8 scenes) | 2x | PSNR | 38.04 dB | Swinging blade, counter-panning pole, wire, turning handle and fast fence; 38.29 dB at 4x with the thin-object stage |
-| Complete GPU time per real-frame pair | 1280x720, 2x, Quality, Flow Scale 1.0 | Mean | 0.55 ms | V1.24 |
-| Complete GPU time per real-frame pair | 1280x720, 4x, Quality, Flow Scale 1.0 | Mean | 0.95 ms | V1.24 |
-| Complete GPU time per real-frame pair | 1280x800, 2x, Quality, Flow Scale 1.0 | Mean | 0.58 ms | V1.24 |
-| Complete GPU time per real-frame pair | 1920x1080, 2x, Quality, Flow Scale 1.0 | Mean | 0.97 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 2x, Quality, Flow Scale 1.0 | Mean | 1.61 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 4x, Quality, Flow Scale 1.0 | Mean | 3.15 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 2x, Quality, Flow Scale 0.8 | Mean | 1.35 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 2x, Balanced, Flow Scale 0.8 | Mean | 1.16 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 2x, Performance, Flow Scale 0.8 | Mean | 1.08 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 2x, Extra Performance, Flow Scale 0.8 | Mean | 0.78 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 3x, Quality, Flow Scale 0.8 | Mean | 1.93 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 3x, Balanced, Flow Scale 0.8 | Mean | 1.73 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 3x, Performance, Flow Scale 0.8 | Mean | 1.65 ms | V1.24 |
-| Complete GPU time per real-frame pair | 2560x1440, 3x, Extra Performance, Flow Scale 0.8 | Mean | 1.35 ms | V1.24 |
-| CPU time to prepare and submit a real-frame pair | 1280x800, 2x, Quality, Flow Scale 1.0 | Median | 0.046 ms | V1.24; calling thread, including signal and MAKO FG hand-off; excludes output wait and profile readback |
+| Complete GPU time per real-frame pair | 1280x720, 2x, Quality, Flow Scale 1.0 | Mean | 0.55 ms | -- |
+| Complete GPU time per real-frame pair | 1280x720, 4x, Quality, Flow Scale 1.0 | Mean | 0.95 ms | -- |
+| Complete GPU time per real-frame pair | 1280x800, 2x, Quality, Flow Scale 1.0 | Mean | 0.58 ms | -- |
+| Complete GPU time per real-frame pair | 1920x1080, 2x, Quality, Flow Scale 1.0 | Mean | 0.97 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Quality, Flow Scale 1.0 | Mean | 1.61 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 4x, Quality, Flow Scale 1.0 | Mean | 3.15 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Quality, Flow Scale 0.8 | Mean | 1.35 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Balanced, Flow Scale 0.8 | Mean | 1.16 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Performance, Flow Scale 0.8 | Mean | 1.08 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Extra Performance, Flow Scale 0.8 | Mean | 0.78 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Quality, Flow Scale 0.8 | Mean | 1.93 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Balanced, Flow Scale 0.8 | Mean | 1.73 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Performance, Flow Scale 0.8 | Mean | 1.65 ms | -- |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Extra Performance, Flow Scale 0.8 | Mean | 1.35 ms | -- |
+| CPU time to prepare and submit a real-frame pair | 1280x800, 2x, Quality, Flow Scale 1.0 | Median | 0.046 ms | Calling thread, including signal and MAKO FG hand-off; excludes output wait and profile readback |
 | GPU output versus independent reference implementation | Six test cases, full and half precision | Maximum / mean absolute error | 8.5e-2 / 2.6e-4 | RGB in [0, 1]. One pixel of one small random-texture case differs by 0.085, where a frame-edge decision flips on rounding; every other pixel is within 4e-4. Along 10 consecutive real 2560x1440 staircase frames, each carrying its own motion from pair to pair, GPU and reference frames score within 0.07 dB |
 
 ## Licence and terms
