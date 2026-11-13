@@ -37,7 +37,9 @@ Steam Deck and similar PC handhelds, Steam Machine and desktop GPUs, on SteamOS 
 
 ### Out of scope
 
-Commercial use; producing or altering video as evidence; medical or safety-critical imaging.
+Commercial use; medical or safety-critical imaging.
+
+Generated frames are estimates and may contain artifacts. They should not be relied on as an exact visual record of an event.
 
 ## How to use
 
