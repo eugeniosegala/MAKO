@@ -23,7 +23,7 @@ MAKO FG is a state-of-the-art, very fast, memory-efficient, open-weight frame-ge
 
 Flow Scale controls motion-analysis resolution, and MAKO FG Mode controls how often motion is solved at 2x and 3x. Together they let players balance motion detail and GPU cost for each game. Reusing motion saves GPU time but can add artifacts when motion changes quickly; static HUD text and crosshairs are preserved by a separate screen-overlay stage.
 
-The model has 211 learned parameters, under 1 KB of weights. On the tested Steam Machine-class AMD GPU, recorded benchmarks with motion solved on every pair (Quality mode) and 100% Flow Scale took about 0.55 ms of GPU time per real-frame pair at 1280x800, under a millisecond at 1080p and 1.6 ms at 1440p, all at 2x. The runtime reuses temporary GPU buffers and releases context memory when resources are replaced; total working memory depends on resolution and generated-frame capacity, not just weight size. The evaluation below records the measured workloads and limitations.
+The model has 211 learned parameters, under 1 KB of weights. V1.24 timings below cover all four MAKO FG modes at 1440p. The runtime reuses temporary GPU buffers and releases context memory when resources are replaced; working memory depends on resolution and generated-frame capacity, not just weight size.
 
 MAKO FG is a free, non-commercial research project. Its training used motion supervision derived from the open-source Practical-RIFE 4.25 lite model, as described in the Training section below. No proprietary or commercial models, or their outputs, were used to train it. Its weights and GPU shaders are available under the non-commercial licence below; the model, runtime and training source code are not published.
 
@@ -124,11 +124,9 @@ No video game footage or game assets; no code, weights, shaders, binaries or gen
 
 ## Evaluation
 
-Project benchmarks use one Steam Machine-class GPU (AMD RADV NAVI33, Mesa 26.2); timing rows name the measured release. PSNR compares generated frames with real frames at matching timestamps (higher is better); these frames were not used in training. Game recordings run sequentially; other suites test isolated pairs after a still frame.
+V1.24 timings use its released model and runtime on one AMD Steam Machine (RADV NAVI33, Mesa 26.2). Each setting has three runs of 500 measured pairs after 1,000 warmups, with fixed SDR inputs, half storage and FP32 arithmetic. GPU rows report mean time per real-frame pair, including all generated frames and excluding game rendering. This is diagnostic profiling with unknown intervals treated as even cadence, not a live-game benchmark. CPU time covers signalling, preparation and submission on the calling thread.
 
-GPU timings include all generated frames per real-frame pair, excluding game rendering; medians and recorded spans are labelled separately. CPU timings cover preparation, submission and hand-off to MAKO FG on the game's presentation thread.
-
-Quality and GPU rows without a Balanced label use Quality mode. Balanced, MAKO's default, solves one pair in two, saving GPU time with possible motion artifacts. Its timing study covers only 1440p at 2x/3x and 80% Flow Scale; reused-motion quality and other resolutions/devices were not measured. Commercial comparisons used licensed software for measurement only.
+Image-quality scores use full motion estimation (Quality mode); separate scores for Balanced, Performance and Extra Performance are not available. PSNR compares generated frames with held-out real frames at matching timestamps (higher is better). Recordings run sequentially; other suites use isolated pairs after a still frame. Commercial comparisons used licensed software for measurement only.
 
 | Benchmark | Setting | Metric | Result | Notes |
 | --- | --- | --- | --- | --- |
@@ -143,15 +141,21 @@ Quality and GPU rows without a Balanced label use Quality mode. Balanced, MAKO's
 | Camera orbits around a character in rendered 3D scenes (3 scenes, 75 cases) | 2x, Flow Scale 0.8 | PSNR | 30.19 dB | A staircase with railings, a grass hillside and a furnished room, turning 2 to 14 degrees per real frame; 24.95 dB at the fastest turn and 30.70 dB at 4x |
 | Third-person camera turns (procedural suite, 5 scenes) | 2x | PSNR | 31.74 dB | A character at the screen centre while the world pans 16 to 80 pixels per real frame; 32.45 dB at 4x |
 | Thin moving objects (procedural suite, 8 scenes) | 2x | PSNR | 38.04 dB | Swinging blade, counter-panning pole, wire, turning handle and fast fence; 38.29 dB at 4x with the thin-object stage |
-| Complete GPU time per real-frame pair | 1280x720, 2x | Median | 0.52 ms | V1.15; full Flow Scale, half-precision storage |
-| Complete GPU time per real-frame pair | 1280x720, 4x | Median | 0.92 ms | V1.15; the 30 to 120 FPS handheld case |
-| Complete GPU time per real-frame pair | 1280x800, 2x | Median | 0.55 ms | V1.15; Steam Deck resolution |
-| Complete GPU time per real-frame pair | 1920x1080, 2x | Median | 0.95 ms | V1.15; full Flow Scale |
-| Complete GPU time per real-frame pair | 2560x1440, 2x | Median | 1.60 ms | V1.15; full Flow Scale; 1.35 ms at Flow Scale 0.8 |
-| Complete GPU time per real-frame pair | 2560x1440, 4x | Median | 3.13 ms | V1.15; full Flow Scale |
-| Complete GPU time per real-frame pair | 2560x1440, 2x, Balanced, Flow Scale 0.8 | Recorded GPU span | 1.02 ms | V1.16; motion solved on one pair in two and moved forward, without correction, on the other; one RADV NAVI33 GPU. The same study recorded 1.34 ms with motion solved on every pair. From V1.24 Balanced corrects the other pair, which costs more |
-| Complete GPU time per real-frame pair | 2560x1440, 3x, Balanced, Flow Scale 0.8 | Recorded GPU span | 1.60 ms | V1.16; motion solved on one pair in two and moved forward, without correction, on the other; includes both generated frames. The same study recorded 1.92 ms with motion solved on every pair. From V1.24 Balanced corrects the other pair, which costs more |
-| CPU time to prepare and submit a real-frame pair | 1280x800, 2x | Median | 0.05 ms | V1.18; on the game's presentation thread, through the separate MAKO FG program |
+| Complete GPU time per real-frame pair | 1280x720, 2x, Quality, Flow Scale 1.0 | Mean | 0.55 ms | V1.24 |
+| Complete GPU time per real-frame pair | 1280x720, 4x, Quality, Flow Scale 1.0 | Mean | 0.95 ms | V1.24 |
+| Complete GPU time per real-frame pair | 1280x800, 2x, Quality, Flow Scale 1.0 | Mean | 0.58 ms | V1.24 |
+| Complete GPU time per real-frame pair | 1920x1080, 2x, Quality, Flow Scale 1.0 | Mean | 0.97 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Quality, Flow Scale 1.0 | Mean | 1.61 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 4x, Quality, Flow Scale 1.0 | Mean | 3.15 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Quality, Flow Scale 0.8 | Mean | 1.35 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Balanced, Flow Scale 0.8 | Mean | 1.16 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Performance, Flow Scale 0.8 | Mean | 1.08 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 2x, Extra Performance, Flow Scale 0.8 | Mean | 0.78 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Quality, Flow Scale 0.8 | Mean | 1.93 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Balanced, Flow Scale 0.8 | Mean | 1.73 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Performance, Flow Scale 0.8 | Mean | 1.65 ms | V1.24 |
+| Complete GPU time per real-frame pair | 2560x1440, 3x, Extra Performance, Flow Scale 0.8 | Mean | 1.35 ms | V1.24 |
+| CPU time to prepare and submit a real-frame pair | 1280x800, 2x, Quality, Flow Scale 1.0 | Median | 0.046 ms | V1.24; calling thread, including signal and MAKO FG hand-off; excludes output wait and profile readback |
 | GPU output versus independent reference implementation | Six test cases, full and half precision | Maximum / mean absolute error | 8.5e-2 / 2.6e-4 | RGB in [0, 1]. One pixel of one small random-texture case differs by 0.085, where a frame-edge decision flips on rounding; every other pixel is within 4e-4. Along 10 consecutive real 2560x1440 staircase frames, each carrying its own motion from pair to pair, GPU and reference frames score within 0.07 dB |
 
 ## Licence and terms
@@ -187,7 +191,7 @@ MAKO FG learned from X4K1000FPS, the 4K, 1000 FPS video dataset created by Hyeon
 
 ## Release notes
 
-Balanced and Performance now correct the motion they carry between fully estimated frames, so uneven frame rates and camera turns or speed changes look like Quality while keeping much of the GPU saving; Extra Performance corrects it whenever the frame rate is uneven. The model is unchanged from V1.23.
+First public release of MAKO FG: open-weight Frame Generation for SteamOS and Linux, with a standalone runtime for other non-commercial software. Includes Quality, Balanced, Performance and Extra Performance modes, SDR/HDR support, and Fixed or Adaptive generation.
 
 ## Files and integrity
 
