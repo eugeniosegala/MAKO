@@ -314,10 +314,10 @@ namespace {
     /// get a queue from the logical device
     VkQueue getQueue(const VulkanDeviceFuncs& fd, VkDevice device,
             std::optional<PFN_vkSetDeviceLoaderData> setLoaderData,
-            uint32_t cfi) {
-        VkQueue queue{};
-
-        fd.GetDeviceQueue(device, cfi, 0, &queue);
+            uint32_t cfi, VkDeviceQueueCreateFlags flags = 0) {
+        const VkQueue queue = vk::getDeviceQueue(fd, device, cfi, 0, flags);
+        if (queue == VK_NULL_HANDLE)
+            throw ls::vulkan_error("failed to retrieve the device queue");
 
         if (setLoaderData) { // optionally set loader data
             auto res = (*setLoaderData)(device, queue);
@@ -470,6 +470,26 @@ VulkanInstanceFuncs vk::initVulkanInstanceFuncs(VkInstance i, PFN_vkGetInstanceP
     };
 }
 
+VkQueue vk::getDeviceQueue(const VulkanDeviceFuncs& fd, VkDevice device,
+        const uint32_t queueFamilyIndex, const uint32_t queueIndex,
+        const VkDeviceQueueCreateFlags flags) {
+    VkQueue queue{VK_NULL_HANDLE};
+    if (flags == 0) {
+        fd.GetDeviceQueue(device, queueFamilyIndex, queueIndex, &queue);
+        return queue;
+    }
+    if (!fd.GetDeviceQueue2)
+        return VK_NULL_HANDLE;
+    const VkDeviceQueueInfo2 info{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2,
+        .flags = flags,
+        .queueFamilyIndex = queueFamilyIndex,
+        .queueIndex = queueIndex,
+    };
+    fd.GetDeviceQueue2(device, &info, &queue);
+    return queue;
+}
+
 /// initialize vulkan device function pointers
 VulkanDeviceFuncs vk::initVulkanDeviceFuncs(const VulkanInstanceFuncs& f, VkDevice d,
         bool graphical, const bool frameGenerationInteropEnabled) {
@@ -478,6 +498,8 @@ VulkanDeviceFuncs vk::initVulkanDeviceFuncs(const VulkanInstanceFuncs& f, VkDevi
     };
     return {
         .GetDeviceQueue = dpa<PFN_vkGetDeviceQueue>(f, d, "vkGetDeviceQueue"),
+        .GetDeviceQueue2 = reinterpret_cast<PFN_vkGetDeviceQueue2>(
+            optionalDeviceProc("vkGetDeviceQueue2")),
         .DeviceWaitIdle = dpa<PFN_vkDeviceWaitIdle>(f, d, "vkDeviceWaitIdle"),
         .CreateCommandPool = dpa<PFN_vkCreateCommandPool>(f, d, "vkCreateCommandPool"),
         .DestroyCommandPool = dpa<PFN_vkDestroyCommandPool>(f, d, "vkDestroyCommandPool"),
@@ -639,7 +661,8 @@ Vulkan::Vulkan(VkInstance instance, VkDevice device,
         std::optional<PFN_vkSetDeviceLoaderData> setLoaderData,
         const std::optional<std::filesystem::path>& cachefile,
         const bool shaderFloat16Enabled,
-        const bool storageImageWriteWithoutFormatEnabled) :
+        const bool storageImageWriteWithoutFormatEnabled,
+        const VkDeviceQueueCreateFlags queueCreateFlags) :
     instance(new VkInstance(instance)),
     instance_funcs(instanceFuncs),
     phys_dev(physdev),
@@ -656,7 +679,7 @@ Vulkan::Vulkan(VkInstance instance, VkDevice device,
     device_funcs(deviceFuncs),
     computeQueue(getQueue(this->device_funcs, *this->device,
         this->setLoaderData,
-        this->queueFamilyIdx)),
+        this->queueFamilyIdx, queueCreateFlags)),
     cmdPool(createCommandPool(this->device_funcs,
         *this->device,
         this->queueFamilyIdx

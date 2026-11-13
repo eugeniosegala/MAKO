@@ -410,7 +410,12 @@ namespace {
             ));
     }
 
-    std::optional<uint32_t> selectLayerQueueFamily(
+    struct LayerQueueFamily {
+        uint32_t index;
+        VkDeviceQueueCreateFlags createFlags;
+    };
+
+    std::optional<LayerQueueFamily> selectLayerQueueFamily(
             const VkPhysicalDevice physicalDevice,
             const VkDeviceCreateInfo& createInfo,
             const bool spatialScalingConfigured) {
@@ -426,13 +431,17 @@ namespace {
             (spatialScalingConfigured ? VK_QUEUE_COMPUTE_BIT : 0);
         for (uint32_t i = 0; i < createInfo.queueCreateInfoCount; ++i) {
             const auto& requested = createInfo.pQueueCreateInfos[i];
-            if (requested.queueCount == 0 || requested.flags != 0 ||
+            if (requested.queueCount == 0 ||
+                    !vk::ordinaryQueueCreateFlags(requested.flags) ||
                     requested.queueFamilyIndex >= familyCount) {
                 continue;
             }
             if ((families.at(requested.queueFamilyIndex).queueFlags &
                     required) == required) {
-                return requested.queueFamilyIndex;
+                return LayerQueueFamily{
+                    .index = requested.queueFamilyIndex,
+                    .createFlags = requested.flags,
+                };
             }
         }
         return std::nullopt;
@@ -1115,10 +1124,11 @@ namespace {
                     instance_info->handles.front(), *device, physdev,
                     instance_info->funcs, vk::initVulkanDeviceFuncs(instance_info->funcs, *device,
                         true, frameGenerationInteropEnabled),
-                    *layerQueueFamily,
+                    layerQueueFamily->index,
                     frameGenerationInteropEnabled,
                     true, setLoaderData, std::nullopt, shaderFloat16Enabled,
-                    storageWriteWithoutFormatEnabled
+                    storageWriteWithoutFormatEnabled,
+                    layerQueueFamily->createFlags
                 )
             );
             if (!inserted)
@@ -1137,15 +1147,15 @@ namespace {
             // queue and only with a compatible command-pool family.
             for (uint32_t i = 0; i < info->queueCreateInfoCount; ++i) {
                 const auto& requested = info->pQueueCreateInfos[i];
-                if (requested.flags != 0) {
+                if (!vk::ordinaryQueueCreateFlags(requested.flags)) {
                     continue;
                 }
                 for (uint32_t queueIndex = 0;
                         queueIndex < requested.queueCount; ++queueIndex) {
-                    VkQueue queue{VK_NULL_HANDLE};
-                    wrapper->second.df().GetDeviceQueue(
-                        *device, requested.queueFamilyIndex,
-                        queueIndex, &queue
+                    const VkQueue queue = vk::getDeviceQueue(
+                        wrapper->second.df(), *device,
+                        requested.queueFamilyIndex, queueIndex,
+                        requested.flags
                     );
                     if (queue == VK_NULL_HANDLE)
                         continue;

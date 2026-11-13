@@ -66,6 +66,8 @@ namespace vk {
     /// vulkan device function pointers
     struct VulkanDeviceFuncs {
         PFN_vkGetDeviceQueue GetDeviceQueue;
+        /// optional: required only for queues created with non-zero flags
+        PFN_vkGetDeviceQueue2 GetDeviceQueue2;
         PFN_vkDeviceWaitIdle DeviceWaitIdle;
         PFN_vkCreateCommandPool CreateCommandPool;
         PFN_vkDestroyCommandPool DestroyCommandPool;
@@ -143,6 +145,27 @@ namespace vk {
     VulkanDeviceFuncs initVulkanDeviceFuncs(const VulkanInstanceFuncs& fi, VkDevice device,
         bool graphical, bool frameGenerationInteropEnabled = true);
 
+    /// Queue creation flags that still describe an ordinary application
+    /// queue MAKO may submit to: no flags, or only the
+    /// VK_KHR_internally_synchronized_queues bit. Protected and unknown
+    /// flags are rejected.
+    [[nodiscard]] constexpr bool ordinaryQueueCreateFlags(
+            const VkDeviceQueueCreateFlags flags) noexcept {
+        VkDeviceQueueCreateFlags accepted = 0;
+#ifdef VK_KHR_internally_synchronized_queues
+        accepted |= VK_DEVICE_QUEUE_CREATE_INTERNALLY_SYNCHRONIZED_BIT_KHR;
+#endif
+        return (flags & ~accepted) == 0;
+    }
+
+    /// Retrieve an application queue with the flags it was created with.
+    /// vkGetDeviceQueue only returns queues created with zero flags, so any
+    /// other queue goes through vkGetDeviceQueue2.
+    /// @return the queue, or VK_NULL_HANDLE when it cannot be retrieved
+    [[nodiscard]] VkQueue getDeviceQueue(const VulkanDeviceFuncs& fd, VkDevice device,
+        uint32_t queueFamilyIndex, uint32_t queueIndex,
+        VkDeviceQueueCreateFlags flags);
+
     /// vulkan version wrapper
     class version {
     public:
@@ -189,6 +212,7 @@ namespace vk {
         /// @param isGraphical whether the device is graphical (rather than compute)
         /// @param setLoaderData optional function to set loader data
         /// @param cachefile optional path to pipeline cache file
+        /// @param queueCreateFlags flags the application created the queue family with
         /// @throws ls::vulkan_error on failure
         Vulkan(VkInstance instance, VkDevice device,
             VkPhysicalDevice physdev,
@@ -200,7 +224,8 @@ namespace vk {
             std::optional<PFN_vkSetDeviceLoaderData> setLoaderData = std::nullopt,
             const std::optional<std::filesystem::path>& cachefile = std::nullopt,
             bool shaderFloat16Enabled = false,
-            bool storageImageWriteWithoutFormatEnabled = false);
+            bool storageImageWriteWithoutFormatEnabled = false,
+            VkDeviceQueueCreateFlags queueCreateFlags = 0);
 
         /// find a memory type index
         /// @param validTypes bitset of valid memory types
