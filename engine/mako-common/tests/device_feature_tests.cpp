@@ -168,6 +168,50 @@ namespace {
         }
     }
 
+    struct QueueLookup {
+        uint32_t legacyCalls{};
+        uint32_t queue2Calls{};
+        VkDeviceQueueCreateFlags queue2Flags{};
+    } queueLookup;
+
+    void testApplicationQueueRetrieval() {
+        static_assert(vk::ordinaryQueueCreateFlags(0));
+        static_assert(!vk::ordinaryQueueCreateFlags(
+            VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT));
+#ifdef VK_KHR_internally_synchronized_queues
+        constexpr VkDeviceQueueCreateFlags synchronized =
+            VK_DEVICE_QUEUE_CREATE_INTERNALLY_SYNCHRONIZED_BIT_KHR;
+        static_assert(vk::ordinaryQueueCreateFlags(synchronized));
+        static_assert(!vk::ordinaryQueueCreateFlags(
+            synchronized | VK_DEVICE_QUEUE_CREATE_PROTECTED_BIT));
+#else
+        constexpr VkDeviceQueueCreateFlags synchronized = 0x4;
+#endif
+
+        vk::VulkanDeviceFuncs fd{};
+        fd.GetDeviceQueue = [](VkDevice, uint32_t, uint32_t, VkQueue* queue) {
+            ++queueLookup.legacyCalls;
+            *queue = fakeHandle<VkQueue>();
+        };
+        const auto device = fakeHandle<VkDevice>();
+        expect(vk::getDeviceQueue(fd, device, 0, 0, synchronized) == VK_NULL_HANDLE &&
+                queueLookup.legacyCalls == 0,
+            "a flagged queue must not fall back to vkGetDeviceQueue");
+
+        fd.GetDeviceQueue2 = [](VkDevice, const VkDeviceQueueInfo2* info, VkQueue* queue) {
+            ++queueLookup.queue2Calls;
+            queueLookup.queue2Flags = info->flags;
+            *queue = fakeHandle<VkQueue>();
+        };
+        expect(vk::getDeviceQueue(fd, device, 0, 0, synchronized) != VK_NULL_HANDLE &&
+                queueLookup.queue2Calls == 1 && queueLookup.queue2Flags == synchronized &&
+                queueLookup.legacyCalls == 0,
+            "a flagged queue must be retrieved through vkGetDeviceQueue2 with its flags");
+        expect(vk::getDeviceQueue(fd, device, 0, 0, 0) != VK_NULL_HANDLE &&
+                queueLookup.legacyCalls == 1 && queueLookup.queue2Calls == 1,
+            "an unflagged queue must keep using vkGetDeviceQueue");
+    }
+
     void testDeviceFunctionLoading() {
         const auto device = reinterpret_cast<VkDevice>(uintptr_t{1});
         vk::VulkanInstanceFuncs instanceFunctions{};
@@ -412,6 +456,7 @@ int main() {
     }
 
     testDeviceFunctionLoading();
+    testApplicationQueueRetrieval();
     testStorageWriteFormatSupport();
 
     std::cout << "device feature and function loading tests passed\n";
