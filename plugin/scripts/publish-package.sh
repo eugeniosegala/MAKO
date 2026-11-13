@@ -299,6 +299,8 @@ printf '%s\n' \
 printf '%s\n' \
   '## Installation' \
   '' \
+  '**MAKO works without Lossless Scaling:** MAKO FG, MAKO Scaler, and Shaders are included. Install Lossless Scaling only if you want its frame generation model or LS1 scaling.' \
+  '' \
   'New to Decky or installing MAKO Decky for the first time? See the [full install and use guide](https://github.com/eugeniosegala/MAKO#install-and-use) for Decky Loader setup and prerequisites.' \
   '' \
   "1. Download \`$(basename "$output_path")\` below." \

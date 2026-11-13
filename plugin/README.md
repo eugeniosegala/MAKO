@@ -10,7 +10,7 @@ MAKO is an independent community project bringing frame generation, spatial scal
 
 ## Download
 
-To use the optional Lossless Scaling frame generation model or LS1 scaling, first install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. Beta branches are not validated.
+**MAKO works without Lossless Scaling:** MAKO FG, MAKO Scaler, and Shaders are included. **Optional:** install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam only if you want its frame generation model or LS1 scaling. Beta branches are not validated.
 
 Open the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a> and download the ZIP under **Assets**. Previous Decky releases are available on the <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer">MAKO releases page</a>.
 

@@ -88,8 +88,8 @@ Every game and display behaves differently, so compare one setting at a time. If
 
 ## Install and use
 
-1. **Install Decky Loader** if needed. Switch to Desktop Mode and follow the <a href="https://github.com/SteamDeckHomebrew/decky-loader#-installation" target="_blank" rel="noopener noreferrer">official Decky Loader installation guide</a>, then return to Game Mode.
-2. **Optional: install the default public version of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> from Steam only if you want its frame generation model or LS1 scaling.** MAKO can use beta branches, but they are not validated; the default public branch is recommended. MAKO reads its licensed `Lossless.dll`; MAKO FG, MAKO Scaler, and Shaders work without it.
+1. **Install Decky Loader (if you haven't already).** Switch to Desktop Mode and follow the <a href="https://github.com/SteamDeckHomebrew/decky-loader#-installation" target="_blank" rel="noopener noreferrer">official Decky Loader installation guide</a>, then return to Game Mode.
+2. **Optional: Lossless Scaling. Skip this step if you only want MAKO FG, MAKO Scaler, and Shaders.** To use the Lossless Scaling frame generation model or LS1 scaling, install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. Beta branches are not validated; the default public branch is recommended.
 3. Open the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a> and download its ZIP under **Assets**.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
 5. Open **MAKO Decky** and select **Install MAKO Renderer**. Installing the ZIP alone does not install its bundled Renderer.
@@ -129,13 +129,17 @@ For a step-by-step guide that creates a shareable report on the Desktop, see <a 
 3. Restart your Steam Deck or Steam Machine.
 4. Open MAKO Decky and select **Install MAKO Renderer**, or **Update** when MAKO offers it, to install the version bundled in the ZIP. This also refreshes every MAKO Flatpak runtime extension already installed.
 
-Valid profiles and Steam launch options are kept, and removing or reinstalling MAKO Decky leaves the native Renderer, launchers and Remote Play override in place. Older Decky versions may remove Renderer during uninstall, so step 4 reinstalls it. A Renderer configuration that cannot be read or validated is recreated with defaults. A ZIP alone does not update Renderer, MAKO FG or Flatpak runtime extensions: open Decky and apply the offered update. MAKO offers it whenever the installed Renderer, MAKO FG or an installed Flatpak runtime extension differs from the ZIP's bundle, including files replaced outside Decky or left by an interrupted update. To remove the shared Renderer, use **Remove MAKO Renderer** in Decky or the desktop **Uninstall MAKO Renderer** entry, which stays available after Decky is removed.
+Valid profiles and Steam launch options are kept. Removing or reinstalling MAKO Decky leaves Renderer, launchers, and the Remote Play override in place. Older Decky versions may remove Renderer; step 4 restores it. Invalid or unreadable Renderer configurations reset to defaults.
+
+**The ZIP updates MAKO Decky.** Apply the offered update inside Decky for Renderer, MAKO FG, and installed Flatpak extensions, even when the version number is unchanged.
+
+To remove Renderer, use **Remove MAKO Renderer** in Decky or the desktop **Uninstall MAKO Renderer** entry, which remains available after Decky is removed.
 
 ## Use MAKO Renderer directly
 
 Decky is optional. Desktop Linux users can install MAKO Renderer directly:
 
-1. Optional: to use the Lossless Scaling frame generation model or LS1 scaling, purchase and install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. MAKO can use beta branches, but they are not validated; the default public branch is recommended. MAKO FG, MAKO Scaler, and Shaders work without it.
+1. **Optional: Lossless Scaling. Skip this step if you only want MAKO FG, MAKO Scaler, and Shaders.** To use the Lossless Scaling frame generation model or LS1 scaling, install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. Beta branches are not validated; the default public branch is recommended.
 2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v5.0.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. The installer opens **MAKO Renderer Configuration** and shows the launch option.
 3. Create or select a profile and choose Frame Generation, scaling, and/or shader effects. Add the executable manually under **Profile Matching > Matched Processes**, or start the game normally and use **Detect Running Game…**, then close it. Detection only identifies the executable; it does not activate MAKO in the running game.
 4. Every standalone native Steam or Proton game must start through MAKO. Add the option shown by the configuration window under **Steam Properties > General > Launch Options**, then use Steam's **Play** button normally:

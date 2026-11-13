@@ -22,7 +22,7 @@ GitHub's automatic **Source code** archives are not installable Renderer package
 
 ## Installation
 
-MAKO FG, MAKO Scaler, and Shaders work without Lossless Scaling. To use the optional Lossless Scaling frame generation model or LS1 scaling, first install the default public version of Lossless Scaling through Steam.
+**MAKO works without Lossless Scaling:** MAKO FG, MAKO Scaler, and Shaders are included. **Optional:** install the **default public version** of Lossless Scaling through Steam only if you want its frame generation model or LS1 scaling.
 
 ### Steam Deck or Steam Machine
 

@@ -217,6 +217,8 @@ Every game, renderer, and display setup behaves differently. Compare Fixed Frame
 
 ## Installation
 
+**MAKO works without Lossless Scaling:** MAKO FG, MAKO Scaler, and Shaders are included. Install Lossless Scaling only if you want its frame generation model or LS1 scaling.
+
 ### Choose the right download
 
 | Release file | Use it for | Installation owner |
