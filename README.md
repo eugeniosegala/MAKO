@@ -32,6 +32,7 @@
 | --- | --- | --- |
 | **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users (bundles MAKO Renderer) | <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">Latest MAKO Decky release (ZIP under Assets)</a> |
 | **MAKO Renderer** | Direct Vulkan-layer installation without Decky | <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v5.0.0" target="_blank" rel="noopener noreferrer">Latest MAKO Renderer release (Linux archive under Assets)</a> |
+| **MAKO FG** | Standalone frame-generation model that can be used outside MAKO | <a href="https://huggingface.co/eugeniosegala/MAKO-FG" target="_blank" rel="noopener noreferrer">MAKO FG model and runtime on Hugging Face</a> |
 
 Published Renderer packages currently target x86_64 Linux hosts and include layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages are not included in this release.
 
