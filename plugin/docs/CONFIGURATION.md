@@ -8,7 +8,7 @@ Without live metrics, **Live Status** shows **Off** when Frame Generation and Sc
 
 ## Quick start
 
-1. Add `/home/deck/.local/bin/mako-run %command%` to the game's Steam launch options. For other launchers, follow [launcher setup](LAUNCHERS.md).
+1. Add `/home/deck/.local/bin/mako-run %command%` to the game's Steam launch options. For other launchers, follow [launcher setup](LAUNCHERS.md). To skip typing it, select **Apply to Installed Games** under **Usage Instructions** and turn the game on; MAKO inserts its command before `%command%` and keeps the game's other launch options, and turning the game off removes only the MAKO command. Non-Steam shortcuts are listed too; Flatpak, Heroic, and Lutris shortcuts still follow [launcher setup](LAUNCHERS.md). Use the search box to find a game in a long list.
 2. Start the game and select **Save profile for &lt;game&gt;** after gameplay loads.
 3. Use the **Frame-gen**, **Scaling**, and/or **Shaders** tabs to choose features.
 4. Restart after changing a **Restart** option, then check **Live Status**.

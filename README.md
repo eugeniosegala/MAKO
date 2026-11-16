@@ -100,6 +100,8 @@ Every game and display behaves differently, so compare one setting at a time. If
     /home/deck/.local/bin/mako-run %command%
     ```
 
+    Or select **Apply to Installed Games** in MAKO Decky to add it to one or all installed games, including non-Steam shortcuts, without typing it.
+
 7. Start the game normally.
 8. Experiment with the settings to find what works best for each game. Try Fixed or Adaptive Frame Generation, scaling, and shader effects independently.
 

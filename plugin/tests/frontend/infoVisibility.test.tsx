@@ -90,6 +90,9 @@ vi.mock("../../src/api/makoApi", () => ({
 vi.mock("../../src/components/SmartClipboardButton", () => ({
   SmartClipboardButton: () => <button>Copy Launch Option</button>,
 }));
+vi.mock("../../src/components/LaunchOptionGamesModal", () => ({
+  LaunchOptionGamesModal: () => null,
+}));
 vi.mock("../../src/i18n/i18n", () => ({
   default: (_key: string, fallback: string) => fallback,
 }));

@@ -483,7 +483,7 @@ export function Content() {
           </>
         )}
 
-        <UsageInstructions />
+        <UsageInstructions canApplyToGames={isInstalled} />
 
         {isInstalled && <FgmodClipboardButton />}
 

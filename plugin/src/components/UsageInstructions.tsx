@@ -1,12 +1,19 @@
 import { MakoInfo } from "./MakoInfo";
 import { useEffect, useState } from "react";
-import { PanelSectionRow } from "@decky/ui";
+import { ButtonItem, PanelSectionRow, showModal } from "@decky/ui";
 import { DEFAULT_STEAM_LAUNCH_OPTION, getLaunchOption } from "../api/makoApi";
 import t from "../i18n/i18n";
 import { MakoSectionHeader } from "./MakoUi";
 import { SmartClipboardButton } from "./SmartClipboardButton";
+import { LaunchOptionGamesModal } from "./LaunchOptionGamesModal";
 
-export function UsageInstructions() {
+interface UsageInstructionsProps {
+  canApplyToGames?: boolean;
+}
+
+export function UsageInstructions({
+  canApplyToGames = false,
+}: UsageInstructionsProps = {}) {
   const [launchOption, setLaunchOption] = useState(DEFAULT_STEAM_LAUNCH_OPTION);
 
   useEffect(() => {
@@ -99,6 +106,20 @@ export function UsageInstructions() {
       </MakoInfo>
 
       <SmartClipboardButton />
+
+      {canApplyToGames && (
+        <PanelSectionRow>
+          <div className="Mako_BrandButton" style={{ marginTop: "8px" }}>
+            <ButtonItem
+              layout="below"
+              bottomSeparator="none"
+              onClick={() => showModal(<LaunchOptionGamesModal />)}
+            >
+              {t("LAUNCH_GAMES_OPEN", "Apply to Installed Games")}
+            </ButtonItem>
+          </div>
+        </PanelSectionRow>
+      )}
     </>
   );
 }
