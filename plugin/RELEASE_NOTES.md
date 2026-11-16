@@ -2,6 +2,11 @@
 
 <img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/phoenix.png" alt="Phoenix release artwork: a blue-and-white mako shark swims through a drowned city beneath a fiery phoenix in the ocean abyss" width="100%">
 
+<p align="center">
+  <a href="https://ko-fi.com/F0Q429XXET"><img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/kofi-button.svg" align="middle" hspace="4" alt="Support MAKO on Ko-fi" /></a>
+  <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer"><img src="https://img.shields.io/github/downloads/eugeniosegala/MAKO/total?style=flat&amp;label=total%20downloads&amp;color=0f766e" width="201" align="middle" hspace="4" alt="Total downloads across all MAKO Renderer and MAKO Decky release assets" /></a>
+</p>
+
 ### Release codename: Phoenix
 
 > _“Where the phoenix lit the drowned stones, the mako found a way through.”_
