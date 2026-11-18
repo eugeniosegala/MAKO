@@ -12,8 +12,9 @@ from mako_remote_play.remote_play_launch import SDR_HELPER_RELATIVE_PATH, SDR_HE
 
 ROOT = Path(__file__).resolve().parent
 ELF = b'\x7fELF\x02\x01' + b'\0' * 12 + b'\x3e\0' + b'test client'
+SYSTEM_PYTHON = Path('/usr/bin/python3')
 SYSTEM_PYTHON_SUPPORTED = subprocess.run(
-    ['/usr/bin/python3', '-I', '-c', "import tomllib, hashlib; assert hasattr(hashlib, 'file_digest')"],
+    [SYSTEM_PYTHON, '-I', '-c', "import tomllib, hashlib; assert hasattr(hashlib, 'file_digest')"],
     capture_output=True, timeout=5).returncode == 0
 
 
@@ -50,6 +51,13 @@ class RemotePlayCommandTests(unittest.TestCase):
         self.assertEqual(0 if success else 1, result.returncode, result.stderr.decode())
         return response
 
+    def client_environment(self):
+        result = subprocess.run(
+            [self.client, '-I', '-c', 'import json, os; print(json.dumps(dict(os.environ)))'],
+            env=self.environment, capture_output=True, timeout=5)
+        self.assertEqual(0, result.returncode, result.stderr.decode())
+        return json.loads(result.stdout)
+
     def test_disabled_status_and_refresh_never_install(self):
         self.assertFalse(self.command('status')['installed'])
         self.assertFalse(self.command('refresh')['installed'])
@@ -75,16 +83,14 @@ class RemotePlayCommandTests(unittest.TestCase):
         self.assertEqual(0o750, self.client.stat().st_mode & 0o7777)
 
     def test_standalone_shader_launch_and_custom_config_are_used(self):
-        self.client.write_bytes(Path('/usr/bin/env').read_bytes())
+        shutil.copyfile(SYSTEM_PYTHON, self.client)
         config = self.home / 'other config/conf.toml'
         config.parent.mkdir()
         config.write_text(self.config.read_text())
         settings = {'version': 1, 'profiles': {'stream-quality': {'external_vulkan_layer': 'vkbasalt'}}}
         (config.parent / 'profile-wrapper-settings.json').write_text(json.dumps(settings))
         self.command('install', config=config)
-        result = subprocess.run([str(self.client), '-0'], env=self.environment, capture_output=True, timeout=5)
-        self.assertEqual(0, result.returncode, result.stderr.decode())
-        values = dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if item)
+        values = self.client_environment()
         self.assertEqual(str(config), values['MAKO_CONFIG'])
         self.assertEqual('stream-quality', values['MAKO_PROFILE'])
         self.assertEqual('1', values['ENABLE_VKBASALT'])
@@ -101,7 +107,7 @@ class RemotePlayCommandTests(unittest.TestCase):
         self.command('refresh')
         self.assertEqual(before, self.client.read_bytes())
         self.command('restore-before-uninstall')
-        self.assertEqual(Path('/usr/bin/env').read_bytes(), self.client.read_bytes())
+        self.assertEqual(SYSTEM_PYTHON.read_bytes(), self.client.read_bytes())
 
     def test_conflicts_leave_client_untouched(self):
         backup = self.client.with_name('streaming_client.mako-original')
@@ -129,7 +135,7 @@ class RemotePlayCommandTests(unittest.TestCase):
         self.command('remove')
 
     def test_real_standalone_launcher_uses_current_shader_settings(self):
-        self.client.write_bytes(Path('/usr/bin/env').read_bytes())
+        shutil.copyfile(SYSTEM_PYTHON, self.client)
         shutil.copyfile(ROOT / 'mako-launch', self.launcher)
         # Native config overrides must not change the standalone owner's global
         # launcher.conf discovery. Its ALSA setting still applies; Zink does not.
@@ -156,9 +162,7 @@ class RemotePlayCommandTests(unittest.TestCase):
             (self.config.parent / 'profile-wrapper-settings.json').write_text(json.dumps(settings))
             self.command('remove')
             self.command('install')
-            result = subprocess.run([str(self.client), '-0'], env=self.environment, capture_output=True, timeout=5)
-            self.assertEqual(0, result.returncode, result.stderr.decode())
-            values = dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if item)
+            values = self.client_environment()
             self.assertEqual('stream-quality', values['MAKO_PROFILE'])
             self.assertEqual(str(self.config), values['MAKO_CONFIG'])
             self.assertEqual(enabled, 'VK_LAYER_VKBASALT_post_processing' in values.get('VK_INSTANCE_LAYERS', ''))
@@ -184,10 +188,7 @@ class RemotePlayCommandTests(unittest.TestCase):
                     {'version': 1, 'profiles': {'mako': {'external_vulkan_layer': 'vkbasalt'}}}))
                 self.command('remove')
                 self.command('install')
-                result = subprocess.run([str(self.client), '-0'], env=self.environment,
-                                        capture_output=True, timeout=5)
-                self.assertEqual(0, result.returncode, result.stderr.decode())
-                values = dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if item)
+                values = self.client_environment()
                 self.assertEqual('mako', values['MAKO_PROFILE'])
                 self.assertEqual(str(self.config.parent / 'vkbasalt/current-profile.conf'), values['VKBASALT_CONFIG_FILE'])
                 self.assertEqual(default_shader.read_bytes(), Path(values['VKBASALT_CONFIG_FILE']).read_bytes())

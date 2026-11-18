@@ -310,7 +310,7 @@ if(BUILD_TESTING AND TARGET mako-remote-play-sdr)
         list(APPEND remote_play_test_environment "ASAN_OPTIONS=verify_asan_link_order=0")
     else()
         # Instrumented Clang DSOs need the executable's ASan runtime. The
-        # SDL client below supplies it; /usr/bin/env environment fixtures do not.
+        # SDL test client supplies it; the system Python fixture does not.
         list(APPEND remote_play_test_environment "MAKO_TEST_SDR_HELPER=$<TARGET_FILE:mako-remote-play-sdr>")
     endif()
     set_tests_properties(remote-play-command PROPERTIES LABELS "portable-policy"

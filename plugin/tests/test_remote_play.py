@@ -691,13 +691,20 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
     """Run the installed entry point and the real generated launcher without Vulkan."""
     def setUp(self):
         RemotePlayTests.setUp(self)
-        self.service.client.write_bytes(Path('/usr/bin/env').read_bytes())
+        shutil.copyfile('/usr/bin/python3', self.service.client)
         if not self.service._native_client(self.service.client):
-            self.skipTest('native x86_64 env executable unavailable')
+            self.skipTest('native x86_64 system Python executable unavailable')
         with self.configuration._configuration_write_lock:
             self.configuration.create_profile(SELECTED_PROFILE)
             self.configuration.set_current_profile(SELECTED_PROFILE)
         self.service.install()
+
+    def client_environment(self, environment):
+        result = subprocess.run(
+            [self.service.client, '-I', '-c', 'import json, os; print(json.dumps(dict(os.environ)))'],
+            env=environment, capture_output=True, timeout=5)
+        self.assertEqual(0, result.returncode, result.stderr.decode())
+        return json.loads(result.stdout)
 
     def execute_profile(self, fields, gamescope=False):
         result = self.configuration.update_profile_config_fields(SELECTED_PROFILE, fields)
@@ -718,9 +725,7 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
                        'GALLIUM_DRIVER': 'zink', 'ENABLE_GAMESCOPE_WSI': '1', 'ENABLE_VKBASALT': '1'}
         if gamescope:
             environment.update(GAMESCOPE_WAYLAND_DISPLAY='gamescope-0', WAYLAND_DISPLAY='gamescope-0')
-        result = subprocess.run([str(self.service.client), '-0'], env=environment, capture_output=True, timeout=5)
-        self.assertEqual(0, result.returncode, result.stderr.decode())
-        values = dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if item)
+        values = self.client_environment(environment)
         self.assertEqual('1', values['MAKO_REMOTE_PLAY_SDR'])
         self.assertEqual(str(self.service.mako_script_path.parent.parent / SDR_HELPER_RELATIVE_PATH), values['LD_PRELOAD'])
         return values
@@ -816,10 +821,7 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
         data = self.configuration._get_profile_data()
         data['profiles'][SELECTED_PROFILE]['scaling_enabled'] = True
         self.configuration._save_profile_data(data)
-        result = subprocess.run([str(self.service.client), '-0'], capture_output=True,
-                                env={'PATH': '/usr/bin:/bin', 'HOME': str(self.home)}, timeout=5)
-        self.assertEqual(0, result.returncode, result.stderr.decode())
-        values = dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if item)
+        values = self.client_environment({'PATH': '/usr/bin:/bin', 'HOME': str(self.home)})
         self.assertEqual('1', values['ENABLE_VKBASALT'])
         self.assertEqual('1', values['ENABLE_MAKO'])
         self.assertEqual(before, self.configuration.mako_script_path.read_bytes())
