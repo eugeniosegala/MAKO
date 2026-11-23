@@ -40,6 +40,29 @@ class RuntimeContextState(TypedDict):
 
 MARKER = b"# MAKO_NATIVE_REMOTE_PLAY_OVERRIDE_V3"
 
+# Current Steam clients start Remote Play from steamrt64 inside the Steam
+# Runtime container, which has no Python. Older clients still use the native
+# ubuntu12_64 entry point, so it remains the fallback.
+CLIENT_DIRECTORIES = ("steamrt64", "ubuntu12_64")
+CONTAINER_CLIENT_DIRECTORY = "steamrt64"
+
+# POSIX sh prologue for the containerized client. Python reads it as a string
+# literal; sh runs the host interpreter through /run/host, or the verified
+# original without MAKO when no interpreter is reachable.
+CONTAINER_LAUNCH_PROLOGUE = """#!/bin/sh
+# MAKO_NATIVE_REMOTE_PLAY_OVERRIDE_V3
+''':'
+if [ -x /run/host/usr/bin/python3 ] && [ -x /run/host/lib64/ld-linux-x86-64.so.2 ]; then
+    exec /run/host/lib64/ld-linux-x86-64.so.2 --library-path /run/host/usr/lib /run/host/usr/bin/python3 "$0" "$@"
+fi
+if [ -x /usr/bin/python3 ]; then
+    exec /usr/bin/python3 "$0" "$@"
+fi
+echo "MAKO Renderer: Remote Play interpreter unavailable; launching Steam without MAKO" >&2
+exec "${0%/*}/streaming_client.mako-original" "$@"
+'''
+"""
+
 
 class RemotePlayOverrideState(TypedDict):
     version: int
@@ -58,12 +81,30 @@ class RemotePlayOverride:
         self._requested_runner = self.mako_script_path
         self._requested_configuration = self.config_file_path
         self.log = logger or logging.getLogger('MAKO Renderer')
-        self.client = self.user_home / ".local/share/Steam/ubuntu12_64/streaming_client"
+        self.client = self._select_client()
         self.backup = self.client.with_name("streaming_client.mako-original")
         self.checksum = self.client.with_name("streaming_client.mako-original.sha256")
         self.state = self.config_dir / "native-remote-play.json"
         self.lock_path = self.config_dir / "native-remote-play.lock"
         self.proc_root = Path("/proc")
+
+    def _select_client(self) -> Path:
+        """Keep managing an existing override; otherwise prefer the client Steam launches."""
+        steam = self.user_home / ".local/share/Steam"
+        candidates = [steam / directory / "streaming_client" for directory in CLIENT_DIRECTORIES]
+        for client in candidates:
+            if any(path.exists() or path.is_symlink() for path in (
+                    client.with_name("streaming_client.mako-original"),
+                    client.with_name("streaming_client.mako-original.sha256"))):
+                return client
+        for client in candidates:
+            if self._native_client(client):
+                return client
+        return candidates[-1]
+
+    @property
+    def containerized(self) -> bool:
+        return self.client.parent.name == CONTAINER_CLIENT_DIRECTORY
 
     @staticmethod
     def _digest(path: Path, expected_uid: int | None = None) -> str:
@@ -103,7 +144,11 @@ class RemotePlayOverride:
         for proc in self.proc_root.glob("[0-9]*"):
             try:
                 executable = os.readlink(proc / "exe").removesuffix(" (deleted)")
-                arguments = (proc / "cmdline").read_bytes().split(b"\0") if Path(executable).name.startswith("python") else []
+                name = Path(executable).name
+                arguments = (proc / "cmdline").read_bytes().split(b"\0") if name.startswith(("python", "ld-linux")) else []
+                if name.startswith("ld-linux"):
+                    # Containerized entry point: ld.so --library-path DIR python3 SCRIPT ...
+                    arguments = arguments[3:]
                 script = None
                 if len(arguments) > 1 and not arguments[1].startswith(b"-"):
                     script = Path(os.fsdecode(arguments[1]))
@@ -243,7 +288,10 @@ class RemotePlayOverride:
             raise
 
     def _payload(self) -> str:
-        return Path(__file__).with_name("remote_play_launch.py").read_text().replace(
+        template = Path(__file__).with_name("remote_play_launch.py").read_text()
+        if self.containerized:
+            template = CONTAINER_LAUNCH_PROLOGUE + template
+        return template.replace(
             "home = Path('__MAKO_USER_HOME__')", f"home = Path({str(self.user_home)!r})",
         ).replace("runner=Path('__MAKO_RUNNER_PATH__')", f"runner=Path({str(self.mako_script_path)!r})").replace(
             "config=Path('__MAKO_CONFIG_PATH__')", f"config=Path({str(self.config_file_path)!r})").replace(
@@ -285,6 +333,11 @@ class RemotePlayOverride:
         """Called under mutation(), after the canonical profile is prepared."""
         installed = self._installed()
         if not installed:
+            # A long-lived service may have selected the client before a
+            # restore or a Steam update; choose again for a fresh install.
+            self.client = self._select_client()
+            self.backup = self.client.with_name("streaming_client.mako-original")
+            self.checksum = self.client.with_name("streaming_client.mako-original.sha256")
             self.mako_script_path = self._requested_runner
             self.config_file_path = self._requested_configuration
         if not self.mako_script_path.is_absolute() or self.mako_script_path.name not in ('mako-run', 'mako-launch'):

@@ -1,7 +1,7 @@
 {
   "login_to_names": {
     "eugeniosegala": ["Eugenio Segala", "eugeniosegala"],
-    "hugouchoasborges": ["Hugo Uchôas Borges", "hugouchoasborges"],
+    "hugouchoasborges": ["Hugo Uchôas Borges", "Hugo Borges", "hugouchoasborges"],
     "Hu2ki3": ["Hu2ki3"],
     "lordkaus": ["lordkaus"],
     "PJ-568": ["PJ568"],
@@ -11,5 +11,6 @@
     "WowOne987": ["WowOne987"]
   },
   "additional_logins": [],
+  "nonhuman_coauthors": [{"name": "Claude Opus 5.5", "email": "noreply@anthropic.com"}],
   "avatar_revision": 20261004
 }

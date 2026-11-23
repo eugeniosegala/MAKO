@@ -79,6 +79,72 @@ class RemotePlayTests(unittest.TestCase):
         self.assertFalse(self.service.state.exists())
         self.assertFalse(self.service.backup.exists())
 
+    def _service_for_current_steam(self):
+        """Recreate the service after Steam gained a steamrt64 streaming client."""
+        container_client = self.home / ".local/share/Steam/steamrt64/streaming_client"
+        container_client.parent.mkdir(parents=True, exist_ok=True)
+        container_client.write_bytes(ELF)
+        container_client.chmod(0o750)
+        with patch("py_modules.mako_plugin.base_service.resolve_user_home", return_value=self.home):
+            service = RemotePlayService(_Logger())
+        service.proc_root = self.service.proc_root
+        return service, container_client
+
+    def test_legacy_steam_keeps_the_ubuntu12_64_python_entry_point(self):
+        self.assertEqual("ubuntu12_64", self.service.client.parent.name)
+        self.assertFalse(self.service.containerized)
+        self.assertTrue(self.service._payload().startswith("#!/usr/bin/python3\n"))
+
+    def test_current_steam_installs_a_container_entry_point_in_steamrt64(self):
+        service, container_client = self._service_for_current_steam()
+        self.assertEqual(container_client, service.client)
+        self.assertTrue(service.containerized)
+        service.install()
+        entry = container_client.read_text()
+        self.assertTrue(entry.startswith("#!/bin/sh\n# MAKO_NATIVE_REMOTE_PLAY_OVERRIDE_V3\n"))
+        self.assertIn("/run/host/usr/bin/python3", entry)
+        compile(entry, "streaming_client", "exec")
+        # sh only parses the prologue: every branch ends in exec before the Python body.
+        prologue = container_client.with_name("prologue-only")
+        prologue.write_text(entry.split("\n'''\n", 1)[0] + "\n")
+        subprocess.run(["sh", "-n", str(prologue)], check=True)
+        prologue.unlink()
+        self.assertTrue(service.get_status()["installed"])
+        self.assertEqual(ELF, (self.home / ".local/share/Steam/ubuntu12_64/streaming_client").read_bytes())
+        service.remove()
+        self.assertEqual(ELF, container_client.read_bytes())
+        self.assertFalse(service.backup.exists())
+
+    def test_container_entry_point_launches_the_original_without_an_interpreter(self):
+        service, container_client = self._service_for_current_steam()
+        service.install()
+        marker = self.home / "launched"
+        service.backup.write_text(f'#!/bin/sh\necho "$@" > {marker}\n')
+        prologue = container_client.read_text().split("\n'''\n", 1)[0]
+        isolated = container_client.with_name("prologue-only")
+        isolated.write_text(prologue.replace("/run/host/", "/nonexistent/").replace(
+            "/usr/bin/python3", "/nonexistent/python3") + "\n")
+        result = subprocess.run(["sh", str(isolated), "--stream", "1"], capture_output=True, text=True)
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("launching Steam without MAKO", result.stderr)
+        self.assertEqual("--stream 1\n", marker.read_text())
+
+    def test_existing_legacy_override_stays_managed_after_steam_gains_steamrt64(self):
+        self.service.install()
+        service, container_client = self._service_for_current_steam()
+        self.assertEqual(self.service.client, service.client)
+        self.assertFalse(service.containerized)
+        service.remove()
+        self.assertEqual(ELF, self.service.client.read_bytes())
+        self.assertEqual(ELF, container_client.read_bytes())
+        # Enabling again on the same long-lived service moves to steamrt64.
+        service.install()
+        self.assertEqual(container_client, service.client)
+        self.assertTrue(container_client.read_text().startswith("#!/bin/sh\n"))
+        self.assertEqual(ELF, self.service.client.read_bytes())
+        service.remove()
+        self.assertEqual(ELF, container_client.read_bytes())
+
     def test_enabled_payload_upgrade_preserves_original_and_defers_during_stream(self):
         self.assertFalse(self.service.refresh_installed_payload())
         self.assertEqual(ELF, self.service.client.read_bytes())

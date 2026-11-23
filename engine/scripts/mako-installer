@@ -534,7 +534,11 @@ uninstall_payload() {
             -e "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original" ||
             -L "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original" ||
             -e "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original.sha256" ||
-            -L "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original.sha256" ]]; then
+            -L "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original.sha256" ||
+            -e "$HOME/.local/share/Steam/steamrt64/streaming_client.mako-original" ||
+            -L "$HOME/.local/share/Steam/steamrt64/streaming_client.mako-original" ||
+            -e "$HOME/.local/share/Steam/steamrt64/streaming_client.mako-original.sha256" ||
+            -L "$HOME/.local/share/Steam/steamrt64/streaming_client.mako-original.sha256" ]]; then
         fail "Remove the Remote Play override before uninstalling this older Renderer."
     fi
 

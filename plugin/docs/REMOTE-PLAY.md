@@ -2,6 +2,8 @@
 
 Apply MAKO on the **receiving device** when using Steam's native **Stream** action. Requires native x86_64 Linux Steam, a current MAKO Renderer installation, and system Python 3.11 or newer. Flatpak Steam, standalone Steam Link, browser streaming, and AArch64 are unsupported.
 
+Current Steam clients start Remote Play from `~/.local/share/Steam/steamrt64/streaming_client` inside the Steam Runtime container, which has no Python. When that client exists, MAKO installs the override there as a POSIX `sh` entry point that runs the host's system Python through `/run/host`; older Steam clients keep the native `ubuntu12_64` entry point. An existing override stays where it was installed until it is removed, so restore it and enable it again after Steam moves to `steamrt64`. If the container cannot reach the host Python, the stream starts without MAKO.
+
 ## Enable Remote Play
 
 1. Close all streams on the receiving device.
