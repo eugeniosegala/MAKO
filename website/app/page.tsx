@@ -439,8 +439,8 @@ export default function Home() {
               <p>Yes. Scale with the open MAKO Scaler or optional LS1, feed reconstructed real frames into Fixed or Adaptive frame generation, and apply per-game shader effects in the same profile. The downloads above track MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion} from canonical release metadata.</p>
             </details>
             <details>
-              <summary><span>04</span> What hardware is published today?<i>+</i></summary>
-              <p>MAKO Renderer v{rendererVersion} targets x86_64 Linux hosts and includes 64-bit and 32-bit x86 Vulkan layers. Native AArch64 packages are not included in this release.</p>
+              <summary><span>04</span> Does MAKO Renderer support Arch Linux?<i>+</i></summary>
+              <p>Yes. On x86_64 Arch Linux, enable <code>multilib</code> and use pacman to install <code>mako-renderer-bin</code> from the <a className="underline" href={links.rendererRelease} {...newTabProps}>MAKO Renderer v{rendererVersion} release</a>. It includes Vulkan layers for 64-bit and 32-bit x86 games. Native ARM64 (AArch64) packages are unavailable for this release.</p>
             </details>
           </div>
         </section>

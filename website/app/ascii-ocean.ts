@@ -273,7 +273,12 @@ export function animateWater(hero: HTMLElement, canvas: HTMLCanvasElement) {
   };
 
   resize();
-  const observer = new ResizeObserver(resize);
+  // Update the canvas backing store after the browser finishes the layout notification.
+  let resizeFrame = 0;
+  const observer = new ResizeObserver(() => {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(resize);
+  });
   observer.observe(hero);
   motion.addEventListener('change', sync);
   hero.addEventListener('pointermove', move, { passive: true });
@@ -288,6 +293,7 @@ export function animateWater(hero: HTMLElement, canvas: HTMLCanvasElement) {
     },
     dispose() {
       cancelAnimationFrame(request);
+      cancelAnimationFrame(resizeFrame);
       observer.disconnect();
       motion.removeEventListener('change', sync);
       hero.removeEventListener('pointermove', move);
