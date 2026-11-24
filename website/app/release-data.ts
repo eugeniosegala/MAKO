@@ -25,6 +25,7 @@ export const releaseData = {
     issues: `${repository}/issues`,
     allReleases: `${repository}/releases`,
     discord: 'https://discord.gg/NAVkyCq7Rc',
+    makoFg: 'https://huggingface.co/eugeniosegala/MAKO-FG',
     losslessScaling: 'https://store.steampowered.com/app/993090/Lossless_Scaling/',
   },
 } as const;

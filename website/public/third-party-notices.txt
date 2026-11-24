@@ -22,4 +22,4 @@ The above copyright notices and this permission notice shall be included in all 
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-GitHub and Discord names and glyphs identify outbound links to those services. They are trademarks of their respective owners. Their use does not imply sponsorship or endorsement.
+GitHub, Discord, and Hugging Face names and glyphs identify outbound links to those services. They are trademarks of their respective owners. Their use does not imply sponsorship or endorsement.

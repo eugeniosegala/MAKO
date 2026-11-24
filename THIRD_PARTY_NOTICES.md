@@ -82,7 +82,7 @@ The upstream React Icons license file shipped in MAKO Decky identifies these ico
 
 The deployed website includes notices for its shipped frontend dependencies in `third-party-notices.txt`. These include React, React DOM, Scheduler, React Server DOM Webpack, Next.js, Vinext, and Tailwind CSS under their respective MIT licenses. Build-only tools are not part of the deployed website unless their code is emitted into the production artifact.
 
-GitHub and Discord names and glyphs on the website identify links to the corresponding services. They are trademarks of their respective owners and do not imply sponsorship or endorsement.
+GitHub, Discord, and Hugging Face names and glyphs on the website identify links to the corresponding services. They are trademarks of their respective owners and do not imply sponsorship or endorsement.
 
 ## Project artwork
 

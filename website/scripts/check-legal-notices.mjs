@@ -13,7 +13,7 @@ if (packageManifest.license !== 'GPL-3.0-or-later') {
 if (!page.includes('href="third-party-notices.txt"')) {
   throw new Error('The website footer must link to the deployed third-party notices');
 }
-for (const requiredNotice of ['Meta Platforms', 'Vercel', 'Cloudflare', 'Tailwind Labs', 'MIT License', 'GitHub', 'Discord']) {
+for (const requiredNotice of ['Meta Platforms', 'Vercel', 'Cloudflare', 'Tailwind Labs', 'MIT License', 'GitHub', 'Discord', 'Hugging Face']) {
   if (!notices.includes(requiredNotice)) {
     throw new Error(`The website third-party notices are missing: ${requiredNotice}`);
   }

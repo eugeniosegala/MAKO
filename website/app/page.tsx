@@ -1,6 +1,6 @@
 'use client';
 
-import type { PointerEvent as ReactPointerEvent } from 'react';
+import { SharkHero } from './shark-display';
 import { releaseData } from './release-data';
 import { DiscordIcon, GitHubIcon } from './social-icons';
 
@@ -30,28 +30,6 @@ function DonateMenu() {
       <DonationPanel />
     </details>
   );
-}
-
-function tiltCard(event: ReactPointerEvent<HTMLDivElement>) {
-  if (event.pointerType === 'touch' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-  const card = event.currentTarget;
-  const bounds = card.getBoundingClientRect();
-  const x = Math.min(1, Math.max(0, (event.clientX - bounds.left) / bounds.width));
-  const y = Math.min(1, Math.max(0, (event.clientY - bounds.top) / bounds.height));
-
-  card.style.setProperty('--tilt-x', `${((0.5 - y) * 7).toFixed(2)}deg`);
-  card.style.setProperty('--tilt-y', `${((x - 0.5) * 8).toFixed(2)}deg`);
-  card.style.setProperty('--shine-x', `${(x * 100).toFixed(1)}%`);
-  card.style.setProperty('--shine-y', `${(y * 100).toFixed(1)}%`);
-}
-
-function resetCardTilt(event: ReactPointerEvent<HTMLDivElement>) {
-  const card = event.currentTarget;
-  card.style.setProperty('--tilt-x', '0deg');
-  card.style.setProperty('--tilt-y', '0deg');
-  card.style.setProperty('--shine-x', '50%');
-  card.style.setProperty('--shine-y', '50%');
 }
 
 const features = [
@@ -116,7 +94,7 @@ export default function Home() {
     <main>
       <a className="skip-link" href="#content">Skip to content</a>
 
-      <nav className="site-nav" aria-label="Main navigation">
+      <nav id="top" className="site-nav" aria-label="Main navigation">
         <a className="brand" href="#top" aria-label="MAKO home">
           <img src="assets/mako-discord-icon.webp" alt="" width="44" height="44" draggable={false} />
           <span>MAKO</span>
@@ -150,70 +128,51 @@ export default function Home() {
       </nav>
 
       <div id="content">
-        <section className="hero" id="top">
-          <div className="hero-glow hero-glow-cyan" />
-          <div className="hero-glow hero-glow-orange" />
+        <SharkHero>
+          <header className="hero-title">
+            <p className="section-kicker"><span>MAKO</span> Steam Deck, Steam Machine and Linux</p>
+            <h1>Frames. Scaling. <br /><em>Shaders.</em></h1>
+          </header>
           <div className="hero-copy">
-            <p className="eyebrow"><span /> Frame generation + spatial scaling + shaders / Linux</p>
-            <h1>Frames. Scaling.<br /><em>Shaders.</em></h1>
             <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. MAKO FG, MAKO Scaler and bundled shaders work without it. Only optional LSFG and LS1 require a separate purchase.</p>
-            <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
+            <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="Fully open source. Read the GPL-3.0-or-later licence.">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
               <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Contribute. Fork it. Change it. Make it yours.</span></span>
               <span className="open-source-sticker-arrow" aria-hidden="true">↗</span>
             </a>
-            <div className="hero-actions">
-              <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>
+            <div className="hero-downloads">
+              <a href={links.deckyDownload} {...newTabProps}>
+                <span className="hero-download-copy">Get MAKO Decky<small>Includes MAKO Renderer</small></span>
                 <span className="download-glyph" aria-hidden="true"><i /></span>
-                <span className="hero-download-copy"><span>Get MAKO Decky</span><small>Includes MAKO Renderer</small></span>
               </a>
-              <a className="button button-primary button-renderer" href={links.rendererDownload} {...newTabProps}>
+              <a className="renderer-download" href={links.rendererDownload} {...newTabProps}>
+                <span className="hero-download-copy">Get MAKO Renderer<small>Standalone for Linux</small></span>
                 <span className="download-glyph" aria-hidden="true"><i /></span>
-                <span className="hero-download-copy"><span>Get MAKO Renderer</span><small>Standalone for desktop Linux</small></span>
               </a>
-              <a className="button button-secondary" href={links.docs} {...newTabProps}>Installation Guide <span aria-hidden="true">→</span></a>
-              <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
-            <div className="hero-meta">
-              <span><b>1-2×</b> MAKO Scaler or LS1</span>
-              <span><b>30-240</b> adaptive FPS target</span>
-              <span><b>2-5×</b> generation ceiling</span>
-              <span><b>LIVE</b> per-game shader effects</span>
-            </div>
+            <nav className="hero-links" aria-label="MAKO resources">
+              <a className="hero-model" href={links.makoFg} {...newTabProps}>
+                <img src="assets/hugging-face.svg" width="20" height="20" alt="" />
+                <span><strong>MAKO FG</strong> on Hugging Face</span>
+              </a>
+              <a href={links.docs} {...newTabProps}>Install guide</a>
+            </nav>
           </div>
+        </SharkHero>
 
-          <div className="hero-visual" aria-label="MAKO Decky and Renderer system visualization">
-            <div className="orbit orbit-one" />
-            <div className="orbit orbit-two" />
-            <div className="visual-card visual-card-decky" onPointerMove={tiltCard} onPointerLeave={resetCardTilt}>
-              <span className="card-index">01 / CONTROL</span>
-              <img src="assets/mako-logo.webp" alt="MAKO Decky shark logo" width="170" height="170" draggable={false} />
-              <div><strong>MAKO Decky</strong><span>Per-game orchestration</span></div>
-            </div>
-            <div className="visual-card visual-card-renderer" onPointerMove={tiltCard} onPointerLeave={resetCardTilt}>
-              <span className="card-index">02 / PIPELINE</span>
-              <img src="assets/mako-render-logo.webp" alt="MAKO Renderer shark logo" width="154" height="154" draggable={false} />
-              <div><strong>MAKO Renderer</strong><span>Scaling + synthesis + shaders</span></div>
-            </div>
-          </div>
-        </section>
-
-        <div className="signal-strip" aria-hidden="true">
-          <div>STEAM DECK</div><span />
-          <div>STEAM MACHINE</div><span />
-          <div>STEAMOS</div><span />
-          <div>LINUX</div><span />
-          <div>VULKAN</div><span />
-          <div>GAMESCOPE</div><span />
-          <div>FLATPAK</div>
-        </div>
+        <dl className="hero-meta section-shell">
+          <div><dt>Spatial scaling</dt><dd>1–2×</dd></div>
+          <div><dt>Adaptive FPS target</dt><dd>30–240</dd></div>
+          <div><dt>Generation ceiling</dt><dd>2–5×</dd></div>
+          <div><dt>Per-game shaders</dt><dd>Live</dd></div>
+        </dl>
 
         <section className="system-section section-shell" id="system">
           <header className="section-heading">
-            <p className="section-kicker"><span>01</span> One system. Two precision layers.</p>
+            <p className="section-kicker"><span>01</span> Components</p>
             <div>
-              <h2>Controls above.<br /><em>Vulkan below.</em></h2>
-              <p>MAKO Decky manages the game. MAKO Renderer runs the frame pipeline. Together, they bring frame generation, spatial scaling, and bundled shader effects into Linux gaming.</p>
+              <h2>How MAKO <em>works</em></h2>
+              <p>MAKO Decky lets you configure frame generation, scaling, and shaders for each game. MAKO Renderer applies those settings in Vulkan and can also run on its own.</p>
             </div>
           </header>
 
@@ -259,10 +218,10 @@ export default function Home() {
         <section className="features-section" id="features">
           <div className="section-shell">
             <header className="section-heading features-heading">
-              <p className="section-kicker"><span>02</span> Engineered for play</p>
+              <p className="section-kicker"><span>02</span> SteamOS and desktop Linux</p>
               <div>
-                <h2>Every frame.<br /><em>Under control.</em></h2>
-                <p>MAKO’s scaler, scheduler, profiles, and launch boundaries are designed to stay fast, predictable, and out of your way.</p>
+                <h2>MAKO <br /><em>features</em></h2>
+                <p>Set a target frame rate, choose a scaler, and save shader settings for each game. MAKO Renderer supports both 32-bit and 64-bit x86 Vulkan games.</p>
               </div>
             </header>
 
@@ -284,13 +243,13 @@ export default function Home() {
 
         <section className="adaptive-section processing-section">
           <div className="adaptive-copy">
-            <p className="section-kicker"><span>03</span> Adaptive intelligence</p>
-            <h2>It doesn’t just add frames.<br /><em>It reads the rhythm.</em></h2>
-            <p>Choose a target and ceiling. MAKO Renderer observes each game interval, plans only the generated frames needed to reach the output rhythm, and backs off cleanly when delivery becomes unstable.</p>
+            <p className="section-kicker"><span>03</span> MAKO Renderer</p>
+            <h2>Adaptive <br /><em>frame generation</em></h2>
+            <p>Set a target frame rate and a maximum multiplier. MAKO Renderer adjusts how many frames it generates as the game’s frame rate changes. A 3× ceiling allows up to two generated frames per game frame.</p>
             <div className="adaptive-points">
-              <div><span>01</span><p><strong>Observe</strong> game cadence and delivery health</p></div>
-              <div><span>02</span><p><strong>Plan</strong> the right generated-frame count</p></div>
-              <div><span>03</span><p><strong>Recover</strong> without sacrificing native presentation</p></div>
+              <div><span>01</span><p><strong>Measure</strong> the time between game frames</p></div>
+              <div><span>02</span><p><strong>Schedule</strong> generated frames to meet the target</p></div>
+              <div><span>03</span><p><strong>Reduce</strong> generation if frame delivery becomes unstable</p></div>
             </div>
           </div>
 
@@ -316,7 +275,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="telemetry-foot"><span>INPUT CADENCE 37-60 FPS</span><span>OUTPUT RHYTHM 90 FPS</span></div>
+            <div className="telemetry-foot"><span>INPUT 37-60 FPS</span><span>OUTPUT 90 FPS</span></div>
           </div>
         </section>
 
@@ -324,9 +283,9 @@ export default function Home() {
 
         <section className="scaling-section processing-section" id="scaling">
           <div className="scaling-copy">
-            <p className="section-kicker"><span>04</span> Spatial scaling</p>
-            <h2>Make each pixel.<br /><em>Count twice.</em></h2>
-            <p>Render fewer source pixels when you need headroom, then reconstruct them for the display you actually play on. Pick the fast Native baseline, the open MAKO Scaler, or the licensed LS1 models, then run scaling by itself or ahead of frame generation.</p>
+            <p className="section-kicker"><span>04</span> MAKO Renderer</p>
+            <h2>Spatial <br /><em>scaling</em></h2>
+            <p>Your game can render at 720p while MAKO Renderer upscales each frame to 1080p for display. You can use scaling on its own or before frame generation.</p>
             <div className="scaling-modes">
               <div><span>NATIVE</span><strong>Fast linear baseline</strong></div>
               <div className="scaling-mode-active"><span>MAKO</span><strong>Open single-pass scaler</strong></div>
@@ -357,9 +316,9 @@ export default function Home() {
 
         <section className="shader-section processing-section" id="shaders">
           <div className="shader-copy">
-            <p className="section-kicker"><span>05</span> Shaders</p>
-            <h2>Sharpen. Smooth.<br /><em>Stylize.</em></h2>
-            <p>Use per-game shaders to make details crisper, soften jagged edges, or shift the colour and mood. Compare the image before and after, then tune supported effects live while you play.</p>
+            <p className="section-kicker"><span>05</span> MAKO Renderer</p>
+            <h2>Per-game <br /><em>shaders</em></h2>
+            <p>Choose sharpening, anti-aliasing, and colour settings for each game. You can adjust supported effects while the game is running.</p>
             <div className="shader-modes">
               <div><span>DETAIL</span><strong>CAS or DLS sharpening</strong></div>
               <div><span>EDGES</span><strong>FXAA or SMAA smoothing</strong></div>
@@ -392,8 +351,8 @@ export default function Home() {
         <section className="start-section">
           <div className="section-shell start-inner">
             <header className="start-heading">
-              <p className="section-kicker"><span>06</span> From zero to smoother</p>
-              <h2>Three steps.<br /><em>Then dive in.</em></h2>
+              <p className="section-kicker"><span>06</span> SteamOS and desktop Linux</p>
+              <h2>Installation</h2>
             </header>
             <ol className="steps">
               <li>
@@ -463,8 +422,8 @@ export default function Home() {
 
         <section className="faq-section section-shell" id="faq">
           <header>
-            <p className="section-kicker"><span>08</span> Signal check</p>
-            <h2>Before you<br /><em>make the jump.</em></h2>
+            <p className="section-kicker"><span>08</span> Setup and compatibility</p>
+            <h2>Common <br /><em>questions</em></h2>
           </header>
           <div className="faq-list">
             <details>
