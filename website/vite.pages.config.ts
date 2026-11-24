@@ -89,7 +89,6 @@ function staticPagesSeo(): Plugin {
 }
 
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? '/MAKO/' : '/',
   css: {
     postcss: {
       plugins: [tailwindcss()],

@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://eugeniosegala.github.io/MAKO/sitemap.xml
+Sitemap: https://mako-fg.app/sitemap.xml

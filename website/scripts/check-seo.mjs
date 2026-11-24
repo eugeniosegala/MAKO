@@ -12,14 +12,14 @@ const outputRoot = path.join(websiteRoot, 'dist-pages');
 const index = readFileSync(path.join(outputRoot, 'index.html'), 'utf8');
 const robots = readFileSync(path.join(outputRoot, 'robots.txt'), 'utf8');
 const sitemap = readFileSync(path.join(outputRoot, 'sitemap.xml'), 'utf8');
-const siteUrl = 'https://eugeniosegala.github.io/MAKO/';
+const siteUrl = 'https://mako-fg.app/';
 
 const requiredIndexFragments = [
   '<html lang="en">',
   '<meta name="description"',
   '<meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1">',
-  '<link rel="canonical" href="https://eugeniosegala.github.io/MAKO/">',
-  '<link rel="sitemap" type="application/xml" href="https://eugeniosegala.github.io/MAKO/sitemap.xml">',
+  `<link rel="canonical" href="${siteUrl}">`,
+  `<link rel="sitemap" type="application/xml" href="${siteUrl}sitemap.xml">`,
   '<meta property="og:site_name" content="MAKO">',
   '<meta property="og:image:alt"',
   '<meta name="twitter:image:alt"',

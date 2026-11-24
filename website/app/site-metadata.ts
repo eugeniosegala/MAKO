@@ -1,6 +1,6 @@
 import { releaseData } from './release-data';
 
-export const siteUrl = 'https://eugeniosegala.github.io/MAKO/';
+export const siteUrl = 'https://mako-fg.app/';
 export const siteTitle =
   'MAKO: Frame Generation, Scaling, and Shaders for SteamOS and Linux';
 export const siteDescription =
