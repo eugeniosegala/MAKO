@@ -9,12 +9,9 @@ import {
   siteKeywords,
   siteTitle,
   siteUrl,
-  socialImageUrl,
+  socialImage,
   structuredDataJson,
 } from './app/site-metadata';
-
-const socialImageAlt =
-  'MAKO frame generation, spatial scaling, and shaders for SteamOS and Linux';
 
 function metaTag(name: string, content: string): HtmlTagDescriptor {
   return { tag: 'meta', attrs: { name, content }, injectTo: 'head' };
@@ -44,17 +41,17 @@ function staticPagesSeo(): Plugin {
         propertyTag('og:url', siteUrl),
         propertyTag('og:site_name', 'MAKO'),
         propertyTag('og:locale', 'en_US'),
-        propertyTag('og:image', socialImageUrl),
-        propertyTag('og:image:secure_url', socialImageUrl),
-        propertyTag('og:image:type', 'image/png'),
-        propertyTag('og:image:width', '1200'),
-        propertyTag('og:image:height', '630'),
-        propertyTag('og:image:alt', socialImageAlt),
+        propertyTag('og:image', socialImage.url),
+        propertyTag('og:image:secure_url', socialImage.url),
+        propertyTag('og:image:type', socialImage.type),
+        propertyTag('og:image:width', String(socialImage.width)),
+        propertyTag('og:image:height', String(socialImage.height)),
+        propertyTag('og:image:alt', socialImage.alt),
         metaTag('twitter:card', 'summary_large_image'),
         metaTag('twitter:title', siteTitle),
         metaTag('twitter:description', siteDescription),
-        metaTag('twitter:image', socialImageUrl),
-        metaTag('twitter:image:alt', socialImageAlt),
+        metaTag('twitter:image', socialImage.url),
+        metaTag('twitter:image:alt', socialImage.alt),
         {
           tag: 'link',
           attrs: { rel: 'canonical', href: siteUrl },

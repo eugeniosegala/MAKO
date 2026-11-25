@@ -5,7 +5,7 @@ import {
   siteKeywords,
   siteTitle,
   siteUrl,
-  socialImageUrl,
+  socialImage,
   structuredDataJson,
 } from './site-metadata';
 
@@ -45,14 +45,7 @@ export const metadata: Metadata = {
     siteName: 'MAKO',
     type: 'website',
     locale: 'en_US',
-    images: [
-      {
-        url: socialImageUrl,
-        width: 1200,
-        height: 630,
-        alt: 'MAKO frame generation, spatial scaling, and shaders for SteamOS and Linux',
-      },
-    ],
+    images: [socialImage],
   },
   twitter: {
     card: 'summary_large_image',
@@ -60,8 +53,8 @@ export const metadata: Metadata = {
     description: siteDescription,
     images: [
       {
-        url: socialImageUrl,
-        alt: 'MAKO frame generation, spatial scaling, and shaders for SteamOS and Linux',
+        url: socialImage.url,
+        alt: socialImage.alt,
       },
     ],
   },

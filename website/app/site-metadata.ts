@@ -5,7 +5,13 @@ export const siteTitle =
   'MAKO: Frame Generation, Scaling, and Shaders for SteamOS and Linux';
 export const siteDescription =
   'MAKO brings frame generation, spatial scaling, and per-game shader effects to Steam Deck, SteamOS, and desktop Linux through Decky and Vulkan.';
-export const socialImageUrl = `${siteUrl}og.png`;
+export const socialImage = {
+  url: `${siteUrl}og.png?v=1f18e7ab`,
+  width: 1280,
+  height: 640,
+  type: 'image/png',
+  alt: 'Blue shark beside the MAKO logo and the words “Frame Generation, Scaling & Shaders” and “SteamOS · Linux”.',
+};
 export const siteKeywords = [
   'MAKO',
   'Steam Deck frame generation',
@@ -52,7 +58,7 @@ export const structuredData = {
       ],
       codeRepository: releaseData.links.repository,
       license: `${releaseData.links.repository}/blob/main/LICENSE.md`,
-      image: socialImageUrl,
+      image: socialImage.url,
       softwareRequirements:
         'MAKO FG, MAKO Scaler, and bundled shaders work without Lossless Scaling. Only the optional Lossless Scaling frame generation model (LSFG) and LS1 scaling require a separately purchased Lossless Scaling installation.',
       featureList: [
