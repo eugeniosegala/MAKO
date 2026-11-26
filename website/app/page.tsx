@@ -180,7 +180,7 @@ export default function Home() {
             <article className="system-panel decky-panel">
               <div className="panel-number">01</div>
               <div className="panel-topline"><span>CONTROL LAYER</span><i>STEAMOS / DECKY</i></div>
-              <img src="assets/mako-logo.webp" alt="MAKO Decky" width="230" height="230" draggable={false} />
+              <img src="assets/mako-logo.webp" loading="lazy" decoding="async" alt="MAKO Decky" width="230" height="230" draggable={false} />
               <h3>MAKO Decky</h3>
               <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration through one focused interface.</p>
               <ul>
@@ -202,7 +202,7 @@ export default function Home() {
             <article className="system-panel renderer-panel">
               <div className="panel-number">02</div>
               <div className="panel-topline"><span>RENDER LAYER</span><i>VULKAN / LINUX</i></div>
-              <img src="assets/mako-render-logo.webp" alt="MAKO Renderer" width="230" height="230" draggable={false} />
+              <img src="assets/mako-render-logo.webp" loading="lazy" decoding="async" alt="MAKO Renderer" width="230" height="230" draggable={false} />
               <h3>MAKO Renderer</h3>
               <p>A private Vulkan pipeline for spatial reconstruction, frame synthesis, deterministic scheduling, and presentation recovery, with optional bundled shader effects.</p>
               <ul>
@@ -298,13 +298,13 @@ export default function Home() {
             <div className="resolution-flow" aria-hidden="true">
               <div className="resolution-surface resolution-source">
                 <span>RENDER TARGET</span><strong>1280 × 720</strong>
-                <div className="resolution-preview resolution-preview-source"><img src="assets/mako-logo.webp" alt="" width="256" height="256" draggable={false} /></div>
+                <div className="resolution-preview resolution-preview-source"><img src="assets/mako-logo.webp" loading="lazy" decoding="async" alt="" width="256" height="256" draggable={false} /></div>
                 <small>COARSE INPUT SAMPLE</small>
               </div>
               <div className="scaling-transfer"><span>1.50×</span><i>→</i><small>RECONSTRUCT</small></div>
               <div className="resolution-surface resolution-output">
                 <span>DISPLAY TARGET</span><strong>1920 × 1080</strong>
-                <div className="resolution-preview resolution-preview-output"><img src="assets/mako-logo.webp" alt="" width="256" height="256" draggable={false} /></div>
+                <div className="resolution-preview resolution-preview-output"><img src="assets/mako-logo.webp" loading="lazy" decoding="async" alt="" width="256" height="256" draggable={false} /></div>
                 <small>RECONSTRUCTED DETAIL</small>
               </div>
             </div>
@@ -332,8 +332,8 @@ export default function Home() {
               <div className="shader-preview" aria-hidden="true">
                 <span className="shader-before-label">BEFORE</span>
                 <span className="shader-after-label">SHADER</span>
-                <img className="shader-before-image" src="assets/mako-logo.webp" alt="" width="256" height="256" draggable={false} />
-                <img className="shader-after-image" src="assets/mako-logo.webp" alt="" width="256" height="256" draggable={false} />
+                <img className="shader-before-image" src="assets/mako-logo.webp" loading="lazy" decoding="async" alt="" width="256" height="256" draggable={false} />
+                <img className="shader-after-image" src="assets/mako-logo.webp" loading="lazy" decoding="async" alt="" width="256" height="256" draggable={false} />
                 <i className="shader-split"><b>↔</b></i>
                 <small>MOVE FROM NEUTRAL TO CRISP, SMOOTH, OR STYLIZED</small>
               </div>
@@ -382,7 +382,7 @@ export default function Home() {
           <div className="download-grid">
             <article className="download-card download-decky">
               <div className="download-badge">RECOMMENDED FOR STEAMOS</div>
-              <div className="download-icon"><img src="assets/mako-logo.webp" alt="" width="88" height="88" draggable={false} /></div>
+              <div className="download-icon"><img src="assets/mako-logo.webp" loading="lazy" decoding="async" alt="" width="88" height="88" draggable={false} /></div>
               <p className="download-type">CONTROL + BUNDLED RENDERER</p>
               <h3>MAKO Decky</h3>
               <p className="download-copy">The complete managed experience for Steam Deck, Steam Machine, Decky Loader, Heroic, and EmuDeck.</p>
@@ -397,7 +397,7 @@ export default function Home() {
 
             <article className="download-card download-renderer">
               <div className="download-badge">DIRECT LINUX INSTALL</div>
-              <div className="download-icon"><img src="assets/mako-render-logo.webp" alt="" width="88" height="88" draggable={false} /></div>
+              <div className="download-icon"><img src="assets/mako-render-logo.webp" loading="lazy" decoding="async" alt="" width="88" height="88" draggable={false} /></div>
               <p className="download-type">STANDALONE VULKAN LAYER</p>
               <h3>MAKO Renderer</h3>
               <p className="download-copy">The direct host archive for desktop Linux, with the UI, launcher, CLI, both x86 Vulkan layers, and bundled shader effects.</p>
@@ -447,7 +447,7 @@ export default function Home() {
 
         <section className="final-cta section-shell">
           <div className="cta-glow" />
-          <img src="assets/mako-logo.webp" alt="MAKO shark" width="260" height="260" draggable={false} />
+          <img src="assets/mako-logo.webp" loading="lazy" decoding="async" alt="MAKO shark" width="260" height="260" draggable={false} />
           <div>
             <p className="eyebrow"><span /> Motion-Adaptive Kernel Orchestration</p>
             <h2>Play smoother.<br /><em>Look sharper.</em></h2>
@@ -463,7 +463,7 @@ export default function Home() {
 
       <footer className="site-footer">
         <div className="footer-brand">
-          <a className="brand" href="#top"><img src="assets/mako-discord-icon.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
+          <a className="brand" href="#top"><img src="assets/mako-discord-icon.webp" loading="lazy" decoding="async" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
           <p>Frame generation, spatial scaling, and bundled shaders for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
         </div>
         <div className="footer-links">
