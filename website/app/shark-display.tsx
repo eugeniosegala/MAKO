@@ -1,6 +1,30 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { animateWater, stillOcean } from './ascii-ocean';
 
+function SharkPiece({ className }: { className: 'shark-tail' | 'shark-body' }) {
+  const imageRef = useRef<HTMLImageElement>(null);
+  const [status, setStatus] = useState<'loading' | 'ready' | 'failed'>('loading');
+
+  useEffect(() => {
+    const image = imageRef.current;
+    if (!image) return;
+    let active = true;
+    // The glyphs have a solid backing. Paint it only once the artwork can cover it.
+    image.decode().then(
+      () => { if (active) setStatus('ready'); },
+      () => { if (active) setStatus('failed'); },
+    );
+    return () => { active = false; };
+  }, []);
+
+  return (
+    <div className={className}>
+      {status === 'ready' && <span className="shark-glyphs" />}
+      <img ref={imageRef} src="assets/mako-shark.webp" width={1280} height={640} alt="" fetchPriority="high" hidden={status === 'failed'} />
+    </div>
+  );
+}
+
 export function SharkHero({ children }: { children: ReactNode }) {
   const heroRef = useRef<HTMLElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -43,8 +67,8 @@ export function SharkHero({ children }: { children: ReactNode }) {
       <figure className="shark-display">
         <div className="shark-field" aria-hidden="true">
           <div className="shark-art">
-            <div className="shark-tail"><span className="shark-glyphs" /></div>
-            <div className="shark-body"><span className="shark-glyphs" /></div>
+            <SharkPiece className="shark-tail" />
+            <SharkPiece className="shark-body" />
           </div>
         </div>
         <figcaption>
