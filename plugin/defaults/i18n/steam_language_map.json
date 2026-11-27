@@ -8,7 +8,8 @@
   "koreana": "ko",
   "japanese": "ja",
   "schinese": "zh",
-  "tchinese": "zh",
+  "tchinese": "zh-TW",
+  "zh-tw": "zh-TW",
   "ukrainian": "uk",
   "german": "de",
   "russian": "ru"
